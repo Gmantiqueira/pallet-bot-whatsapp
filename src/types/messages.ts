@@ -8,6 +8,10 @@ export interface OutgoingMessage {
   };
   buttons?: Array<{
     id: string;
-    title: string;
+    label: string;
   }>;
+  document?: {
+    filename: string;
+    url: string;
+  };
 }
