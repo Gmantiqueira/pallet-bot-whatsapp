@@ -3,6 +3,8 @@ import { SessionRepository } from '../domain/sessionRepository';
 import { Input, transition, State } from '../domain/stateMachine';
 import { OutgoingMessage } from '../types/messages';
 import { buildMessages, MessageContext } from './messageBuilder';
+import { PdfService } from '../infra/pdf/pdfService';
+import { loadEnv } from '../config/env';
 
 export interface IncomingPayload {
   from: string;
@@ -98,6 +100,32 @@ export const routeIncoming = (
   // Update session from transition result
   let updatedSession = transitionResult.session;
 
+  // Handle GENERATE_PDF effect
+  const hasGeneratePdfEffect = transitionResult.effects.some(
+    (effect) => effect.type === 'GENERATE_PDF'
+  );
+
+  if (hasGeneratePdfEffect && updatedSession.state === 'GENERATING_DOC') {
+    // Generate PDF
+    const env = loadEnv();
+    const pdfService = new PdfService('./storage', env.PORT);
+    const pdfResult = pdfService.generatePdf(updatedSession);
+
+    // Transition to DONE state (GENERATING_DOC automatically transitions to DONE on next input)
+    const doneTransition = transition(updatedSession, {
+      type: 'TEXT',
+      value: 'done', // Trigger DONE transition
+    });
+    updatedSession = doneTransition.session;
+
+    // Update session with PDF info (store in answers for reference)
+    updatedSession.answers = {
+      ...updatedSession.answers,
+      pdfFilename: pdfResult.filename,
+      pdfUrl: pdfResult.url,
+    };
+  }
+
   // Detect if image was analyzed (transitioned from WAIT_PLANT_IMAGE)
   const imageAnalyzed =
     previousState === 'WAIT_PLANT_IMAGE' && updatedSession.state !== 'WAIT_PLANT_IMAGE';
@@ -107,6 +135,12 @@ export const routeIncoming = (
     imageAnalyzed,
     previousState,
   };
+
+  // If we just generated PDF, include PDF URL in context
+  if (hasGeneratePdfEffect && updatedSession.answers.pdfUrl) {
+    ctx.pdfUrl = updatedSession.answers.pdfUrl as string;
+    ctx.pdfFilename = updatedSession.answers.pdfFilename as string;
+  }
 
   const messages = buildMessages(updatedSession, ctx);
 

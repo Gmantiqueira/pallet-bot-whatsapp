@@ -7,6 +7,8 @@ export interface MessageContext {
   statusOnly?: boolean;
   previousState?: State;
   imageAnalyzed?: boolean;
+  pdfUrl?: string;
+  pdfFilename?: string;
 }
 
 export const buildMessages = (
@@ -54,7 +56,7 @@ export const buildMessages = (
 
 const buildStateMessage = (
   session: Session,
-  _ctx: MessageContext
+  ctx: MessageContext
 ): OutgoingMessage | null => {
   const state = session.state as State;
 
@@ -163,13 +165,14 @@ const buildStateMessage = (
       };
 
     case 'DONE':
-      // In a real implementation, the PDF URL would come from the PDF generation service
-      const pdfUrl = `/files/projeto-${session.phone}-${Date.now()}.pdf`;
+      // Use PDF URL from context if available
+      const pdfUrl = ctx.pdfUrl || `/files/projeto-${session.phone}-${Date.now()}.pdf`;
+      const pdfFilename = ctx.pdfFilename || `projeto-${session.phone}.pdf`;
       return {
         to: session.phone,
         text: '✅ Projeto concluído',
         document: {
-          filename: `projeto-${session.phone}.pdf`,
+          filename: pdfFilename,
           url: pdfUrl,
         },
       };

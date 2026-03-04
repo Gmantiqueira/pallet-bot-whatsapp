@@ -7,3 +7,5 @@ coverage/
 *.swp
 *.swo
 *~
+storage/
+data/
