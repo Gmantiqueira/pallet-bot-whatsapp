@@ -158,6 +158,20 @@ const buildStateMessage = (
         ],
       };
 
+    case 'CHOOSE_EDIT_FIELD':
+      return {
+        to: session.phone,
+        text: 'Qual campo deseja editar?',
+        buttons: [
+          { id: 'MEDIDAS', label: 'Medidas' },
+          { id: 'CORREDOR', label: 'Corredor' },
+          { id: 'CAPACIDADE', label: 'Capacidade' },
+          { id: 'ALTURA', label: 'Altura' },
+          { id: 'GUARD_RAIL', label: 'Guard rail' },
+          { id: 'VOLTAR_RESUMO', label: 'Voltar resumo' },
+        ],
+      };
+
     case 'GENERATING_DOC':
       return {
         to: session.phone,

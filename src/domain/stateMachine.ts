@@ -14,6 +14,7 @@ export type State =
   | 'WAIT_LEVELS'
   | 'WAIT_EXTRAS_GUARD_RAIL'
   | 'SUMMARY_CONFIRM'
+  | 'CHOOSE_EDIT_FIELD'
   | 'GENERATING_DOC'
   | 'DONE';
 
@@ -72,6 +73,21 @@ const parseNumber = (text: string): number | null => {
   const cleaned = text.trim().replace(/[^\d]/g, '');
   const num = parseInt(cleaned, 10);
   return isNaN(num) ? null : num;
+};
+
+const isEditMode = (stack: string[]): boolean => {
+  return stack.includes('CHOOSE_EDIT_FIELD');
+};
+
+const getNextStateAfterEdit = (stack: string[]): State | null => {
+  if (isEditMode(stack)) {
+    // Find SUMMARY_CONFIRM in stack
+    const summaryIndex = stack.lastIndexOf('SUMMARY_CONFIRM');
+    if (summaryIndex >= 0) {
+      return 'SUMMARY_CONFIRM';
+    }
+  }
+  return null;
 };
 
 export const transition = (session: Session, input: Input): TransitionResult => {
@@ -184,11 +200,12 @@ export const transition = (session: Session, input: Input): TransitionResult => 
           error = validationError;
           return { session: newSession, effects, error };
         }
+        const nextState = getNextStateAfterEdit(newSession.stack);
         newSession = {
           ...newSession,
-          state: 'WAIT_WIDTH',
+          state: nextState || 'WAIT_WIDTH',
           answers: { ...newSession.answers, lengthMm: length },
-          stack: [...newSession.stack, newSession.state],
+          stack: nextState ? newSession.stack.slice(0, -1) : [...newSession.stack, newSession.state],
           updatedAt: Date.now(),
         };
         effects.push({ type: 'SEND' });
@@ -207,11 +224,12 @@ export const transition = (session: Session, input: Input): TransitionResult => 
           error = validationError;
           return { session: newSession, effects, error };
         }
+        const nextState = getNextStateAfterEdit(newSession.stack);
         newSession = {
           ...newSession,
-          state: 'WAIT_CORRIDOR',
+          state: nextState || 'WAIT_CORRIDOR',
           answers: { ...newSession.answers, widthMm: width },
-          stack: [...newSession.stack, newSession.state],
+          stack: nextState ? newSession.stack.slice(0, -1) : [...newSession.stack, newSession.state],
           updatedAt: Date.now(),
         };
         effects.push({ type: 'SEND' });
@@ -230,11 +248,12 @@ export const transition = (session: Session, input: Input): TransitionResult => 
           error = validationError;
           return { session: newSession, effects, error };
         }
+        const nextState = getNextStateAfterEdit(newSession.stack);
         newSession = {
           ...newSession,
-          state: 'WAIT_CAPACITY',
+          state: nextState || 'WAIT_CAPACITY',
           answers: { ...newSession.answers, corridorMm: corridor },
-          stack: [...newSession.stack, newSession.state],
+          stack: nextState ? newSession.stack.slice(0, -1) : [...newSession.stack, newSession.state],
           updatedAt: Date.now(),
         };
         effects.push({ type: 'SEND' });
@@ -253,11 +272,12 @@ export const transition = (session: Session, input: Input): TransitionResult => 
           error = validationError;
           return { session: newSession, effects, error };
         }
+        const nextState = getNextStateAfterEdit(newSession.stack);
         newSession = {
           ...newSession,
-          state: 'CHOOSE_HEIGHT_MODE',
+          state: nextState || 'CHOOSE_HEIGHT_MODE',
           answers: { ...newSession.answers, capacityKg: capacity },
-          stack: [...newSession.stack, newSession.state],
+          stack: nextState ? newSession.stack.slice(0, -1) : [...newSession.stack, newSession.state],
           updatedAt: Date.now(),
         };
         effects.push({ type: 'SEND' });
@@ -294,11 +314,12 @@ export const transition = (session: Session, input: Input): TransitionResult => 
           error = 'Por favor, digite um número válido em mm';
           return { session: newSession, effects, error };
         }
+        const nextState = getNextStateAfterEdit(newSession.stack);
         newSession = {
           ...newSession,
-          state: 'WAIT_EXTRAS_GUARD_RAIL',
+          state: nextState || 'WAIT_EXTRAS_GUARD_RAIL',
           answers: { ...newSession.answers, heightMm: height },
-          stack: [...newSession.stack, newSession.state],
+          stack: nextState ? newSession.stack.slice(0, -1) : [...newSession.stack, newSession.state],
           updatedAt: Date.now(),
         };
         effects.push({ type: 'SEND' });
@@ -312,11 +333,12 @@ export const transition = (session: Session, input: Input): TransitionResult => 
           error = 'Por favor, digite um número válido em mm';
           return { session: newSession, effects, error };
         }
+        const nextState = getNextStateAfterEdit(newSession.stack);
         newSession = {
           ...newSession,
-          state: 'WAIT_LEVELS',
+          state: nextState || 'WAIT_LEVELS',
           answers: { ...newSession.answers, loadHeightMm: loadHeight },
-          stack: [...newSession.stack, newSession.state],
+          stack: nextState ? newSession.stack.slice(0, -1) : [...newSession.stack, newSession.state],
           updatedAt: Date.now(),
         };
         effects.push({ type: 'SEND' });
@@ -335,11 +357,12 @@ export const transition = (session: Session, input: Input): TransitionResult => 
           error = validationError;
           return { session: newSession, effects, error };
         }
+        const nextState = getNextStateAfterEdit(newSession.stack);
         newSession = {
           ...newSession,
-          state: 'WAIT_EXTRAS_GUARD_RAIL',
+          state: nextState || 'WAIT_EXTRAS_GUARD_RAIL',
           answers: { ...newSession.answers, levels: levels },
-          stack: [...newSession.stack, newSession.state],
+          stack: nextState ? newSession.stack.slice(0, -1) : [...newSession.stack, newSession.state],
           updatedAt: Date.now(),
         };
         effects.push({ type: 'SEND' });
@@ -370,6 +393,57 @@ export const transition = (session: Session, input: Input): TransitionResult => 
         };
         effects.push({ type: 'GENERATE_PDF' });
         effects.push({ type: 'SEND' });
+      } else if (input.type === 'BUTTON' && input.value === 'EDITAR') {
+        newSession = {
+          ...newSession,
+          state: 'CHOOSE_EDIT_FIELD',
+          stack: [...newSession.stack, newSession.state],
+          updatedAt: Date.now(),
+        };
+        effects.push({ type: 'SEND' });
+      }
+      return { session: newSession, effects };
+
+    case 'CHOOSE_EDIT_FIELD':
+      if (input.type === 'BUTTON') {
+        const field = input.value;
+        let targetState: State | null = null;
+
+        if (field === 'MEDIDAS') {
+          // Go to length to edit measures
+          targetState = 'WAIT_LENGTH';
+        } else if (field === 'CORREDOR') {
+          targetState = 'WAIT_CORRIDOR';
+        } else if (field === 'CAPACIDADE') {
+          targetState = 'WAIT_CAPACITY';
+        } else if (field === 'ALTURA') {
+          targetState = 'CHOOSE_HEIGHT_MODE';
+        } else if (field === 'GUARD_RAIL') {
+          targetState = 'WAIT_EXTRAS_GUARD_RAIL';
+        } else if (field === 'VOLTAR_RESUMO') {
+          // Go back to summary
+          if (newSession.stack.length > 0) {
+            const previousState = newSession.stack[newSession.stack.length - 1];
+            newSession = {
+              ...newSession,
+              state: previousState as State,
+              stack: newSession.stack.slice(0, -1),
+              updatedAt: Date.now(),
+            };
+            effects.push({ type: 'SEND' });
+            return { session: newSession, effects };
+          }
+        }
+
+        if (targetState) {
+          newSession = {
+            ...newSession,
+            state: targetState,
+            stack: [...newSession.stack, newSession.state], // Keep CHOOSE_EDIT_FIELD in stack
+            updatedAt: Date.now(),
+          };
+          effects.push({ type: 'SEND' });
+        }
       }
       return { session: newSession, effects };
 
