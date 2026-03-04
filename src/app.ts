@@ -1,6 +1,7 @@
 import Fastify, { FastifyInstance } from 'fastify';
 import { webhookRoutes } from './routes/webhook';
 import { filesRoutes } from './routes/files';
+import { simulatorRoutes } from './routes/simulator';
 import { migrate } from './infra/db/sqlite';
 
 export const createApp = async (): Promise<FastifyInstance> => {
@@ -14,6 +15,7 @@ export const createApp = async (): Promise<FastifyInstance> => {
   // Register routes
   await app.register(webhookRoutes);
   await app.register(filesRoutes);
+  await app.register(simulatorRoutes);
 
   return app;
 };

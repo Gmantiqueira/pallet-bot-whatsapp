@@ -31,6 +31,19 @@ npm run dev
 
 O servidor estará rodando em `http://localhost:3000` (ou a porta configurada no `.env`).
 
+### Simulador Web
+
+Para testar o bot localmente, use o simulador web:
+
+1. Inicie o servidor: `npm run dev`
+2. Abra no navegador: `http://localhost:3000/simulator`
+
+O simulador permite:
+- Enviar mensagens de texto
+- Clicar em botões de resposta
+- Simular envio de imagens
+- Ver todas as mensagens do bot em tempo real
+
 ### Build
 
 ```bash
