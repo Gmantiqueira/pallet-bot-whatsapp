@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { OutgoingMessage } from '../types/messages';
 import { SqliteSessionRepository } from '../infra/repositories/sqliteSessionRepository';
+import { routeIncoming, IncomingPayload } from '../application/messageRouter';
 
 interface IncomingWebhookPayload {
   from: string;
@@ -27,29 +28,25 @@ export const webhookRoutes = async (fastify: FastifyInstance): Promise<void> => 
       request: FastifyRequest<{ Body: IncomingWebhookPayload }>,
       reply: FastifyReply
     ) => {
-      const { from } = request.body;
+      const incoming: IncomingPayload = request.body;
 
       // Load or create session
-      let session = sessionRepository.get(from);
+      let session = sessionRepository.get(incoming.from);
       if (!session) {
         session = {
-          phone: from,
+          phone: incoming.from,
           state: START_STATE,
           answers: {},
           stack: [],
           updatedAt: Date.now(),
         };
         sessionRepository.upsert(session);
-      } else {
-        // Update timestamp
-        session.updatedAt = Date.now();
-        sessionRepository.upsert(session);
       }
 
-      // TODO: Process webhook and generate response messages
-      const messages: OutgoingMessage[] = [];
+      // Route incoming message
+      const result = routeIncoming(session, incoming, sessionRepository);
 
-      return reply.code(200).send({ messages });
+      return reply.code(200).send({ messages: result.outgoingMessages });
     }
   );
 };
