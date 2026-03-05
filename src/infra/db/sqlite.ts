@@ -1,4 +1,6 @@
 import Database from 'better-sqlite3';
+import * as fs from 'fs';
+import * as path from 'path';
 
 let db: Database.Database | null = null;
 
@@ -8,6 +10,13 @@ export const getDb = (): Database.Database => {
   }
 
   const dbPath = process.env.DB_PATH || './data/app.db';
+  
+  // Ensure directory exists
+  const dbDir = path.dirname(dbPath);
+  if (!fs.existsSync(dbDir)) {
+    fs.mkdirSync(dbDir, { recursive: true });
+  }
+
   db = new Database(dbPath);
 
   // Enable foreign keys
