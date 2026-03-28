@@ -102,13 +102,20 @@ export function buildFrontViewInputFromAnswers(
     return null;
   }
   const cap = typeof answers.capacityKg === 'number' ? answers.capacityKg : 0;
-  return {
+  const depthMm =
+    typeof answers.depthMm === 'number' ? answers.depthMm : DEFAULT_MODULE_DEPTH_MM;
+  const beamLengthMm =
+    typeof answers.beamLengthMm === 'number'
+      ? answers.beamLengthMm
+      : DEFAULT_MODULE_WIDTH_MM;
+  const base = {
     levels: answers.levels,
     uprightHeightMm: totalH,
-    beamWidthMm: DEFAULT_MODULE_WIDTH_MM,
-    depthMm: DEFAULT_MODULE_DEPTH_MM,
+    beamLengthMm,
+    depthMm,
     capacityKgPerLevel: cap,
   };
+  return answers.tunnel === true ? { ...base, tunnel: true as const } : base;
 }
 
 /** Dados para vista isométrica 3D a partir do layout e das respostas. */

@@ -166,205 +166,243 @@ export function resolveFloorPlanWarehouse(
   };
 }
 
-// --- Vista frontal técnica ---
+// --- Vista frontal técnica (elevação industrial) ---
 
 export type FrontViewInput = {
   levels: number;
   uprightHeightMm: number;
-  beamWidthMm: number;
+  beamLengthMm: number;
   depthMm: number;
   capacityKgPerLevel: number;
+  tunnel?: boolean;
 };
 
-/** Número de vãos lado a lado na elevação (montantes repetidos). */
 const FV_MODULE_COUNT = 3;
-/** Folga lateral entre vãos na cota (mm), p.ex. entre faces de montante. */
-const FV_BAY_GAP_MM = 75;
-/** Largura visual do montante em planta de elevação (mm). */
+/** Entre vãos: duas folgas de 75 mm (referência típica de porta-paletes). */
+const FV_FOLGA_MM = 75;
+const FV_INTER_BAY_MM = FV_FOLGA_MM * 2;
 const FV_UPRIGHT_WIDTH_MM = 72;
 
-const FV_VB_W = 960;
-const FV_VB_H = 840;
-const FV_PAD = 44;
-const FV_RACK_TOP = FV_PAD + 108;
-const FV_RACK_MAX_W = 780;
-const FV_RACK_MAX_H = 400;
-const FV_DIM_GAP = 54;
-const FV_BOTTOM_RESERVE = 56;
+const FV_VB_W = 1000;
+const FV_PAD = 40;
+const FV_RACK_MAX_W = 820;
+const FV_RACK_MAX_H = 440;
+const FV_DIM_GAP = 50;
+const FV_MIN_LEVEL_PX = 19;
 
-const FV_UPRIGHT_FILL = '#1e293b';
-const FV_UPRIGHT_STROKE = '#0f172a';
-const FV_BEAM_FILL = '#fdba74';
-const FV_BEAM_STROKE = '#ea580c';
+const FV_UPRIGHT_FILL = '#1c2434';
+const FV_UPRIGHT_STROKE = '#0b0f14';
+const FV_UPRIGHT_HIGHLIGHT = '#3d4f6a';
+const FV_BEAM_FILL = '#fbbf77';
+const FV_BEAM_STROKE = '#d97706';
+const FV_BEAM_EDGE = '#b45309';
+const FV_DIM_STROKE = '#1f1f1f';
+const FV_EXT_STROKE = '#6b7280';
+const FV_FRAME_STROKE = '#d4d4d4';
 
-/** Cota horizontal estilo desenho: linha + traços diagonais nas extremidades. */
-function dimensionLineHDiagonal(
-  x1: number,
-  y: number,
-  x2: number,
-  stroke: string,
-  d = 4.8
-): string {
+const ARROW_LEN = 6;
+const ARROW_W = 3.4;
+
+/** Cota horizontal com setas nas extremidades (pontas para dentro). */
+function dimensionLineHArrows(x1: number, y: number, x2: number, stroke: string): string {
+  const inset = ARROW_LEN * 0.75;
+  const xa = x1 + inset;
+  const xb = x2 - inset;
+  const L = ARROW_LEN;
+  const w = ARROW_W;
   return [
-    `<line x1="${x1}" y1="${y}" x2="${x2}" y2="${y}" stroke="${stroke}" stroke-width="0.9"/>`,
-    `<line x1="${x1 - d}" y1="${y - d}" x2="${x1 + d}" y2="${y + d}" stroke="${stroke}" stroke-width="0.9"/>`,
-    `<line x1="${x2 - d}" y1="${y + d}" x2="${x2 + d}" y2="${y - d}" stroke="${stroke}" stroke-width="0.9"/>`,
+    `<line x1="${xa}" y1="${y}" x2="${xb}" y2="${y}" stroke="${stroke}" stroke-width="0.55"/>`,
+    `<polygon points="${x1},${y} ${x1 + L},${y - w} ${x1 + L},${y + w}" fill="${stroke}"/>`,
+    `<polygon points="${x2},${y} ${x2 - L},${y - w} ${x2 - L},${y + w}" fill="${stroke}"/>`,
   ].join('');
 }
 
-/** Cota vertical: linha + traços diagonais nas extremidades. */
-function dimensionLineVDiagonal(
-  x: number,
-  yTop: number,
-  yBot: number,
-  stroke: string,
-  d = 4.8
-): string {
-  const yt = Math.min(yTop, yBot);
-  const yb = Math.max(yTop, yBot);
+/** Cota vertical com setas (pontas para dentro). */
+function dimensionLineVArrows(x: number, y1: number, y2: number, stroke: string): string {
+  const yt = Math.min(y1, y2);
+  const yb = Math.max(y1, y2);
+  const inset = ARROW_LEN * 0.75;
+  const ya = yt + inset;
+  const yb2 = yb - inset;
+  const L = ARROW_LEN;
+  const w = ARROW_W;
   return [
-    `<line x1="${x}" y1="${yt}" x2="${x}" y2="${yb}" stroke="${stroke}" stroke-width="0.9"/>`,
-    `<line x1="${x - d}" y1="${yt - d}" x2="${x + d}" y2="${yt + d}" stroke="${stroke}" stroke-width="0.9"/>`,
-    `<line x1="${x - d}" y1="${yb + d}" x2="${x + d}" y2="${yb - d}" stroke="${stroke}" stroke-width="0.9"/>`,
+    `<line x1="${x}" y1="${ya}" x2="${x}" y2="${yb2}" stroke="${stroke}" stroke-width="0.55"/>`,
+    `<polygon points="${x},${yt} ${x - w},${yt + L} ${x + w},${yt + L}" fill="${stroke}"/>`,
+    `<polygon points="${x},${yb} ${x - w},${yb - L} ${x + w},${yb - L}" fill="${stroke}"/>`,
   ].join('');
 }
 
 /**
- * Elevação frontal tipo engenharia: vários módulos, cotas com traços diagonais,
- * longarinas em laranja, montantes escuros, legenda compacta.
+ * Elevação técnica industrial: 3 vãos, montantes escuros, longarinas laranja,
+ * cotas com setas, escala automática para 1–5+ níveis e PDF.
  */
 export function generateFrontViewSvg(data: FrontViewInput): string {
-  const levels = Math.max(1, Math.floor(data.levels));
+  const levels = Math.max(1, Math.min(32, Math.floor(data.levels)));
   const uprightH = Math.max(1, data.uprightHeightMm);
-  const beamW = Math.max(1, data.beamWidthMm);
+  const beamL = Math.max(1, data.beamLengthMm);
   const depthMm = Math.max(0, data.depthMm);
   const capKg = Math.max(0, data.capacityKgPerLevel);
+  const tunnel = data.tunnel === true;
 
   const nMod = FV_MODULE_COUNT;
-  const gapMm = FV_BAY_GAP_MM;
   const upMm = FV_UPRIGHT_WIDTH_MM;
+  const gapTotalMm = FV_INTER_BAY_MM;
 
-  const innerChainMm = nMod * beamW + (nMod - 1) * gapMm;
-  const totalRackMm = (nMod + 1) * upMm + innerChainMm;
+  const innerChainMm = nMod * beamL + (nMod - 1) * gapTotalMm;
+  const totalRackMm = (nMod + 1) * upMm + nMod * beamL + (nMod - 1) * gapTotalMm;
 
-  const scale = Math.min(FV_RACK_MAX_W / totalRackMm, FV_RACK_MAX_H / uprightH);
-  const u = upMm * scale;
-  const beamPx = beamW * scale;
-  const gapPx = gapMm * scale;
-  const innerH = uprightH * scale;
-  const levDraw = innerH / levels;
-  const levelHmm = uprightH / levels;
+  const rackMaxW = FV_RACK_MAX_W;
+  const minInnerHPx = FV_MIN_LEVEL_PX * levels * 1.03;
+  const rackMaxH = Math.max(FV_RACK_MAX_H, minInnerHPx);
 
-  let totalW = 0;
-  let xCursor = 0;
-  for (let i = 0; i < nMod; i++) {
-    totalW += u + beamPx;
-    if (i < nMod - 1) {
-      totalW += gapPx;
+  const applyScale = (s: number) => ({
+    u: upMm * s,
+    beamPx: beamL * s,
+    gapPx: gapTotalMm * s,
+    innerH: uprightH * s,
+  });
+
+  let scale = Math.min(rackMaxW / totalRackMm, rackMaxH / uprightH);
+  let { u, beamPx, gapPx, innerH } = applyScale(scale);
+
+  let totalW = (nMod + 1) * u + nMod * beamPx + (nMod - 1) * gapPx;
+  if (totalW > rackMaxW) {
+    scale *= rackMaxW / totalW;
+    ({ u, beamPx, gapPx, innerH } = applyScale(scale));
+    totalW = rackMaxW;
+  }
+
+  if (innerH < minInnerHPx) {
+    scale *= minInnerHPx / innerH;
+    ({ u, beamPx, gapPx, innerH } = applyScale(scale));
+    totalW = (nMod + 1) * u + nMod * beamPx + (nMod - 1) * gapPx;
+    if (totalW > rackMaxW) {
+      scale *= rackMaxW / totalW;
+      ({ u, beamPx, gapPx, innerH } = applyScale(scale));
+      totalW = rackMaxW;
     }
   }
-  totalW += u;
 
+  const levDraw = innerH / levels;
+
+  const levelHmm = uprightH / levels;
   const rx = (FV_VB_W - totalW) / 2;
-  const ry = FV_RACK_TOP;
+  const headerH = FV_PAD + 54;
+  const dimBand = 46;
+  const ry = headerH + dimBand;
   const rackBottom = ry + innerH;
-  xCursor = rx;
 
   type BaySpan = { left: number; right: number };
   const bays: BaySpan[] = [];
   const uprightXs: number[] = [];
-
+  let xCursor = rx;
   for (let i = 0; i < nMod; i++) {
     uprightXs.push(xCursor);
     const beamLeft = xCursor + u;
     const beamRight = beamLeft + beamPx;
     bays.push({ left: beamLeft, right: beamRight });
-    xCursor = beamRight;
-    if (i < nMod - 1) {
-      xCursor += gapPx;
-    }
+    xCursor = beamRight + gapPx;
   }
   uprightXs.push(xCursor);
 
   const chainLeft = bays[0].left;
   const chainRight = bays[nMod - 1].right;
 
-  const beamTh = Math.max(1.6, Math.min(4.2, innerH / Math.max(levels * 9, 8)));
-
+  const beamTh = Math.max(
+    1.5,
+    Math.min(4.5, levDraw * 0.22, innerH / Math.max(levels * 8, 6))
+  );
+  const capFontPx = Math.max(7.2, Math.min(10.5, levDraw * 0.38));
   const capLabel = `${capKg}kg`;
+
+  const chainParts: string[] = [];
+  for (let i = 0; i < nMod; i++) {
+    chainParts.push(String(Math.round(beamL)));
+    if (i < nMod - 1) {
+      chainParts.push(String(FV_FOLGA_MM), String(FV_FOLGA_MM));
+    }
+  }
+  const chainText = chainParts.join(' | ');
+
+  const dimTopY = ry - 28;
+  const dimBottomY = rackBottom + 26;
+  const footerExtra = tunnel ? 36 : 0;
+  const vbH = Math.max(
+    dimBottomY + 52 + footerExtra + FV_PAD,
+    rackBottom + 120 + footerExtra
+  );
 
   const parts: string[] = [];
   parts.push(
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${FV_VB_W} ${FV_VB_H}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">`
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${FV_VB_W} ${vbH}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">`
   );
   parts.push('<title>Detalhe técnico frontal</title>');
   parts.push('<defs>');
   parts.push(`<style>
-    .tf-title { font: 700 20px system-ui, -apple-system, "Segoe UI", sans-serif; fill: ${DOC_INK}; letter-spacing: 0.04em; }
-    .tf-sub { font: 500 12px system-ui, -apple-system, "Segoe UI", sans-serif; fill: ${DOC_MUTED}; }
-    .tf-legend { font: 600 11px system-ui, -apple-system, "Segoe UI", sans-serif; fill: ${DOC_MUTED}; }
-    .tf-cota { font: 9.5px system-ui, -apple-system, "Segoe UI", sans-serif; fill: ${DOC_INK}; }
-    .tf-cota-chain { font: 8.5px system-ui, -apple-system, "Segoe UI", sans-serif; fill: ${DOC_INK}; font-weight: 600; }
-    .tf-hint { font: 8.5px system-ui, -apple-system, "Segoe UI", sans-serif; fill: ${DOC_LEGEND_MUTED}; }
-    .tf-cap { font: 600 9px system-ui, -apple-system, "Segoe UI", sans-serif; fill: ${DOC_INK}; }
+    .tf-title { font: 700 17px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #111827; }
+    .tf-sub { font: 500 11px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #4b5563; }
+    .tf-legend { font: 600 10.5px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #374151; }
+    .tf-tunnel { font: 700 11px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #111827; letter-spacing: 0.2em; }
+    .tf-cota { font: 9px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #111827; }
+    .tf-cota-chain { font: 8.5px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #111827; font-weight: 600; }
+    .tf-hint { font: 8px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #6b7280; }
+    .tf-cap { font: 600 ${capFontPx}px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #111827; }
   </style>`);
   parts.push('</defs>');
 
-  parts.push(`<rect width="${FV_VB_W}" height="${FV_VB_H}" fill="${DOC_BG}"/>`);
+  parts.push(`<rect width="${FV_VB_W}" height="${vbH}" fill="#ffffff"/>`);
   parts.push(
-    `<rect x="${FV_PAD}" y="${FV_PAD}" width="${FV_VB_W - 2 * FV_PAD}" height="${FV_VB_H - 2 * FV_PAD}" fill="none" stroke="${DOC_FRAME}" stroke-width="1" rx="6"/>`
+    `<rect x="${FV_PAD}" y="${FV_PAD}" width="${FV_VB_W - 2 * FV_PAD}" height="${vbH - 2 * FV_PAD}" fill="none" stroke="${FV_FRAME_STROKE}" stroke-width="0.5"/>`
   );
 
   parts.push(
-    `<text x="${FV_VB_W / 2}" y="${FV_PAD + 26}" text-anchor="middle" class="tf-title">${escapeXml('DETALHE TÉCNICO')}</text>`
+    `<text x="${FV_VB_W / 2}" y="${FV_PAD + 22}" text-anchor="middle" class="tf-title">${escapeXml('DETALHE TÉCNICO')}</text>`
   );
   parts.push(
-    `<text x="${FV_VB_W / 2}" y="${FV_PAD + 48}" text-anchor="middle" class="tf-sub">${escapeXml('Elevação frontal')}</text>`
+    `<text x="${FV_VB_W / 2}" y="${FV_PAD + 40}" text-anchor="middle" class="tf-sub">${escapeXml('Elevação frontal')}</text>`
   );
 
-  const dimTopY = ry - 36;
-  const extTop = 10;
   for (let i = 0; i <= nMod; i++) {
     const ux = uprightXs[i];
     parts.push(
-      `<line x1="${ux + u / 2}" y1="${dimTopY}" x2="${ux + u / 2}" y2="${ry - 2}" stroke="${DOC_INK}" stroke-width="0.35" stroke-dasharray="2 2" opacity="0.55"/>`
+      `<line x1="${ux + u / 2}" y1="${dimTopY}" x2="${ux + u / 2}" y2="${ry - 1}" stroke="${FV_EXT_STROKE}" stroke-width="0.4" stroke-dasharray="3 2" opacity="0.75"/>`
     );
   }
   for (let i = 0; i < nMod - 1; i++) {
-    const xj = bays[i].right + gapPx / 2;
+    const g0 = bays[i].right + gapPx * 0.25;
+    const g1 = bays[i].right + gapPx * 0.75;
     parts.push(
-      `<line x1="${xj}" y1="${dimTopY}" x2="${xj}" y2="${ry - 2}" stroke="${DOC_INK}" stroke-width="0.35" stroke-dasharray="2 2" opacity="0.55"/>`
+      `<line x1="${g0}" y1="${dimTopY}" x2="${g0}" y2="${ry - 1}" stroke="${FV_EXT_STROKE}" stroke-width="0.4" stroke-dasharray="3 2" opacity="0.75"/>`
+    );
+    parts.push(
+      `<line x1="${g1}" y1="${dimTopY}" x2="${g1}" y2="${ry - 1}" stroke="${FV_EXT_STROKE}" stroke-width="0.4" stroke-dasharray="3 2" opacity="0.75"/>`
     );
   }
 
+  parts.push(dimensionLineHArrows(chainLeft, dimTopY, chainRight, FV_DIM_STROKE));
   parts.push(
-    dimensionLineHDiagonal(chainLeft, dimTopY, chainRight, DOC_INK)
-  );
-
-  const segLabels: string[] = [];
-  for (let i = 0; i < nMod; i++) {
-    segLabels.push(String(Math.round(beamW)));
-    if (i < nMod - 1) {
-      segLabels.push(String(gapMm));
-    }
-  }
-  const chainText = segLabels.join(' | ');
-  parts.push(
-    `<text x="${FV_VB_W / 2}" y="${dimTopY - extTop - 4}" text-anchor="middle" class="tf-cota-chain">${escapeXml(chainText)}</text>`
+    `<text x="${FV_VB_W / 2}" y="${dimTopY - 12}" text-anchor="middle" class="tf-cota-chain">${escapeXml(chainText)}</text>`
   );
 
   for (let i = 0; i < nMod; i++) {
     const midBeam = (bays[i].left + bays[i].right) / 2;
     parts.push(
-      `<text x="${midBeam}" y="${dimTopY + 12}" text-anchor="middle" class="tf-cota">${escapeXml(
-        formatMmPtBr(Math.round(beamW))
+      `<text x="${midBeam}" y="${dimTopY + 11}" text-anchor="middle" class="tf-cota">${escapeXml(
+        formatMmPtBr(Math.round(beamL))
       )}</text>`
     );
     if (i < nMod - 1) {
-      const midGap = bays[i].right + gapPx / 2;
+      const g0 = bays[i].right + gapPx * 0.25;
+      const g1 = bays[i].right + gapPx * 0.75;
       parts.push(
-        `<text x="${midGap}" y="${dimTopY + 12}" text-anchor="middle" class="tf-cota">${escapeXml(
-          formatMmPtBr(gapMm)
+        `<text x="${g0}" y="${dimTopY + 11}" text-anchor="middle" class="tf-cota">${escapeXml(
+          formatMmPtBr(FV_FOLGA_MM)
+        )}</text>`
+      );
+      parts.push(
+        `<text x="${g1}" y="${dimTopY + 11}" text-anchor="middle" class="tf-cota">${escapeXml(
+          formatMmPtBr(FV_FOLGA_MM)
         )}</text>`
       );
     }
@@ -372,7 +410,10 @@ export function generateFrontViewSvg(data: FrontViewInput): string {
 
   for (const ux of uprightXs) {
     parts.push(
-      `<rect x="${ux}" y="${ry}" width="${u}" height="${innerH}" fill="${FV_UPRIGHT_FILL}" stroke="${FV_UPRIGHT_STROKE}" stroke-width="1.4" rx="1"/>`
+      `<rect x="${ux}" y="${ry}" width="${u}" height="${innerH}" fill="${FV_UPRIGHT_FILL}" stroke="${FV_UPRIGHT_STROKE}" stroke-width="1.25"/>`
+    );
+    parts.push(
+      `<line x1="${ux + u * 0.38}" y1="${ry}" x2="${ux + u * 0.38}" y2="${rackBottom}" stroke="${FV_UPRIGHT_HIGHLIGHT}" stroke-width="0.55" opacity="0.5"/>`
     );
   }
 
@@ -383,38 +424,42 @@ export function generateFrontViewSvg(data: FrontViewInput): string {
         `<line x1="${bay.left}" y1="${yy}" x2="${bay.right}" y2="${yy}" stroke="${FV_BEAM_STROKE}" stroke-width="${beamTh}" stroke-linecap="butt"/>`
       );
       parts.push(
-        `<line x1="${bay.left}" y1="${yy}" x2="${bay.right}" y2="${yy}" stroke="${FV_BEAM_FILL}" stroke-width="${Math.max(1, beamTh - 1.1)}" stroke-linecap="butt" opacity="0.92"/>`
+        `<line x1="${bay.left}" y1="${yy}" x2="${bay.right}" y2="${yy}" stroke="${FV_BEAM_FILL}" stroke-width="${Math.max(1.1, beamTh - 1.15)}" stroke-linecap="butt"/>`
+      );
+      parts.push(
+        `<line x1="${bay.left}" y1="${yy - beamTh * 0.35}" x2="${bay.right}" y2="${yy - beamTh * 0.35}" stroke="${FV_BEAM_EDGE}" stroke-width="${Math.max(0.35, beamTh * 0.12)}" stroke-linecap="butt" opacity="0.65"/>`
       );
     }
   }
 
+  const capDy = Math.min(3.5, levDraw * 0.12);
   for (const bay of bays) {
     for (let tier = 0; tier < levels; tier++) {
       const yMid = ry + (tier + 0.5) * levDraw;
       parts.push(
-        `<text x="${(bay.left + bay.right) / 2}" y="${yMid + 3.2}" text-anchor="middle" class="tf-cap">${escapeXml(capLabel)}</text>`
+        `<text x="${(bay.left + bay.right) / 2}" y="${yMid + capDy}" text-anchor="middle" class="tf-cap">${escapeXml(capLabel)}</text>`
       );
     }
   }
 
   const dimLeftX = rx - FV_DIM_GAP;
-  parts.push(dimensionLineVDiagonal(dimLeftX, ry, rackBottom, DOC_INK));
+  parts.push(dimensionLineVArrows(dimLeftX, ry, rackBottom, FV_DIM_STROKE));
   parts.push(
-    `<text transform="translate(${dimLeftX - 16},${(ry + rackBottom) / 2}) rotate(-90)" text-anchor="middle" class="tf-cota">${escapeXml(
+    `<text transform="translate(${dimLeftX - 15},${(ry + rackBottom) / 2}) rotate(-90)" text-anchor="middle" class="tf-cota">${escapeXml(
       formatMmPtBr(Math.round(uprightH))
     )}</text>`
   );
   parts.push(
-    `<text x="${dimLeftX}" y="${dimTopY - 4}" text-anchor="middle" class="tf-hint">${escapeXml('altura total')}</text>`
+    `<text x="${dimLeftX}" y="${dimTopY - 6}" text-anchor="middle" class="tf-hint">${escapeXml('altura total')}</text>`
   );
 
   const dimRightX = rx + totalW + FV_DIM_GAP;
   if (levels > 1) {
     const yA = ry + (levels - 1) * levDraw;
     const yB = rackBottom;
-    parts.push(dimensionLineVDiagonal(dimRightX, yA, yB, DOC_INK));
+    parts.push(dimensionLineVArrows(dimRightX, yA, yB, FV_DIM_STROKE));
     parts.push(
-      `<text transform="translate(${dimRightX + 18},${(yA + yB) / 2}) rotate(-90)" text-anchor="middle" class="tf-cota">${escapeXml(
+      `<text transform="translate(${dimRightX + 16},${(yA + yB) / 2}) rotate(-90)" text-anchor="middle" class="tf-cota">${escapeXml(
         formatMmPtBr(Math.round(levelHmm))
       )}</text>`
     );
@@ -425,23 +470,25 @@ export function generateFrontViewSvg(data: FrontViewInput): string {
     );
   }
 
-  const dimY = rackBottom + 34;
-  parts.push(dimensionLineHDiagonal(rx, dimY, rx + totalW, DOC_INK));
+  parts.push(dimensionLineHArrows(rx, dimBottomY, rx + totalW, FV_DIM_STROKE));
   parts.push(
-    `<text x="${rx + totalW / 2}" y="${dimY + 17}" text-anchor="middle" class="tf-cota">${escapeXml(
+    `<text x="${rx + totalW / 2}" y="${dimBottomY + 15}" text-anchor="middle" class="tf-cota">${escapeXml(
       formatMmPtBr(Math.round(innerChainMm))
     )}</text>`
   );
   parts.push(
-    `<text x="${rx + totalW / 2}" y="${dimY - 7}" text-anchor="middle" class="tf-hint">${escapeXml(
-      'largura total (vãos + folgas)'
+    `<text x="${rx + totalW / 2}" y="${dimBottomY - 6}" text-anchor="middle" class="tf-hint">${escapeXml(
+      'largura total'
     )}</text>`
   );
 
-  const legendY = Math.min(
-    dimY + 44,
-    FV_VB_H - FV_PAD - FV_BOTTOM_RESERVE
-  );
+  let legendY = dimBottomY + 36;
+  if (tunnel) {
+    parts.push(
+      `<text x="${FV_VB_W / 2}" y="${legendY}" text-anchor="middle" class="tf-tunnel">${escapeXml('TÚNEL')}</text>`
+    );
+    legendY += 20;
+  }
   const legend = `Config: ${levels} níveis de ${capKg}kg | Prof: ${Math.round(depthMm)}mm`;
   parts.push(
     `<text x="${FV_VB_W / 2}" y="${legendY}" text-anchor="middle" class="tf-legend">${escapeXml(legend)}</text>`
