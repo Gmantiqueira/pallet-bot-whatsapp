@@ -12,15 +12,17 @@ export type IsometricViewInput = {
 };
 
 const VB_W = 1000;
-const VB_H = 740;
-const PAD = 40;
-const TITLE_BAND = 46;
-const LEGEND_BAND = 78;
-const FIT_SLACK = 0.92;
+const VB_H = 768;
+const PAD = 48;
+const TITLE_BAND = 58;
+const LEGEND_BAND = 94;
+const FIT_SLACK = 0.88;
 
 const BG = '#ffffff';
 const FRAME = '#d4d4d4';
-const INK = '#1e293b';
+const INK = '#111827';
+const ISO_MUTED = '#4b5563';
+const ISO_LEGEND_LBL = '#6b7280';
 const FLOOR_FILL = '#e8ecf1';
 const FLOOR_OPACITY = 0.42;
 
@@ -246,8 +248,8 @@ export function generateIsometricView(input: IsometricViewInput): string {
 
   const sw = strokeWidthForGrid(cols, rows, levels);
   const cx = VB_W / 2;
-  const legTop = VB_H - PAD - LEGEND_BAND + 22;
-  const legGap = 18;
+  const legTop = VB_H - PAD - LEGEND_BAND + 20;
+  const legGap = 19;
 
   const parts: string[] = [];
   parts.push(
@@ -256,7 +258,11 @@ export function generateIsometricView(input: IsometricViewInput): string {
   parts.push('<title>Vista isométrica porta-paletes</title>');
   parts.push('<defs>');
   parts.push(`<style>
-    .iso-legend { font: 500 11px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #374151; }
+    .iso-title { font: 700 18px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: ${INK}; letter-spacing: 0.04em; }
+    .iso-sub { font: 500 11px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: ${ISO_MUTED}; letter-spacing: 0.02em; }
+    .iso-rule { stroke: #e2e8f0; stroke-width: 1; }
+    .iso-legend { font: 500 11px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: ${INK}; }
+    .iso-legend-lbl { fill: ${ISO_LEGEND_LBL}; font-weight: 600; }
   </style>`);
   parts.push('</defs>');
 
@@ -266,7 +272,13 @@ export function generateIsometricView(input: IsometricViewInput): string {
   );
 
   parts.push(
-    `<text x="${cx}" y="${PAD + 26}" text-anchor="middle" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="17" font-weight="700" fill="${INK}">${escapeXml('VISTA 3D')}</text>`
+    `<text x="${cx}" y="${PAD + 28}" text-anchor="middle" class="iso-title">${escapeXml('VISTA 3D')}</text>`
+  );
+  parts.push(
+    `<text x="${cx}" y="${PAD + 52}" text-anchor="middle" class="iso-sub">${escapeXml('(projeção isométrica)')}</text>`
+  );
+  parts.push(
+    `<line x1="${cx - 160}" y1="${PAD + 66}" x2="${cx + 160}" y2="${PAD + 66}" class="iso-rule"/>`
   );
 
   parts.push(`<g stroke="none">`);
@@ -300,13 +312,13 @@ export function generateIsometricView(input: IsometricViewInput): string {
   parts.push('</g>');
 
   parts.push(
-    `<text x="${cx}" y="${legTop}" text-anchor="middle" class="iso-legend">${escapeXml(`Linhas: ${rows}`)}</text>`
+    `<text x="${cx}" y="${legTop}" text-anchor="middle" class="iso-legend"><tspan class="iso-legend-lbl">Linhas:</tspan> ${rows}</text>`
   );
   parts.push(
-    `<text x="${cx}" y="${legTop + legGap}" text-anchor="middle" class="iso-legend">${escapeXml(`Módulos por linha: ${cols}`)}</text>`
+    `<text x="${cx}" y="${legTop + legGap}" text-anchor="middle" class="iso-legend"><tspan class="iso-legend-lbl">Módulos por linha:</tspan> ${cols}</text>`
   );
   parts.push(
-    `<text x="${cx}" y="${legTop + legGap * 2}" text-anchor="middle" class="iso-legend">${escapeXml(`Níveis: ${levels}`)}</text>`
+    `<text x="${cx}" y="${legTop + legGap * 2}" text-anchor="middle" class="iso-legend"><tspan class="iso-legend-lbl">Níveis:</tspan> ${levels}</text>`
   );
 
   parts.push('</svg>');

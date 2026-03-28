@@ -46,7 +46,7 @@ describe('DrawingEngine', () => {
     expect(svg.trim().startsWith('<svg')).toBe(true);
     expect(svg).toContain('xmlns="http://www.w3.org/2000/svg"');
     expect(svg).toContain('</svg>');
-    expect(svg).toMatch(/viewBox="\s*0\s+0\s+1000\s+700"/);
+    expect(svg).toMatch(/viewBox="\s*0\s+0\s+1000\s+720"/);
     expect(svg).toContain('width="100%"');
     expect(svg).toContain('preserveAspectRatio="xMidYMid meet"');
     expect(svg).toContain('fill="#ffffff"');
@@ -86,7 +86,7 @@ describe('DrawingEngine', () => {
     expect(svg.length).toBeGreaterThan(500);
     expect(svg).toContain('80.000 mm');
     expect(svg).toContain('11.200 mm');
-    expect(svg).toMatch(/viewBox="\s*0\s+0\s+1000\s+700"/);
+    expect(svg).toMatch(/viewBox="\s*0\s+0\s+1000\s+720"/);
     expect(svg).toContain('PLANTA DO GALPÃO');
     expect(svg).toContain('Total de módulos:');
     const rectCount = (svg.match(/<rect/g) || []).length;

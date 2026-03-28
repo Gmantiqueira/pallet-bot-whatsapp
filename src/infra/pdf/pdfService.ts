@@ -17,7 +17,7 @@ import {
 import { generateIsometricView } from '../../domain/isometricDrawingEngine';
 import { resolveStoragePath } from '../../config/storagePath';
 
-const MARGIN_PT = 52;
+const MARGIN_PT = 56;
 const COL_INK = '#0f172a';
 const COL_MUTED = '#4b5563';
 const COL_RULE = '#e5e7eb';
@@ -42,9 +42,9 @@ export type GenerateProjectPdfResult = {
 };
 
 /** SVG mínimo quando não há dados para elevação frontal. */
-export const FRONT_VIEW_PLACEHOLDER_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 120"><rect width="400" height="120" fill="#ffffff"/><text x="200" y="68" text-anchor="middle" font-size="13" fill="#6b7280" font-family="system-ui,sans-serif">Vista técnica indisponível</text></svg>`;
+export const FRONT_VIEW_PLACEHOLDER_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 132"><rect width="480" height="132" fill="#ffffff"/><rect x="28" y="28" width="424" height="76" fill="none" stroke="#d4d4d4" stroke-width="0.75"/><text x="240" y="74" text-anchor="middle" font-size="12.5" font-weight="500" fill="#6b7280" font-family="Helvetica Neue,Helvetica,Arial,sans-serif">Vista técnica indisponível</text></svg>`;
 
-export const ISOMETRIC_PLACEHOLDER_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 120"><rect width="400" height="120" fill="#ffffff"/><text x="200" y="68" text-anchor="middle" font-size="13" fill="#6b7280" font-family="system-ui,sans-serif">Vista 3D indisponível</text></svg>`;
+export const ISOMETRIC_PLACEHOLDER_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 132"><rect width="480" height="132" fill="#ffffff"/><rect x="28" y="28" width="424" height="76" fill="none" stroke="#d4d4d4" stroke-width="0.75"/><text x="240" y="74" text-anchor="middle" font-size="12.5" font-weight="500" fill="#6b7280" font-family="Helvetica Neue,Helvetica,Arial,sans-serif">Vista 3D indisponível</text></svg>`;
 
 /** @deprecated Use GenerateProjectPdfResult */
 export type PdfResult = GenerateProjectPdfResult;
@@ -277,9 +277,9 @@ function drawingRasterPixelSize(): { pxW: number; pxH: number } {
   const pageH = 841.89;
   const usableW = pageW - 2 * MARGIN_PT;
   const pageBottom = pageH - MARGIN_PT;
-  const headerFromTop = 52;
+  const headerFromTop = 46;
   const imgTop = MARGIN_PT + headerFromTop;
-  const imgBottomPad = 14;
+  const imgBottomPad = 20;
   const imgBoxH = pageBottom - imgTop - imgBottomPad;
   return {
     pxW: ptToPx(usableW),
@@ -336,7 +336,7 @@ export async function generateProjectPdf(
   const usableW =
     doc.page.width - doc.page.margins.left - doc.page.margins.right;
   const pageBottom = doc.page.height - doc.page.margins.bottom;
-  const imgBottomPad = 14;
+  const imgBottomPad = 20;
 
   const drawCentered = (
     text: string,
@@ -380,8 +380,8 @@ export async function generateProjectPdf(
   const embedFullWidthDrawing = (
     raster: { buffer: Buffer; widthPx: number; heightPx: number }
   ): void => {
-    doc.moveDown(0.2);
-    const yImg = doc.y + 4;
+    doc.moveDown(0.12);
+    const yImg = doc.y + 6;
     const availH = pageBottom - yImg - imgBottomPad;
     const { dw, dh } = fitRasterInBox(
       raster.widthPx,
@@ -397,10 +397,10 @@ export async function generateProjectPdf(
 
   // ----- Página 1 — capa + resumo técnico -----
   doc.y = doc.page.margins.top;
-  doc.moveDown(0.35);
+  doc.moveDown(0.32);
 
   drawCentered('PROJETO PORTA PALETES', {
-    size: 22,
+    size: 20,
     font: 'Helvetica-Bold',
     color: COL_INK,
     lineGap: 2,
@@ -418,13 +418,13 @@ export async function generateProjectPdf(
 
   doc
     .font('Helvetica')
-    .fontSize(8.5)
+    .fontSize(9)
     .fillColor(COL_MUTED)
     .text('Documento para apresentação ao cliente', left, doc.y, {
       width: usableW,
       align: 'center',
     });
-  doc.moveDown(0.9);
+  doc.moveDown(0.85);
 
   horizontalRule(doc.y, 0.1, COL_RULE);
   doc.moveDown(0.55);
@@ -507,56 +507,56 @@ export async function generateProjectPdf(
 
   // ----- Página 2 — planta -----
   doc.addPage();
-  doc.y = doc.page.margins.top + 8;
+  doc.y = doc.page.margins.top + 6;
   drawCentered('PLANTA DO GALPÃO', {
-    size: 13,
+    size: 12,
     font: 'Helvetica-Bold',
     color: COL_INK,
-    moveDown: 0.22,
+    moveDown: 0.18,
   });
   drawCentered('Implantação — vista em planta', {
-    size: 9,
+    size: 8.5,
     color: COL_MUTED,
-    moveDown: 0.32,
+    moveDown: 0.28,
   });
-  horizontalRule(doc.y + 2, 0.12, COL_RULE);
-  doc.moveDown(0.45);
+  horizontalRule(doc.y + 3, 0.1, COL_RULE);
+  doc.moveDown(0.38);
   embedFullWidthDrawing(floorRaster);
 
   // ----- Página 3 — detalhe técnico -----
   doc.addPage();
-  doc.y = doc.page.margins.top + 8;
+  doc.y = doc.page.margins.top + 6;
   drawCentered('DETALHE TÉCNICO', {
-    size: 13,
+    size: 12,
     font: 'Helvetica-Bold',
     color: COL_INK,
-    moveDown: 0.22,
+    moveDown: 0.18,
   });
   drawCentered('Elevação frontal', {
-    size: 9,
+    size: 8.5,
     color: COL_MUTED,
-    moveDown: 0.32,
+    moveDown: 0.28,
   });
-  horizontalRule(doc.y + 2, 0.12, COL_RULE);
-  doc.moveDown(0.45);
+  horizontalRule(doc.y + 3, 0.1, COL_RULE);
+  doc.moveDown(0.38);
   embedFullWidthDrawing(frontRaster);
 
   // ----- Página 4 — vista 3D isométrica -----
   doc.addPage();
-  doc.y = doc.page.margins.top + 8;
+  doc.y = doc.page.margins.top + 6;
   drawCentered('VISTA 3D', {
-    size: 13,
+    size: 12,
     font: 'Helvetica-Bold',
     color: COL_INK,
-    moveDown: 0.22,
+    moveDown: 0.18,
   });
   drawCentered('Vista isométrica esquemática da estrutura', {
-    size: 9,
+    size: 8.5,
     color: COL_MUTED,
-    moveDown: 0.32,
+    moveDown: 0.28,
   });
-  horizontalRule(doc.y + 2, 0.12, COL_RULE);
-  doc.moveDown(0.45);
+  horizontalRule(doc.y + 3, 0.1, COL_RULE);
+  doc.moveDown(0.38);
   embedFullWidthDrawing(isoRaster);
 
   doc.end();

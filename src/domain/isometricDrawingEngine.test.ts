@@ -17,12 +17,12 @@ describe('generateIsometricView', () => {
     expect(svg.trim().startsWith('<svg')).toBe(true);
     expect(svg).toContain('xmlns="http://www.w3.org/2000/svg"');
     expect(svg).toContain('</svg>');
-    expect(svg).toMatch(/viewBox="\s*0\s+0\s+1000\s+740"/);
+    expect(svg).toMatch(/viewBox="\s*0\s+0\s+1000\s+768"/);
     expect(svg).toContain('preserveAspectRatio="xMidYMid meet"');
     expect(svg).toContain('fill="#ffffff"');
     expect(svg).toContain('VISTA 3D');
     expect(svg).toContain('<line ');
-    expect(svg).toContain('stroke="#1e293b"');
+    expect(svg).toContain('stroke="#111827"');
     expect(svg).toContain('iso-legend');
   });
 
@@ -70,9 +70,9 @@ describe('generateIsometricView', () => {
 
   it('deve incluir legenda com linhas, módulos e níveis', () => {
     const svg = generateIsometricView(baseInput());
-    expect(svg).toContain('Linhas: 2');
-    expect(svg).toContain('Módulos por linha: 5');
-    expect(svg).toContain('Níveis: 4');
+    expect(svg).toMatch(/Linhas:<\/tspan>\s*2/);
+    expect(svg).toMatch(/Módulos por linha:<\/tspan>\s*5/);
+    expect(svg).toMatch(/Níveis:<\/tspan>\s*4/);
     expect(svg).toContain('iso-legend');
 
     const svgSmall = generateIsometricView({
@@ -81,8 +81,8 @@ describe('generateIsometricView', () => {
       modulesPerRow: 8,
       levels: 6,
     });
-    expect(svgSmall).toContain('Linhas: 3');
-    expect(svgSmall).toContain('Módulos por linha: 8');
-    expect(svgSmall).toContain('Níveis: 6');
+    expect(svgSmall).toMatch(/Linhas:<\/tspan>\s*3/);
+    expect(svgSmall).toMatch(/Módulos por linha:<\/tspan>\s*8/);
+    expect(svgSmall).toMatch(/Níveis:<\/tspan>\s*6/);
   });
 });
