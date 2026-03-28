@@ -3,10 +3,10 @@ import * as path from 'path';
 import { Session } from '../domain/session';
 import { SessionRepository } from '../domain/sessionRepository';
 import { Input, transition, State } from '../domain/stateMachine';
-import type { LayoutResult } from '../domain/layoutEngine';
 import {
   buildFrontViewInputFromAnswers,
   buildIsometricInputFromAnswers,
+  computeProjectEngines,
   finalizeSummaryAnswers,
 } from '../domain/projectEngines';
 import {
@@ -147,10 +147,17 @@ export const routeIncoming = async (
       const phone = genSession.phone;
       const ans = genSession.answers;
 
-      const layout = ans.layout as LayoutResult | undefined;
-      if (!layout) {
+      const engines = computeProjectEngines(ans);
+      if (!engines) {
         throw new Error('Layout ausente');
       }
+      const { layout } = engines;
+      const projectForPdf = {
+        ...ans,
+        layout: engines.layout,
+        structure: engines.structure,
+        budget: engines.budget,
+      };
 
       const floorSvg = generateFloorPlanSvg(
         layout,
@@ -184,7 +191,7 @@ export const routeIncoming = async (
 
       const pdfService = new PdfService(storageDir, env.PORT);
       const pdfResult = await pdfService.generateProjectPdf({
-        project: ans,
+        project: projectForPdf,
         layout,
         floorPlanSvg: floorSvg,
         frontViewSvg: frontSvg,

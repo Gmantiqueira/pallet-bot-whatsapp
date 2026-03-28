@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { PDFDocument } from 'pdf-lib';
 import { routeIncoming, IncomingPayload } from './messageRouter';
 import { Session } from '../domain/session';
 import { SessionRepository } from '../domain/sessionRepository';
@@ -216,6 +217,57 @@ describe('MessageRouter', () => {
           path.join(storageDir, docMsg?.document?.filename as string)
         )
       ).toBe(true);
+    });
+
+    it('integração: fluxo GERAR inclui SVG isométrico no PDF (4 páginas)', async () => {
+      const session = createSession(
+        'SUMMARY_CONFIRM',
+        finalizeSummaryAnswers({
+          lengthMm: 12000,
+          widthMm: 10000,
+          corridorMm: 3000,
+          capacityKg: 2000,
+          heightMode: 'DIRECT',
+          heightMm: 5000,
+          levels: 4,
+          guardRail: 'ambos',
+        })
+      );
+
+      const incoming: IncomingPayload = {
+        from: '5511999999999',
+        buttonReply: 'GERAR',
+      };
+
+      const result = await routeIncoming(session, incoming, repository);
+
+      expect(result.session.state).toBe('DONE');
+      const textMsg = result.outgoingMessages.find((m) => m.type === 'text');
+      expect(textMsg?.text).toContain('Segue o layout do galpão');
+      expect(
+        result.outgoingMessages.some((m) => m.type === 'document')
+      ).toBe(true);
+
+      const pdfPath = result.session.answers.pdfPath as string;
+      expect(fs.existsSync(pdfPath)).toBe(true);
+      expect(fs.statSync(pdfPath).size).toBeGreaterThan(500);
+
+      const pdfDoc = await PDFDocument.load(fs.readFileSync(pdfPath));
+      expect(pdfDoc.getPageCount()).toBe(4);
+
+      const names = fs.existsSync(storageDir)
+        ? fs.readdirSync(storageDir).filter((f) => f.includes('5511999999999'))
+        : [];
+      const isoName = names.find(
+        (f) => f.startsWith('vista-isometrica-') && f.endsWith('.svg')
+      );
+      expect(isoName).toBeDefined();
+      const isoSvg = fs.readFileSync(
+        path.join(storageDir, isoName as string),
+        'utf8'
+      );
+      expect(isoSvg).toMatch(/<svg[\s>]/i);
+      expect(isoSvg.length).toBeGreaterThan(80);
     });
 
     it('should return to SUMMARY_CONFIRM with friendly message when delivery fails', async () => {
