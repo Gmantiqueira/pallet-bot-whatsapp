@@ -9,7 +9,7 @@ export interface MessageContext {
   statusOnly?: boolean;
   previousState?: State;
   imageAnalyzed?: boolean;
-  pdfUrl?: string;
+  /** Nome do ficheiro PDF em `storage` (ex.: `projeto-1730000000000.pdf`). */
   pdfFilename?: string;
 }
 
@@ -23,6 +23,7 @@ export const buildMessages = (
   if (ctx.lastError) {
     messages.push({
       to: session.phone,
+      type: 'text',
       text: `❌ ${ctx.lastError}`,
     });
   }
@@ -32,6 +33,7 @@ export const buildMessages = (
     const summary = buildSummary(session);
     messages.push({
       to: session.phone,
+      type: 'text',
       text: summary,
     });
     return messages;
@@ -43,12 +45,32 @@ export const buildMessages = (
     const width = session.answers.widthMm as number;
     messages.push({
       to: session.phone,
+      type: 'text',
       text: `✅ IMAGEM ANALISADA!\nComprimento: ${length} mm\nLargura: ${width} mm\nPorta: não detectada`,
     });
   }
 
+  // Entrega final: texto + documento em mensagens separadas
+  if (session.state === 'DONE') {
+    const filename = ctx.pdfFilename ?? `projeto-${session.phone}.pdf`;
+    messages.push({
+      to: session.phone,
+      type: 'text',
+      text: 'Projeto gerado com sucesso. Segue o layout do galpão.',
+    });
+    messages.push({
+      to: session.phone,
+      type: 'document',
+      document: {
+        filename,
+        url: `/files/${filename}`,
+      },
+    });
+    return messages;
+  }
+
   // Build state-specific message
-  const stateMessage = buildStateMessage(session, ctx);
+  const stateMessage = buildStateMessage(session);
   if (stateMessage) {
     messages.push(stateMessage);
   }
@@ -56,10 +78,7 @@ export const buildMessages = (
   return messages;
 };
 
-const buildStateMessage = (
-  session: Session,
-  ctx: MessageContext
-): OutgoingMessage | null => {
+const buildStateMessage = (session: Session): OutgoingMessage | null => {
   const state = session.state as State;
 
   switch (state) {
@@ -178,19 +197,6 @@ const buildStateMessage = (
       return {
         to: session.phone,
         text: '⏳ Gerando documento...',
-      };
-
-    case 'DONE':
-      // Use PDF URL from context if available
-      const pdfUrl = ctx.pdfUrl || `/files/projeto-${session.phone}-${Date.now()}.pdf`;
-      const pdfFilename = ctx.pdfFilename || `projeto-${session.phone}.pdf`;
-      return {
-        to: session.phone,
-        text: 'Projeto gerado com sucesso. Segue o layout do galpão.',
-        document: {
-          filename: pdfFilename,
-          url: pdfUrl,
-        },
       };
 
     default:

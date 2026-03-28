@@ -222,8 +222,7 @@ export const routeIncoming = async (
     lastError: deliveryError,
   };
 
-  if (hasGeneratePdfEffect && updatedSession.answers.pdfUrl) {
-    ctx.pdfUrl = updatedSession.answers.pdfUrl as string;
+  if (hasGeneratePdfEffect && updatedSession.answers.pdfFilename) {
     ctx.pdfFilename = updatedSession.answers.pdfFilename as string;
   }
 

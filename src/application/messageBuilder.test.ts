@@ -161,14 +161,20 @@ describe('MessageBuilder', () => {
       expect(messages[0].buttons?.[1].id).toBe('EDITAR');
     });
 
-    it('should build DONE message with document', () => {
+    it('should build DONE as text + document with /files URL', () => {
       const session = createSession('DONE');
-      const messages = buildMessages(session);
+      const messages = buildMessages(session, {
+        pdfFilename: 'projeto-1730000000000.pdf',
+      });
 
+      expect(messages).toHaveLength(2);
+      expect(messages[0].type).toBe('text');
       expect(messages[0].text).toContain('layout do galpão');
-      expect(messages[0].document).toBeDefined();
-      expect(messages[0].document?.filename).toContain('.pdf');
-      expect(messages[0].document?.url).toBeDefined();
+      expect(messages[1].type).toBe('document');
+      expect(messages[1].document?.filename).toBe('projeto-1730000000000.pdf');
+      expect(messages[1].document?.url).toBe(
+        '/files/projeto-1730000000000.pdf'
+      );
     });
   });
 });

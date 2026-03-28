@@ -190,14 +190,12 @@ describe('MessageRouter', () => {
       const result = await routeIncoming(session, incoming, repository);
 
       expect(result.session.state).toBe('DONE');
-      expect(
-        result.outgoingMessages.some((m) =>
-          m.text?.includes('Segue o layout do galpão')
-        )
-      ).toBe(true);
-      const docMsg = result.outgoingMessages.find((m) => m.document);
+      const textMsg = result.outgoingMessages.find((m) => m.type === 'text');
+      expect(textMsg?.text).toContain('Segue o layout do galpão');
+      const docMsg = result.outgoingMessages.find((m) => m.type === 'document');
+      expect(docMsg).toBeDefined();
       expect(docMsg?.document?.filename).toMatch(/^projeto-\d+\.pdf$/);
-      expect(docMsg?.document?.url).toContain('/files/');
+      expect(docMsg?.document?.url).toMatch(/^\/files\/projeto-\d+\.pdf$/);
       expect(typeof result.session.answers.pdfPath).toBe('string');
       expect(fs.existsSync(result.session.answers.pdfPath as string)).toBe(true);
 
