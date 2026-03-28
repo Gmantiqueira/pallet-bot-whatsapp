@@ -89,6 +89,46 @@ describe('generateProjectPdf', () => {
     expect(imageMarkers.length).toBeGreaterThanOrEqual(3);
   });
 
+  it('deve gravar PDF no storage com filename, path e url corretos', async () => {
+    const answers = finalizeSummaryAnswers({
+      lengthMm: 12000,
+      widthMm: 10000,
+      corridorMm: 3000,
+      capacityKg: 2000,
+      heightMode: 'DIRECT',
+      heightMm: 5000,
+      levels: 4,
+      guardRail: 'ambos',
+      clientName: 'Cliente Teste SA',
+      projectName: 'Galpão Campinas',
+    });
+    const layout = answers.layout as LayoutResult;
+    const result = await generateProjectPdf(
+      {
+        project: answers,
+        layout,
+        floorPlanSvg: generateFloorPlanSvg(
+          layout,
+          resolveFloorPlanWarehouse(layout, answers)
+        ),
+        frontViewSvg: generateFrontViewSvg(
+          buildFrontViewInputFromAnswers(answers)!
+        ),
+        isometricSvg: generateIsometricView(
+          buildIsometricInputFromAnswers(answers, layout)!
+        ),
+      },
+      { storagePath: testStoragePath, port: 8080 }
+    );
+
+    expect(result.filename).toMatch(/^projeto-\d+\.pdf$/);
+    expect(result.path).toBe(path.join(testStoragePath, result.filename));
+    expect(path.dirname(result.path)).toBe(testStoragePath);
+    expect(fs.existsSync(result.path)).toBe(true);
+    expect(fs.statSync(result.path).size).toBeGreaterThan(2000);
+    expect(result.url).toBe(`http://localhost:8080/files/${result.filename}`);
+  });
+
   it('PDF deve incluir vista 3D isométrica na 4ª página', async () => {
     const answers = finalizeSummaryAnswers({
       lengthMm: 12000,

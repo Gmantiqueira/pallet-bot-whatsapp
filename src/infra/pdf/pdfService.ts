@@ -21,10 +21,11 @@ const MARGIN_PT = 52;
 const COL_INK = '#0f172a';
 const COL_MUTED = '#4b5563';
 const COL_RULE = '#e5e7eb';
-const COL_ACCENT = '#2563eb';
+const COL_ACCENT = '#1e40af';
+const COL_BOX = '#f1f5f9';
 
-/** DPI para rasterizar SVG antes de embutir no PDF (boa nitidez em impressão). */
-const RASTER_DPI = 240;
+/** DPI para rasterizar SVG antes de embutir no PDF (nitidez em impressão / PDF cliente). */
+const RASTER_DPI = 280;
 
 export type GenerateProjectPdfInput = {
   project: Record<string, unknown>;
@@ -101,7 +102,91 @@ function fitRasterInBox(
   return { dw, dh };
 }
 
-function summaryLines(
+function stringField(
+  project: Record<string, unknown>,
+  keys: string[],
+  fallback = '—'
+): string {
+  for (const k of keys) {
+    const v = project[k];
+    if (typeof v === 'string' && v.trim().length > 0) {
+      return v.trim();
+    }
+  }
+  return fallback;
+}
+
+function coverCliente(project: Record<string, unknown>): string {
+  return stringField(project, [
+    'clientName',
+    'cliente',
+    'nomeCliente',
+    'customerName',
+  ]);
+}
+
+function coverProjeto(project: Record<string, unknown>): string {
+  return stringField(project, [
+    'projectName',
+    'nomeProjeto',
+    'projetoNome',
+    'referencia',
+    'referência',
+  ]);
+}
+
+function coverDataEmissao(project: Record<string, unknown>): string {
+  const raw = project.pdfDate ?? project.dataEmissao ?? project.documentDate;
+  if (typeof raw === 'string' && raw.trim()) {
+    return raw.trim();
+  }
+  if (typeof raw === 'number') {
+    return new Date(raw).toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric',
+    });
+  }
+  return new Date().toLocaleDateString('pt-BR', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  });
+}
+
+function formatPeDireitoAltura(project: Record<string, unknown>): string {
+  if (project.heightMode === 'DIRECT' && typeof project.heightMm === 'number') {
+    return formatMm(project.heightMm);
+  }
+  if (
+    project.heightMode === 'CALC' &&
+    typeof project.loadHeightMm === 'number' &&
+    typeof project.levels === 'number'
+  ) {
+    const total = project.loadHeightMm * project.levels;
+    return `${formatMm(total)} (${project.levels} × ${formatMm(project.loadHeightMm)})`;
+  }
+  return '—';
+}
+
+function formatPosicoesEstimadas(
+  project: Record<string, unknown>,
+  layout: LayoutResult
+): string {
+  const budget = project.budget as BudgetResult | undefined;
+  if (budget?.totals && typeof budget.totals.positions === 'number') {
+    return String(budget.totals.positions);
+  }
+  if (layout.estimatedPositions > 0) {
+    return String(layout.estimatedPositions);
+  }
+  if (typeof project.levels === 'number' && layout.modulesTotal > 0) {
+    return String(layout.modulesTotal * project.levels);
+  }
+  return '—';
+}
+
+function technicalSummaryRows(
   project: Record<string, unknown>,
   layout: LayoutResult
 ): { label: string; value: string }[] {
@@ -114,26 +199,62 @@ function summaryLines(
   const niveis =
     typeof project.levels === 'number' ? String(project.levels) : '—';
   const modulos = String(layout.modulesTotal);
-  const budget = project.budget as BudgetResult | undefined;
-  let posicoes: string;
-  if (budget?.totals) {
-    posicoes = String(budget.totals.positions);
-  } else if (
-    typeof project.levels === 'number' &&
-    layout.modulesTotal > 0
-  ) {
-    posicoes = String(layout.modulesTotal * project.levels);
-  } else {
-    posicoes = '—';
-  }
 
   return [
     { label: 'Comprimento', value: comprimento },
     { label: 'Largura', value: largura },
+    { label: 'Pé-direito / altura', value: formatPeDireitoAltura(project) },
     { label: 'Níveis', value: niveis },
     { label: 'Módulos', value: modulos },
-    { label: 'Posições', value: posicoes },
+    { label: 'Posições estimadas', value: formatPosicoesEstimadas(project, layout) },
   ];
+}
+
+function drawKeyValueRow(
+  doc: InstanceType<typeof PDFDocument>,
+  x: number,
+  y: number,
+  usableW: number,
+  label: string,
+  value: string,
+  labelW: number
+): number {
+  const valX = x + labelW;
+  const valW = Math.max(80, usableW - labelW);
+  doc.font('Helvetica-Bold').fontSize(9).fillColor(COL_MUTED);
+  const hLabel = doc.heightOfString(label, { width: labelW - 4 });
+  doc.font('Helvetica').fontSize(10).fillColor(COL_INK);
+  const hVal = doc.heightOfString(value, { width: valW });
+  const rowH = Math.max(hLabel, hVal, 13);
+
+  doc.font('Helvetica-Bold').fontSize(9).fillColor(COL_MUTED).text(label, x, y, {
+    width: labelW - 4,
+    lineGap: 1,
+  });
+  doc.font('Helvetica').fontSize(10).fillColor(COL_INK).text(value, valX, y, {
+    width: valW,
+    lineGap: 1,
+  });
+  return y + rowH + 6;
+}
+
+function measureTechnicalSummaryHeight(
+  doc: InstanceType<typeof PDFDocument>,
+  usableW: number,
+  labelColW: number,
+  rows: { label: string; value: string }[]
+): number {
+  doc.font('Helvetica-Bold').fontSize(11);
+  let h = doc.heightOfString('RESUMO TÉCNICO', { width: usableW }) + 14;
+  const valW = Math.max(80, usableW - labelColW);
+  for (const row of rows) {
+    doc.font('Helvetica-Bold').fontSize(9);
+    const hLabel = doc.heightOfString(row.label, { width: labelColW - 4 });
+    doc.font('Helvetica').fontSize(10);
+    const hVal = doc.heightOfString(row.value, { width: valW });
+    h += Math.max(hLabel, hVal, 13) + 6;
+  }
+  return h + 12;
 }
 
 function attachPdfFileStream(
@@ -272,97 +393,170 @@ export async function generateProjectPdf(
     doc.image(raster.buffer, ix, yImg, { width: dw, height: dh });
   };
 
-  // ----- Página 1 — resumo -----
+  const labelColW = 132;
+
+  // ----- Página 1 — capa + resumo técnico -----
   doc.y = doc.page.margins.top;
-  doc.moveDown(0.45);
+  doc.moveDown(0.35);
 
   drawCentered('PROJETO PORTA PALETES', {
-    size: 24,
+    size: 22,
     font: 'Helvetica-Bold',
     color: COL_INK,
     lineGap: 2,
-    moveDown: 0.55,
+    moveDown: 0.4,
   });
 
-  const accentBarY = doc.y;
+  const barY = doc.y + 2;
   doc
     .strokeColor(COL_ACCENT)
-    .lineWidth(2)
-    .moveTo(left + usableW * 0.35, accentBarY)
-    .lineTo(left + usableW * 0.65, accentBarY)
+    .lineWidth(2.25)
+    .moveTo(left + usableW * 0.28, barY)
+    .lineTo(left + usableW * 0.72, barY)
     .stroke();
-  doc.moveDown(0.85);
+  doc.moveDown(0.55);
 
-  drawCentered('RESUMO', {
-    size: 11,
-    font: 'Helvetica-Bold',
-    color: COL_INK,
-    moveDown: 0.85,
-  });
+  doc
+    .font('Helvetica')
+    .fontSize(8.5)
+    .fillColor(COL_MUTED)
+    .text('Documento para apresentação ao cliente', left, doc.y, {
+      width: usableW,
+      align: 'center',
+    });
+  doc.moveDown(0.9);
 
-  for (const block of summaryLines(input.project, input.layout)) {
-    drawCentered(block.label, {
-      size: 9,
-      color: COL_MUTED,
-      moveDown: 0.28,
-    });
-    drawCentered(block.value, {
-      size: 12,
-      color: COL_INK,
-      font: 'Helvetica',
-      moveDown: 0.72,
-    });
+  horizontalRule(doc.y, 0.1, COL_RULE);
+  doc.moveDown(0.55);
+
+  let rowY = doc.y;
+  rowY = drawKeyValueRow(
+    doc,
+    left,
+    rowY,
+    usableW,
+    'Cliente',
+    coverCliente(input.project),
+    labelColW
+  );
+  rowY = drawKeyValueRow(
+    doc,
+    left,
+    rowY,
+    usableW,
+    'Projeto',
+    coverProjeto(input.project),
+    labelColW
+  );
+  rowY = drawKeyValueRow(
+    doc,
+    left,
+    rowY,
+    usableW,
+    'Data',
+    coverDataEmissao(input.project),
+    labelColW
+  );
+  doc.y = rowY;
+  doc.moveDown(0.45);
+  horizontalRule(doc.y, 0.1, COL_RULE);
+  doc.moveDown(0.55);
+
+  const techRows = technicalSummaryRows(input.project, input.layout);
+  const boxTop = doc.y;
+  const boxPad = 8;
+  const innerH = measureTechnicalSummaryHeight(
+    doc,
+    usableW,
+    labelColW,
+    techRows
+  );
+  const boxH = innerH + boxPad * 2;
+
+  doc
+    .roundedRect(left - 2, boxTop - 4, usableW + 4, boxH, 3)
+    .fillColor(COL_BOX)
+    .fillOpacity(0.5)
+    .fill();
+  doc.fillOpacity(1);
+  doc
+    .roundedRect(left - 2, boxTop - 4, usableW + 4, boxH, 3)
+    .strokeColor(COL_RULE)
+    .lineWidth(0.65)
+    .stroke();
+
+  rowY = boxTop + boxPad;
+  doc
+    .font('Helvetica-Bold')
+    .fontSize(11)
+    .fillColor(COL_INK)
+    .text('RESUMO TÉCNICO', left, rowY, { width: usableW });
+  rowY = doc.y + 6;
+  for (const row of techRows) {
+    rowY = drawKeyValueRow(
+      doc,
+      left,
+      rowY,
+      usableW,
+      row.label,
+      row.value,
+      labelColW
+    );
   }
+  doc.y = boxTop + boxH + 14;
 
-  doc.moveDown(0.4);
-  horizontalRule(doc.y, 0.08, COL_RULE);
-
-  // ----- Página 2 — planta (imagem ocupa área útil) -----
+  // ----- Página 2 — planta -----
   doc.addPage();
-  doc.y = doc.page.margins.top + 10;
+  doc.y = doc.page.margins.top + 8;
   drawCentered('PLANTA DO GALPÃO', {
-    size: 12,
+    size: 13,
     font: 'Helvetica-Bold',
     color: COL_INK,
-    moveDown: 0.28,
+    moveDown: 0.22,
   });
-  drawCentered('Implantação esquemática', {
+  drawCentered('Implantação — vista em planta', {
     size: 9,
     color: COL_MUTED,
-    moveDown: 0.35,
+    moveDown: 0.32,
   });
+  horizontalRule(doc.y + 2, 0.12, COL_RULE);
+  doc.moveDown(0.45);
   embedFullWidthDrawing(floorRaster);
 
-  // ----- Página 3 — vista técnica -----
+  // ----- Página 3 — detalhe técnico -----
   doc.addPage();
-  doc.y = doc.page.margins.top + 10;
+  doc.y = doc.page.margins.top + 8;
   drawCentered('DETALHE TÉCNICO', {
-    size: 12,
+    size: 13,
     font: 'Helvetica-Bold',
     color: COL_INK,
-    moveDown: 0.28,
+    moveDown: 0.22,
   });
   drawCentered('Elevação frontal', {
     size: 9,
     color: COL_MUTED,
-    moveDown: 0.35,
+    moveDown: 0.32,
   });
+  horizontalRule(doc.y + 2, 0.12, COL_RULE);
+  doc.moveDown(0.45);
   embedFullWidthDrawing(frontRaster);
 
   // ----- Página 4 — vista 3D isométrica -----
   doc.addPage();
-  doc.y = doc.page.margins.top + 10;
+  doc.y = doc.page.margins.top + 8;
   drawCentered('VISTA 3D', {
-    size: 12,
+    size: 13,
     font: 'Helvetica-Bold',
     color: COL_INK,
-    moveDown: 0.28,
+    moveDown: 0.22,
   });
-  drawCentered('Representação isométrica esquemática', {
+  drawCentered('Vista isométrica esquemática da estrutura', {
     size: 9,
     color: COL_MUTED,
-    moveDown: 0.35,
+    moveDown: 0.32,
   });
+  horizontalRule(doc.y + 2, 0.12, COL_RULE);
+  doc.moveDown(0.45);
   embedFullWidthDrawing(isoRaster);
 
   doc.end();
