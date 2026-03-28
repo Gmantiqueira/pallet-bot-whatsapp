@@ -21,10 +21,11 @@ const SVGtoPDF = require('svg-to-pdfkit') as (
 ) => void;
 /* eslint-enable @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires */
 
-const MARGIN_PT = 56;
-const COL_INK = '#111827';
-const COL_MUTED = '#6b7280';
+const MARGIN_PT = 52;
+const COL_INK = '#0f172a';
+const COL_MUTED = '#4b5563';
 const COL_RULE = '#e5e7eb';
+const COL_ACCENT = '#2563eb';
 
 export interface PdfResult {
   filename: string;
@@ -156,11 +157,11 @@ export class PdfService {
       }
     };
 
-    const horizontalRule = (y: number, inset = 0.1): void => {
+    const horizontalRule = (y: number, inset = 0.08, color = COL_RULE): void => {
       const x0 = left + usableW * inset;
       const x1 = left + usableW * (1 - inset);
       doc
-        .strokeColor(COL_RULE)
+        .strokeColor(color)
         .lineWidth(0.75)
         .moveTo(x0, y)
         .lineTo(x1, y)
@@ -176,40 +177,50 @@ export class PdfService {
 
     // ----- Página 1 -----
     doc.y = doc.page.margins.top;
-    doc.moveDown(0.35);
+    doc.moveDown(0.45);
 
     drawCentered('PROJETO PORTA PALETES', {
-      size: 26,
+      size: 24,
       font: 'Helvetica-Bold',
       color: COL_INK,
-      moveDown: 1.1,
+      lineGap: 2,
+      moveDown: 0.55,
     });
+
+    const accentBarY = doc.y;
+    doc
+      .strokeColor(COL_ACCENT)
+      .lineWidth(2)
+      .moveTo(left + usableW * 0.35, accentBarY)
+      .lineTo(left + usableW * 0.65, accentBarY)
+      .stroke();
+    doc.moveDown(0.75);
 
     drawCentered(`Cliente: ${resolveClientLine(session, answers)}`, {
       size: 11,
       color: COL_INK,
-      moveDown: 0.35,
+      moveDown: 0.42,
     });
     drawCentered(`Projeto: ${resolveProjectLine(answers)}`, {
       size: 11,
       color: COL_INK,
-      moveDown: 0.35,
+      moveDown: 0.42,
     });
     drawCentered(`Data: ${dateStr}`, {
       size: 11,
       color: COL_INK,
-      moveDown: 1.0,
+      moveDown: 1.15,
     });
 
     const ruleY = doc.y;
-    horizontalRule(ruleY, 0.08);
-    doc.moveDown(0.9);
+    horizontalRule(ruleY, 0.08, COL_RULE);
+    doc.moveDown(1.0);
 
     drawCentered('RESUMO TÉCNICO', {
-      size: 12,
+      size: 11,
       font: 'Helvetica-Bold',
       color: COL_INK,
-      moveDown: 0.85,
+      moveDown: 0.95,
     });
 
     let warehouseSummary = '—';
@@ -243,31 +254,31 @@ export class PdfService {
       drawCentered(block.label, {
         size: 9,
         color: COL_MUTED,
-        moveDown: 0.2,
+        moveDown: 0.28,
       });
       drawCentered(block.value, {
         size: 12,
         color: COL_INK,
         font: 'Helvetica',
-        moveDown: 0.65,
+        moveDown: 0.72,
       });
     }
 
     // ----- Página 2 — Planta -----
     doc.addPage();
     doc.y = doc.page.margins.top;
-    doc.moveDown(0.5);
+    doc.moveDown(0.55);
 
-    drawCentered('PLANTA', {
-      size: 18,
+    drawCentered('PLANTA DO GALPÃO', {
+      size: 17,
       font: 'Helvetica-Bold',
       color: COL_INK,
-      moveDown: 0.3,
+      moveDown: 0.38,
     });
     drawCentered('Implantação esquemática', {
-      size: 9,
+      size: 10,
       color: COL_MUTED,
-      moveDown: 0.55,
+      moveDown: 0.65,
     });
 
     if (layout) {
@@ -276,7 +287,7 @@ export class PdfService {
         resolveFloorPlanWarehouse(layout, answers)
       );
       const topSvg = doc.y;
-      const bottomPad = 36;
+      const bottomPad = 44;
       const maxH = Math.max(120, pageBottom - topSvg - bottomPad);
       const { width: svgW, height: svgH } = fitSvgToBox(
         svg,
@@ -304,25 +315,25 @@ export class PdfService {
     // ----- Página 3 — Vista técnica -----
     doc.addPage();
     doc.y = doc.page.margins.top;
-    doc.moveDown(0.5);
+    doc.moveDown(0.55);
 
-    drawCentered('VISTA TÉCNICA', {
-      size: 18,
+    drawCentered('DETALHE TÉCNICO', {
+      size: 17,
       font: 'Helvetica-Bold',
       color: COL_INK,
-      moveDown: 0.3,
+      moveDown: 0.38,
     });
     drawCentered('Elevação frontal', {
-      size: 9,
+      size: 10,
       color: COL_MUTED,
-      moveDown: 0.55,
+      moveDown: 0.65,
     });
 
     const fv = buildFrontViewInputFromAnswers(answers);
     if (fv) {
       const svgFv = generateFrontViewSvg(fv);
       const top2 = doc.y;
-      const bottomPad2 = 36;
+      const bottomPad2 = 44;
       const maxH2 = Math.max(120, pageBottom - top2 - bottomPad2);
       const { width: w2, height: h2 } = fitSvgToBox(
         svgFv,

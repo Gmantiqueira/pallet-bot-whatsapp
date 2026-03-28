@@ -6,25 +6,25 @@ export type FloorPlanWarehouseMm = {
   widthMm: number;
 };
 
-const VB_W = 880;
-const VB_H = 640;
-const MARGIN = 40;
-const HEADER_H = 88;
-const WH_MAX_W = 780;
-const WH_MAX_H = 410;
-const CORRIDOR_WEIGHT = 0.38;
+/** Paleta comercial unificada (planta + elevação): azul estrutura, cinza corredor, preto técnico. */
+const DOC_BG = '#ffffff';
+const DOC_INK = '#0f172a';
+const DOC_STRUCTURE_FILL = '#dbeafe';
+const DOC_STRUCTURE_STROKE = '#2563eb';
+const DOC_CORRIDOR_FILL = '#e5e7eb';
+const DOC_CORRIDOR_STROKE = '#9ca3af';
+const DOC_MUTED = '#4b5563';
+const DOC_LEGEND_MUTED = '#6b7280';
+const DOC_FRAME = '#e5e7eb';
+const DOC_WAREHOUSE_FILL = '#f8fafc';
 
-const COL_WHITE = '#ffffff';
-const COL_WAREHOUSE_FILL = '#fafafa';
-const COL_WAREHOUSE_STROKE = '#0f172a';
-const COL_CORRIDOR = '#e8eaed';
-const COL_CORRIDOR_LINE = '#cbd5e1';
-const COL_MODULE_FILL = '#dbeafe';
-const COL_MODULE_STROKE = '#3b82f6';
-const COL_PL_TEXT = '#111827';
-const COL_PL_SUB = '#4b5563';
-const COL_PL_LEGEND_LBL = '#6b7280';
-const COL_INNER_RULE = '#e5e7eb';
+const VB_W = 880;
+const VB_H = 660;
+const PAD = 48;
+const HEADER_BLOCK = 72;
+const WH_MAX_W = 748;
+const WH_MAX_H = 398;
+const CORRIDOR_WEIGHT = 0.38;
 
 function formatMmPtBr(mm: number): string {
   return `${mm.toLocaleString('pt-BR')} mm`;
@@ -39,9 +39,8 @@ function escapeXml(text: string): string {
 }
 
 /**
- * Planta do galpão: fundo branco, margens, título, subtítulo com dimensões,
- * contorno proporcional ao canvas, corredores cinza claro, módulos azul claro,
- * legenda inferior. SVG responsivo (viewBox fixo + preserveAspectRatio).
+ * Planta do galpão: documento comercial — moldura, título central, módulos em azul claro,
+ * corredores cinza, contornos técnicos em preto. SVG responsivo (viewBox + preserveAspectRatio).
  */
 export function generateFloorPlanSvg(
   layout: LayoutResult,
@@ -56,7 +55,7 @@ export function generateFloorPlanSvg(
   const buildingW = lengthMm * scale;
   const buildingH = widthMm * scale;
   const bx = (VB_W - buildingW) / 2;
-  const by = MARGIN + HEADER_H - 8;
+  const by = PAD + HEADER_BLOCK + 12;
 
   const n = Math.max(cols, rows, 1);
   const outlineStroke = Math.max(3, Math.min(5.5, 3.6 + 8 / Math.log2(n + 2)));
@@ -80,29 +79,29 @@ export function generateFloorPlanSvg(
   parts.push('<title>Planta do galpão</title>');
   parts.push('<defs>');
   parts.push(`<style>
-    .pl-title { font: 700 20px system-ui, -apple-system, "Segoe UI", sans-serif; fill: ${COL_PL_TEXT}; }
-    .pl-sub { font: 500 12px system-ui, -apple-system, "Segoe UI", sans-serif; fill: ${COL_PL_SUB}; }
-    .pl-legend { font: 12px system-ui, -apple-system, "Segoe UI", sans-serif; fill: ${COL_PL_TEXT}; }
-    .pl-legend-lbl { fill: ${COL_PL_LEGEND_LBL}; }
+    .pl-title { font: 700 20px system-ui, -apple-system, "Segoe UI", sans-serif; fill: ${DOC_INK}; letter-spacing: 0.04em; }
+    .pl-sub { font: 500 12px system-ui, -apple-system, "Segoe UI", sans-serif; fill: ${DOC_MUTED}; }
+    .pl-legend { font: 12px system-ui, -apple-system, "Segoe UI", sans-serif; fill: ${DOC_INK}; }
+    .pl-legend-lbl { fill: ${DOC_LEGEND_MUTED}; font-weight: 500; }
   </style>`);
   parts.push('</defs>');
 
   parts.push(
-    `<rect x="0" y="0" width="${VB_W}" height="${VB_H}" fill="${COL_WHITE}"/>`
+    `<rect x="0" y="0" width="${VB_W}" height="${VB_H}" fill="${DOC_BG}"/>`
   );
   parts.push(
-    `<rect x="${MARGIN}" y="${MARGIN}" width="${VB_W - 2 * MARGIN}" height="${VB_H - 2 * MARGIN}" fill="none" stroke="${COL_INNER_RULE}" stroke-width="1" rx="4"/>`
-  );
-
-  parts.push(
-    `<text x="${VB_W / 2}" y="${MARGIN + 28}" text-anchor="middle" class="pl-title">${escapeXml('PLANTA DO GALPÃO')}</text>`
-  );
-  parts.push(
-    `<text x="${VB_W / 2}" y="${MARGIN + 50}" text-anchor="middle" class="pl-sub">${escapeXml(subtitle)}</text>`
+    `<rect x="${PAD}" y="${PAD}" width="${VB_W - 2 * PAD}" height="${VB_H - 2 * PAD}" fill="none" stroke="${DOC_FRAME}" stroke-width="1" rx="6"/>`
   );
 
   parts.push(
-    `<rect x="${bx}" y="${by}" width="${buildingW}" height="${buildingH}" fill="${COL_WAREHOUSE_FILL}" stroke="${COL_WAREHOUSE_STROKE}" stroke-width="${outlineStroke}" rx="2"/>`
+    `<text x="${VB_W / 2}" y="${PAD + 26}" text-anchor="middle" class="pl-title">${escapeXml('PLANTA DO GALPÃO')}</text>`
+  );
+  parts.push(
+    `<text x="${VB_W / 2}" y="${PAD + 48}" text-anchor="middle" class="pl-sub">${escapeXml(subtitle)}</text>`
+  );
+
+  parts.push(
+    `<rect x="${bx}" y="${by}" width="${buildingW}" height="${buildingH}" fill="${DOC_WAREHOUSE_FILL}" stroke="${DOC_INK}" stroke-width="${outlineStroke}" rx="2"/>`
   );
 
   let yCursor = by;
@@ -115,30 +114,30 @@ export function generateFloorPlanSvg(
       const mh = Math.max(rowBandH - 2 * gapModule, 0.5);
       const rr = Math.min(2.5, mw / 5, mh / 5);
       parts.push(
-        `<rect x="${mx}" y="${my}" width="${mw}" height="${mh}" rx="${rr}" fill="${COL_MODULE_FILL}" stroke="${COL_MODULE_STROKE}" stroke-width="${modStroke}"/>`
+        `<rect x="${mx}" y="${my}" width="${mw}" height="${mh}" rx="${rr}" fill="${DOC_STRUCTURE_FILL}" stroke="${DOC_STRUCTURE_STROKE}" stroke-width="${modStroke}"/>`
       );
     }
 
     yCursor += rowBandH;
     if (r < rows - 1 && corH > 0.5) {
       parts.push(
-        `<rect x="${bx}" y="${yCursor}" width="${buildingW}" height="${corH}" fill="${COL_CORRIDOR}" stroke="${COL_CORRIDOR_LINE}" stroke-width="0.75"/>`
+        `<rect x="${bx}" y="${yCursor}" width="${buildingW}" height="${corH}" fill="${DOC_CORRIDOR_FILL}" stroke="${DOC_CORRIDOR_STROKE}" stroke-width="0.85"/>`
       );
       yCursor += corH;
     }
   }
 
-  const legY = VB_H - MARGIN - 8;
-  const legX = MARGIN + 8;
-  const lineGap = 16;
+  const legBase = VB_H - PAD - 14;
+  const lineGap = 22;
+  const cx = VB_W / 2;
   parts.push(
-    `<text x="${legX}" y="${legY - lineGap * 2}" class="pl-legend"><tspan class="pl-legend-lbl">Linhas:</tspan> ${rows}</text>`
+    `<text x="${cx}" y="${legBase - lineGap * 2}" text-anchor="middle" class="pl-legend"><tspan class="pl-legend-lbl">Linhas:</tspan> ${rows}</text>`
   );
   parts.push(
-    `<text x="${legX}" y="${legY - lineGap}" class="pl-legend"><tspan class="pl-legend-lbl">Módulos por linha:</tspan> ${cols}</text>`
+    `<text x="${cx}" y="${legBase - lineGap}" text-anchor="middle" class="pl-legend"><tspan class="pl-legend-lbl">Módulos por linha:</tspan> ${cols}</text>`
   );
   parts.push(
-    `<text x="${legX}" y="${legY}" class="pl-legend"><tspan class="pl-legend-lbl">Total de módulos:</tspan> ${layout.modulesTotal}</text>`
+    `<text x="${cx}" y="${legBase}" text-anchor="middle" class="pl-legend"><tspan class="pl-legend-lbl">Total de módulos:</tspan> ${layout.modulesTotal}</text>`
   );
 
   parts.push('</svg>');
@@ -169,9 +168,6 @@ export function resolveFloorPlanWarehouse(
 
 // --- Vista frontal técnica ---
 
-const TECH = '#000000';
-const TECH_BG = '#ffffff';
-
 export type FrontViewInput = {
   levels: number;
   uprightHeightMm: number;
@@ -181,12 +177,13 @@ export type FrontViewInput = {
 };
 
 const FV_VB_W = 880;
-const FV_VB_H = 720;
-const FV_TITLE_Y = 38;
-const FV_RACK_TOP = 68;
-const FV_RACK_MAX_W = 560;
-const FV_RACK_MAX_H = 380;
-const FV_DIM_GAP = 40;
+const FV_VB_H = 780;
+const FV_PAD = 48;
+const FV_RACK_TOP = FV_PAD + 86;
+const FV_RACK_MAX_W = 540;
+const FV_RACK_MAX_H = 360;
+const FV_DIM_GAP = 48;
+const FV_BOTTOM_RESERVE = 138;
 
 function dimensionLineH(
   x1: number,
@@ -223,7 +220,8 @@ function dimensionLineV(
 }
 
 /**
- * Elevação frontal como desenho técnico: montantes, longarinas, cotas e dados (fundo branco, traços pretos).
+ * Elevação frontal: mesma linguagem visual da planta — moldura, montantes em azul claro,
+ * longarinas em azul, cotas e traços de cota em preto técnico.
  */
 export function generateFrontViewSvg(data: FrontViewInput): string {
   const levels = Math.max(1, Math.floor(data.levels));
@@ -243,9 +241,9 @@ export function generateFrontViewSvg(data: FrontViewInput): string {
   const rackBottom = ry + innerH;
 
   const t = Math.max(2.5, Math.min(6, innerW * 0.028));
-  const beamTh = Math.max(1.2, Math.min(2.6, innerH / Math.max(levels * 12, 8)));
-  const xL = rx + t * 0.4;
-  const xR = rx + innerW - t * 0.4;
+  const beamTh = Math.max(1.4, Math.min(3.2, innerH / Math.max(levels * 10, 8)));
+  const xL = rx + t * 0.35;
+  const xR = rx + innerW - t * 0.35;
 
   const parts: string[] = [];
   parts.push(
@@ -254,87 +252,94 @@ export function generateFrontViewSvg(data: FrontViewInput): string {
   parts.push('<title>Detalhe técnico frontal</title>');
   parts.push('<defs>');
   parts.push(`<style>
-    .tf-title { font: 700 18px system-ui, -apple-system, "Segoe UI", sans-serif; fill: ${TECH}; }
-    .tf-note { font: 12px system-ui, -apple-system, "Segoe UI", sans-serif; fill: ${TECH}; }
-    .tf-cota { font: 10px system-ui, -apple-system, "Segoe UI", sans-serif; fill: ${TECH}; }
-    .tf-hint { font: 9px system-ui, -apple-system, "Segoe UI", sans-serif; fill: ${TECH}; }
+    .tf-title { font: 700 20px system-ui, -apple-system, "Segoe UI", sans-serif; fill: ${DOC_INK}; letter-spacing: 0.04em; }
+    .tf-sub { font: 500 12px system-ui, -apple-system, "Segoe UI", sans-serif; fill: ${DOC_MUTED}; }
+    .tf-note { font: 12px system-ui, -apple-system, "Segoe UI", sans-serif; fill: ${DOC_INK}; }
+    .tf-cota { font: 10px system-ui, -apple-system, "Segoe UI", sans-serif; fill: ${DOC_INK}; }
+    .tf-hint { font: 9px system-ui, -apple-system, "Segoe UI", sans-serif; fill: ${DOC_LEGEND_MUTED}; }
   </style>`);
   parts.push('</defs>');
 
-  parts.push(`<rect width="${FV_VB_W}" height="${FV_VB_H}" fill="${TECH_BG}"/>`);
-
+  parts.push(`<rect width="${FV_VB_W}" height="${FV_VB_H}" fill="${DOC_BG}"/>`);
   parts.push(
-    `<text x="${FV_VB_W / 2}" y="${FV_TITLE_Y}" text-anchor="middle" class="tf-title">${escapeXml('DETALHE TÉCNICO')}</text>`
+    `<rect x="${FV_PAD}" y="${FV_PAD}" width="${FV_VB_W - 2 * FV_PAD}" height="${FV_VB_H - 2 * FV_PAD}" fill="none" stroke="${DOC_FRAME}" stroke-width="1" rx="6"/>`
   );
 
   parts.push(
-    `<rect x="${rx}" y="${ry}" width="${t}" height="${innerH}" fill="${TECH_BG}" stroke="${TECH}" stroke-width="1.6"/>`
+    `<text x="${FV_VB_W / 2}" y="${FV_PAD + 26}" text-anchor="middle" class="tf-title">${escapeXml('DETALHE TÉCNICO')}</text>`
   );
   parts.push(
-    `<rect x="${rx + innerW - t}" y="${ry}" width="${t}" height="${innerH}" fill="${TECH_BG}" stroke="${TECH}" stroke-width="1.6"/>`
+    `<text x="${FV_VB_W / 2}" y="${FV_PAD + 48}" text-anchor="middle" class="tf-sub">${escapeXml('Elevação frontal')}</text>`
+  );
+
+  parts.push(
+    `<rect x="${rx}" y="${ry}" width="${t}" height="${innerH}" fill="${DOC_STRUCTURE_FILL}" stroke="${DOC_INK}" stroke-width="1.6"/>`
+  );
+  parts.push(
+    `<rect x="${rx + innerW - t}" y="${ry}" width="${t}" height="${innerH}" fill="${DOC_STRUCTURE_FILL}" stroke="${DOC_INK}" stroke-width="1.6"/>`
   );
 
   for (let j = 0; j <= levels; j++) {
     const yy = ry + j * levDraw;
     parts.push(
-      `<line x1="${xL}" y1="${yy}" x2="${xR}" y2="${yy}" stroke="${TECH}" stroke-width="${beamTh}" stroke-linecap="square"/>`
+      `<line x1="${xL}" y1="${yy}" x2="${xR}" y2="${yy}" stroke="${DOC_STRUCTURE_STROKE}" stroke-width="${beamTh}" stroke-linecap="square"/>`
     );
   }
 
   const dimLeftX = rx - FV_DIM_GAP;
-  parts.push(dimensionLineV(dimLeftX, ry, rackBottom, 4, TECH));
+  parts.push(dimensionLineV(dimLeftX, ry, rackBottom, 4, DOC_INK));
   parts.push(
-    `<text transform="translate(${dimLeftX - 10},${(ry + rackBottom) / 2}) rotate(-90)" text-anchor="middle" class="tf-cota">${escapeXml(
+    `<text transform="translate(${dimLeftX - 14},${(ry + rackBottom) / 2}) rotate(-90)" text-anchor="middle" class="tf-cota">${escapeXml(
       formatMmPtBr(Math.round(uprightH))
     )}</text>`
   );
   parts.push(
-    `<text x="${dimLeftX}" y="${ry - 8}" text-anchor="middle" class="tf-hint">${escapeXml('altura total')}</text>`
+    `<text x="${dimLeftX}" y="${ry - 14}" text-anchor="middle" class="tf-hint">${escapeXml('altura total')}</text>`
   );
 
   const dimRightX = rx + innerW + FV_DIM_GAP;
   if (levels > 1) {
     const yA = ry + (levels - 1) * levDraw;
     const yB = rackBottom;
-    parts.push(dimensionLineV(dimRightX, yA, yB, 4, TECH));
+    parts.push(dimensionLineV(dimRightX, yA, yB, 4, DOC_INK));
     parts.push(
-      `<text transform="translate(${dimRightX + 12},${(yA + yB) / 2}) rotate(-90)" text-anchor="middle" class="tf-cota">${escapeXml(
+      `<text transform="translate(${dimRightX + 16},${(yA + yB) / 2}) rotate(-90)" text-anchor="middle" class="tf-cota">${escapeXml(
         formatMmPtBr(Math.round(levelHmm))
       )}</text>`
     );
     parts.push(
-      `<text x="${dimRightX}" y="${yA - 6}" text-anchor="middle" class="tf-hint">${escapeXml(
+      `<text x="${dimRightX}" y="${yA - 12}" text-anchor="middle" class="tf-hint">${escapeXml(
         'entre níveis'
       )}</text>`
     );
   }
 
-  const dimY = rackBottom + 26;
-  parts.push(dimensionLineH(rx, dimY, rx + innerW, 4, TECH));
+  const dimY = rackBottom + 32;
+  parts.push(dimensionLineH(rx, dimY, rx + innerW, 4, DOC_INK));
   parts.push(
-    `<text x="${rx + innerW / 2}" y="${dimY + 15}" text-anchor="middle" class="tf-cota">${escapeXml(
+    `<text x="${rx + innerW / 2}" y="${dimY + 18}" text-anchor="middle" class="tf-cota">${escapeXml(
       formatMmPtBr(Math.round(beamW))
     )}</text>`
   );
   parts.push(
-    `<text x="${rx + innerW / 2}" y="${dimY - 6}" text-anchor="middle" class="tf-hint">${escapeXml(
+    `<text x="${rx + innerW / 2}" y="${dimY - 8}" text-anchor="middle" class="tf-hint">${escapeXml(
       'largura longarina'
     )}</text>`
   );
 
-  const noteY = dimY + 48;
+  const noteY = Math.min(dimY + 56, FV_VB_H - FV_BOTTOM_RESERVE);
   parts.push(
     `<text x="${FV_VB_W / 2}" y="${noteY}" text-anchor="middle" class="tf-note">${escapeXml(
       `Níveis: ${levels}`
     )}</text>`
   );
   parts.push(
-    `<text x="${FV_VB_W / 2}" y="${noteY + 22}" text-anchor="middle" class="tf-note">${escapeXml(
+    `<text x="${FV_VB_W / 2}" y="${noteY + 24}" text-anchor="middle" class="tf-note">${escapeXml(
       `Capacidade por nível: ${capKg.toLocaleString('pt-BR')} kg`
     )}</text>`
   );
   parts.push(
-    `<text x="${FV_VB_W / 2}" y="${noteY + 44}" text-anchor="middle" class="tf-cota">${escapeXml(
+    `<text x="${FV_VB_W / 2}" y="${noteY + 48}" text-anchor="middle" class="tf-cota">${escapeXml(
       `Profundidade: ${formatMmPtBr(Math.round(depthMm))}`
     )}</text>`
   );

@@ -18,7 +18,7 @@ describe('DrawingEngine', () => {
     expect(svg.trim().startsWith('<svg')).toBe(true);
     expect(svg).toContain('xmlns="http://www.w3.org/2000/svg"');
     expect(svg).toContain('</svg>');
-    expect(svg).toMatch(/viewBox="\s*0\s+0\s+880\s+640"/);
+    expect(svg).toMatch(/viewBox="\s*0\s+0\s+880\s+660"/);
     expect(svg).toContain('width="100%"');
     expect(svg).toContain('preserveAspectRatio="xMidYMid meet"');
     expect(svg).toContain('fill="#ffffff"');
@@ -56,7 +56,7 @@ describe('DrawingEngine', () => {
     expect(svg).toContain('</svg>');
     expect(svg).toContain('80.000 mm');
     expect(svg).toContain('11.200 mm');
-    expect(svg).toMatch(/viewBox="\s*0\s+0\s+880\s+640"/);
+    expect(svg).toMatch(/viewBox="\s*0\s+0\s+880\s+660"/);
     const rectCount = (svg.match(/<rect/g) || []).length;
     expect(rectCount).toBeGreaterThan(40 * 60);
   });
@@ -75,11 +75,13 @@ describe('generateFrontViewSvg', () => {
     expect(svg.trim().startsWith('<svg')).toBe(true);
     expect(svg).toContain('xmlns="http://www.w3.org/2000/svg"');
     expect(svg).toContain('</svg>');
-    expect(svg).toMatch(/viewBox="\s*0\s+0\s+880\s+720"/);
+    expect(svg).toMatch(/viewBox="\s*0\s+0\s+880\s+780"/);
     expect(svg).toContain('preserveAspectRatio="xMidYMid meet"');
     expect(svg).toContain('fill="#ffffff"');
     expect(svg).toContain('DETALHE TÉCNICO');
-    expect(svg).toContain('stroke="#000000"');
+    expect(svg).toContain('Elevação frontal');
+    expect(svg).toContain('stroke="#0f172a"');
+    expect(svg).toContain('stroke="#2563eb"');
     expect(svg).toContain('Níveis: 4');
     expect(svg).toContain('Capacidade por nível:');
     expect(svg).toContain('2.000');
