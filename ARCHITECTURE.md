@@ -8,8 +8,8 @@ O projeto segue uma arquitetura em camadas (layered architecture) com separaçã
 
 ```
 ┌─────────────────────────────────────┐
-│         Routes (HTTP)                │
-│  /webhook, /files, /simulator        │
+│         Routes (HTTP)               │
+│  /webhook, /files, /simulator       │
 └──────────────┬──────────────────────┘
                │
 ┌──────────────▼──────────────────────┐
@@ -19,13 +19,13 @@ O projeto segue uma arquitetura em camadas (layered architecture) com separaçã
                │
 ┌──────────────▼──────────────────────┐
 │        Domain Layer                 │
-│  stateMachine, session, repository   │
+│  stateMachine, session, repository  │
 └──────────────┬──────────────────────┘
                │
 ┌──────────────▼──────────────────────┐
-│      Infrastructure Layer            │
-│  db, repositories, pdf, server       │
-└──────────────────────────────────────┘
+│      Infrastructure Layer           │
+│  db, repositories, pdf, server      │
+└─────────────────────────────────────┘
 ```
 
 ## Camadas
