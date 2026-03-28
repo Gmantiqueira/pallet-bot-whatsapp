@@ -1,6 +1,9 @@
+import * as fs from 'fs';
+import * as path from 'path';
 import { routeIncoming, IncomingPayload } from './messageRouter';
 import { Session } from '../domain/session';
 import { SessionRepository } from '../domain/sessionRepository';
+import { finalizeSummaryAnswers } from '../domain/projectEngines';
 
 const createSession = (state: string, answers: Record<string, unknown> = {}): Session => {
   return {
@@ -138,6 +141,74 @@ describe('MessageRouter', () => {
       const persisted = repository.get('5511999999999');
       expect(persisted).not.toBeNull();
       expect(persisted?.state).toBe('WAIT_LENGTH');
+    });
+  });
+
+  describe('PDF generation on GERAR', () => {
+    const storageDir = path.join(process.cwd(), 'storage');
+
+    afterEach(() => {
+      if (!fs.existsSync(storageDir)) {
+        return;
+      }
+      for (const f of fs.readdirSync(storageDir)) {
+        if (
+          f.includes('5511999999999') &&
+          (f.endsWith('.pdf') || f.endsWith('.svg'))
+        ) {
+          try {
+            fs.unlinkSync(path.join(storageDir, f));
+          } catch {
+            /* ignore */
+          }
+        }
+      }
+    });
+
+    it('should finalize engines, save SVGs and PDF, DONE message with document', () => {
+      const session = createSession(
+        'SUMMARY_CONFIRM',
+        finalizeSummaryAnswers({
+          lengthMm: 12000,
+          widthMm: 10000,
+          corridorMm: 3000,
+          capacityKg: 2000,
+          heightMode: 'DIRECT',
+          heightMm: 5000,
+          levels: 4,
+          guardRail: 'ambos',
+        })
+      );
+
+      const incoming: IncomingPayload = {
+        from: '5511999999999',
+        buttonReply: 'GERAR',
+      };
+
+      const result = routeIncoming(session, incoming, repository);
+
+      expect(result.session.state).toBe('DONE');
+      expect(
+        result.outgoingMessages.some((m) =>
+          m.text?.includes('Projeto gerado com sucesso')
+        )
+      ).toBe(true);
+      const docMsg = result.outgoingMessages.find((m) => m.document);
+      expect(docMsg?.document?.filename).toMatch(/\.pdf$/);
+      expect(docMsg?.document?.url).toContain('/files/');
+
+      const names = fs.existsSync(storageDir)
+        ? fs.readdirSync(storageDir).filter((f) => f.includes('5511999999999'))
+        : [];
+      expect(names.some((f) => f.startsWith('planta-') && f.endsWith('.svg'))).toBe(
+        true
+      );
+      expect(
+        names.some((f) => f.startsWith('vista-frontal-') && f.endsWith('.svg'))
+      ).toBe(true);
+      expect(names.some((f) => f.startsWith('projeto-') && f.endsWith('.pdf'))).toBe(
+        true
+      );
     });
   });
 

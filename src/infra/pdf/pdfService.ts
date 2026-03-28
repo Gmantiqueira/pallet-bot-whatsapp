@@ -4,15 +4,8 @@ import * as path from 'path';
 import { Session } from '../../domain/session';
 import type { BudgetResult } from '../../domain/budgetEngine';
 import type { LayoutResult } from '../../domain/layoutEngine';
-import {
-  generateFloorPlanSvg,
-  generateFrontViewSvg,
-  type FrontViewInput,
-} from '../../domain/drawingEngine';
-import {
-  DEFAULT_MODULE_DEPTH_MM,
-  DEFAULT_MODULE_WIDTH_MM,
-} from '../../domain/projectEngines';
+import { generateFloorPlanSvg, generateFrontViewSvg } from '../../domain/drawingEngine';
+import { buildFrontViewInputFromAnswers } from '../../domain/projectEngines';
 
 /* eslint-disable @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires */
 const SVGtoPDF = require('svg-to-pdfkit') as (
@@ -62,42 +55,6 @@ function estimateSvgDrawHeight(svg: string, targetWidth: number): number {
     return targetWidth * 0.35;
   }
   return (vbH / vbW) * targetWidth;
-}
-
-function totalHeightMmFromAnswers(
-  answers: Record<string, unknown>
-): number | null {
-  if (answers.heightMode === 'DIRECT' && typeof answers.heightMm === 'number') {
-    return answers.heightMm;
-  }
-  if (
-    answers.heightMode === 'CALC' &&
-    typeof answers.loadHeightMm === 'number' &&
-    typeof answers.levels === 'number'
-  ) {
-    return answers.loadHeightMm * answers.levels;
-  }
-  return null;
-}
-
-function buildFrontViewInput(
-  answers: Record<string, unknown>
-): FrontViewInput | null {
-  if (typeof answers.levels !== 'number' || answers.levels < 1) {
-    return null;
-  }
-  const totalH = totalHeightMmFromAnswers(answers);
-  if (totalH === null) {
-    return null;
-  }
-  const cap = typeof answers.capacityKg === 'number' ? answers.capacityKg : 0;
-  return {
-    levels: answers.levels,
-    totalHeightMm: totalH,
-    beamWidthMm: DEFAULT_MODULE_WIDTH_MM,
-    depthMm: DEFAULT_MODULE_DEPTH_MM,
-    capacityKgPerLevel: cap,
-  };
 }
 
 export class PdfService {
@@ -278,7 +235,7 @@ export class PdfService {
     drawCenteredMuted('Elevação frontal (esquema)', 10);
     doc.moveDown(0.85);
 
-    const fv = buildFrontViewInput(answers);
+    const fv = buildFrontViewInputFromAnswers(answers);
     if (fv) {
       const svgFv = generateFrontViewSvg(fv);
       const maxH = pageBottom - doc.y - 36;

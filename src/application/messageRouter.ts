@@ -1,6 +1,17 @@
+import * as fs from 'fs';
+import * as path from 'path';
 import { Session } from '../domain/session';
 import { SessionRepository } from '../domain/sessionRepository';
 import { Input, transition, State } from '../domain/stateMachine';
+import type { LayoutResult } from '../domain/layoutEngine';
+import {
+  buildFrontViewInputFromAnswers,
+  finalizeSummaryAnswers,
+} from '../domain/projectEngines';
+import {
+  generateFloorPlanSvg,
+  generateFrontViewSvg,
+} from '../domain/drawingEngine';
 import { OutgoingMessage } from '../types/messages';
 import { buildMessages, MessageContext } from './messageBuilder';
 import { PdfService } from '../infra/pdf/pdfService';
@@ -33,7 +44,11 @@ const convertToInput = (incoming: IncomingPayload): Input | null => {
   if (incoming.text && isGlobalCommand(incoming.text)) {
     return {
       type: 'GLOBAL',
-      command: incoming.text.trim().toLowerCase() as 'novo' | 'voltar' | 'cancelar' | 'status',
+      command: incoming.text.trim().toLowerCase() as
+        | 'novo'
+        | 'voltar'
+        | 'cancelar'
+        | 'status',
     };
   }
 
@@ -102,23 +117,60 @@ export const routeIncoming = (
 
   // Handle GENERATE_PDF effect
   const hasGeneratePdfEffect = transitionResult.effects.some(
-    (effect) => effect.type === 'GENERATE_PDF'
+    effect => effect.type === 'GENERATE_PDF'
   );
 
   if (hasGeneratePdfEffect && updatedSession.state === 'GENERATING_DOC') {
-    // Generate PDF
     const env = loadEnv();
-    const pdfService = new PdfService('./storage', env.PORT);
+    const storageDir = './storage';
+    if (!fs.existsSync(storageDir)) {
+      fs.mkdirSync(storageDir, { recursive: true });
+    }
+
+    updatedSession = {
+      ...updatedSession,
+      answers: finalizeSummaryAnswers({ ...updatedSession.answers }),
+    };
+
+    const ts = Date.now();
+    const phone = updatedSession.phone;
+    const ans = updatedSession.answers;
+
+    const layout = ans.layout as LayoutResult | undefined;
+    if (layout) {
+      const dims =
+        typeof ans.widthMm === 'number' && typeof ans.lengthMm === 'number'
+          ? {
+              warehouseWidthMm: ans.widthMm,
+              warehouseLengthMm: ans.lengthMm,
+            }
+          : undefined;
+      const floorSvg = generateFloorPlanSvg(layout, dims);
+      fs.writeFileSync(
+        path.join(storageDir, `planta-${phone}-${ts}.svg`),
+        floorSvg,
+        'utf8'
+      );
+    }
+
+    const fv = buildFrontViewInputFromAnswers(ans);
+    if (fv) {
+      fs.writeFileSync(
+        path.join(storageDir, `vista-frontal-${phone}-${ts}.svg`),
+        generateFrontViewSvg(fv),
+        'utf8'
+      );
+    }
+
+    const pdfService = new PdfService(storageDir, env.PORT);
     const pdfResult = pdfService.generatePdf(updatedSession);
 
-    // Transition to DONE state (GENERATING_DOC automatically transitions to DONE on next input)
     const doneTransition = transition(updatedSession, {
       type: 'TEXT',
-      value: 'done', // Trigger DONE transition
+      value: 'done',
     });
     updatedSession = doneTransition.session;
 
-    // Update session with PDF info (store in answers for reference)
     updatedSession.answers = {
       ...updatedSession.answers,
       pdfFilename: pdfResult.filename,
@@ -128,7 +180,8 @@ export const routeIncoming = (
 
   // Detect if image was analyzed (transitioned from WAIT_PLANT_IMAGE)
   const imageAnalyzed =
-    previousState === 'WAIT_PLANT_IMAGE' && updatedSession.state !== 'WAIT_PLANT_IMAGE';
+    previousState === 'WAIT_PLANT_IMAGE' &&
+    updatedSession.state !== 'WAIT_PLANT_IMAGE';
 
   // Build messages with context
   const ctx: MessageContext = {
