@@ -157,7 +157,16 @@ export class PdfService {
       doc.fontSize(16).text('Planta esquemática', { underline: true });
       doc.moveDown(0.5);
 
-      const svg = generateFloorPlanSvg(layout);
+      const svg = generateFloorPlanSvg(
+        layout,
+        typeof answers.widthMm === 'number' &&
+          typeof answers.lengthMm === 'number'
+          ? {
+              warehouseWidthMm: answers.widthMm,
+              warehouseLengthMm: answers.lengthMm,
+            }
+          : undefined
+      );
       const top = doc.y;
       try {
         SVGtoPDF(doc, svg, left, top, { width: usableW });
