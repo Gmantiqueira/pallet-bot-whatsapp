@@ -1,4 +1,5 @@
 import PDFDocument from 'pdfkit';
+import sharp from 'sharp';
 import * as fs from 'fs';
 import * as path from 'path';
 import { Session } from '../../domain/session';
@@ -12,21 +13,14 @@ import {
 import { buildFrontViewInputFromAnswers } from '../../domain/projectEngines';
 import { resolveStoragePath } from '../../config/storagePath';
 
-/* eslint-disable @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires */
-const SVGtoPDF = require('svg-to-pdfkit') as (
-  doc: InstanceType<typeof PDFDocument>,
-  svg: string,
-  x: number,
-  y: number,
-  options?: { width?: number }
-) => void;
-/* eslint-enable @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires */
-
 const MARGIN_PT = 52;
 const COL_INK = '#0f172a';
 const COL_MUTED = '#4b5563';
 const COL_RULE = '#e5e7eb';
 const COL_ACCENT = '#2563eb';
+
+/** DPI para rasterizar SVG antes de embutir no PDF (boa nitidez em impressão). */
+const RASTER_DPI = 240;
 
 export type GenerateProjectPdfInput = {
   project: Record<string, unknown>;
@@ -51,28 +45,53 @@ function formatMm(n: number): string {
   return `${n.toLocaleString('pt-BR')} mm`;
 }
 
-function fitSvgToBox(
+function ptToPx(pt: number): number {
+  return Math.max(1, Math.round((pt * RASTER_DPI) / 72));
+}
+
+/**
+ * Converte SVG em PNG com proporção preservada, limitado à caixa em pixels.
+ */
+export async function svgRasterToPng(
   svg: string,
-  maxW: number,
-  maxH: number
-): { width: number; height: number } {
-  const m = svg.match(/viewBox="\s*0\s+0\s+([\d.]+)\s+([\d.]+)"/);
-  if (!m || maxW <= 0 || maxH <= 0) {
-    return { width: maxW * 0.9, height: maxH * 0.85 };
+  maxWidthPx: number,
+  maxHeightPx: number
+): Promise<{ buffer: Buffer; widthPx: number; heightPx: number }> {
+  const buffer = await sharp(Buffer.from(svg, 'utf8'), {
+    density: RASTER_DPI,
+  })
+    .resize({
+      width: maxWidthPx,
+      height: maxHeightPx,
+      fit: 'inside',
+      withoutEnlargement: false,
+    })
+    .png({ compressionLevel: 6 })
+    .toBuffer();
+
+  const meta = await sharp(buffer).metadata();
+  return {
+    buffer,
+    widthPx: meta.width ?? 1,
+    heightPx: meta.height ?? 1,
+  };
+}
+
+/** Encaixa bitmap (proporção da imagem) num retângulo em pontos PDF. */
+function fitRasterInBox(
+  imgWpx: number,
+  imgHpx: number,
+  boxWpt: number,
+  boxHpt: number
+): { dw: number; dh: number } {
+  const ar = imgHpx / imgWpx;
+  let dw = boxWpt;
+  let dh = dw * ar;
+  if (dh > boxHpt) {
+    dh = boxHpt;
+    dw = dh / ar;
   }
-  const vbW = parseFloat(m[1]);
-  const vbH = parseFloat(m[2]);
-  if (vbW <= 0 || vbH <= 0) {
-    return { width: maxW * 0.9, height: maxH * 0.85 };
-  }
-  const aspect = vbH / vbW;
-  let w = maxW;
-  let h = w * aspect;
-  if (h > maxH) {
-    h = maxH;
-    w = h / aspect;
-  }
-  return { width: w, height: h };
+  return { dw, dh };
 }
 
 function summaryLines(
@@ -124,9 +143,25 @@ function attachPdfFileStream(
   return done;
 }
 
+/** Caixa útil para desenho em A4 com margens iguais (pontos). */
+function drawingRasterPixelSize(): { pxW: number; pxH: number } {
+  const pageW = 595.28;
+  const pageH = 841.89;
+  const usableW = pageW - 2 * MARGIN_PT;
+  const pageBottom = pageH - MARGIN_PT;
+  const headerFromTop = 52;
+  const imgTop = MARGIN_PT + headerFromTop;
+  const imgBottomPad = 14;
+  const imgBoxH = pageBottom - imgTop - imgBottomPad;
+  return {
+    pxW: ptToPx(usableW),
+    pxH: ptToPx(Math.max(80, imgBoxH)),
+  };
+}
+
 /**
  * Gera o PDF do projeto, grava em disco e só resolve após o stream concluir
- * (ficheiro existente e pronto a servir).
+ * (ficheiro existente e pronto a servir). SVGs são rasterizados com Sharp antes de embutir.
  */
 export async function generateProjectPdf(
   input: GenerateProjectPdfInput,
@@ -140,6 +175,20 @@ export async function generateProjectPdf(
   const timestamp = Date.now();
   const filename = `projeto-${timestamp}.pdf`;
   const filePath = path.join(storagePath, filename);
+
+  const { pxW, pxH } = drawingRasterPixelSize();
+
+  let floorRaster: { buffer: Buffer; widthPx: number; heightPx: number };
+  let frontRaster: { buffer: Buffer; widthPx: number; heightPx: number };
+  try {
+    [floorRaster, frontRaster] = await Promise.all([
+      svgRasterToPng(input.floorPlanSvg, pxW, pxH),
+      svgRasterToPng(input.frontViewSvg, pxW, pxH),
+    ]);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    throw new Error(`Falha ao rasterizar SVG para PDF: ${msg}`);
+  }
 
   const doc = new PDFDocument({
     size: 'A4',
@@ -157,6 +206,7 @@ export async function generateProjectPdf(
   const usableW =
     doc.page.width - doc.page.margins.left - doc.page.margins.right;
   const pageBottom = doc.page.height - doc.page.margins.bottom;
+  const imgBottomPad = 14;
 
   const drawCentered = (
     text: string,
@@ -197,7 +247,23 @@ export async function generateProjectPdf(
       .stroke();
   };
 
-  // ----- Página 1 -----
+  const embedFullWidthDrawing = (
+    raster: { buffer: Buffer; widthPx: number; heightPx: number }
+  ): void => {
+    doc.moveDown(0.2);
+    const yImg = doc.y + 4;
+    const availH = pageBottom - yImg - imgBottomPad;
+    const { dw, dh } = fitRasterInBox(
+      raster.widthPx,
+      raster.heightPx,
+      usableW,
+      availH
+    );
+    const ix = left + (usableW - dw) / 2;
+    doc.image(raster.buffer, ix, yImg, { width: dw, height: dh });
+  };
+
+  // ----- Página 1 — resumo -----
   doc.y = doc.page.margins.top;
   doc.moveDown(0.45);
 
@@ -240,81 +306,39 @@ export async function generateProjectPdf(
   }
 
   doc.moveDown(0.4);
-  const ruleY = doc.y;
-  horizontalRule(ruleY, 0.08, COL_RULE);
+  horizontalRule(doc.y, 0.08, COL_RULE);
 
-  // ----- Página 2 — Planta -----
+  // ----- Página 2 — planta (imagem ocupa área útil) -----
   doc.addPage();
-  doc.y = doc.page.margins.top;
-  doc.moveDown(0.55);
-
+  doc.y = doc.page.margins.top + 10;
   drawCentered('PLANTA DO GALPÃO', {
-    size: 17,
+    size: 12,
     font: 'Helvetica-Bold',
     color: COL_INK,
-    moveDown: 0.38,
+    moveDown: 0.28,
   });
   drawCentered('Implantação esquemática', {
-    size: 10,
+    size: 9,
     color: COL_MUTED,
-    moveDown: 0.65,
+    moveDown: 0.35,
   });
+  embedFullWidthDrawing(floorRaster);
 
-  const topSvg = doc.y;
-  const bottomPad = 44;
-  const maxH = Math.max(120, pageBottom - topSvg - bottomPad);
-  const { width: svgW, height: svgH } = fitSvgToBox(
-    input.floorPlanSvg,
-    usableW * 0.98,
-    maxH
-  );
-  const xSvg = left + (usableW - svgW) / 2;
-  try {
-    SVGtoPDF(doc, input.floorPlanSvg, xSvg, topSvg, { width: svgW });
-    doc.y = Math.min(topSvg + svgH + bottomPad * 0.35, pageBottom);
-  } catch {
-    doc.y = topSvg;
-    drawCentered('Planta indisponível neste documento.', {
-      size: 11,
-      color: COL_MUTED,
-    });
-  }
-
-  // ----- Página 3 — Vista técnica -----
+  // ----- Página 3 — vista técnica -----
   doc.addPage();
-  doc.y = doc.page.margins.top;
-  doc.moveDown(0.55);
-
+  doc.y = doc.page.margins.top + 10;
   drawCentered('DETALHE TÉCNICO', {
-    size: 17,
+    size: 12,
     font: 'Helvetica-Bold',
     color: COL_INK,
-    moveDown: 0.38,
+    moveDown: 0.28,
   });
   drawCentered('Elevação frontal', {
-    size: 10,
+    size: 9,
     color: COL_MUTED,
-    moveDown: 0.65,
+    moveDown: 0.35,
   });
-
-  const top2 = doc.y;
-  const maxH2 = Math.max(120, pageBottom - top2 - bottomPad);
-  const { width: w2, height: h2 } = fitSvgToBox(
-    input.frontViewSvg,
-    usableW * 0.98,
-    maxH2
-  );
-  const x2 = left + (usableW - w2) / 2;
-  try {
-    SVGtoPDF(doc, input.frontViewSvg, x2, top2, { width: w2 });
-    doc.y = Math.min(top2 + h2 + bottomPad * 0.35, pageBottom);
-  } catch {
-    doc.y = top2;
-    drawCentered('Vista técnica indisponível neste documento.', {
-      size: 11,
-      color: COL_MUTED,
-    });
-  }
+  embedFullWidthDrawing(frontRaster);
 
   doc.end();
   await writeDone;

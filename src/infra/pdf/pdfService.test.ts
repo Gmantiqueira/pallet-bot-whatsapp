@@ -1,7 +1,9 @@
+import { PDFDocument } from 'pdf-lib';
 import {
   FRONT_VIEW_PLACEHOLDER_SVG,
   generateProjectPdf,
   PdfService,
+  svgRasterToPng,
 } from './pdfService';
 import { Session } from '../../domain/session';
 import {
@@ -70,6 +72,26 @@ describe('generateProjectPdf', () => {
     expect(fs.existsSync(result.path)).toBe(true);
     expect(fs.statSync(result.path).size).toBeGreaterThan(100);
     expect(result.url).toBe(`http://localhost:3000/files/${result.filename}`);
+
+    const bytes = fs.readFileSync(result.path);
+    const pdfDoc = await PDFDocument.load(bytes);
+    expect(pdfDoc.getPageCount()).toBe(3);
+
+    const raw = bytes.toString('latin1');
+    const imageMarkers = raw.match(/\/Subtype\s*\/Image/g) ?? [];
+    expect(imageMarkers.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('svgRasterToPng deve converter SVG em PNG', async () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100" fill="#2563eb"/></svg>';
+    const { buffer, widthPx, heightPx } = await svgRasterToPng(svg, 320, 320);
+    expect(widthPx).toBeGreaterThan(0);
+    expect(heightPx).toBeGreaterThan(0);
+    expect(buffer.subarray(0, 8).toString('hex')).toBe(
+      '89504e470d0a1a0a'
+    );
+    expect(buffer.length).toBeGreaterThan(80);
   });
 });
 
