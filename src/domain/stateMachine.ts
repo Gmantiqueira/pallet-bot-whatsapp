@@ -1,4 +1,5 @@
 import { Session } from './session';
+import { finalizeSummaryAnswers } from './projectEngines';
 
 export type State =
   | 'START'
@@ -88,6 +89,15 @@ const getNextStateAfterEdit = (stack: string[]): State | null => {
     }
   }
   return null;
+};
+
+const patchAnswersForState = (
+  base: Record<string, unknown>,
+  patch: Record<string, unknown>,
+  nextState: State
+): Record<string, unknown> => {
+  const merged = { ...base, ...patch };
+  return nextState === 'SUMMARY_CONFIRM' ? finalizeSummaryAnswers(merged) : merged;
 };
 
 export const transition = (session: Session, input: Input): TransitionResult => {
@@ -201,10 +211,11 @@ export const transition = (session: Session, input: Input): TransitionResult => 
           return { session: newSession, effects, error };
         }
         const nextState = getNextStateAfterEdit(newSession.stack);
+        const targetState = (nextState || 'WAIT_WIDTH') as State;
         newSession = {
           ...newSession,
-          state: nextState || 'WAIT_WIDTH',
-          answers: { ...newSession.answers, lengthMm: length },
+          state: targetState,
+          answers: patchAnswersForState(newSession.answers, { lengthMm: length }, targetState),
           stack: nextState ? newSession.stack.slice(0, -1) : [...newSession.stack, newSession.state],
           updatedAt: Date.now(),
         };
@@ -225,10 +236,11 @@ export const transition = (session: Session, input: Input): TransitionResult => 
           return { session: newSession, effects, error };
         }
         const nextState = getNextStateAfterEdit(newSession.stack);
+        const targetState = (nextState || 'WAIT_CORRIDOR') as State;
         newSession = {
           ...newSession,
-          state: nextState || 'WAIT_CORRIDOR',
-          answers: { ...newSession.answers, widthMm: width },
+          state: targetState,
+          answers: patchAnswersForState(newSession.answers, { widthMm: width }, targetState),
           stack: nextState ? newSession.stack.slice(0, -1) : [...newSession.stack, newSession.state],
           updatedAt: Date.now(),
         };
@@ -249,10 +261,11 @@ export const transition = (session: Session, input: Input): TransitionResult => 
           return { session: newSession, effects, error };
         }
         const nextState = getNextStateAfterEdit(newSession.stack);
+        const targetState = (nextState || 'WAIT_CAPACITY') as State;
         newSession = {
           ...newSession,
-          state: nextState || 'WAIT_CAPACITY',
-          answers: { ...newSession.answers, corridorMm: corridor },
+          state: targetState,
+          answers: patchAnswersForState(newSession.answers, { corridorMm: corridor }, targetState),
           stack: nextState ? newSession.stack.slice(0, -1) : [...newSession.stack, newSession.state],
           updatedAt: Date.now(),
         };
@@ -273,10 +286,11 @@ export const transition = (session: Session, input: Input): TransitionResult => 
           return { session: newSession, effects, error };
         }
         const nextState = getNextStateAfterEdit(newSession.stack);
+        const targetState = (nextState || 'CHOOSE_HEIGHT_MODE') as State;
         newSession = {
           ...newSession,
-          state: nextState || 'CHOOSE_HEIGHT_MODE',
-          answers: { ...newSession.answers, capacityKg: capacity },
+          state: targetState,
+          answers: patchAnswersForState(newSession.answers, { capacityKg: capacity }, targetState),
           stack: nextState ? newSession.stack.slice(0, -1) : [...newSession.stack, newSession.state],
           updatedAt: Date.now(),
         };
@@ -315,10 +329,11 @@ export const transition = (session: Session, input: Input): TransitionResult => 
           return { session: newSession, effects, error };
         }
         const nextState = getNextStateAfterEdit(newSession.stack);
+        const targetState = (nextState || 'WAIT_LEVELS') as State;
         newSession = {
           ...newSession,
-          state: nextState || 'WAIT_EXTRAS_GUARD_RAIL',
-          answers: { ...newSession.answers, heightMm: height },
+          state: targetState,
+          answers: patchAnswersForState(newSession.answers, { heightMm: height }, targetState),
           stack: nextState ? newSession.stack.slice(0, -1) : [...newSession.stack, newSession.state],
           updatedAt: Date.now(),
         };
@@ -334,10 +349,11 @@ export const transition = (session: Session, input: Input): TransitionResult => 
           return { session: newSession, effects, error };
         }
         const nextState = getNextStateAfterEdit(newSession.stack);
+        const targetState = (nextState || 'WAIT_LEVELS') as State;
         newSession = {
           ...newSession,
-          state: nextState || 'WAIT_LEVELS',
-          answers: { ...newSession.answers, loadHeightMm: loadHeight },
+          state: targetState,
+          answers: patchAnswersForState(newSession.answers, { loadHeightMm: loadHeight }, targetState),
           stack: nextState ? newSession.stack.slice(0, -1) : [...newSession.stack, newSession.state],
           updatedAt: Date.now(),
         };
@@ -358,10 +374,11 @@ export const transition = (session: Session, input: Input): TransitionResult => 
           return { session: newSession, effects, error };
         }
         const nextState = getNextStateAfterEdit(newSession.stack);
+        const targetState = (nextState || 'WAIT_EXTRAS_GUARD_RAIL') as State;
         newSession = {
           ...newSession,
-          state: nextState || 'WAIT_EXTRAS_GUARD_RAIL',
-          answers: { ...newSession.answers, levels: levels },
+          state: targetState,
+          answers: patchAnswersForState(newSession.answers, { levels: levels }, targetState),
           stack: nextState ? newSession.stack.slice(0, -1) : [...newSession.stack, newSession.state],
           updatedAt: Date.now(),
         };
@@ -375,7 +392,7 @@ export const transition = (session: Session, input: Input): TransitionResult => 
         newSession = {
           ...newSession,
           state: 'SUMMARY_CONFIRM',
-          answers: { ...newSession.answers, guardRail: guardRail },
+          answers: finalizeSummaryAnswers({ ...newSession.answers, guardRail: guardRail }),
           stack: [...newSession.stack, newSession.state],
           updatedAt: Date.now(),
         };

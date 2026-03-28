@@ -120,14 +120,24 @@ describe('State Machine', () => {
 
       // WAIT_HEIGHT_DIRECT -> enter height
       result = transition(session, { type: 'TEXT', value: '5000' });
-      expect(result.session.state).toBe('WAIT_EXTRAS_GUARD_RAIL');
+      expect(result.session.state).toBe('WAIT_LEVELS');
       expect(result.session.answers.heightMm).toBe(5000);
+      session = result.session;
+
+      // WAIT_LEVELS -> enter levels
+      result = transition(session, { type: 'TEXT', value: '4' });
+      expect(result.session.state).toBe('WAIT_EXTRAS_GUARD_RAIL');
+      expect(result.session.answers.levels).toBe(4);
       session = result.session;
 
       // WAIT_EXTRAS_GUARD_RAIL -> choose guard rail
       result = transition(session, { type: 'BUTTON', value: 'ambos' });
       expect(result.session.state).toBe('SUMMARY_CONFIRM');
       expect(result.session.answers.guardRail).toBe('ambos');
+      expect(result.session.answers.layout).toBeDefined();
+      expect(result.session.answers.structure).toBeDefined();
+      expect(result.session.answers.budget).toBeDefined();
+      expect((result.session.answers.budget as { totals: { modules: number } }).totals.modules).toBe(10);
     });
 
     it('should complete flow with CALC height mode', () => {

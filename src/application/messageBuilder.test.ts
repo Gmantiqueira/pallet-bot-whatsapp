@@ -1,5 +1,6 @@
 import { buildMessages } from './messageBuilder';
 import { Session } from '../domain/session';
+import { finalizeSummaryAnswers } from '../domain/projectEngines';
 
 const createSession = (state: string, answers: Record<string, unknown> = {}): Session => {
   return {
@@ -128,15 +129,19 @@ describe('MessageBuilder', () => {
     });
 
     it('should build SUMMARY_CONFIRM message with summary and buttons', () => {
-      const session = createSession('SUMMARY_CONFIRM', {
-        lengthMm: 12000,
-        widthMm: 10000,
-        corridorMm: 3000,
-        capacityKg: 2000,
-        heightMode: 'DIRECT',
-        heightMm: 5000,
-        guardRail: 'ambos',
-      });
+      const session = createSession(
+        'SUMMARY_CONFIRM',
+        finalizeSummaryAnswers({
+          lengthMm: 12000,
+          widthMm: 10000,
+          corridorMm: 3000,
+          capacityKg: 2000,
+          heightMode: 'DIRECT',
+          heightMm: 5000,
+          levels: 4,
+          guardRail: 'ambos',
+        }),
+      );
       const messages = buildMessages(session);
 
       expect(messages[0].text).toContain('RESUMO');
@@ -145,7 +150,12 @@ describe('MessageBuilder', () => {
       expect(messages[0].text).toContain('3000');
       expect(messages[0].text).toContain('2000');
       expect(messages[0].text).toContain('5000');
+      expect(messages[0].text).toContain('Níveis: 4');
       expect(messages[0].text).toContain('Ambos');
+      expect(messages[0].text).toContain('Módulos: 10');
+      expect(messages[0].text).toContain('Posições: 40');
+      expect(messages[0].text).toContain('Tipo de montante: Montante 8T');
+      expect(messages[0].text).toContain('Pares de longarinas: 40');
       expect(messages[0].buttons).toHaveLength(2);
       expect(messages[0].buttons?.[0].id).toBe('GERAR');
       expect(messages[0].buttons?.[1].id).toBe('EDITAR');

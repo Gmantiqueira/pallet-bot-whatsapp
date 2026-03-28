@@ -1,6 +1,8 @@
 import { Session } from '../domain/session';
 import { OutgoingMessage } from '../types/messages';
 import { State } from '../domain/stateMachine';
+import type { BudgetResult } from '../domain/budgetEngine';
+import type { StructureResult } from '../domain/structureEngine';
 
 export interface MessageContext {
   lastError?: string;
@@ -217,6 +219,9 @@ const buildSummary = (session: Session): string => {
 
   if (answers.heightMode === 'DIRECT' && answers.heightMm) {
     lines.push(`Altura: ${answers.heightMm} mm (direta)`);
+    if (answers.levels) {
+      lines.push(`Níveis: ${answers.levels}`);
+    }
   } else if (answers.heightMode === 'CALC') {
     if (answers.loadHeightMm) {
       lines.push(`Altura da carga: ${answers.loadHeightMm} mm`);
@@ -234,6 +239,19 @@ const buildSummary = (session: Session): string => {
       nao: 'Não',
     };
     lines.push(`Guard rail: ${guardRailLabels[answers.guardRail as string] || answers.guardRail}`);
+  }
+
+  const budget = answers.budget as BudgetResult | undefined;
+  const structure = answers.structure as StructureResult | undefined;
+  if (budget?.totals && structure?.uprightType) {
+    lines.push('');
+    lines.push(`Módulos: ${budget.totals.modules}`);
+    lines.push(`Posições: ${budget.totals.positions}`);
+    lines.push(`Tipo de montante: Montante ${structure.uprightType}`);
+    const longarinas = budget.items.find((i) => i.name === 'Par de Longarinas');
+    if (longarinas) {
+      lines.push(`Pares de longarinas: ${longarinas.quantity}`);
+    }
   }
 
   return lines.join('\n');

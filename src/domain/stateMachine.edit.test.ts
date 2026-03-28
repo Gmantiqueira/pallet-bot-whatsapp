@@ -165,6 +165,8 @@ describe('State Machine - Edit Flow', () => {
         capacityKg: 2000,
         heightMode: 'DIRECT',
         heightMm: 5000,
+        levels: 4,
+        guardRail: 'ambos',
       }, ['SUMMARY_CONFIRM', 'CHOOSE_EDIT_FIELD', 'CHOOSE_HEIGHT_MODE']);
       const input: Input = { type: 'TEXT', value: '6000' };
 
