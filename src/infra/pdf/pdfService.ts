@@ -21,6 +21,11 @@ const SVGtoPDF = require('svg-to-pdfkit') as (
 ) => void;
 /* eslint-enable @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires */
 
+const MARGIN_PT = 56;
+const COL_INK = '#111827';
+const COL_MUTED = '#6b7280';
+const COL_RULE = '#e5e7eb';
+
 export interface PdfResult {
   filename: string;
   url: string;
@@ -48,17 +53,40 @@ function resolveClientLine(
   return formatPhoneDisplay(session.phone);
 }
 
-function estimateSvgDrawHeight(svg: string, targetWidth: number): number {
+function resolveProjectLine(answers: Record<string, unknown>): string {
+  const keys = ['projectName', 'projectTitle', 'projeto'] as const;
+  for (const k of keys) {
+    const v = answers[k];
+    if (typeof v === 'string' && v.trim()) {
+      return v.trim();
+    }
+  }
+  return '—';
+}
+
+/** Encaixa SVG (viewBox) em retângulo máximo; preserva proporção, sem cortes. */
+function fitSvgToBox(
+  svg: string,
+  maxW: number,
+  maxH: number
+): { width: number; height: number } {
   const m = svg.match(/viewBox="\s*0\s+0\s+([\d.]+)\s+([\d.]+)"/);
-  if (!m) {
-    return targetWidth * 0.35;
+  if (!m || maxW <= 0 || maxH <= 0) {
+    return { width: maxW * 0.9, height: maxH * 0.85 };
   }
   const vbW = parseFloat(m[1]);
   const vbH = parseFloat(m[2]);
-  if (vbW <= 0) {
-    return targetWidth * 0.35;
+  if (vbW <= 0 || vbH <= 0) {
+    return { width: maxW * 0.9, height: maxH * 0.85 };
   }
-  return (vbH / vbW) * targetWidth;
+  const aspect = vbH / vbW;
+  let w = maxW;
+  let h = w * aspect;
+  if (h > maxH) {
+    h = maxH;
+    w = h / aspect;
+  }
+  return { width: w, height: h };
 }
 
 export class PdfService {
@@ -80,7 +108,12 @@ export class PdfService {
 
     const doc = new PDFDocument({
       size: 'A4',
-      margins: { top: 56, bottom: 56, left: 56, right: 56 },
+      margins: {
+        top: MARGIN_PT,
+        bottom: MARGIN_PT,
+        left: MARGIN_PT,
+        right: MARGIN_PT,
+      },
     });
 
     const stream = fs.createWriteStream(filePath);
@@ -95,180 +128,226 @@ export class PdfService {
       doc.page.width - doc.page.margins.left - doc.page.margins.right;
     const pageBottom = doc.page.height - doc.page.margins.bottom;
 
-    const drawCenteredTitle = (
+    const drawCentered = (
       text: string,
-      size: number,
-      color = '#0f172a'
+      opts: {
+        size: number;
+        color?: string;
+        font?: string;
+        lineGap?: number;
+        moveDown?: number;
+      }
     ): void => {
-      doc.fillColor(color).fontSize(size).text(text, left, doc.y, {
+      const {
+        size,
+        color = COL_INK,
+        font = 'Helvetica',
+        lineGap = 0,
+        moveDown: md = 0,
+      } = opts;
+      doc.font(font).fillColor(color).fontSize(size);
+      doc.text(text, left, doc.y, {
         align: 'center',
         width: usableW,
+        lineGap,
       });
+      if (md > 0) {
+        doc.moveDown(md);
+      }
     };
 
-    const drawCenteredMuted = (text: string, size = 10): void => {
-      doc.fillColor('#475569').fontSize(size).text(text, left, doc.y, {
-        align: 'center',
-        width: usableW,
-      });
+    const horizontalRule = (y: number, inset = 0.1): void => {
+      const x0 = left + usableW * inset;
+      const x1 = left + usableW * (1 - inset);
+      doc
+        .strokeColor(COL_RULE)
+        .lineWidth(0.75)
+        .moveTo(x0, y)
+        .lineTo(x1, y)
+        .stroke();
     };
+
+    const today = new Date();
+    const dateStr = today.toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric',
+    });
 
     // ----- Página 1 -----
     doc.y = doc.page.margins.top;
-    doc.moveDown(0.5);
-    drawCenteredTitle('Projeto Porta Paletes', 24);
     doc.moveDown(0.35);
-    drawCenteredMuted(`Cliente: ${resolveClientLine(session, answers)}`, 11);
-    doc.moveDown(0.25);
-    const today = new Date();
-    drawCenteredMuted(
-      `Data: ${today.toLocaleDateString('pt-BR', {
-        day: '2-digit',
-        month: 'long',
-        year: 'numeric',
-      })}`,
-      11
-    );
-    doc.moveDown(1.25);
 
-    const sepY = doc.y;
-    doc
-      .strokeColor('#cbd5e1')
-      .lineWidth(0.5)
-      .moveTo(left + usableW * 0.12, sepY)
-      .lineTo(left + usableW * 0.88, sepY)
-      .stroke();
-    doc.moveDown(1);
-    doc.fillColor('#0f172a');
+    drawCentered('PROJETO PORTA PALETES', {
+      size: 26,
+      font: 'Helvetica-Bold',
+      color: COL_INK,
+      moveDown: 1.1,
+    });
 
-    drawCenteredTitle('Resumo', 15);
+    drawCentered(`Cliente: ${resolveClientLine(session, answers)}`, {
+      size: 11,
+      color: COL_INK,
+      moveDown: 0.35,
+    });
+    drawCentered(`Projeto: ${resolveProjectLine(answers)}`, {
+      size: 11,
+      color: COL_INK,
+      moveDown: 0.35,
+    });
+    drawCentered(`Data: ${dateStr}`, {
+      size: 11,
+      color: COL_INK,
+      moveDown: 1.0,
+    });
+
+    const ruleY = doc.y;
+    horizontalRule(ruleY, 0.08);
     doc.moveDown(0.9);
 
-    doc.fillColor('#1e293b').fontSize(11.5);
-    const summaryLines: string[] = [];
+    drawCentered('RESUMO TÉCNICO', {
+      size: 12,
+      font: 'Helvetica-Bold',
+      color: COL_INK,
+      moveDown: 0.85,
+    });
 
+    let warehouseSummary = '—';
     if (
       typeof answers.lengthMm === 'number' &&
       typeof answers.widthMm === 'number'
     ) {
-      let dim = `Comprimento ${formatMm(answers.lengthMm)} × largura ${formatMm(answers.widthMm)}`;
+      warehouseSummary = `${formatMm(answers.lengthMm)} × ${formatMm(answers.widthMm)}`;
       if (typeof answers.corridorMm === 'number') {
-        dim += ` · corredor ${formatMm(answers.corridorMm)}`;
+        warehouseSummary += ` · corredor ${formatMm(answers.corridorMm)}`;
       }
-      summaryLines.push(`Dimensões do galpão: ${dim}`);
-    } else {
-      summaryLines.push('Dimensões do galpão: —');
     }
 
-    if (typeof answers.levels === 'number') {
-      summaryLines.push(`Níveis: ${answers.levels}`);
-    } else {
-      summaryLines.push('Níveis: —');
+    const levelsStr =
+      typeof answers.levels === 'number' ? String(answers.levels) : '—';
+    const modulesStr = budget?.totals
+      ? String(budget.totals.modules)
+      : '—';
+    const positionsStr = budget?.totals
+      ? String(budget.totals.positions)
+      : '—';
+
+    const summaryBlocks: { label: string; value: string }[] = [
+      { label: 'Dimensões do galpão', value: warehouseSummary },
+      { label: 'Níveis', value: levelsStr },
+      { label: 'Módulos', value: modulesStr },
+      { label: 'Posições estimadas', value: positionsStr },
+    ];
+
+    for (const block of summaryBlocks) {
+      drawCentered(block.label, {
+        size: 9,
+        color: COL_MUTED,
+        moveDown: 0.2,
+      });
+      drawCentered(block.value, {
+        size: 12,
+        color: COL_INK,
+        font: 'Helvetica',
+        moveDown: 0.65,
+      });
     }
-
-    if (budget?.totals) {
-      summaryLines.push(`Módulos: ${budget.totals.modules}`);
-      summaryLines.push(`Posições: ${budget.totals.positions}`);
-    } else {
-      summaryLines.push('Módulos: —');
-      summaryLines.push('Posições: —');
-    }
-
-    doc.text(summaryLines.join('\n'), left, doc.y, {
-      align: 'center',
-      width: usableW,
-      lineGap: 6,
-    });
-
-    doc.fillColor('#0f172a');
 
     // ----- Página 2 — Planta -----
     doc.addPage();
     doc.y = doc.page.margins.top;
-    doc.moveDown(0.75);
-    drawCenteredTitle('Planta', 18);
-    doc.moveDown(0.4);
-    drawCenteredMuted('Vista em planta (esquemática)', 10);
-    doc.moveDown(0.85);
+    doc.moveDown(0.5);
+
+    drawCentered('PLANTA', {
+      size: 18,
+      font: 'Helvetica-Bold',
+      color: COL_INK,
+      moveDown: 0.3,
+    });
+    drawCentered('Implantação esquemática', {
+      size: 9,
+      color: COL_MUTED,
+      moveDown: 0.55,
+    });
 
     if (layout) {
       const svg = generateFloorPlanSvg(
         layout,
         resolveFloorPlanWarehouse(layout, answers)
       );
-      const svgW = usableW * 0.92;
+      const topSvg = doc.y;
+      const bottomPad = 36;
+      const maxH = Math.max(120, pageBottom - topSvg - bottomPad);
+      const { width: svgW, height: svgH } = fitSvgToBox(
+        svg,
+        usableW * 0.98,
+        maxH
+      );
       const xSvg = left + (usableW - svgW) / 2;
-      const top = doc.y;
       try {
-        SVGtoPDF(doc, svg, xSvg, top, { width: svgW });
-        const drawnH = estimateSvgDrawHeight(svg, svgW);
-        doc.y = Math.min(top + drawnH + 24, pageBottom);
+        SVGtoPDF(doc, svg, xSvg, topSvg, { width: svgW });
+        doc.y = Math.min(topSvg + svgH + bottomPad * 0.35, pageBottom);
       } catch {
-        doc
-          .fillColor('#64748b')
-          .fontSize(11)
-          .text('Planta indisponível neste documento.', left, doc.y, {
-            align: 'center',
-            width: usableW,
-          });
-        doc.fillColor('#0f172a');
+        doc.y = topSvg;
+        drawCentered('Planta indisponível neste documento.', {
+          size: 11,
+          color: COL_MUTED,
+        });
       }
     } else {
-      doc
-        .fillColor('#64748b')
-        .fontSize(11)
-        .text('Layout não calculado; planta omitida.', left, doc.y, {
-          align: 'center',
-          width: usableW,
-        });
-      doc.fillColor('#0f172a');
+      drawCentered('Layout não calculado; planta omitida.', {
+        size: 11,
+        color: COL_MUTED,
+      });
     }
 
-    // ----- Página 3 — Vista frontal -----
+    // ----- Página 3 — Vista técnica -----
     doc.addPage();
     doc.y = doc.page.margins.top;
-    doc.moveDown(0.75);
-    drawCenteredTitle('Vista técnica', 18);
-    doc.moveDown(0.4);
-    drawCenteredMuted('Elevação frontal (esquema)', 10);
-    doc.moveDown(0.85);
+    doc.moveDown(0.5);
+
+    drawCentered('VISTA TÉCNICA', {
+      size: 18,
+      font: 'Helvetica-Bold',
+      color: COL_INK,
+      moveDown: 0.3,
+    });
+    drawCentered('Elevação frontal', {
+      size: 9,
+      color: COL_MUTED,
+      moveDown: 0.55,
+    });
 
     const fv = buildFrontViewInputFromAnswers(answers);
     if (fv) {
       const svgFv = generateFrontViewSvg(fv);
-      const maxH = pageBottom - doc.y - 36;
-      let svgW2 = usableW * 0.92;
-      let hEst = estimateSvgDrawHeight(svgFv, svgW2);
-      if (hEst > maxH && maxH > 80) {
-        svgW2 *= maxH / hEst;
-        hEst = estimateSvgDrawHeight(svgFv, svgW2);
-      }
-      const xSvg2 = left + (usableW - svgW2) / 2;
       const top2 = doc.y;
+      const bottomPad2 = 36;
+      const maxH2 = Math.max(120, pageBottom - top2 - bottomPad2);
+      const { width: w2, height: h2 } = fitSvgToBox(
+        svgFv,
+        usableW * 0.98,
+        maxH2
+      );
+      const x2 = left + (usableW - w2) / 2;
       try {
-        SVGtoPDF(doc, svgFv, xSvg2, top2, { width: svgW2 });
-        doc.y = Math.min(top2 + hEst + 24, pageBottom);
+        SVGtoPDF(doc, svgFv, x2, top2, { width: w2 });
+        doc.y = Math.min(top2 + h2 + bottomPad2 * 0.35, pageBottom);
       } catch {
-        doc
-          .fillColor('#64748b')
-          .fontSize(11)
-          .text('Vista técnica indisponível neste documento.', left, doc.y, {
-            align: 'center',
-            width: usableW,
-          });
-        doc.fillColor('#0f172a');
+        doc.y = top2;
+        drawCentered('Vista técnica indisponível neste documento.', {
+          size: 11,
+          color: COL_MUTED,
+        });
       }
     } else {
-      doc
-        .fillColor('#64748b')
-        .fontSize(11)
-        .text(
-          'Dados de altura ou níveis insuficientes para gerar a vista frontal.',
-          left,
-          doc.y,
-          { align: 'center', width: usableW }
-        );
-      doc.fillColor('#0f172a');
+      drawCentered(
+        'Dados de altura ou níveis insuficientes para gerar a vista técnica.',
+        {
+          size: 11,
+          color: COL_MUTED,
+        }
+      );
     }
 
     doc.end();
