@@ -6,24 +6,28 @@ export type FloorPlanWarehouseMm = {
   widthMm: number;
 };
 
-/** Paleta comercial unificada (planta + elevação): azul estrutura, cinza corredor, preto técnico. */
 const DOC_BG = '#ffffff';
-const DOC_INK = '#0f172a';
-const DOC_STRUCTURE_FILL = '#dbeafe';
-const DOC_STRUCTURE_STROKE = '#2563eb';
-const DOC_CORRIDOR_FILL = '#e5e7eb';
-const DOC_CORRIDOR_STROKE = '#9ca3af';
-const DOC_MUTED = '#4b5563';
-const DOC_LEGEND_MUTED = '#6b7280';
-const DOC_FRAME = '#e5e7eb';
-const DOC_WAREHOUSE_FILL = '#f8fafc';
 
-const VB_W = 880;
-const VB_H = 660;
-const PAD = 48;
-const HEADER_BLOCK = 72;
-const WH_MAX_W = 748;
-const WH_MAX_H = 398;
+/** Planta — paleta alinhada à elevação técnica (neutros + estrutura legível em PDF). */
+const FP_INK = '#111827';
+const FP_MUTED = '#4b5563';
+const FP_LEGEND_MUTED = '#6b7280';
+const FP_FRAME = '#d4d4d4';
+const FP_WAREHOUSE_FILL = '#f4f4f5';
+const FP_WAREHOUSE_STROKE = '#0f172a';
+const FP_MODULE_FILL = '#e8eef5';
+const FP_MODULE_STROKE = '#475569';
+const FP_CORRIDOR_FILL = '#d8dee9';
+const FP_CORRIDOR_STROKE = '#64748b';
+const FP_CORRIDOR_INNER = '#94a3b8';
+
+const FP_VB_W = 1000;
+const FP_VB_H = 700;
+const FP_PAD = 40;
+const FP_HEADER = 78;
+const FP_FOOTER = 96;
+const FP_WH_MAX_W = 868;
+const FP_WH_MAX_H = 428;
 const CORRIDOR_WEIGHT = 0.38;
 
 function formatMmPtBr(mm: number): string {
@@ -39,8 +43,8 @@ function escapeXml(text: string): string {
 }
 
 /**
- * Planta do galpão: documento comercial — moldura, título central, módulos em azul claro,
- * corredores cinza, contornos técnicos em preto. SVG responsivo (viewBox + preserveAspectRatio).
+ * Planta de implantação técnica: contorno do galpão marcado, corredores neutros,
+ * módulos proporcionais, legenda e rótulo CORREDOR quando há espaço (PDF / cliente).
  */
 export function generateFloorPlanSvg(
   layout: LayoutResult,
@@ -51,18 +55,18 @@ export function generateFloorPlanSvg(
   const lengthMm = Math.max(1, warehouse.lengthMm);
   const widthMm = Math.max(1, warehouse.widthMm);
 
-  const scale = Math.min(WH_MAX_W / lengthMm, WH_MAX_H / widthMm);
+  const scale = Math.min(FP_WH_MAX_W / lengthMm, FP_WH_MAX_H / widthMm);
   const buildingW = lengthMm * scale;
   const buildingH = widthMm * scale;
-  const bx = (VB_W - buildingW) / 2;
-  const by = PAD + HEADER_BLOCK + 12;
+  const bx = (FP_VB_W - buildingW) / 2;
+  const by = FP_PAD + FP_HEADER + 8;
 
   const n = Math.max(cols, rows, 1);
-  const outlineStroke = Math.max(3, Math.min(5.5, 3.6 + 8 / Math.log2(n + 2)));
-  const modStroke = Math.max(0.45, Math.min(1.15, 2.2 / Math.log2(n + 2)));
+  const outlineOuter = Math.max(3.2, Math.min(5.2, 3.4 + 7 / Math.log2(n + 2)));
+  const modStroke = Math.max(0.5, Math.min(1.05, 2 / Math.log2(n + 2)));
   const gapModule = Math.max(
-    0.6,
-    Math.min(1.8, buildingW / Math.max(cols * 24, 48))
+    0.5,
+    Math.min(1.65, buildingW / Math.max(cols * 26, 52))
   );
 
   const corCount = Math.max(0, rows - 1);
@@ -70,74 +74,99 @@ export function generateFloorPlanSvg(
   const rowBandH = rows > 0 ? buildingH / denom : 0;
   const corH = rows > 1 ? rowBandH * CORRIDOR_WEIGHT : 0;
 
-  const subtitle = `${formatMmPtBr(Math.round(lengthMm))} × ${formatMmPtBr(Math.round(widthMm))}`;
+  const subtitle = `${formatMmPtBr(Math.round(lengthMm))} x ${formatMmPtBr(Math.round(widthMm))}`;
+
+  const grid = Math.max(cols, rows);
+  const titleFs = grid > 35 ? 16 : grid > 20 ? 17 : 18;
+  const subFs = grid > 35 ? 10.5 : 11;
+  const legFs = grid > 40 ? 9.5 : grid > 25 ? 10.5 : 11;
+  const legLine = grid > 40 ? 17 : 19;
+  const cx = FP_VB_W / 2;
+  const legTop = FP_VB_H - FP_PAD - FP_FOOTER + 8;
 
   const parts: string[] = [];
   parts.push(
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${VB_W} ${VB_H}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">`
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${FP_VB_W} ${FP_VB_H}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">`
   );
   parts.push('<title>Planta do galpão</title>');
   parts.push('<defs>');
+  parts.push(`<pattern id="fp-cor-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+    <line x1="0" y1="0" x2="0" y2="6" stroke="${FP_CORRIDOR_INNER}" stroke-width="0.55" opacity="0.35"/>
+  </pattern>`);
   parts.push(`<style>
-    .pl-title { font: 700 20px system-ui, -apple-system, "Segoe UI", sans-serif; fill: ${DOC_INK}; letter-spacing: 0.04em; }
-    .pl-sub { font: 500 12px system-ui, -apple-system, "Segoe UI", sans-serif; fill: ${DOC_MUTED}; }
-    .pl-legend { font: 12px system-ui, -apple-system, "Segoe UI", sans-serif; fill: ${DOC_INK}; }
-    .pl-legend-lbl { fill: ${DOC_LEGEND_MUTED}; font-weight: 500; }
+    .pl-title { font: 700 ${titleFs}px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: ${FP_INK}; }
+    .pl-sub { font: 500 ${subFs}px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: ${FP_MUTED}; }
+    .pl-legend { font: ${legFs}px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: ${FP_INK}; }
+    .pl-legend-lbl { fill: ${FP_LEGEND_MUTED}; font-weight: 600; }
+    .pl-cor { font: 600 9px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #475569; letter-spacing: 0.12em; }
   </style>`);
   parts.push('</defs>');
 
+  parts.push(`<rect width="${FP_VB_W}" height="${FP_VB_H}" fill="${DOC_BG}"/>`);
   parts.push(
-    `<rect x="0" y="0" width="${VB_W}" height="${VB_H}" fill="${DOC_BG}"/>`
-  );
-  parts.push(
-    `<rect x="${PAD}" y="${PAD}" width="${VB_W - 2 * PAD}" height="${VB_H - 2 * PAD}" fill="none" stroke="${DOC_FRAME}" stroke-width="1" rx="6"/>`
+    `<rect x="${FP_PAD}" y="${FP_PAD}" width="${FP_VB_W - 2 * FP_PAD}" height="${FP_VB_H - 2 * FP_PAD}" fill="none" stroke="${FP_FRAME}" stroke-width="0.5"/>`
   );
 
   parts.push(
-    `<text x="${VB_W / 2}" y="${PAD + 26}" text-anchor="middle" class="pl-title">${escapeXml('PLANTA DO GALPÃO')}</text>`
+    `<text x="${cx}" y="${FP_PAD + 24}" text-anchor="middle" class="pl-title">${escapeXml('PLANTA DO GALPÃO')}</text>`
   );
   parts.push(
-    `<text x="${VB_W / 2}" y="${PAD + 48}" text-anchor="middle" class="pl-sub">${escapeXml(subtitle)}</text>`
+    `<text x="${cx}" y="${FP_PAD + 46}" text-anchor="middle" class="pl-sub">${escapeXml(subtitle)}</text>`
   );
 
   parts.push(
-    `<rect x="${bx}" y="${by}" width="${buildingW}" height="${buildingH}" fill="${DOC_WAREHOUSE_FILL}" stroke="${DOC_INK}" stroke-width="${outlineStroke}" rx="2"/>`
+    `<rect x="${bx}" y="${by}" width="${buildingW}" height="${buildingH}" fill="${FP_WAREHOUSE_FILL}" stroke="${FP_WAREHOUSE_STROKE}" stroke-width="${outlineOuter}" stroke-linejoin="miter"/>`
   );
 
   let yCursor = by;
   const cellW = cols > 0 ? buildingW / cols : buildingW;
+  const inset = Math.min(1.1, gapModule * 0.45);
+  const corLabelMinH = 11;
+  const corLabelMinW = 72;
+
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       const mx = bx + c * cellW + gapModule;
       const my = yCursor + gapModule;
       const mw = Math.max(cellW - 2 * gapModule, 0.5);
       const mh = Math.max(rowBandH - 2 * gapModule, 0.5);
-      const rr = Math.min(2.5, mw / 5, mh / 5);
       parts.push(
-        `<rect x="${mx}" y="${my}" width="${mw}" height="${mh}" rx="${rr}" fill="${DOC_STRUCTURE_FILL}" stroke="${DOC_STRUCTURE_STROKE}" stroke-width="${modStroke}"/>`
+        `<rect x="${mx}" y="${my}" width="${mw}" height="${mh}" fill="${FP_MODULE_FILL}" stroke="${FP_MODULE_STROKE}" stroke-width="${modStroke}"/>`
       );
+      if (mw > 9 && mh > 9) {
+        parts.push(
+          `<rect x="${mx + inset}" y="${my + inset}" width="${Math.max(0, mw - 2 * inset)}" height="${Math.max(0, mh - 2 * inset)}" fill="none" stroke="${FP_MODULE_STROKE}" stroke-width="${Math.max(0.25, modStroke * 0.35)}" opacity="0.32"/>`
+        );
+      }
     }
 
     yCursor += rowBandH;
     if (r < rows - 1 && corH > 0.5) {
+      const cy = yCursor + corH / 2;
       parts.push(
-        `<rect x="${bx}" y="${yCursor}" width="${buildingW}" height="${corH}" fill="${DOC_CORRIDOR_FILL}" stroke="${DOC_CORRIDOR_STROKE}" stroke-width="0.85"/>`
+        `<rect x="${bx}" y="${yCursor}" width="${buildingW}" height="${corH}" fill="${FP_CORRIDOR_FILL}" stroke="${FP_CORRIDOR_STROKE}" stroke-width="0.65"/>`
       );
+      parts.push(
+        `<rect x="${bx}" y="${yCursor}" width="${buildingW}" height="${corH}" fill="url(#fp-cor-hatch)" opacity="0.45"/>`
+      );
+      if (corH >= corLabelMinH && buildingW >= corLabelMinW) {
+        const corFs = Math.min(10, Math.max(6, corH * 0.32));
+        parts.push(
+          `<text x="${bx + buildingW / 2}" y="${cy + corFs * 0.35}" text-anchor="middle" class="pl-cor" style="font-size:${corFs}px">${escapeXml('CORREDOR')}</text>`
+        );
+      }
       yCursor += corH;
     }
   }
 
-  const legBase = VB_H - PAD - 14;
-  const lineGap = 22;
-  const cx = VB_W / 2;
   parts.push(
-    `<text x="${cx}" y="${legBase - lineGap * 2}" text-anchor="middle" class="pl-legend"><tspan class="pl-legend-lbl">Linhas:</tspan> ${rows}</text>`
+    `<text x="${cx}" y="${legTop}" text-anchor="middle" class="pl-legend"><tspan class="pl-legend-lbl">Linhas:</tspan> ${rows}</text>`
   );
   parts.push(
-    `<text x="${cx}" y="${legBase - lineGap}" text-anchor="middle" class="pl-legend"><tspan class="pl-legend-lbl">Módulos por linha:</tspan> ${cols}</text>`
+    `<text x="${cx}" y="${legTop + legLine}" text-anchor="middle" class="pl-legend"><tspan class="pl-legend-lbl">Módulos por linha:</tspan> ${cols}</text>`
   );
   parts.push(
-    `<text x="${cx}" y="${legBase}" text-anchor="middle" class="pl-legend"><tspan class="pl-legend-lbl">Total de módulos:</tspan> ${layout.modulesTotal}</text>`
+    `<text x="${cx}" y="${legTop + legLine * 2}" text-anchor="middle" class="pl-legend"><tspan class="pl-legend-lbl">Total de módulos:</tspan> ${layout.modulesTotal}</text>`
   );
 
   parts.push('</svg>');

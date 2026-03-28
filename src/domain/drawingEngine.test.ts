@@ -29,7 +29,7 @@ function anchorsAreUnique(svg: string): boolean {
 }
 
 describe('DrawingEngine', () => {
-  it('deve gerar SVG válido', () => {
+  it('deve gerar SVG válido com título e legenda', () => {
     const layout: LayoutResult = {
       rows: 2,
       modulesPerRow: 5,
@@ -42,10 +42,11 @@ describe('DrawingEngine', () => {
       widthMm: 10000,
     });
 
+    expect(svg.length).toBeGreaterThan(100);
     expect(svg.trim().startsWith('<svg')).toBe(true);
     expect(svg).toContain('xmlns="http://www.w3.org/2000/svg"');
     expect(svg).toContain('</svg>');
-    expect(svg).toMatch(/viewBox="\s*0\s+0\s+880\s+660"/);
+    expect(svg).toMatch(/viewBox="\s*0\s+0\s+1000\s+700"/);
     expect(svg).toContain('width="100%"');
     expect(svg).toContain('preserveAspectRatio="xMidYMid meet"');
     expect(svg).toContain('fill="#ffffff"');
@@ -53,10 +54,11 @@ describe('DrawingEngine', () => {
     expect(svg).toContain('PLANTA DO GALPÃO');
     expect(svg).toContain('12.000 mm');
     expect(svg).toContain('10.000 mm');
-    expect(svg).toContain('×');
+    expect(svg).toMatch(/12\.000 mm x 10\.000 mm/);
     expect(svg).toContain('Linhas:');
     expect(svg).toContain('Módulos por linha:');
     expect(svg).toMatch(/Total de módulos:<\/tspan>\s*10</);
+    expect(svg).toContain('CORREDOR');
   });
 
   it('não deve quebrar com valores grandes', () => {
@@ -81,9 +83,12 @@ describe('DrawingEngine', () => {
 
     expect(svg).toContain('<svg');
     expect(svg).toContain('</svg>');
+    expect(svg.length).toBeGreaterThan(500);
     expect(svg).toContain('80.000 mm');
     expect(svg).toContain('11.200 mm');
-    expect(svg).toMatch(/viewBox="\s*0\s+0\s+880\s+660"/);
+    expect(svg).toMatch(/viewBox="\s*0\s+0\s+1000\s+700"/);
+    expect(svg).toContain('PLANTA DO GALPÃO');
+    expect(svg).toContain('Total de módulos:');
     const rectCount = (svg.match(/<rect/g) || []).length;
     expect(rectCount).toBeGreaterThan(40 * 60);
   });
