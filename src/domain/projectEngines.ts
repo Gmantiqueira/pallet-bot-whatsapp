@@ -6,6 +6,7 @@ import {
 } from './layoutEngine';
 import { selectStructure, type StructureResult } from './structureEngine';
 import type { FrontViewInput } from './drawingEngine';
+import type { IsometricViewInput } from './isometricDrawingEngine';
 
 /** Profundidade de módulo padrão (mm) — não coletada no fluxo atual. */
 export const DEFAULT_MODULE_DEPTH_MM = 2700;
@@ -107,5 +108,27 @@ export function buildFrontViewInputFromAnswers(
     beamWidthMm: DEFAULT_MODULE_WIDTH_MM,
     depthMm: DEFAULT_MODULE_DEPTH_MM,
     capacityKgPerLevel: cap,
+  };
+}
+
+/** Dados para vista isométrica 3D a partir do layout e das respostas. */
+export function buildIsometricInputFromAnswers(
+  answers: Record<string, unknown>,
+  layout: LayoutResult
+): IsometricViewInput | null {
+  if (typeof answers.levels !== 'number' || answers.levels < 1) {
+    return null;
+  }
+  const uprightHeightMm = uprightHeightMmFromAnswers(answers);
+  if (uprightHeightMm === null) {
+    return null;
+  }
+  return {
+    rows: layout.rows,
+    modulesPerRow: layout.modulesPerRow,
+    levels: answers.levels,
+    moduleWidthMm: DEFAULT_MODULE_WIDTH_MM,
+    moduleDepthMm: DEFAULT_MODULE_DEPTH_MM,
+    uprightHeightMm,
   };
 }

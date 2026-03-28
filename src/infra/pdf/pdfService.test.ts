@@ -8,6 +8,7 @@ import {
 import { Session } from '../../domain/session';
 import {
   buildFrontViewInputFromAnswers,
+  buildIsometricInputFromAnswers,
   finalizeSummaryAnswers,
 } from '../../domain/projectEngines';
 import {
@@ -15,6 +16,7 @@ import {
   generateFrontViewSvg,
   resolveFloorPlanWarehouse,
 } from '../../domain/drawingEngine';
+import { generateIsometricView } from '../../domain/isometricDrawingEngine';
 import type { LayoutResult } from '../../domain/layoutEngine';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -56,6 +58,10 @@ describe('generateProjectPdf', () => {
     const frontViewSvg = fv
       ? generateFrontViewSvg(fv)
       : FRONT_VIEW_PLACEHOLDER_SVG;
+    const isoIn = buildIsometricInputFromAnswers(answers, layout);
+    const isometricSvg = isoIn
+      ? generateIsometricView(isoIn)
+      : '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#fff"/></svg>';
 
     const result = await generateProjectPdf(
       {
@@ -63,6 +69,7 @@ describe('generateProjectPdf', () => {
         layout,
         floorPlanSvg,
         frontViewSvg,
+        isometricSvg,
       },
       { storagePath: testStoragePath, port: 3000 }
     );
@@ -75,11 +82,48 @@ describe('generateProjectPdf', () => {
 
     const bytes = fs.readFileSync(result.path);
     const pdfDoc = await PDFDocument.load(bytes);
-    expect(pdfDoc.getPageCount()).toBe(3);
+    expect(pdfDoc.getPageCount()).toBe(4);
 
     const raw = bytes.toString('latin1');
     const imageMarkers = raw.match(/\/Subtype\s*\/Image/g) ?? [];
-    expect(imageMarkers.length).toBeGreaterThanOrEqual(2);
+    expect(imageMarkers.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('PDF deve incluir vista 3D isométrica na 4ª página', async () => {
+    const answers = finalizeSummaryAnswers({
+      lengthMm: 12000,
+      widthMm: 10000,
+      corridorMm: 3000,
+      capacityKg: 2000,
+      heightMode: 'DIRECT',
+      heightMm: 5000,
+      levels: 3,
+      guardRail: 'ambos',
+    });
+    const layout = answers.layout as LayoutResult;
+    const isoIn = buildIsometricInputFromAnswers(answers, layout);
+    expect(isoIn).not.toBeNull();
+    const isometricSvg = generateIsometricView(isoIn!);
+    expect(isometricSvg).toContain('VISTA 3D');
+
+    const result = await generateProjectPdf(
+      {
+        project: answers,
+        layout,
+        floorPlanSvg: generateFloorPlanSvg(
+          layout,
+          resolveFloorPlanWarehouse(layout, answers)
+        ),
+        frontViewSvg: generateFrontViewSvg(
+          buildFrontViewInputFromAnswers(answers)!
+        ),
+        isometricSvg,
+      },
+      { storagePath: testStoragePath, port: 3000 }
+    );
+
+    const pdfDoc = await PDFDocument.load(fs.readFileSync(result.path));
+    expect(pdfDoc.getPageCount()).toBe(4);
   });
 
   it('svgRasterToPng deve converter SVG em PNG', async () => {

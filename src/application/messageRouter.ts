@@ -6,6 +6,7 @@ import { Input, transition, State } from '../domain/stateMachine';
 import type { LayoutResult } from '../domain/layoutEngine';
 import {
   buildFrontViewInputFromAnswers,
+  buildIsometricInputFromAnswers,
   finalizeSummaryAnswers,
 } from '../domain/projectEngines';
 import {
@@ -13,9 +14,14 @@ import {
   generateFrontViewSvg,
   resolveFloorPlanWarehouse,
 } from '../domain/drawingEngine';
+import { generateIsometricView } from '../domain/isometricDrawingEngine';
 import { OutgoingMessage } from '../types/messages';
 import { buildMessages, MessageContext } from './messageBuilder';
-import { FRONT_VIEW_PLACEHOLDER_SVG, PdfService } from '../infra/pdf/pdfService';
+import {
+  FRONT_VIEW_PLACEHOLDER_SVG,
+  ISOMETRIC_PLACEHOLDER_SVG,
+  PdfService,
+} from '../infra/pdf/pdfService';
 import { loadEnv } from '../config/env';
 import { resolveStoragePath } from '../config/storagePath';
 
@@ -166,12 +172,23 @@ export const routeIncoming = async (
         );
       }
 
+      const isoIn = buildIsometricInputFromAnswers(ans, layout);
+      const isometricSvg = isoIn
+        ? generateIsometricView(isoIn)
+        : ISOMETRIC_PLACEHOLDER_SVG;
+      fs.writeFileSync(
+        path.join(storageDir, `vista-isometrica-${phone}-${ts}.svg`),
+        isometricSvg,
+        'utf8'
+      );
+
       const pdfService = new PdfService(storageDir, env.PORT);
       const pdfResult = await pdfService.generateProjectPdf({
         project: ans,
         layout,
         floorPlanSvg: floorSvg,
         frontViewSvg: frontSvg,
+        isometricSvg,
       });
 
       const nextAnswers = { ...genSession.answers };

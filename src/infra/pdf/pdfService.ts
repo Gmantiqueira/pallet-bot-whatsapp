@@ -10,7 +10,11 @@ import {
   generateFrontViewSvg,
   resolveFloorPlanWarehouse,
 } from '../../domain/drawingEngine';
-import { buildFrontViewInputFromAnswers } from '../../domain/projectEngines';
+import {
+  buildFrontViewInputFromAnswers,
+  buildIsometricInputFromAnswers,
+} from '../../domain/projectEngines';
+import { generateIsometricView } from '../../domain/isometricDrawingEngine';
 import { resolveStoragePath } from '../../config/storagePath';
 
 const MARGIN_PT = 52;
@@ -27,6 +31,7 @@ export type GenerateProjectPdfInput = {
   layout: LayoutResult;
   floorPlanSvg: string;
   frontViewSvg: string;
+  isometricSvg: string;
 };
 
 export type GenerateProjectPdfResult = {
@@ -37,6 +42,8 @@ export type GenerateProjectPdfResult = {
 
 /** SVG mínimo quando não há dados para elevação frontal. */
 export const FRONT_VIEW_PLACEHOLDER_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 120"><rect width="400" height="120" fill="#ffffff"/><text x="200" y="68" text-anchor="middle" font-size="13" fill="#6b7280" font-family="system-ui,sans-serif">Vista técnica indisponível</text></svg>`;
+
+export const ISOMETRIC_PLACEHOLDER_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 120"><rect width="400" height="120" fill="#ffffff"/><text x="200" y="68" text-anchor="middle" font-size="13" fill="#6b7280" font-family="system-ui,sans-serif">Vista 3D indisponível</text></svg>`;
 
 /** @deprecated Use GenerateProjectPdfResult */
 export type PdfResult = GenerateProjectPdfResult;
@@ -180,10 +187,12 @@ export async function generateProjectPdf(
 
   let floorRaster: { buffer: Buffer; widthPx: number; heightPx: number };
   let frontRaster: { buffer: Buffer; widthPx: number; heightPx: number };
+  let isoRaster: { buffer: Buffer; widthPx: number; heightPx: number };
   try {
-    [floorRaster, frontRaster] = await Promise.all([
+    [floorRaster, frontRaster, isoRaster] = await Promise.all([
       svgRasterToPng(input.floorPlanSvg, pxW, pxH),
       svgRasterToPng(input.frontViewSvg, pxW, pxH),
+      svgRasterToPng(input.isometricSvg, pxW, pxH),
     ]);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -340,6 +349,22 @@ export async function generateProjectPdf(
   });
   embedFullWidthDrawing(frontRaster);
 
+  // ----- Página 4 — vista 3D isométrica -----
+  doc.addPage();
+  doc.y = doc.page.margins.top + 10;
+  drawCentered('VISTA 3D', {
+    size: 12,
+    font: 'Helvetica-Bold',
+    color: COL_INK,
+    moveDown: 0.28,
+  });
+  drawCentered('Representação isométrica esquemática', {
+    size: 9,
+    color: COL_MUTED,
+    moveDown: 0.35,
+  });
+  embedFullWidthDrawing(isoRaster);
+
   doc.end();
   await writeDone;
 
@@ -393,11 +418,17 @@ export class PdfService {
     const fv = buildFrontViewInputFromAnswers(answers);
     const frontViewSvg = fv ? generateFrontViewSvg(fv) : FRONT_VIEW_PLACEHOLDER_SVG;
 
+    const isoIn = buildIsometricInputFromAnswers(answers, layout);
+    const isometricSvg = isoIn
+      ? generateIsometricView(isoIn)
+      : ISOMETRIC_PLACEHOLDER_SVG;
+
     return this.generateProjectPdf({
       project: answers,
       layout,
       floorPlanSvg,
       frontViewSvg,
+      isometricSvg,
     });
   }
 }

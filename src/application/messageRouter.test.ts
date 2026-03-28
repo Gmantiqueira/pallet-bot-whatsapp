@@ -209,6 +209,9 @@ describe('MessageRouter', () => {
         names.some((f) => f.startsWith('vista-frontal-') && f.endsWith('.svg'))
       ).toBe(true);
       expect(
+        names.some((f) => f.startsWith('vista-isometrica-') && f.endsWith('.svg'))
+      ).toBe(true);
+      expect(
         fs.existsSync(
           path.join(storageDir, docMsg?.document?.filename as string)
         )
