@@ -17,12 +17,13 @@ describe('generateIsometricView', () => {
     expect(svg.trim().startsWith('<svg')).toBe(true);
     expect(svg).toContain('xmlns="http://www.w3.org/2000/svg"');
     expect(svg).toContain('</svg>');
-    expect(svg).toMatch(/viewBox="\s*0\s+0\s+880\s+720"/);
+    expect(svg).toMatch(/viewBox="\s*0\s+0\s+1000\s+740"/);
     expect(svg).toContain('preserveAspectRatio="xMidYMid meet"');
     expect(svg).toContain('fill="#ffffff"');
     expect(svg).toContain('VISTA 3D');
     expect(svg).toContain('<line ');
-    expect(svg).toContain('stroke="#0f172a"');
+    expect(svg).toContain('stroke="#1e293b"');
+    expect(svg).toContain('iso-legend');
   });
 
   it('deve funcionar com diferentes rows e modulesPerRow', () => {
