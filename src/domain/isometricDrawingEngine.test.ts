@@ -60,4 +60,28 @@ describe('generateIsometricView', () => {
       }).trim()
     ).not.toBe('');
   });
+
+  it('deve incluir título VISTA 3D', () => {
+    const svg = generateIsometricView(baseInput());
+    expect(svg).toContain('VISTA 3D');
+    expect(svg).toMatch(/VISTA 3D/);
+  });
+
+  it('deve incluir legenda com linhas, módulos e níveis', () => {
+    const svg = generateIsometricView(baseInput());
+    expect(svg).toContain('Linhas: 2');
+    expect(svg).toContain('Módulos por linha: 5');
+    expect(svg).toContain('Níveis: 4');
+    expect(svg).toContain('iso-legend');
+
+    const svgSmall = generateIsometricView({
+      ...baseInput(),
+      rows: 3,
+      modulesPerRow: 8,
+      levels: 6,
+    });
+    expect(svgSmall).toContain('Linhas: 3');
+    expect(svgSmall).toContain('Módulos por linha: 8');
+    expect(svgSmall).toContain('Níveis: 6');
+  });
 });
