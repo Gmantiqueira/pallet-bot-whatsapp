@@ -1,4 +1,4 @@
-import { generateFloorPlanSvg } from './drawingEngine';
+import { generateFloorPlanSvg, generateFrontViewSvg } from './drawingEngine';
 import type { LayoutResult } from './layoutEngine';
 
 describe('DrawingEngine', () => {
@@ -53,5 +53,29 @@ describe('DrawingEngine', () => {
     expect(h).toBeLessThan(900);
     const rectCount = (svg.match(/<rect/g) || []).length;
     expect(rectCount).toBeGreaterThan(35 * 48);
+  });
+});
+
+describe('generateFrontViewSvg', () => {
+  it('deve gerar string SVG válida', () => {
+    const svg = generateFrontViewSvg({
+      levels: 4,
+      totalHeightMm: 8000,
+      beamWidthMm: 2700,
+      depthMm: 1100,
+      capacityKgPerLevel: 1500,
+    });
+
+    expect(svg.trim().startsWith('<svg')).toBe(true);
+    expect(svg).toContain('xmlns="http://www.w3.org/2000/svg"');
+    expect(svg).toContain('</svg>');
+    expect(svg).toContain('VISTA FRONTAL');
+    expect(svg).toContain('Nível');
+    expect(svg).toContain('Cota altura');
+    expect(svg).toContain('Cota largura');
+    expect(svg).toContain('Profundidade:');
+    expect(svg).toContain('Capacidade por nível:');
+    expect(svg).toContain('1.500');
+    expect(svg).toMatch(/<line[^>]+>/);
   });
 });
