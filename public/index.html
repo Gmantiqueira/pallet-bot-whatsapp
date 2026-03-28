@@ -65,6 +65,29 @@
       border-bottom-left-radius: 4px;
     }
 
+    .message.bot.message-document {
+      white-space: normal;
+    }
+
+    .message.bot .document-link {
+      color: #075e54;
+      text-decoration: none;
+      font-weight: 500;
+      font-size: 14px;
+      line-height: 1.4;
+      word-break: break-word;
+    }
+
+    .message.bot .document-link:hover {
+      text-decoration: underline;
+    }
+
+    .message.bot .document-link:focus-visible {
+      outline: 2px solid #25d366;
+      outline-offset: 2px;
+      border-radius: 4px;
+    }
+
     .message.user {
       background: #dcf8c6;
       align-self: flex-end;
@@ -169,6 +192,42 @@
     const sendButton = document.getElementById('sendButton');
     const imageButton = document.getElementById('imageButton');
 
+    function resolveUrl(url) {
+      if (!url) return '';
+      if (/^https?:\/\//i.test(url)) return url;
+      return `${API_URL}${url.startsWith('/') ? '' : '/'}${url}`;
+    }
+
+    function addBotDocumentMessage(filename, url) {
+      const messageDiv = document.createElement('div');
+      messageDiv.className = 'message bot message-document';
+      const link = document.createElement('a');
+      link.className = 'document-link';
+      link.href = resolveUrl(url);
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.textContent = `📄 Baixar PDF (${filename})`;
+      messageDiv.appendChild(link);
+      messagesDiv.appendChild(messageDiv);
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+
+    function renderWebhookMessages(messages) {
+      if (!messages || !messages.length) return;
+      messages.forEach((msg) => {
+        const isDocument =
+          msg.type === 'document' ||
+          (msg.document && msg.document.filename && msg.document.url);
+        if (isDocument && msg.document) {
+          addBotDocumentMessage(msg.document.filename, msg.document.url);
+          return;
+        }
+        if (msg.text) {
+          addMessage(msg.text, false, msg.buttons);
+        }
+      });
+    }
+
     function addMessage(text, isUser = false, buttons = null) {
       const messageDiv = document.createElement('div');
       messageDiv.className = `message ${isUser ? 'user' : 'bot'}`;
@@ -228,13 +287,7 @@
           addMessage(`[Botão: ${buttonId}]`, true);
         }
 
-        if (data.messages && data.messages.length > 0) {
-          data.messages.forEach(msg => {
-            if (msg.text) {
-              addMessage(msg.text, false, msg.buttons);
-            }
-          });
-        }
+        renderWebhookMessages(data.messages);
       } catch (error) {
         console.error('Error:', error);
         addMessage('❌ Erro ao enviar mensagem', false);
@@ -271,13 +324,7 @@
         const data = await response.json();
         addMessage('📷 [Imagem enviada]', true);
 
-        if (data.messages && data.messages.length > 0) {
-          data.messages.forEach(msg => {
-            if (msg.text) {
-              addMessage(msg.text, false, msg.buttons);
-            }
-          });
-        }
+        renderWebhookMessages(data.messages);
       } catch (error) {
         console.error('Error:', error);
         addMessage('❌ Erro ao enviar imagem', false);
