@@ -4,6 +4,7 @@ import { routeIncoming, IncomingPayload } from './messageRouter';
 import { Session } from '../domain/session';
 import { SessionRepository } from '../domain/sessionRepository';
 import { finalizeSummaryAnswers } from '../domain/projectEngines';
+import { PdfService } from '../infra/pdf/pdfService';
 
 const createSession = (state: string, answers: Record<string, unknown> = {}): Session => {
   return {
@@ -190,7 +191,7 @@ describe('MessageRouter', () => {
       expect(result.session.state).toBe('DONE');
       expect(
         result.outgoingMessages.some((m) =>
-          m.text?.includes('Projeto gerado com sucesso')
+          m.text?.includes('Segue o layout do galpão')
         )
       ).toBe(true);
       const docMsg = result.outgoingMessages.find((m) => m.document);
@@ -209,6 +210,45 @@ describe('MessageRouter', () => {
       expect(names.some((f) => f.startsWith('projeto-') && f.endsWith('.pdf'))).toBe(
         true
       );
+    });
+
+    it('should return to SUMMARY_CONFIRM with friendly message when delivery fails', () => {
+      const pdfSpy = jest
+        .spyOn(PdfService.prototype, 'generatePdf')
+        .mockImplementation(() => {
+          throw new Error('pdf fail');
+        });
+
+      const session = createSession(
+        'SUMMARY_CONFIRM',
+        finalizeSummaryAnswers({
+          lengthMm: 12000,
+          widthMm: 10000,
+          corridorMm: 3000,
+          capacityKg: 2000,
+          heightMode: 'DIRECT',
+          heightMm: 5000,
+          levels: 4,
+          guardRail: 'ambos',
+        })
+      );
+
+      const incoming: IncomingPayload = {
+        from: '5511999999999',
+        buttonReply: 'GERAR',
+      };
+
+      const result = routeIncoming(session, incoming, repository);
+
+      pdfSpy.mockRestore();
+
+      expect(result.session.state).toBe('SUMMARY_CONFIRM');
+      expect(
+        result.outgoingMessages.some((m) =>
+          m.text?.includes('Não foi possível gerar o documento')
+        )
+      ).toBe(true);
+      expect(result.outgoingMessages.some((m) => m.document)).toBe(false);
     });
   });
 

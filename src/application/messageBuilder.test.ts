@@ -165,7 +165,7 @@ describe('MessageBuilder', () => {
       const session = createSession('DONE');
       const messages = buildMessages(session);
 
-      expect(messages[0].text).toContain('Projeto gerado com sucesso');
+      expect(messages[0].text).toContain('layout do galpão');
       expect(messages[0].document).toBeDefined();
       expect(messages[0].document?.filename).toContain('.pdf');
       expect(messages[0].document?.url).toBeDefined();

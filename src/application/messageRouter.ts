@@ -121,6 +121,8 @@ export const routeIncoming = (
     effect => effect.type === 'GENERATE_PDF'
   );
 
+  let deliveryError: string | undefined;
+
   if (hasGeneratePdfEffect && updatedSession.state === 'GENERATING_DOC') {
     const env = loadEnv();
     const storageDir = './storage';
@@ -128,51 +130,72 @@ export const routeIncoming = (
       fs.mkdirSync(storageDir, { recursive: true });
     }
 
-    updatedSession = {
+    const genSession: Session = {
       ...updatedSession,
       answers: finalizeSummaryAnswers({ ...updatedSession.answers }),
     };
 
-    const ts = Date.now();
-    const phone = updatedSession.phone;
-    const ans = updatedSession.answers;
+    try {
+      const ts = Date.now();
+      const phone = genSession.phone;
+      const ans = genSession.answers;
 
-    const layout = ans.layout as LayoutResult | undefined;
-    if (layout) {
-      const floorSvg = generateFloorPlanSvg(
-        layout,
-        resolveFloorPlanWarehouse(layout, ans)
-      );
-      fs.writeFileSync(
-        path.join(storageDir, `planta-${phone}-${ts}.svg`),
-        floorSvg,
-        'utf8'
-      );
+      const layout = ans.layout as LayoutResult | undefined;
+      if (layout) {
+        const floorSvg = generateFloorPlanSvg(
+          layout,
+          resolveFloorPlanWarehouse(layout, ans)
+        );
+        fs.writeFileSync(
+          path.join(storageDir, `planta-${phone}-${ts}.svg`),
+          floorSvg,
+          'utf8'
+        );
+      }
+
+      const fv = buildFrontViewInputFromAnswers(ans);
+      if (fv) {
+        fs.writeFileSync(
+          path.join(storageDir, `vista-frontal-${phone}-${ts}.svg`),
+          generateFrontViewSvg(fv),
+          'utf8'
+        );
+      }
+
+      const pdfService = new PdfService(storageDir, env.PORT);
+      const pdfResult = pdfService.generatePdf(genSession);
+
+      const nextAnswers = { ...genSession.answers };
+      delete nextAnswers.pdfFilename;
+      delete nextAnswers.pdfUrl;
+
+      updatedSession = {
+        ...genSession,
+        state: 'DONE',
+        updatedAt: Date.now(),
+        answers: {
+          ...nextAnswers,
+          pdfFilename: pdfResult.filename,
+          pdfUrl: pdfResult.url,
+        },
+      };
+    } catch {
+      const cleanAnswers = { ...genSession.answers };
+      delete cleanAnswers.pdfFilename;
+      delete cleanAnswers.pdfUrl;
+      updatedSession = {
+        ...genSession,
+        state: 'SUMMARY_CONFIRM',
+        stack:
+          genSession.stack.length > 0
+            ? genSession.stack.slice(0, -1)
+            : genSession.stack,
+        updatedAt: Date.now(),
+        answers: cleanAnswers,
+      };
+      deliveryError =
+        'Não foi possível gerar o documento agora. Tente novamente em instantes.';
     }
-
-    const fv = buildFrontViewInputFromAnswers(ans);
-    if (fv) {
-      fs.writeFileSync(
-        path.join(storageDir, `vista-frontal-${phone}-${ts}.svg`),
-        generateFrontViewSvg(fv),
-        'utf8'
-      );
-    }
-
-    const pdfService = new PdfService(storageDir, env.PORT);
-    const pdfResult = pdfService.generatePdf(updatedSession);
-
-    const doneTransition = transition(updatedSession, {
-      type: 'TEXT',
-      value: 'done',
-    });
-    updatedSession = doneTransition.session;
-
-    updatedSession.answers = {
-      ...updatedSession.answers,
-      pdfFilename: pdfResult.filename,
-      pdfUrl: pdfResult.url,
-    };
   }
 
   // Detect if image was analyzed (transitioned from WAIT_PLANT_IMAGE)
@@ -184,9 +207,9 @@ export const routeIncoming = (
   const ctx: MessageContext = {
     imageAnalyzed,
     previousState,
+    lastError: deliveryError,
   };
 
-  // If we just generated PDF, include PDF URL in context
   if (hasGeneratePdfEffect && updatedSession.answers.pdfUrl) {
     ctx.pdfUrl = updatedSession.answers.pdfUrl as string;
     ctx.pdfFilename = updatedSession.answers.pdfFilename as string;

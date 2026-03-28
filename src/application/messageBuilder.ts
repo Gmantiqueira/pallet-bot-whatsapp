@@ -186,7 +186,7 @@ const buildStateMessage = (
       const pdfFilename = ctx.pdfFilename || `projeto-${session.phone}.pdf`;
       return {
         to: session.phone,
-        text: 'Projeto gerado com sucesso. Segue o layout.',
+        text: 'Projeto gerado com sucesso. Segue o layout do galpão.',
         document: {
           filename: pdfFilename,
           url: pdfUrl,
