@@ -52,7 +52,17 @@ export const buildMessages = (
 
   // Entrega final: texto + documento em mensagens separadas
   if (session.state === 'DONE') {
-    const filename = ctx.pdfFilename ?? `projeto-${session.phone}.pdf`;
+    const fromSession =
+      typeof session.answers.pdfFilename === 'string'
+        ? session.answers.pdfFilename.trim()
+        : '';
+    const fromCtx = ctx.pdfFilename?.trim() ?? '';
+    const filename =
+      (fromSession.length > 0 ? fromSession : null) ??
+      (fromCtx.length > 0 ? fromCtx : null) ??
+      `projeto-${session.phone}.pdf`;
+    const publicUrl = `/files/${filename}`;
+
     messages.push({
       to: session.phone,
       type: 'text',
@@ -63,7 +73,7 @@ export const buildMessages = (
       type: 'document',
       document: {
         filename,
-        url: `/files/${filename}`,
+        url: publicUrl,
       },
     });
     return messages;

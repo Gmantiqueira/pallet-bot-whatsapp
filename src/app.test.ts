@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { closeDb } from './infra/db/sqlite';
+import { resolveStoragePath } from './config/storagePath';
 
 describe('App Smoke Test', () => {
   let app: FastifyInstance;
@@ -39,5 +40,31 @@ describe('App Smoke Test', () => {
     const body = JSON.parse(response.body);
     expect(body).toHaveProperty('messages');
     expect(Array.isArray(body.messages)).toBe(true);
+  });
+
+  it('GET /files/:name should serve PDF from storage', async () => {
+    const dir = resolveStoragePath();
+    fs.mkdirSync(dir, { recursive: true });
+    const name = `smoke-${Date.now()}.pdf`;
+    const filePath = path.join(dir, name);
+    fs.writeFileSync(filePath, Buffer.from('%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF'));
+
+    const res = await app.inject({ method: 'GET', url: `/files/${name}` });
+
+    expect(res.statusCode).toBe(200);
+    expect(String(res.headers['content-type'] || '')).toContain('pdf');
+    expect(String(res.headers['content-disposition'] || '')).toContain(
+      'inline'
+    );
+
+    fs.unlinkSync(filePath);
+  });
+
+  it('GET /files/:name should reject suspicious filename segments', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/files/prefix..suffix.pdf',
+    });
+    expect(res.statusCode).toBe(400);
   });
 });

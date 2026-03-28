@@ -206,7 +206,11 @@
       link.href = resolveUrl(url);
       link.target = '_blank';
       link.rel = 'noopener noreferrer';
-      link.textContent = `📄 Baixar PDF (${filename})`;
+      link.textContent = '📄 Baixar PDF';
+      if (filename) {
+        link.title = filename;
+        link.setAttribute('download', filename);
+      }
       messageDiv.appendChild(link);
       messagesDiv.appendChild(messageDiv);
       messagesDiv.scrollTop = messagesDiv.scrollHeight;

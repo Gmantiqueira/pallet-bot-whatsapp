@@ -246,8 +246,12 @@ export const routeIncoming = async (
     lastError: deliveryError,
   };
 
-  if (hasGeneratePdfEffect && updatedSession.answers.pdfFilename) {
-    ctx.pdfFilename = updatedSession.answers.pdfFilename as string;
+  if (
+    updatedSession.state === 'DONE' &&
+    typeof updatedSession.answers.pdfFilename === 'string' &&
+    updatedSession.answers.pdfFilename.trim().length > 0
+  ) {
+    ctx.pdfFilename = updatedSession.answers.pdfFilename.trim();
   }
 
   const messages = buildMessages(updatedSession, ctx);

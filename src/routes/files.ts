@@ -31,8 +31,11 @@ export const filesRoutes = async (fastify: FastifyInstance): Promise<void> => {
         return reply.code(404).send({ error: 'File not found' });
       }
 
-      // Send file
-      return reply.type('application/pdf').send(fs.createReadStream(filePath));
+      const safeName = name.replace(/"/g, '');
+      return reply
+        .type('application/pdf')
+        .header('Content-Disposition', `inline; filename="${safeName}"`)
+        .send(fs.createReadStream(filePath));
     }
   );
 };

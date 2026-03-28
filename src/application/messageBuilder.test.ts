@@ -169,12 +169,24 @@ describe('MessageBuilder', () => {
 
       expect(messages).toHaveLength(2);
       expect(messages[0].type).toBe('text');
-      expect(messages[0].text).toContain('layout do galpão');
+      expect(messages[0].text).toBe(
+        'Projeto gerado com sucesso. Segue o layout do galpão.'
+      );
       expect(messages[1].type).toBe('document');
       expect(messages[1].document?.filename).toBe('projeto-1730000000000.pdf');
       expect(messages[1].document?.url).toBe(
         '/files/projeto-1730000000000.pdf'
       );
+    });
+
+    it('should use pdfFilename from session answers when ctx omits it', () => {
+      const session = createSession('DONE', {
+        pdfFilename: 'projeto-from-session.pdf',
+      });
+      const messages = buildMessages(session, {});
+
+      expect(messages[1].document?.filename).toBe('projeto-from-session.pdf');
+      expect(messages[1].document?.url).toBe('/files/projeto-from-session.pdf');
     });
   });
 });
