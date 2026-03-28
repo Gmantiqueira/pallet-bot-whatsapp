@@ -4,7 +4,11 @@ import * as path from 'path';
 import { Session } from '../../domain/session';
 import type { BudgetResult } from '../../domain/budgetEngine';
 import type { LayoutResult } from '../../domain/layoutEngine';
-import { generateFloorPlanSvg, generateFrontViewSvg } from '../../domain/drawingEngine';
+import {
+  generateFloorPlanSvg,
+  generateFrontViewSvg,
+  resolveFloorPlanWarehouse,
+} from '../../domain/drawingEngine';
 import { buildFrontViewInputFromAnswers } from '../../domain/projectEngines';
 
 /* eslint-disable @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires */
@@ -190,13 +194,7 @@ export class PdfService {
     if (layout) {
       const svg = generateFloorPlanSvg(
         layout,
-        typeof answers.widthMm === 'number' &&
-          typeof answers.lengthMm === 'number'
-          ? {
-              warehouseWidthMm: answers.widthMm,
-              warehouseLengthMm: answers.lengthMm,
-            }
-          : undefined
+        resolveFloorPlanWarehouse(layout, answers)
       );
       const svgW = usableW * 0.92;
       const xSvg = left + (usableW - svgW) / 2;

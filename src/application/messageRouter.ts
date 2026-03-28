@@ -11,6 +11,7 @@ import {
 import {
   generateFloorPlanSvg,
   generateFrontViewSvg,
+  resolveFloorPlanWarehouse,
 } from '../domain/drawingEngine';
 import { OutgoingMessage } from '../types/messages';
 import { buildMessages, MessageContext } from './messageBuilder';
@@ -138,14 +139,10 @@ export const routeIncoming = (
 
     const layout = ans.layout as LayoutResult | undefined;
     if (layout) {
-      const dims =
-        typeof ans.widthMm === 'number' && typeof ans.lengthMm === 'number'
-          ? {
-              warehouseWidthMm: ans.widthMm,
-              warehouseLengthMm: ans.lengthMm,
-            }
-          : undefined;
-      const floorSvg = generateFloorPlanSvg(layout, dims);
+      const floorSvg = generateFloorPlanSvg(
+        layout,
+        resolveFloorPlanWarehouse(layout, ans)
+      );
       fs.writeFileSync(
         path.join(storageDir, `planta-${phone}-${ts}.svg`),
         floorSvg,

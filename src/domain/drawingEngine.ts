@@ -1,31 +1,33 @@
 import type { LayoutResult } from './layoutEngine';
 
-/** Dimensões reais do galpão (mm) para a legenda; opcional. */
-export type FloorPlanDimensionsMm = {
-  warehouseWidthMm: number;
-  warehouseLengthMm: number;
+/** Dimensões do galpão (mm): comprimento × largura na planta. */
+export type FloorPlanWarehouseMm = {
+  lengthMm: number;
+  widthMm: number;
 };
 
-const MAX_DRAW_W = 700;
-const MAX_DRAW_H = 420;
-const BASE_CELL_W = 52;
-const BASE_CELL_H = 32;
-const BASE_CORRIDOR_H = 12;
-const OUTER_PAD = 14;
-const TITLE_TOP = 6;
-const GAP_TITLE_GRID = 10;
-const GAP_GRID_LEGEND = 14;
-const LEGEND_LINE = 13;
-const MIN_MODULE = 2.8;
+const VB_W = 880;
+const VB_H = 640;
+const MARGIN = 40;
+const HEADER_H = 88;
+const WH_MAX_W = 780;
+const WH_MAX_H = 410;
+const CORRIDOR_WEIGHT = 0.38;
+
+const COL_WHITE = '#ffffff';
+const COL_WAREHOUSE_FILL = '#fafafa';
+const COL_WAREHOUSE_STROKE = '#0f172a';
+const COL_CORRIDOR = '#e8eaed';
+const COL_CORRIDOR_LINE = '#cbd5e1';
+const COL_MODULE_FILL = '#dbeafe';
+const COL_MODULE_STROKE = '#3b82f6';
+const COL_PL_TEXT = '#111827';
+const COL_PL_SUB = '#4b5563';
+const COL_PL_LEGEND_LBL = '#6b7280';
+const COL_INNER_RULE = '#e5e7eb';
 
 const COL_BG = '#f0f2f5';
 const COL_CARD = '#ffffff';
-const COL_WAREHOUSE_FILL = '#f8fafc';
-const COL_WAREHOUSE_STROKE = '#0f172a';
-const COL_CORRIDOR = '#fcd34d';
-const COL_CORRIDOR_EDGE = '#d97706';
-const COL_MODULE_FILL = '#dbeafe';
-const COL_MODULE_STROKE = '#3b82f6';
 const COL_TEXT = '#1e293b';
 const COL_MUTED = '#64748b';
 
@@ -42,194 +44,132 @@ function escapeXml(text: string): string {
 }
 
 /**
- * Calcula tamanhos de célula e corredor: encaixa em MAX_DRAW_* e garante mínimo por módulo quando há muitos blocos.
- */
-function computeGridGeometry(
-  cols: number,
-  rows: number
-): {
-  cellW: number;
-  cellH: number;
-  corH: number;
-  gridW: number;
-  gridH: number;
-} {
-  const c = Math.max(0, cols);
-  const r = Math.max(0, rows);
-
-  if (c === 0 && r === 0) {
-    return {
-      cellW: BASE_CELL_W,
-      cellH: BASE_CELL_H,
-      corH: BASE_CORRIDOR_H,
-      gridW: 64,
-      gridH: 48,
-    };
-  }
-
-  let cellW = BASE_CELL_W;
-  let cellH = BASE_CELL_H;
-  let corH = BASE_CORRIDOR_H;
-
-  const innerH = r > 0 ? r * cellH + Math.max(0, r - 1) * corH : cellH;
-  const innerW = Math.max(c * cellW, 56);
-
-  const s = Math.min(
-    1,
-    MAX_DRAW_W / Math.max(innerW, 1),
-    MAX_DRAW_H / Math.max(innerH, 1)
-  );
-  cellW *= s;
-  cellH *= s;
-  corH *= s;
-
-  if (c > 0 && cellW < MIN_MODULE) {
-    const bump = MIN_MODULE / BASE_CELL_W;
-    cellW = MIN_MODULE;
-    cellH = BASE_CELL_H * bump;
-    corH = BASE_CORRIDOR_H * bump;
-  }
-  if (r > 0 && cellH < MIN_MODULE) {
-    const bump = MIN_MODULE / BASE_CELL_H;
-    if (BASE_CELL_W * bump > cellW && c > 0) {
-      cellW = BASE_CELL_W * bump;
-    }
-    cellH = MIN_MODULE;
-    corH = Math.max(corH, BASE_CORRIDOR_H * bump);
-  }
-
-  const gridW = Math.max(c * cellW, c > 0 ? 8 : 56);
-  const gridH =
-    r > 0 ? r * cellH + Math.max(0, r - 1) * corH : Math.max(cellH, 40);
-
-  return { cellW, cellH, corH, gridW, gridH };
-}
-
-function strokeWidthForDensity(
-  cols: number,
-  rows: number
-): { mod: number; wh: number } {
-  const n = Math.max(cols, rows, 1);
-  const mod = Math.max(0.35, Math.min(1.25, 2.4 / Math.log2(n + 2)));
-  const wh = Math.max(2, Math.min(4, 2.2 + 4 / Math.log2(n + 2)));
-  return { mod, wh };
-}
-
-/**
- * Planta em SVG: título, escala proporcional, corredores destacados, módulos em tom leve, legenda.
+ * Planta do galpão: fundo branco, margens, título, subtítulo com dimensões,
+ * contorno proporcional ao canvas, corredores cinza claro, módulos azul claro,
+ * legenda inferior. SVG responsivo (viewBox fixo + preserveAspectRatio).
  */
 export function generateFloorPlanSvg(
   layout: LayoutResult,
-  dimensionsMm?: FloorPlanDimensionsMm
+  warehouse: FloorPlanWarehouseMm
 ): string {
   const rows = Math.max(0, layout.rows);
   const cols = Math.max(0, layout.modulesPerRow);
+  const lengthMm = Math.max(1, warehouse.lengthMm);
+  const widthMm = Math.max(1, warehouse.widthMm);
 
-  const { cellW, cellH, corH, gridW, gridH } = computeGridGeometry(cols, rows);
-  const { mod: modStroke, wh: whStroke } = strokeWidthForDensity(cols, rows);
+  const scale = Math.min(WH_MAX_W / lengthMm, WH_MAX_H / widthMm);
+  const buildingW = lengthMm * scale;
+  const buildingH = widthMm * scale;
+  const bx = (VB_W - buildingW) / 2;
+  const by = MARGIN + HEADER_H - 8;
 
-  const drawX = OUTER_PAD;
-  const titleY = TITLE_TOP + 16;
-  const gridY = titleY + GAP_TITLE_GRID;
-  const legendY = gridY + gridH + GAP_GRID_LEGEND;
-  const legendLines = 4;
-  const legendBlockH = legendLines * LEGEND_LINE + 8;
+  const n = Math.max(cols, rows, 1);
+  const outlineStroke = Math.max(3, Math.min(5.5, 3.6 + 8 / Math.log2(n + 2)));
+  const modStroke = Math.max(0.45, Math.min(1.15, 2.2 / Math.log2(n + 2)));
+  const gapModule = Math.max(
+    0.6,
+    Math.min(1.8, buildingW / Math.max(cols * 24, 48))
+  );
 
-  const vbW = Math.max(gridW + 2 * OUTER_PAD, 260);
-  const vbH = legendY + legendBlockH + OUTER_PAD;
+  const corCount = Math.max(0, rows - 1);
+  const denom = rows > 0 ? rows + corCount * CORRIDOR_WEIGHT : 1;
+  const rowBandH = rows > 0 ? buildingH / denom : 0;
+  const corH = rows > 1 ? rowBandH * CORRIDOR_WEIGHT : 0;
+
+  const subtitle = `${formatMmPtBr(Math.round(lengthMm))} × ${formatMmPtBr(Math.round(widthMm))}`;
 
   const parts: string[] = [];
   parts.push(
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${vbW} ${vbH}" width="${vbW}" height="${vbH}">`
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${VB_W} ${VB_H}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">`
   );
-  parts.push('<title>Planta esquemática do galpão</title>');
+  parts.push('<title>Planta do galpão</title>');
   parts.push('<defs>');
   parts.push(`<style>
-    .fp-title { font: 700 15px system-ui, -apple-system, "Segoe UI", sans-serif; fill: ${COL_TEXT}; }
-    .fp-legend { font: 11px system-ui, -apple-system, "Segoe UI", sans-serif; fill: ${COL_TEXT}; }
-    .fp-legend-muted { fill: ${COL_MUTED}; }
+    .pl-title { font: 700 20px system-ui, -apple-system, "Segoe UI", sans-serif; fill: ${COL_PL_TEXT}; }
+    .pl-sub { font: 500 12px system-ui, -apple-system, "Segoe UI", sans-serif; fill: ${COL_PL_SUB}; }
+    .pl-legend { font: 12px system-ui, -apple-system, "Segoe UI", sans-serif; fill: ${COL_PL_TEXT}; }
+    .pl-legend-lbl { fill: ${COL_PL_LEGEND_LBL}; }
   </style>`);
   parts.push('</defs>');
 
   parts.push(
-    `<rect x="0" y="0" width="${vbW}" height="${vbH}" rx="6" fill="${COL_BG}"/>`
+    `<rect x="0" y="0" width="${VB_W}" height="${VB_H}" fill="${COL_WHITE}"/>`
   );
   parts.push(
-    `<rect x="4" y="4" width="${vbW - 8}" height="${vbH - 8}" rx="5" fill="${COL_CARD}" stroke="${COL_MUTED}" stroke-width="0.75"/>`
+    `<rect x="${MARGIN}" y="${MARGIN}" width="${VB_W - 2 * MARGIN}" height="${VB_H - 2 * MARGIN}" fill="none" stroke="${COL_INNER_RULE}" stroke-width="1" rx="4"/>`
   );
 
   parts.push(
-    `<text x="${vbW / 2}" y="${titleY}" text-anchor="middle" class="fp-title">${escapeXml('PLANTA DO GALPÃO')}</text>`
+    `<text x="${VB_W / 2}" y="${MARGIN + 28}" text-anchor="middle" class="pl-title">${escapeXml('PLANTA DO GALPÃO')}</text>`
   );
-
-  const x0 = drawX;
-  const y0 = gridY;
+  parts.push(
+    `<text x="${VB_W / 2}" y="${MARGIN + 50}" text-anchor="middle" class="pl-sub">${escapeXml(subtitle)}</text>`
+  );
 
   parts.push(
-    `<rect x="${x0}" y="${y0}" width="${gridW}" height="${gridH}" fill="${COL_WAREHOUSE_FILL}" stroke="${COL_WAREHOUSE_STROKE}" stroke-width="${whStroke}" rx="2"/>`
+    `<rect x="${bx}" y="${by}" width="${buildingW}" height="${buildingH}" fill="${COL_WAREHOUSE_FILL}" stroke="${COL_WAREHOUSE_STROKE}" stroke-width="${outlineStroke}" rx="2"/>`
   );
 
+  let yCursor = by;
+  const cellW = cols > 0 ? buildingW / cols : buildingW;
   for (let r = 0; r < rows; r++) {
-    const rowY = y0 + r * (cellH + corH);
-
-    if (r < rows - 1) {
-      const cy = rowY + cellH;
+    for (let c = 0; c < cols; c++) {
+      const mx = bx + c * cellW + gapModule;
+      const my = yCursor + gapModule;
+      const mw = Math.max(cellW - 2 * gapModule, 0.5);
+      const mh = Math.max(rowBandH - 2 * gapModule, 0.5);
+      const rr = Math.min(2.5, mw / 5, mh / 5);
       parts.push(
-        `<rect x="${x0}" y="${cy}" width="${gridW}" height="${corH}" fill="${COL_CORRIDOR}" fill-opacity="0.92" stroke="${COL_CORRIDOR_EDGE}" stroke-width="${Math.max(
-          0.4,
-          modStroke * 0.85
-        )}" rx="1"/>`
-      );
-      parts.push(
-        `<line x1="${x0 + 2}" y1="${cy + corH / 2}" x2="${x0 + gridW - 2}" y2="${cy + corH / 2}" stroke="${COL_CORRIDOR_EDGE}" stroke-width="${Math.max(
-          0.35,
-          modStroke * 0.5
-        )}" stroke-dasharray="4 3" opacity="0.85"/>`
+        `<rect x="${mx}" y="${my}" width="${mw}" height="${mh}" rx="${rr}" fill="${COL_MODULE_FILL}" stroke="${COL_MODULE_STROKE}" stroke-width="${modStroke}"/>`
       );
     }
 
-    const inset = Math.max(0.4, Math.min(1.2, cellW * 0.04));
-    for (let c = 0; c < cols; c++) {
-      const mx = x0 + c * cellW + inset;
-      const my = rowY + inset;
-      const mw = Math.max(cellW - 2 * inset, 0.5);
-      const mh = Math.max(cellH - 2 * inset, 0.5);
-      const rx = Math.min(2, mw / 4, mh / 4);
+    yCursor += rowBandH;
+    if (r < rows - 1 && corH > 0.5) {
       parts.push(
-        `<rect x="${mx}" y="${my}" width="${mw}" height="${mh}" rx="${rx}" fill="${COL_MODULE_FILL}" fill-opacity="0.95" stroke="${COL_MODULE_STROKE}" stroke-width="${modStroke}"/>`
+        `<rect x="${bx}" y="${yCursor}" width="${buildingW}" height="${corH}" fill="${COL_CORRIDOR}" stroke="${COL_CORRIDOR_LINE}" stroke-width="0.75"/>`
       );
+      yCursor += corH;
     }
   }
 
-  const wLabel =
-    dimensionsMm !== undefined
-      ? formatMmPtBr(dimensionsMm.warehouseWidthMm)
-      : '— (informe medidas para exibir)';
-  const lLabel =
-    dimensionsMm !== undefined
-      ? formatMmPtBr(dimensionsMm.warehouseLengthMm)
-      : '— (informe medidas para exibir)';
-
-  const lx = OUTER_PAD;
-  let ly = legendY;
+  const legY = VB_H - MARGIN - 8;
+  const legX = MARGIN + 8;
+  const lineGap = 16;
   parts.push(
-    `<text x="${lx}" y="${ly}" class="fp-legend"><tspan class="fp-legend-muted">Largura total:</tspan> ${escapeXml(wLabel)}</text>`
+    `<text x="${legX}" y="${legY - lineGap * 2}" class="pl-legend"><tspan class="pl-legend-lbl">Linhas:</tspan> ${rows}</text>`
   );
-  ly += LEGEND_LINE;
   parts.push(
-    `<text x="${lx}" y="${ly}" class="fp-legend"><tspan class="fp-legend-muted">Comprimento total:</tspan> ${escapeXml(lLabel)}</text>`
+    `<text x="${legX}" y="${legY - lineGap}" class="pl-legend"><tspan class="pl-legend-lbl">Módulos por linha:</tspan> ${cols}</text>`
   );
-  ly += LEGEND_LINE;
   parts.push(
-    `<text x="${lx}" y="${ly}" class="fp-legend"><tspan class="fp-legend-muted">Número de linhas:</tspan> ${rows}</text>`
-  );
-  ly += LEGEND_LINE;
-  parts.push(
-    `<text x="${lx}" y="${ly}" class="fp-legend"><tspan class="fp-legend-muted">Módulos por linha:</tspan> ${cols}</text>`
+    `<text x="${legX}" y="${legY}" class="pl-legend"><tspan class="pl-legend-lbl">Total de módulos:</tspan> ${layout.modulesTotal}</text>`
   );
 
   parts.push('</svg>');
   return parts.join('');
+}
+
+const EST_MODULE_WIDTH_MM = 1100;
+const EST_ROW_DEPTH_MM = 2700 + 3000;
+
+/** Comprimento/largura reais nas answers ou estimativa a partir do layout. */
+export function resolveFloorPlanWarehouse(
+  layout: LayoutResult,
+  answers: Record<string, unknown>
+): FloorPlanWarehouseMm {
+  if (
+    typeof answers.lengthMm === 'number' &&
+    typeof answers.widthMm === 'number'
+  ) {
+    return { lengthMm: answers.lengthMm, widthMm: answers.widthMm };
+  }
+  const cols = Math.max(1, layout.modulesPerRow);
+  const rws = Math.max(1, layout.rows);
+  return {
+    lengthMm: cols * EST_MODULE_WIDTH_MM,
+    widthMm: rws * EST_ROW_DEPTH_MM,
+  };
 }
 
 // --- Vista frontal (elevação esquemática) ---
