@@ -1,22 +1,88 @@
-import { PdfService } from './pdfService';
+import {
+  FRONT_VIEW_PLACEHOLDER_SVG,
+  generateProjectPdf,
+  PdfService,
+} from './pdfService';
 import { Session } from '../../domain/session';
-import { finalizeSummaryAnswers } from '../../domain/projectEngines';
+import {
+  buildFrontViewInputFromAnswers,
+  finalizeSummaryAnswers,
+} from '../../domain/projectEngines';
+import {
+  generateFloorPlanSvg,
+  generateFrontViewSvg,
+  resolveFloorPlanWarehouse,
+} from '../../domain/drawingEngine';
+import type { LayoutResult } from '../../domain/layoutEngine';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+
+describe('generateProjectPdf', () => {
+  let testStoragePath: string;
+
+  beforeEach(() => {
+    testStoragePath = path.join(os.tmpdir(), `pdf-gen-${Date.now()}`);
+  });
+
+  afterEach(() => {
+    if (fs.existsSync(testStoragePath)) {
+      for (const file of fs.readdirSync(testStoragePath)) {
+        fs.unlinkSync(path.join(testStoragePath, file));
+      }
+      fs.rmdirSync(testStoragePath);
+    }
+  });
+
+  it('deve gerar arquivo PDF no disco e o arquivo deve existir após execução', async () => {
+    const answers = finalizeSummaryAnswers({
+      lengthMm: 12000,
+      widthMm: 10000,
+      corridorMm: 3000,
+      capacityKg: 2000,
+      heightMode: 'DIRECT',
+      heightMm: 5000,
+      levels: 4,
+      guardRail: 'ambos',
+    });
+    const layout = answers.layout as LayoutResult;
+    const floorPlanSvg = generateFloorPlanSvg(
+      layout,
+      resolveFloorPlanWarehouse(layout, answers)
+    );
+    const fv = buildFrontViewInputFromAnswers(answers);
+    const frontViewSvg = fv
+      ? generateFrontViewSvg(fv)
+      : FRONT_VIEW_PLACEHOLDER_SVG;
+
+    const result = await generateProjectPdf(
+      {
+        project: answers,
+        layout,
+        floorPlanSvg,
+        frontViewSvg,
+      },
+      { storagePath: testStoragePath, port: 3000 }
+    );
+
+    expect(result.filename).toMatch(/^projeto-\d+\.pdf$/);
+    expect(result.path).toBe(path.join(testStoragePath, result.filename));
+    expect(fs.existsSync(result.path)).toBe(true);
+    expect(fs.statSync(result.path).size).toBeGreaterThan(100);
+    expect(result.url).toBe(`http://localhost:3000/files/${result.filename}`);
+  });
+});
 
 describe('PdfService', () => {
   let pdfService: PdfService;
   let testStoragePath: string;
 
   beforeEach(() => {
-    // Create temporary storage directory
     testStoragePath = path.join(os.tmpdir(), `pdf-test-${Date.now()}`);
     pdfService = new PdfService(testStoragePath, 3000);
   });
 
   afterEach(() => {
-    // Clean up test files
     if (fs.existsSync(testStoragePath)) {
       const files = fs.readdirSync(testStoragePath);
       files.forEach((file) => {
@@ -26,7 +92,7 @@ describe('PdfService', () => {
     }
   });
 
-  it('should generate PDF file and save to disk', (done) => {
+  it('generatePdf deve gravar PDF completo no disco após await', async () => {
     const session: Session = {
       phone: '5511999999999',
       state: 'DONE',
@@ -44,30 +110,16 @@ describe('PdfService', () => {
       updatedAt: Date.now(),
     };
 
-    const result = pdfService.generatePdf(session);
+    const result = await pdfService.generatePdf(session);
 
-    // Wait a bit for file to be written (PDF generation is async)
-    setTimeout(() => {
-      const filePath = path.join(testStoragePath, result.filename);
-      expect(fs.existsSync(filePath)).toBe(true);
-
-      // Verify file is not empty
-      const stats = fs.statSync(filePath);
-      expect(stats.size).toBeGreaterThan(0);
-
-      // Verify filename format
-      expect(result.filename).toContain('projeto-');
-      expect(result.filename).toContain('.pdf');
-
-      // Verify URL format
-      expect(result.url).toContain('http://localhost:3000/files/');
-      expect(result.url).toContain(result.filename);
-
-      done();
-    }, 500);
+    expect(result.filename).toMatch(/^projeto-\d+\.pdf$/);
+    expect(fs.existsSync(result.path)).toBe(true);
+    expect(fs.statSync(result.path).size).toBeGreaterThan(0);
+    expect(result.url).toContain('http://localhost:3000/files/');
+    expect(result.url).toContain(result.filename);
   });
 
-  it('should generate PDF with all project data', (done) => {
+  it('generatePdf deve aceitar fluxo CALC', async () => {
     const session: Session = {
       phone: '5511999999999',
       state: 'DONE',
@@ -85,18 +137,10 @@ describe('PdfService', () => {
       updatedAt: Date.now(),
     };
 
-    const result = pdfService.generatePdf(session);
+    const result = await pdfService.generatePdf(session);
 
-    setTimeout(() => {
-      const filePath = path.join(testStoragePath, result.filename);
-      expect(fs.existsSync(filePath)).toBe(true);
-
-      // Verify file content (basic check)
-      const stats = fs.statSync(filePath);
-      expect(stats.size).toBeGreaterThan(100); // PDF should have some content
-
-      done();
-    }, 500);
+    expect(fs.existsSync(result.path)).toBe(true);
+    expect(fs.statSync(result.path).size).toBeGreaterThan(100);
   });
 
   it('should create storage directory if it does not exist', () => {
@@ -105,7 +149,6 @@ describe('PdfService', () => {
 
     expect(fs.existsSync(newStoragePath)).toBe(true);
 
-    // Clean up
     if (fs.existsSync(newStoragePath)) {
       fs.rmdirSync(newStoragePath);
     }

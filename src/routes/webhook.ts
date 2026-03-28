@@ -44,7 +44,7 @@ export const webhookRoutes = async (fastify: FastifyInstance): Promise<void> => 
       }
 
       // Route incoming message
-      const result = routeIncoming(session, incoming, sessionRepository);
+      const result = await routeIncoming(session, incoming, sessionRepository);
 
       return reply.code(200).send({ messages: result.outgoingMessages });
     }

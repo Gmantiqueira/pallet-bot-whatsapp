@@ -15,8 +15,9 @@ import {
 } from '../domain/drawingEngine';
 import { OutgoingMessage } from '../types/messages';
 import { buildMessages, MessageContext } from './messageBuilder';
-import { PdfService } from '../infra/pdf/pdfService';
+import { FRONT_VIEW_PLACEHOLDER_SVG, PdfService } from '../infra/pdf/pdfService';
 import { loadEnv } from '../config/env';
+import { resolveStoragePath } from '../config/storagePath';
 
 export interface IncomingPayload {
   from: string;
@@ -80,11 +81,11 @@ const convertToInput = (incoming: IncomingPayload): Input | null => {
   return null;
 };
 
-export const routeIncoming = (
+export const routeIncoming = async (
   session: Session,
   incoming: IncomingPayload,
   sessionRepository: SessionRepository
-): RouterResult => {
+): Promise<RouterResult> => {
   const input = convertToInput(incoming);
 
   // If no valid input, return current state message
@@ -125,7 +126,7 @@ export const routeIncoming = (
 
   if (hasGeneratePdfEffect && updatedSession.state === 'GENERATING_DOC') {
     const env = loadEnv();
-    const storageDir = './storage';
+    const storageDir = resolveStoragePath();
     if (!fs.existsSync(storageDir)) {
       fs.mkdirSync(storageDir, { recursive: true });
     }
@@ -141,33 +142,42 @@ export const routeIncoming = (
       const ans = genSession.answers;
 
       const layout = ans.layout as LayoutResult | undefined;
-      if (layout) {
-        const floorSvg = generateFloorPlanSvg(
-          layout,
-          resolveFloorPlanWarehouse(layout, ans)
-        );
-        fs.writeFileSync(
-          path.join(storageDir, `planta-${phone}-${ts}.svg`),
-          floorSvg,
-          'utf8'
-        );
+      if (!layout) {
+        throw new Error('Layout ausente');
       }
 
+      const floorSvg = generateFloorPlanSvg(
+        layout,
+        resolveFloorPlanWarehouse(layout, ans)
+      );
+      fs.writeFileSync(
+        path.join(storageDir, `planta-${phone}-${ts}.svg`),
+        floorSvg,
+        'utf8'
+      );
+
       const fv = buildFrontViewInputFromAnswers(ans);
+      const frontSvg = fv ? generateFrontViewSvg(fv) : FRONT_VIEW_PLACEHOLDER_SVG;
       if (fv) {
         fs.writeFileSync(
           path.join(storageDir, `vista-frontal-${phone}-${ts}.svg`),
-          generateFrontViewSvg(fv),
+          frontSvg,
           'utf8'
         );
       }
 
       const pdfService = new PdfService(storageDir, env.PORT);
-      const pdfResult = pdfService.generatePdf(genSession);
+      const pdfResult = await pdfService.generateProjectPdf({
+        project: ans,
+        layout,
+        floorPlanSvg: floorSvg,
+        frontViewSvg: frontSvg,
+      });
 
       const nextAnswers = { ...genSession.answers };
       delete nextAnswers.pdfFilename;
       delete nextAnswers.pdfUrl;
+      delete nextAnswers.pdfPath;
 
       updatedSession = {
         ...genSession,
@@ -177,12 +187,14 @@ export const routeIncoming = (
           ...nextAnswers,
           pdfFilename: pdfResult.filename,
           pdfUrl: pdfResult.url,
+          pdfPath: pdfResult.path,
         },
       };
     } catch {
       const cleanAnswers = { ...genSession.answers };
       delete cleanAnswers.pdfFilename;
       delete cleanAnswers.pdfUrl;
+      delete cleanAnswers.pdfPath;
       updatedSession = {
         ...genSession,
         state: 'SUMMARY_CONFIRM',

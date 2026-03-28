@@ -1,12 +1,11 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import * as fs from 'fs';
 import * as path from 'path';
+import { resolveStoragePath } from '../config/storagePath';
 
 interface FilesParams {
   name: string;
 }
-
-const STORAGE_PATH = './storage';
 
 export const filesRoutes = async (fastify: FastifyInstance): Promise<void> => {
   fastify.get(
@@ -19,7 +18,7 @@ export const filesRoutes = async (fastify: FastifyInstance): Promise<void> => {
         return reply.code(400).send({ error: 'Invalid filename' });
       }
 
-      const filePath = path.join(STORAGE_PATH, name);
+      const filePath = path.join(resolveStoragePath(), name);
 
       // Check if file exists
       if (!fs.existsSync(filePath)) {

@@ -40,32 +40,32 @@ describe('MessageRouter', () => {
   });
 
   describe('Input conversion', () => {
-    it('should convert text with global command to GLOBAL input', () => {
+    it('should convert text with global command to GLOBAL input', async () => {
       const session = createSession('WAIT_LENGTH');
       const incoming: IncomingPayload = {
         from: '5511999999999',
         text: 'novo',
       };
 
-      const result = routeIncoming(session, incoming, repository);
+      const result = await routeIncoming(session, incoming, repository);
 
       expect(result.session.state).toBe('MENU');
       expect(result.session.answers).toEqual({});
     });
 
-    it('should convert buttonReply to BUTTON input', () => {
+    it('should convert buttonReply to BUTTON input', async () => {
       const session = createSession('MENU');
       const incoming: IncomingPayload = {
         from: '5511999999999',
         buttonReply: '2',
       };
 
-      const result = routeIncoming(session, incoming, repository);
+      const result = await routeIncoming(session, incoming, repository);
 
       expect(result.session.state).toBe('WAIT_LENGTH');
     });
 
-    it('should convert media image to MEDIA_IMAGE input', () => {
+    it('should convert media image to MEDIA_IMAGE input', async () => {
       const session = createSession('WAIT_PLANT_IMAGE');
       const incoming: IncomingPayload = {
         from: '5511999999999',
@@ -75,19 +75,19 @@ describe('MessageRouter', () => {
         },
       };
 
-      const result = routeIncoming(session, incoming, repository);
+      const result = await routeIncoming(session, incoming, repository);
 
       expect(result.session.state).toBe('WAIT_CORRIDOR');
     });
 
-    it('should convert text to TEXT input', () => {
+    it('should convert text to TEXT input', async () => {
       const session = createSession('WAIT_LENGTH');
       const incoming: IncomingPayload = {
         from: '5511999999999',
         text: '12000',
       };
 
-      const result = routeIncoming(session, incoming, repository);
+      const result = await routeIncoming(session, incoming, repository);
 
       expect(result.session.state).toBe('WAIT_WIDTH');
       expect(result.session.answers.lengthMm).toBe(12000);
@@ -95,14 +95,14 @@ describe('MessageRouter', () => {
   });
 
   describe('Error handling', () => {
-    it('should not advance state when validation error occurs', () => {
+    it('should not advance state when validation error occurs', async () => {
       const session = createSession('WAIT_LENGTH');
       const incoming: IncomingPayload = {
         from: '5511999999999',
         text: '400', // Too small
       };
 
-      const result = routeIncoming(session, incoming, repository);
+      const result = await routeIncoming(session, incoming, repository);
 
       expect(result.session.state).toBe('WAIT_LENGTH');
       expect(result.outgoingMessages[0].text).toContain('❌');
@@ -111,7 +111,7 @@ describe('MessageRouter', () => {
   });
 
   describe('Status command', () => {
-    it('should return status without changing state', () => {
+    it('should return status without changing state', async () => {
       const session = createSession('WAIT_CORRIDOR', {
         lengthMm: 12000,
         widthMm: 10000,
@@ -121,7 +121,7 @@ describe('MessageRouter', () => {
         text: 'status',
       };
 
-      const result = routeIncoming(session, incoming, repository);
+      const result = await routeIncoming(session, incoming, repository);
 
       expect(result.session.state).toBe('WAIT_CORRIDOR');
       expect(result.outgoingMessages[0].text).toContain('RESUMO');
@@ -130,14 +130,14 @@ describe('MessageRouter', () => {
   });
 
   describe('Session persistence', () => {
-    it('should persist session after routing', () => {
+    it('should persist session after routing', async () => {
       const session = createSession('MENU');
       const incoming: IncomingPayload = {
         from: '5511999999999',
         buttonReply: '2',
       };
 
-      routeIncoming(session, incoming, repository);
+      await routeIncoming(session, incoming, repository);
 
       const persisted = repository.get('5511999999999');
       expect(persisted).not.toBeNull();
@@ -153,10 +153,11 @@ describe('MessageRouter', () => {
         return;
       }
       for (const f of fs.readdirSync(storageDir)) {
-        if (
-          f.includes('5511999999999') &&
-          (f.endsWith('.pdf') || f.endsWith('.svg'))
-        ) {
+        const isTestArtifact =
+          (f.includes('5511999999999') &&
+            (f.endsWith('.pdf') || f.endsWith('.svg'))) ||
+          (f.startsWith('projeto-') && f.endsWith('.pdf'));
+        if (isTestArtifact) {
           try {
             fs.unlinkSync(path.join(storageDir, f));
           } catch {
@@ -166,7 +167,7 @@ describe('MessageRouter', () => {
       }
     });
 
-    it('should finalize engines, save SVGs and PDF, DONE message with document', () => {
+    it('should finalize engines, save SVGs and PDF, DONE message with document', async () => {
       const session = createSession(
         'SUMMARY_CONFIRM',
         finalizeSummaryAnswers({
@@ -186,7 +187,7 @@ describe('MessageRouter', () => {
         buttonReply: 'GERAR',
       };
 
-      const result = routeIncoming(session, incoming, repository);
+      const result = await routeIncoming(session, incoming, repository);
 
       expect(result.session.state).toBe('DONE');
       expect(
@@ -195,8 +196,10 @@ describe('MessageRouter', () => {
         )
       ).toBe(true);
       const docMsg = result.outgoingMessages.find((m) => m.document);
-      expect(docMsg?.document?.filename).toMatch(/\.pdf$/);
+      expect(docMsg?.document?.filename).toMatch(/^projeto-\d+\.pdf$/);
       expect(docMsg?.document?.url).toContain('/files/');
+      expect(typeof result.session.answers.pdfPath).toBe('string');
+      expect(fs.existsSync(result.session.answers.pdfPath as string)).toBe(true);
 
       const names = fs.existsSync(storageDir)
         ? fs.readdirSync(storageDir).filter((f) => f.includes('5511999999999'))
@@ -207,17 +210,17 @@ describe('MessageRouter', () => {
       expect(
         names.some((f) => f.startsWith('vista-frontal-') && f.endsWith('.svg'))
       ).toBe(true);
-      expect(names.some((f) => f.startsWith('projeto-') && f.endsWith('.pdf'))).toBe(
-        true
-      );
+      expect(
+        fs.existsSync(
+          path.join(storageDir, docMsg?.document?.filename as string)
+        )
+      ).toBe(true);
     });
 
-    it('should return to SUMMARY_CONFIRM with friendly message when delivery fails', () => {
+    it('should return to SUMMARY_CONFIRM with friendly message when delivery fails', async () => {
       const pdfSpy = jest
-        .spyOn(PdfService.prototype, 'generatePdf')
-        .mockImplementation(() => {
-          throw new Error('pdf fail');
-        });
+        .spyOn(PdfService.prototype, 'generateProjectPdf')
+        .mockRejectedValue(new Error('pdf fail'));
 
       const session = createSession(
         'SUMMARY_CONFIRM',
@@ -238,7 +241,7 @@ describe('MessageRouter', () => {
         buttonReply: 'GERAR',
       };
 
-      const result = routeIncoming(session, incoming, repository);
+      const result = await routeIncoming(session, incoming, repository);
 
       pdfSpy.mockRestore();
 
@@ -253,7 +256,7 @@ describe('MessageRouter', () => {
   });
 
   describe('Image analysis detection', () => {
-    it('should detect image analysis when transitioning from WAIT_PLANT_IMAGE', () => {
+    it('should detect image analysis when transitioning from WAIT_PLANT_IMAGE', async () => {
       const session = createSession('WAIT_PLANT_IMAGE');
       const incoming: IncomingPayload = {
         from: '5511999999999',
@@ -263,7 +266,7 @@ describe('MessageRouter', () => {
         },
       };
 
-      const result = routeIncoming(session, incoming, repository);
+      const result = await routeIncoming(session, incoming, repository);
 
       // Should have image analyzed message
       const imageMessage = result.outgoingMessages.find((m) =>
