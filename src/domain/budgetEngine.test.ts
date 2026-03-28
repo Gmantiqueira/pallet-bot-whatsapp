@@ -1,4 +1,4 @@
-import { calculateBudget } from './budgetEngine';
+import { BUDGET_RULES_VERSION, calculateBudget } from './budgetEngine';
 import type { LayoutResult } from './layoutEngine';
 import type { StructureResult } from './structureEngine';
 
@@ -19,6 +19,12 @@ describe('BudgetEngine', () => {
 
     expect(result.totals.modules).toBe(20);
     expect(result.totals.positions).toBe(60);
+    expect(result.meta.rulesVersion).toBe(BUDGET_RULES_VERSION);
+    expect(result.meta.assumptions).toEqual([
+      'longarinas = módulos × níveis',
+      'montantes = (módulos por linha + 1) × linhas',
+      'estrutura baseada em capacidade e altura',
+    ]);
   });
 
   it('deve gerar itens básicos', () => {
