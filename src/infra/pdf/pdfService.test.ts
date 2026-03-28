@@ -1,5 +1,6 @@
 import { PdfService } from './pdfService';
 import { Session } from '../../domain/session';
+import { finalizeSummaryAnswers } from '../../domain/projectEngines';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -29,15 +30,16 @@ describe('PdfService', () => {
     const session: Session = {
       phone: '5511999999999',
       state: 'DONE',
-      answers: {
+      answers: finalizeSummaryAnswers({
         lengthMm: 12000,
         widthMm: 10000,
         corridorMm: 3000,
         capacityKg: 2000,
         heightMode: 'DIRECT',
         heightMm: 5000,
+        levels: 4,
         guardRail: 'ambos',
-      },
+      }),
       stack: [],
       updatedAt: Date.now(),
     };
@@ -69,7 +71,7 @@ describe('PdfService', () => {
     const session: Session = {
       phone: '5511999999999',
       state: 'DONE',
-      answers: {
+      answers: finalizeSummaryAnswers({
         lengthMm: 12000,
         widthMm: 10000,
         corridorMm: 3000,
@@ -78,7 +80,7 @@ describe('PdfService', () => {
         loadHeightMm: 1500,
         levels: 5,
         guardRail: 'inicio',
-      },
+      }),
       stack: [],
       updatedAt: Date.now(),
     };
