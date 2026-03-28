@@ -103,7 +103,7 @@ export function buildFrontViewInputFromAnswers(
   const cap = typeof answers.capacityKg === 'number' ? answers.capacityKg : 0;
   return {
     levels: answers.levels,
-    totalHeightMm: totalH,
+    uprightHeightMm: totalH,
     beamWidthMm: DEFAULT_MODULE_WIDTH_MM,
     depthMm: DEFAULT_MODULE_DEPTH_MM,
     capacityKgPerLevel: cap,

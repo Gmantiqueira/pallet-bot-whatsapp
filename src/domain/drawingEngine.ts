@@ -26,11 +26,6 @@ const COL_PL_SUB = '#4b5563';
 const COL_PL_LEGEND_LBL = '#6b7280';
 const COL_INNER_RULE = '#e5e7eb';
 
-const COL_BG = '#f0f2f5';
-const COL_CARD = '#ffffff';
-const COL_TEXT = '#1e293b';
-const COL_MUTED = '#64748b';
-
 function formatMmPtBr(mm: number): string {
   return `${mm.toLocaleString('pt-BR')} mm`;
 }
@@ -172,27 +167,26 @@ export function resolveFloorPlanWarehouse(
   };
 }
 
-// --- Vista frontal (elevação esquemática) ---
+// --- Vista frontal técnica ---
+
+const TECH = '#000000';
+const TECH_BG = '#ffffff';
 
 export type FrontViewInput = {
-  /** Número de níveis de armazenagem. */
   levels: number;
-  /** Altura total do conjunto (montantes), mm. */
-  totalHeightMm: number;
-  /** Vão horizontal da longarina (largura vista frontal), mm. */
+  uprightHeightMm: number;
   beamWidthMm: number;
-  /** Profundidade do módulo / estrutura, mm. */
   depthMm: number;
-  /** Capacidade indicada por nível (texto na prancha). */
   capacityKgPerLevel: number;
 };
 
-const FV_MAX_RACK_W = 280;
-const FV_MAX_RACK_H = 260;
-const FV_LEFT_DIM = 52;
-const FV_TOP_TITLE = 8;
-const FV_RACK_TOP = 40;
-const FV_BOTTOM_BLOCK = 88;
+const FV_VB_W = 880;
+const FV_VB_H = 720;
+const FV_TITLE_Y = 38;
+const FV_RACK_TOP = 68;
+const FV_RACK_MAX_W = 560;
+const FV_RACK_MAX_H = 380;
+const FV_DIM_GAP = 40;
 
 function dimensionLineH(
   x1: number,
@@ -203,11 +197,11 @@ function dimensionLineH(
 ): string {
   const t = tick;
   return [
-    `<line x1="${x1}" y1="${y}" x2="${x2}" y2="${y}" stroke="${stroke}" stroke-width="1.2"/>`,
-    `<line x1="${x1}" y1="${y - t}" x2="${x1}" y2="${y + t}" stroke="${stroke}" stroke-width="1.2"/>`,
-    `<line x1="${x2}" y1="${y - t}" x2="${x2}" y2="${y + t}" stroke="${stroke}" stroke-width="1.2"/>`,
-    `<polygon points="${x1},${y} ${x1 + 5},${y - 3.5} ${x1 + 5},${y + 3.5}" fill="${stroke}"/>`,
-    `<polygon points="${x2},${y} ${x2 - 5},${y - 3.5} ${x2 - 5},${y + 3.5}" fill="${stroke}"/>`,
+    `<line x1="${x1}" y1="${y}" x2="${x2}" y2="${y}" stroke="${stroke}" stroke-width="1"/>`,
+    `<line x1="${x1}" y1="${y - t}" x2="${x1}" y2="${y + t}" stroke="${stroke}" stroke-width="1"/>`,
+    `<line x1="${x2}" y1="${y - t}" x2="${x2}" y2="${y + t}" stroke="${stroke}" stroke-width="1"/>`,
+    `<polygon points="${x1},${y} ${x1 + 4},${y - 2.8} ${x1 + 4},${y + 2.8}" fill="${stroke}"/>`,
+    `<polygon points="${x2},${y} ${x2 - 4},${y - 2.8} ${x2 - 4},${y + 2.8}" fill="${stroke}"/>`,
   ].join('');
 }
 
@@ -220,154 +214,128 @@ function dimensionLineV(
 ): string {
   const t = tick;
   return [
-    `<line x1="${x}" y1="${y1}" x2="${x}" y2="${y2}" stroke="${stroke}" stroke-width="1.2"/>`,
-    `<line x1="${x - t}" y1="${y1}" x2="${x + t}" y2="${y1}" stroke="${stroke}" stroke-width="1.2"/>`,
-    `<line x1="${x - t}" y1="${y2}" x2="${x + t}" y2="${y2}" stroke="${stroke}" stroke-width="1.2"/>`,
-    `<polygon points="${x},${y1} ${x - 3.5},${y1 + 5} ${x + 3.5},${y1 + 5}" fill="${stroke}"/>`,
-    `<polygon points="${x},${y2} ${x - 3.5},${y2 - 5} ${x + 3.5},${y2 - 5}" fill="${stroke}"/>`,
+    `<line x1="${x}" y1="${y1}" x2="${x}" y2="${y2}" stroke="${stroke}" stroke-width="1"/>`,
+    `<line x1="${x - t}" y1="${y1}" x2="${x + t}" y2="${y1}" stroke="${stroke}" stroke-width="1"/>`,
+    `<line x1="${x - t}" y1="${y2}" x2="${x + t}" y2="${y2}" stroke="${stroke}" stroke-width="1"/>`,
+    `<polygon points="${x},${y1} ${x - 2.8},${y1 + 4} ${x + 2.8},${y1 + 4}" fill="${stroke}"/>`,
+    `<polygon points="${x},${y2} ${x - 2.8},${y2 - 4} ${x + 2.8},${y2 - 4}" fill="${stroke}"/>`,
   ].join('');
 }
 
 /**
- * Elevação frontal esquemática: montantes, longarinas por nível, cotas e capacidade.
+ * Elevação frontal como desenho técnico: montantes, longarinas, cotas e dados (fundo branco, traços pretos).
  */
 export function generateFrontViewSvg(data: FrontViewInput): string {
   const levels = Math.max(1, Math.floor(data.levels));
-  const totalH = Math.max(1, data.totalHeightMm);
+  const uprightH = Math.max(1, data.uprightHeightMm);
   const beamW = Math.max(1, data.beamWidthMm);
-  const depth = Math.max(0, data.depthMm);
+  const depthMm = Math.max(0, data.depthMm);
   const capKg = Math.max(0, data.capacityKgPerLevel);
 
-  const scale = Math.min(FV_MAX_RACK_W / beamW, FV_MAX_RACK_H / totalH);
+  const levelHmm = uprightH / levels;
+  const scale = Math.min(FV_RACK_MAX_W / beamW, FV_RACK_MAX_H / uprightH);
   const innerW = beamW * scale;
-  const innerH = totalH * scale;
+  const innerH = uprightH * scale;
+  const levDraw = innerH / levels;
 
-  const x0 = FV_LEFT_DIM;
-  const y0 = FV_RACK_TOP;
-  const x1 = x0 + innerW;
-  const y1 = y0 + innerH;
+  const rx = (FV_VB_W - innerW) / 2;
+  const ry = FV_RACK_TOP;
+  const rackBottom = ry + innerH;
 
-  const dimX = x0 - 22;
-  const dimYBottom = y1 + 28;
-  const capY = dimYBottom + 36;
-  const depthY = dimYBottom + 18;
-
-  const vbW = Math.max(x1 + 48, 320);
-  const vbH = capY + FV_BOTTOM_BLOCK - FV_TOP_TITLE;
-
-  const uprightW = Math.max(3.5, Math.min(7, innerW * 0.04));
-  const beamStroke = Math.max(2, Math.min(4.5, innerH / (levels * 8)));
-  const colMont = '#1e293b';
-  const colLong = '#475569';
-  const colDim = '#334155';
-  const colMuted = '#64748b';
+  const t = Math.max(2.5, Math.min(6, innerW * 0.028));
+  const beamTh = Math.max(1.2, Math.min(2.6, innerH / Math.max(levels * 12, 8)));
+  const xL = rx + t * 0.4;
+  const xR = rx + innerW - t * 0.4;
 
   const parts: string[] = [];
   parts.push(
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${vbW} ${vbH}" width="${vbW}" height="${vbH}">`
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${FV_VB_W} ${FV_VB_H}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">`
   );
-  parts.push('<title>Vista frontal técnica (esquema)</title>');
+  parts.push('<title>Detalhe técnico frontal</title>');
   parts.push('<defs>');
   parts.push(`<style>
-    .fv-title { font: 700 14px system-ui, -apple-system, "Segoe UI", sans-serif; fill: ${COL_TEXT}; }
-    .fv-label { font: 10px system-ui, -apple-system, "Segoe UI", sans-serif; fill: ${COL_TEXT}; }
-    .fv-small { font: 9px system-ui, -apple-system, "Segoe UI", sans-serif; fill: ${colMuted}; }
-    .fv-cota { font: 9px system-ui, -apple-system, "Segoe UI", sans-serif; fill: ${colDim}; }
-    .fv-cap { font: 11px system-ui, -apple-system, "Segoe UI", sans-serif; fill: ${COL_TEXT}; }
+    .tf-title { font: 700 18px system-ui, -apple-system, "Segoe UI", sans-serif; fill: ${TECH}; }
+    .tf-note { font: 12px system-ui, -apple-system, "Segoe UI", sans-serif; fill: ${TECH}; }
+    .tf-cota { font: 10px system-ui, -apple-system, "Segoe UI", sans-serif; fill: ${TECH}; }
+    .tf-hint { font: 9px system-ui, -apple-system, "Segoe UI", sans-serif; fill: ${TECH}; }
   </style>`);
   parts.push('</defs>');
 
+  parts.push(`<rect width="${FV_VB_W}" height="${FV_VB_H}" fill="${TECH_BG}"/>`);
+
   parts.push(
-    `<rect x="0" y="0" width="${vbW}" height="${vbH}" rx="6" fill="${COL_BG}"/>`
-  );
-  parts.push(
-    `<rect x="4" y="4" width="${vbW - 8}" height="${vbH - 8}" rx="5" fill="${COL_CARD}" stroke="${COL_MUTED}" stroke-width="0.75"/>`
+    `<text x="${FV_VB_W / 2}" y="${FV_TITLE_Y}" text-anchor="middle" class="tf-title">${escapeXml('DETALHE TÉCNICO')}</text>`
   );
 
   parts.push(
-    `<text x="${vbW / 2}" y="${FV_TOP_TITLE + 14}" text-anchor="middle" class="fv-title">${escapeXml(
-      'VISTA FRONTAL (ESQUEMA)'
-    )}</text>`
+    `<rect x="${rx}" y="${ry}" width="${t}" height="${innerH}" fill="${TECH_BG}" stroke="${TECH}" stroke-width="1.6"/>`
+  );
+  parts.push(
+    `<rect x="${rx + innerW - t}" y="${ry}" width="${t}" height="${innerH}" fill="${TECH_BG}" stroke="${TECH}" stroke-width="1.6"/>`
   );
 
-  parts.push(
-    `<rect x="${x0}" y="${y0}" width="${innerW}" height="${innerH}" fill="#f8fafc" stroke="${colMont}" stroke-width="1" rx="1"/>`
-  );
-
-  parts.push(
-    `<rect x="${x0}" y="${y0}" width="${uprightW}" height="${innerH}" fill="${colMont}" stroke="none"/>`
-  );
-  parts.push(
-    `<rect x="${x1 - uprightW}" y="${y0}" width="${uprightW}" height="${innerH}" fill="${colMont}" stroke="none"/>`
-  );
-
-  parts.push(
-    `<line x1="${x0 + uprightW * 0.15}" y1="${y0}" x2="${x1 - uprightW * 0.15}" y2="${y0}" stroke="${colLong}" stroke-width="${beamStroke}" stroke-linecap="square"/>`
-  );
-  for (let i = 1; i < levels; i++) {
-    const yy = y0 + (i * innerH) / levels;
+  for (let j = 0; j <= levels; j++) {
+    const yy = ry + j * levDraw;
     parts.push(
-      `<line x1="${x0 + uprightW * 0.15}" y1="${yy}" x2="${x1 - uprightW * 0.15}" y2="${yy}" stroke="${colLong}" stroke-width="${beamStroke}" stroke-linecap="square"/>`
+      `<line x1="${xL}" y1="${yy}" x2="${xR}" y2="${yy}" stroke="${TECH}" stroke-width="${beamTh}" stroke-linecap="square"/>`
     );
   }
+
+  const dimLeftX = rx - FV_DIM_GAP;
+  parts.push(dimensionLineV(dimLeftX, ry, rackBottom, 4, TECH));
   parts.push(
-    `<line x1="${x0 + uprightW * 0.15}" y1="${y1}" x2="${x1 - uprightW * 0.15}" y2="${y1}" stroke="${colLong}" stroke-width="${beamStroke}" stroke-linecap="square"/>`
+    `<text transform="translate(${dimLeftX - 10},${(ry + rackBottom) / 2}) rotate(-90)" text-anchor="middle" class="tf-cota">${escapeXml(
+      formatMmPtBr(Math.round(uprightH))
+    )}</text>`
+  );
+  parts.push(
+    `<text x="${dimLeftX}" y="${ry - 8}" text-anchor="middle" class="tf-hint">${escapeXml('altura total')}</text>`
   );
 
-  const levelH = totalH / levels;
-  const fsLevel = levels > 8 ? 8 : levels > 5 ? 9 : 10;
-  for (let i = 0; i < levels; i++) {
-    const bayTop = y0 + (i * innerH) / levels;
-    const bayH = innerH / levels;
-    const cy = bayTop + Math.min(bayH / 2 + 3, bayH - 4);
-    const cx = x0 + innerW / 2;
-    const label = `Nível ${levels - i}`;
+  const dimRightX = rx + innerW + FV_DIM_GAP;
+  if (levels > 1) {
+    const yA = ry + (levels - 1) * levDraw;
+    const yB = rackBottom;
+    parts.push(dimensionLineV(dimRightX, yA, yB, 4, TECH));
     parts.push(
-      `<text x="${cx}" y="${cy}" text-anchor="middle" font-size="${fsLevel}px" class="fv-label">${escapeXml(
-        label
+      `<text transform="translate(${dimRightX + 12},${(yA + yB) / 2}) rotate(-90)" text-anchor="middle" class="tf-cota">${escapeXml(
+        formatMmPtBr(Math.round(levelHmm))
+      )}</text>`
+    );
+    parts.push(
+      `<text x="${dimRightX}" y="${yA - 6}" text-anchor="middle" class="tf-hint">${escapeXml(
+        'entre níveis'
       )}</text>`
     );
   }
 
+  const dimY = rackBottom + 26;
+  parts.push(dimensionLineH(rx, dimY, rx + innerW, 4, TECH));
   parts.push(
-    `<text x="${x0}" y="${y1 + 12}" class="fv-small">${escapeXml(
-      `Altura média por nível: ${formatMmPtBr(Math.round(levelH))}`
+    `<text x="${rx + innerW / 2}" y="${dimY + 15}" text-anchor="middle" class="tf-cota">${escapeXml(
+      formatMmPtBr(Math.round(beamW))
+    )}</text>`
+  );
+  parts.push(
+    `<text x="${rx + innerW / 2}" y="${dimY - 6}" text-anchor="middle" class="tf-hint">${escapeXml(
+      'largura longarina'
     )}</text>`
   );
 
-  parts.push(dimensionLineV(dimX, y0, y1, 5, colDim));
+  const noteY = dimY + 48;
   parts.push(
-    `<text transform="translate(${dimX - 10},${(y0 + y1) / 2}) rotate(-90)" text-anchor="middle" class="fv-cota">${escapeXml(
-      formatMmPtBr(totalH)
+    `<text x="${FV_VB_W / 2}" y="${noteY}" text-anchor="middle" class="tf-note">${escapeXml(
+      `Níveis: ${levels}`
     )}</text>`
   );
   parts.push(
-    `<text x="${dimX - 10}" y="${y0 - 6}" text-anchor="end" class="fv-small">${escapeXml(
-      'Cota altura'
-    )}</text>`
-  );
-
-  parts.push(dimensionLineH(x0, dimYBottom, x1, 5, colDim));
-  parts.push(
-    `<text x="${(x0 + x1) / 2}" y="${dimYBottom + 14}" text-anchor="middle" class="fv-cota">${escapeXml(
-      formatMmPtBr(beamW)
-    )}</text>`
-  );
-  parts.push(
-    `<text x="${(x0 + x1) / 2}" y="${dimYBottom - 6}" text-anchor="middle" class="fv-small">${escapeXml(
-      'Cota largura (longarina)'
-    )}</text>`
-  );
-
-  parts.push(
-    `<text x="${(x0 + x1) / 2}" y="${depthY}" text-anchor="middle" class="fv-cota">${escapeXml(
-      `Profundidade: ${formatMmPtBr(depth)}`
-    )}</text>`
-  );
-
-  parts.push(
-    `<text x="${vbW / 2}" y="${capY}" text-anchor="middle" class="fv-cap">${escapeXml(
+    `<text x="${FV_VB_W / 2}" y="${noteY + 22}" text-anchor="middle" class="tf-note">${escapeXml(
       `Capacidade por nível: ${capKg.toLocaleString('pt-BR')} kg`
+    )}</text>`
+  );
+  parts.push(
+    `<text x="${FV_VB_W / 2}" y="${noteY + 44}" text-anchor="middle" class="tf-cota">${escapeXml(
+      `Profundidade: ${formatMmPtBr(Math.round(depthMm))}`
     )}</text>`
   );
 
