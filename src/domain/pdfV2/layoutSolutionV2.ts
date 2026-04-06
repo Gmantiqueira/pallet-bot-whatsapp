@@ -242,14 +242,14 @@ function evaluateVariant(
   depthMode: RackDepthModeV2,
   crossSpanMm: number,
   beamSpanMm: number,
-  moduleDepthMm: number,
-  moduleWidthMm: number,
+  rackDepthMm: number,
+  beamAlongModuleMm: number,
   corridorMm: number,
   levels: number,
   hasTunnel: boolean,
   tunnelPosition: 'INICIO' | 'MEIO' | 'FIM' | undefined
 ): VariantEval {
-  const band = bandDepthForMode(depthMode, moduleDepthMm);
+  const band = bandDepthForMode(depthMode, rackDepthMm);
   const rows = countRowsAcrossZones(
     crossSpanMm,
     band,
@@ -257,7 +257,7 @@ function evaluateVariant(
     hasTunnel,
     tunnelPosition
   );
-  const along = modulesAlongBeam(beamSpanMm, moduleWidthMm);
+  const along = modulesAlongBeam(beamSpanMm, beamAlongModuleMm);
   const depthFactor = depthMode === 'double' ? 2 : 1;
   const cells = rows * along;
   const positions = cells * depthFactor * levels;
@@ -268,8 +268,8 @@ function chooseDepthModeFromStrategy(
   strategy: LineStrategyCode,
   crossSpanMm: number,
   beamSpanMm: number,
-  moduleDepthMm: number,
-  moduleWidthMm: number,
+  rackDepthMm: number,
+  beamAlongModuleMm: number,
   corridorMm: number,
   levels: number,
   hasTunnel: boolean,
@@ -282,8 +282,8 @@ function chooseDepthModeFromStrategy(
     'single',
     crossSpanMm,
     beamSpanMm,
-    moduleDepthMm,
-    moduleWidthMm,
+    rackDepthMm,
+    beamAlongModuleMm,
     corridorMm,
     levels,
     hasTunnel,
@@ -293,8 +293,8 @@ function chooseDepthModeFromStrategy(
     'double',
     crossSpanMm,
     beamSpanMm,
-    moduleDepthMm,
-    moduleWidthMm,
+    rackDepthMm,
+    beamAlongModuleMm,
     corridorMm,
     levels,
     hasTunnel,
@@ -394,7 +394,7 @@ function buildModuleSegmentsForRow(
   beamSegs: Segment1DKind[],
   crossSeg: { c0: number; c1: number },
   orientation: LayoutOrientationV2,
-  moduleWidthMm: number,
+  beamAlongModuleMm: number,
   halfOpt: boolean,
   beamSpan: number,
   tunnel: { t0: number; t1: number } | null,
@@ -422,7 +422,7 @@ function buildModuleSegmentsForRow(
     const allowHalfEnd = canHaveHalfAtBeamEnd(bs.b, beamSpan, tunnel, rowBandCount);
     const { full, half, rejectedHalf: rh } = fillSegmentModules(
       len,
-      moduleWidthMm,
+      beamAlongModuleMm,
       halfOpt,
       allowHalfEnd
     );
@@ -432,14 +432,14 @@ function buildModuleSegmentsForRow(
       let cursor = bs.a;
       for (let i = 0; i < nFull; i++) {
         const a = cursor;
-        const b = cursor + moduleWidthMm;
+        const b = cursor + beamAlongModuleMm;
         segments.push(rectFor(orientation, rowId, idx++, a, b, crossSeg, 'full', 'normal'));
         cursor = b;
         moduleEquiv += 1;
       }
       if (hasHalf) {
         const a = cursor;
-        const b = cursor + moduleWidthMm / 2;
+        const b = cursor + beamAlongModuleMm / 2;
         segments.push(rectFor(orientation, rowId, idx++, a, b, crossSeg, 'half', 'normal'));
         moduleEquiv += 0.5;
       }
@@ -509,6 +509,9 @@ export function buildLayoutSolutionV2(answers: BuildLayoutSolutionV2Input): Layo
     firstLevelOnGround,
   } = answers;
 
+  const beamAlongModuleMm = Math.max(moduleWidthMm, moduleDepthMm);
+  const rackDepthMm = Math.min(moduleWidthMm, moduleDepthMm);
+
   const orientation = resolveOrientation(answers);
 
   const beamSpan = orientation === 'along_length' ? lengthMm : widthMm;
@@ -520,15 +523,15 @@ export function buildLayoutSolutionV2(answers: BuildLayoutSolutionV2Input): Layo
     lineStrategy,
     crossSpan,
     beamSpan,
-    moduleDepthMm,
-    moduleWidthMm,
+    rackDepthMm,
+    beamAlongModuleMm,
     corridorMm,
     levels,
     hasTunnel,
     tunnelPos
   );
 
-  const band = bandDepthForMode(depthMode, moduleDepthMm);
+  const band = bandDepthForMode(depthMode, rackDepthMm);
 
   const ctx: FillContext = {
     orientation,
@@ -584,7 +587,7 @@ export function buildLayoutSolutionV2(answers: BuildLayoutSolutionV2Input): Layo
       segsForRow,
       crossSeg,
       orientation,
-      moduleWidthMm,
+      beamAlongModuleMm,
       halfModuleOptimization,
       beamSpan,
       tunnelForHalf,
@@ -614,6 +617,8 @@ export function buildLayoutSolutionV2(answers: BuildLayoutSolutionV2Input): Layo
     crossSpanMm: crossSpan,
     moduleWidthMm,
     moduleDepthMm,
+    beamAlongModuleMm,
+    rackDepthMm,
     corridorMm,
     rows,
     corridors,

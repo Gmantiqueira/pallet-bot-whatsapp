@@ -107,20 +107,22 @@ export function pickBetterOrientationBySimpleCount(
   moduleDepthMm: number,
   moduleWidthMm: number
 ): LayoutOrientationV2 {
+  const rackDepthMm = Math.min(moduleWidthMm, moduleDepthMm);
+  const beamAlongMm = Math.max(moduleWidthMm, moduleDepthMm);
   const alongL = maxModulesSingleDepth(
     lengthMm,
     widthMm,
     corridorMm,
-    moduleDepthMm,
-    moduleWidthMm,
+    rackDepthMm,
+    beamAlongMm,
     'along_length'
   );
   const alongW = maxModulesSingleDepth(
     lengthMm,
     widthMm,
     corridorMm,
-    moduleDepthMm,
-    moduleWidthMm,
+    rackDepthMm,
+    beamAlongMm,
     'along_width'
   );
   return alongW > alongL ? 'along_width' : 'along_length';
@@ -130,14 +132,14 @@ function maxModulesSingleDepth(
   lengthMm: number,
   widthMm: number,
   corridorMm: number,
-  moduleDepthMm: number,
-  moduleWidthMm: number,
+  rackDepthMm: number,
+  beamAlongMm: number,
   orientation: LayoutOrientationV2
 ): number {
   const beamSpan = orientation === 'along_length' ? lengthMm : widthMm;
   const cross = orientation === 'along_length' ? widthMm : lengthMm;
-  const rows = rowBandsSingleDepth(cross, moduleDepthMm, corridorMm);
-  const along = Math.floor(beamSpan / moduleWidthMm);
+  const rows = rowBandsSingleDepth(cross, rackDepthMm, corridorMm);
+  const along = Math.floor(beamSpan / beamAlongMm);
   return rows * along;
 }
 

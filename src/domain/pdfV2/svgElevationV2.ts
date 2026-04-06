@@ -38,10 +38,6 @@ function formatMmPtBr(mm: number): string {
   return `${Math.round(mm).toLocaleString('pt-BR')} mm`;
 }
 
-function formatKgPtBr(kg: number): string {
-  return `${Math.round(kg).toLocaleString('pt-BR')} kg`;
-}
-
 function dimensionLineHArrows(x1: number, y: number, x2: number, stroke: string): string {
   const inset = 4.5;
   const xa = x1 + inset;
@@ -120,59 +116,31 @@ function textLines(
   return `<text x="${x}" y="${yStart}" fill="${attrs.fill}" font-size="${fs}px"${fwText}>${inner}</text>`;
 }
 
-/**
- * Pilha de cotas verticais à direita: entre eixos (níveis) + H total a partir do piso.
- * Sem duplicar H útil / eixo a eixo noutros sítios.
- */
-function drawFrontVerticalDimensionStack(
+/** Cotas verticais à direita: só H total + nota de espaçamento médio (sem pilha por nível). */
+function drawMinimalVerticalDims(
   rackRight: number,
   floorTop: number,
   ry: number,
-  beamYsPx: number[],
-  levels: number,
-  axisGapsMm: number[],
   uprightH: number,
-  structuralTopMm: number
+  meanGapMm: number
 ): string {
-  const STEP = 13;
-  const xBase = rackRight + 8;
-  const parts: string[] = [];
-
-  for (let i = 0; i < levels; i++) {
-    const yBot = beamYsPx[i]!;
-    const yTop = beamYsPx[i + 1]!;
-    const xDim = xBase + i * STEP;
-    const tickL = rackRight + 2;
-    const tickR = tickL + 8;
-    parts.push(extensionToDim(rackRight, xDim - 2, yBot, DIM_MINOR));
-    parts.push(extensionToDim(rackRight, xDim - 2, yTop, DIM_MINOR));
-    parts.push(verticalDimWithTicks(xDim, yTop, yBot, tickL, tickR, DIM_MINOR, 0.38));
-    parts.push(
-      textLines(xDim + 5, (yTop + yBot) / 2 - 7, [`Nív. ${i + 1}`, formatMmPtBr(Math.round(axisGapsMm[i]!))], {
-        fontSize: 6.75,
-        fill: '#475569',
-      })
-    );
-  }
-
-  const xTotal = xBase + levels * STEP + 10;
+  const xDim = rackRight + 10;
   const tickL = rackRight + 2;
   const tickR = tickL + 8;
-  parts.push(extensionToDim(rackRight, xTotal - 2, floorTop, DIM_MAJOR));
-  parts.push(extensionToDim(rackRight, xTotal - 2, ry, DIM_MAJOR));
-  parts.push(verticalDimWithTicks(xTotal, ry, floorTop, tickL, tickR, DIM_MAJOR, 0.55));
+  const parts: string[] = [];
+  parts.push(extensionToDim(rackRight, xDim - 2, floorTop, DIM_MAJOR));
+  parts.push(extensionToDim(rackRight, xDim - 2, ry, DIM_MAJOR));
+  parts.push(verticalDimWithTicks(xDim, ry, floorTop, tickL, tickR, DIM_MAJOR, 0.55));
   parts.push(
-    textLines(xTotal + 5, (ry + floorTop) / 2 - 9, ['H total', formatMmPtBr(Math.round(uprightH))], {
+    textLines(xDim + 6, (ry + floorTop) / 2 - 9, ['H total', formatMmPtBr(Math.round(uprightH))], {
       fontSize: 8.25,
       fill: DIM_MAJOR,
       fontWeight: '600',
     })
   );
-  if (structuralTopMm > 1) {
-    parts.push(
-      `<text x="${xTotal + 5}" y="${ry - 10}" font-size="6.25px" fill="${DIM_MINOR}">Folga sup. ${escapeXml(formatMmPtBr(Math.round(structuralTopMm)))}</text>`
-    );
-  }
+  parts.push(
+    `<text x="${xDim + 6}" y="${floorTop + 16}" font-size="6.75px" fill="${DIM_MINOR}">Eixo médio ≈ ${escapeXml(formatMmPtBr(Math.round(meanGapMm)))}</text>`
+  );
   return parts.join('');
 }
 
@@ -286,7 +254,7 @@ function buildBeamGeometry(
 
 type BaySpan = { left: number; right: number };
 
-/** Vista frontal: pórticos (montantes), longarinas apoiadas, piso, cotas verticais, cargas por nível. */
+/** Vista frontal: estrutura, longarinas, piso, cotas essenciais (sem texto por nível sobre o desenho). */
 function drawFrontRack(
   ox: number,
   oy: number,
@@ -295,15 +263,13 @@ function drawFrontRack(
   data: ElevationPanelPayload,
   sectionTitle: string
 ): string {
-  const tunnel = data.tunnel === true;
   const nMod = FV_MODULE_COUNT;
-  const rackMaxW = Math.max(140, pw - 52 - (Math.min(data.levels, 12) + 4) * 14);
+  const rackMaxW = Math.max(140, pw - 52 - 78);
   const rackMaxH = ph - 120;
   const g = buildBeamGeometry(data, rackMaxW, rackMaxH, ox, oy, pw, ph);
   const {
     levels,
     uprightH,
-    beamH,
     beamYsPx,
     innerH,
     rackBottom,
@@ -313,18 +279,13 @@ function drawFrontRack(
     uprightWidthsPx,
     beamPx,
     gapPx,
-    axisGapsMm,
     totalWidthMm,
   } = g;
 
   const beamL = Math.max(1, data.beamLengthMm);
-  const palletKg = Math.max(0, data.capacityKgPerLevel);
-  /** Dois paletes por nível de vão (selectivo típico). */
-  const pairKg = palletKg * 2;
 
   const levDraw = innerH / Math.max(1, levels);
   const beamTh = Math.max(1.2, Math.min(3.2, levDraw * 0.14));
-  const capFontPx = Math.max(6.5, Math.min(9, levDraw * 0.32));
 
   const bays: BaySpan[] = [];
   const uprightXs: number[] = [];
@@ -341,8 +302,7 @@ function drawFrontRack(
   const refBay = bays[Math.min(1, bays.length - 1)]!;
   const spanLeft = refBay.left;
   const spanRight = refBay.right;
-  const dimTopY = ry - 22;
-  /** Linha de piso: topo do pavimento = base dos montantes (sem “flutuar”). */
+  const dimTopY = ry - 20;
   const floorTop = rackBottom;
   const floorPad = 6;
 
@@ -380,23 +340,9 @@ function drawFrontRack(
   );
 
   for (let bi = 0; bi < bays.length; bi++) {
-    const bay = bays[bi];
-    const tunnelBay = tunnel && bi === 0;
-    const clearFrac = tunnelBay ? 0.42 : 0;
-    const yStart = tunnelBay ? ry + innerH * clearFrac : ry;
-    let minJ = 0;
-    if (tunnelBay) {
-      for (let j = 0; j <= levels; j++) {
-        if (beamYsPx[j]! >= yStart - 0.01) {
-          minJ = j;
-          break;
-        }
-      }
-    }
-
-    for (let j = minJ; j <= levels; j++) {
+    const bay = bays[bi]!;
+    for (let j = 0; j <= levels; j++) {
       const yy = beamYsPx[j]!;
-      if (yy < yStart - 0.01) continue;
       const bh = Math.max(beamTh, 2);
       parts.push(
         `<rect x="${bay.left}" y="${yy - bh / 2}" width="${bay.right - bay.left}" height="${bh}" rx="0.8" fill="${FV_BEAM_FILL}" stroke="${FV_BEAM_STROKE}" stroke-width="0.85"/>`
@@ -405,57 +351,25 @@ function drawFrontRack(
         `<line x1="${bay.left}" y1="${yy - bh * 0.35}" x2="${bay.right}" y2="${yy - bh * 0.35}" stroke="${FV_BEAM_EDGE}" stroke-width="0.45" opacity="0.7"/>`
       );
     }
-
-    const capDy = Math.min(3, levDraw * 0.1);
-    const startTier = tunnelBay ? minJ : 0;
-    for (let tier = startTier; tier < levels; tier++) {
-      const hMid = (beamH[tier]! + beamH[tier + 1]!) / 2;
-      const yMid = rackBottom - (hMid / uprightH) * innerH;
-      if (yMid > rackBottom - 2) continue;
-      const nLabel = tier + 1;
-      const groundNote =
-        tier === 0 && data.firstLevelOnGround ? ' · piso' : '';
-      parts.push(
-        `<text x="${(bay.left + bay.right) / 2}" y="${yMid + capDy}" text-anchor="middle" font-weight="600" font-size="${capFontPx}px" fill="#0f172a">Nív. ${nLabel}${groundNote}: ${formatKgPtBr(palletKg)}/pal · ${formatKgPtBr(pairKg)}/par</text>`
-      );
-    }
   }
 
   parts.push(dimensionLineHArrows(spanLeft, dimTopY, spanRight, DIM_MINOR));
   parts.push(
-    `<text x="${ox + pw / 2}" y="${dimTopY - 10}" text-anchor="middle" font-size="8.5px" font-weight="600" fill="${DIM_MAJOR}">Vão útil (entre faces de montantes) ${escapeXml(formatMmPtBr(Math.round(beamL)))}</text>`
+    `<text x="${ox + pw / 2}" y="${dimTopY - 6}" text-anchor="middle" font-size="7.5px" font-weight="600" fill="${DIM_MAJOR}">Vão ${escapeXml(formatMmPtBr(Math.round(beamL)))}</text>`
   );
 
-  parts.push(dimensionLineHArrows(rx, rackBottom + 28, rx + totalW, DIM_MINOR));
+  parts.push(dimensionLineHArrows(rx, rackBottom + 26, rx + totalW, DIM_MINOR));
   parts.push(
-    `<text x="${rx + totalW / 2}" y="${rackBottom + 44}" text-anchor="middle" font-size="8px" fill="#334155">Largura total (faces externas) ${escapeXml(formatMmPtBr(Math.round(totalWidthMm)))}</text>`
+    `<text x="${rx + totalW / 2}" y="${rackBottom + 40}" text-anchor="middle" font-size="7.25px" fill="#334155">Largura total ${escapeXml(formatMmPtBr(Math.round(totalWidthMm)))}</text>`
   );
 
   parts.push(
-    drawFrontVerticalDimensionStack(
-      rx + totalW,
-      floorTop,
-      ry,
-      beamYsPx,
-      levels,
-      axisGapsMm,
-      uprightH,
-      data.structuralTopMm
-    )
+    drawMinimalVerticalDims(rx + totalW, floorTop, ry, uprightH, data.meanGapMm)
   );
-
-  if (tunnel) {
-    parts.push(
-      `<text x="${bays[0].left + (bays[0].right - bays[0].left) / 2}" y="${rackBottom + 62}" text-anchor="middle" font-weight="700" font-size="10.5px" fill="#b91c1c" letter-spacing="0.12em">TÚNEL</text>`
-    );
-  }
 
   if (sectionTitle) {
     parts.push(
       `<text x="${ox + pw / 2}" y="${oy + 14}" text-anchor="middle" font-weight="700" font-size="12px" fill="#0f172a">${escapeXml(sectionTitle)}</text>`
-    );
-    parts.push(
-      `<text x="${ox + pw / 2}" y="${oy + 30}" text-anchor="middle" font-size="7px" fill="#64748b">Montantes 75 mm (100 mm zona túnel) · Cotas a partir do piso · Mesmos eixos que a vista lateral</text>`
     );
   }
 
@@ -487,13 +401,13 @@ function drawLateral(
   const rackMaxH = ph - 100;
   const g = buildBeamGeometry(data, rackMaxW * 1.4, rackMaxH, ox, oy, pw, ph);
 
-  const { levels, uprightH, beamH, uprightWidthsPx, axisGapsMm } = g;
+  const { levels, uprightH, beamH, uprightWidthsPx } = g;
 
   const bandMm = Math.max(1, data.bandDepthMm);
   const modMm = Math.max(1, data.moduleDepthMm);
   const isDouble = data.rackDepthMode === 'double';
 
-  const dimReservePx = 56 + Math.min(levels, 12) * 14;
+  const dimReservePx = 72;
   const rackW = Math.max(130, pw - 72 - dimReservePx);
   const rackH = ph - 88;
   const sx = rackW / bandMm;
@@ -509,13 +423,13 @@ function drawLateral(
 
   const parts: string[] = [];
   parts.push(
-    `<text x="${ox + pw / 2}" y="${oy + 14}" text-anchor="middle" font-weight="700" font-size="12px" fill="#0f172a">Detalhe de módulo (vista lateral)</text>`
+    `<text x="${ox + pw / 2}" y="${oy + 14}" text-anchor="middle" font-weight="700" font-size="12px" fill="#0f172a">Vista lateral</text>`
   );
   parts.push(
-    `<text x="${ox + pw / 2}" y="${oy + 29}" text-anchor="middle" font-size="7.5px" fill="#64748b">${escapeXml(
+    `<text x="${ox + pw / 2}" y="${oy + 28}" text-anchor="middle" font-size="7px" fill="#64748b">${escapeXml(
       isDouble
-        ? `Dupla costas — ${formatMmPtBr(Math.round(modMm))} + espinha + ${formatMmPtBr(Math.round(modMm))}`
-        : `Profundidade de posição ${formatMmPtBr(Math.round(modMm))}`
+        ? `Dupla costas · ${formatMmPtBr(Math.round(modMm))} + espinha`
+        : `Prof. posição ${formatMmPtBr(Math.round(modMm))}`
     )}</text>`
   );
 
@@ -607,22 +521,7 @@ function drawLateral(
   for (let j = 0; j <= levels; j++) {
     beamYsLat.push(beamYLocal(j));
   }
-  parts.push(
-    drawFrontVerticalDimensionStack(
-      x0 + dw,
-      floorTopLat,
-      y0,
-      beamYsLat,
-      levels,
-      axisGapsMm,
-      uprightH,
-      data.structuralTopMm
-    )
-  );
-
-  parts.push(
-    `<text x="${ox + pw / 2}" y="${floorTopLat + 50}" text-anchor="middle" font-size="6.75px" fill="#94a3af">Mesmos eixos que a frontal · Treliça esquemática</text>`
-  );
+  parts.push(drawMinimalVerticalDims(x0 + dw, floorTopLat, y0, uprightH, data.meanGapMm));
 
   return parts.join('');
 }
@@ -646,7 +545,7 @@ export function serializeElevationSvgV2(model: ElevationModelV2): string {
   const gap = 30;
   let y = 36;
   parts.push(
-    drawFrontRack(36, y, w - 72, bandH, model.front, 'Detalhe de módulo (vista frontal)')
+    drawFrontRack(36, y, w - 72, bandH, model.front, 'Vista frontal — estrutura típica')
   );
   y += bandH + gap;
   parts.push(drawLateral(36, y, w - 72, bandH, model.lateral));

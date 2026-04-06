@@ -1,12 +1,15 @@
-import { DEFAULT_BEAM_LENGTH_MM } from '../projectEngines';
 import type { ElevationModelV2, ElevationPanelPayload } from './types';
-import { representativeModuleForElevation, type LayoutGeometry } from './layoutGeometryV2';
+import {
+  findTunnelModuleGeometry,
+  representativeModuleForElevation,
+  type LayoutGeometry,
+} from './layoutGeometryV2';
 
 /** Espinha central entre costas (mm) — alinhado a layoutSolutionV2. */
 const SPINE_BACK_TO_BACK_MM = 100;
 
 function bandDepthMmFromGeometry(geometry: LayoutGeometry): number {
-  const d = geometry.metadata.moduleDepthMm;
+  const d = geometry.metadata.rackDepthMm;
   return geometry.metadata.rackDepthMode === 'single'
     ? d
     : 2 * d + SPINE_BACK_TO_BACK_MM;
@@ -30,17 +33,14 @@ function panelPayload(answers: Record<string, unknown>, geometry: LayoutGeometry
   const rep = representativeModuleForElevation(geometry);
   const levels = rep.globalLevels;
   const geom = rep.beamGeometry;
-  const beamLengthMm =
-    typeof answers.beamLengthMm === 'number' ? answers.beamLengthMm : DEFAULT_BEAM_LENGTH_MM;
-  const moduleDepthMm = geometry.metadata.moduleDepthMm;
+  const beamLengthMm = geometry.metadata.beamAlongModuleMm;
+  const moduleDepthMm = geometry.metadata.rackDepthMm;
   const bandDepthMm = bandDepthMmFromGeometry(geometry);
   const cap = typeof answers.capacityKg === 'number' ? answers.capacityKg : 0;
   const firstLevelOnGround =
     typeof answers.firstLevelOnGround === 'boolean' ? answers.firstLevelOnGround : true;
 
-  const useTunnelGeom = rep.type === 'tunnel';
-  const tunnelClear = rep.tunnelClearanceHeightMm;
-
+  /** Vista esquemática = módulo normal; túnel só em nota / planta. */
   return {
     levels,
     uprightHeightMm: rep.heightMm,
@@ -50,9 +50,9 @@ function panelPayload(answers: Record<string, unknown>, geometry: LayoutGeometry
     rackDepthMode: geometry.metadata.rackDepthMode,
     corridorMm: geometry.metadata.corridorMm,
     capacityKgPerLevel: cap,
-    tunnel: useTunnelGeom,
+    tunnel: false,
     uprightThicknessMm: rep.uprightThicknessMm,
-    tunnelClearanceMm: useTunnelGeom ? tunnelClear : undefined,
+    tunnelClearanceMm: undefined,
     firstLevelOnGround,
     clearHeightMm: clearHeightFromAnswers(answers),
     beamElevationsMm: geom.beamElevationsMm,
@@ -73,18 +73,19 @@ export function buildElevationModelV2(
   const front = panelPayload(answers, geometry);
   const lateral = panelPayload(answers, geometry);
 
+  const tunnelMod = findTunnelModuleGeometry(geometry);
   const summaryLines: string[] = [
-    `Config: ${geometry.totals.levelCount} níveis de ${front.capacityKgPerLevel} kg/palete | Prof. módulo: ${Math.round(front.moduleDepthMm)} mm | Faixa: ${Math.round(front.bandDepthMm)} mm`,
-    `Módulos (equiv.): ${geometry.totals.moduleCount.toFixed(1)} | Posições: ${geometry.totals.positionCount} | Prof. estrutura: ${geometry.metadata.rackDepthMode === 'double' ? 'dupla costas' : 'simples'}`,
-    `Orientação planta: ${geometry.orientation === 'along_length' ? 'acompanha comprimento' : 'acompanha largura'} · eixo vão: ${geometry.beamSpanDirection.toUpperCase()}`,
-    front.tunnelClearanceMm != null
-      ? `Módulo túnel: pé livre ${Math.round(front.tunnelClearanceMm)} mm · entre eixos méd. ${Math.round(front.meanGapMm)} mm (H útil ${Math.round(front.usableHeightMm)} mm)`
-      : `Espaçamento médio entre eixos: ${Math.round(front.meanGapMm)} mm (altura útil ${Math.round(front.usableHeightMm)} mm, folgas ${front.structuralBottomMm}+${front.structuralTopMm} mm)`,
+    `${geometry.totals.levelCount} níveis · ${front.capacityKgPerLevel} kg/palete · vão ${Math.round(geometry.metadata.beamAlongModuleMm)} mm · prof. posição ${Math.round(geometry.metadata.rackDepthMm)} mm · faixa ${Math.round(front.bandDepthMm)} mm`,
+    `Módulos ${geometry.totals.moduleCount.toFixed(1)} (equiv.) · posições ${geometry.totals.positionCount} · ${geometry.metadata.rackDepthMode === 'double' ? 'dupla costas' : 'simples'} · planta: eixo vão ${geometry.beamSpanDirection.toUpperCase()}`,
   ];
+  if (geometry.metadata.hasTunnel && tunnelMod?.tunnelClearanceHeightMm != null) {
+    summaryLines.push(
+      `Variante túnel no projeto: pé livre ${Math.round(tunnelMod.tunnelClearanceHeightMm)} mm (detalhe em planta / 3D).`
+    );
+  }
 
   return {
     viewBoxW: 1000,
-    /** Duas faixas (frontal + lateral) + rodapé com resumo e cotas. */
     viewBoxH: 1100,
     front,
     lateral,

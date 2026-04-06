@@ -33,6 +33,13 @@ export type LayoutSolutionV2 = {
   crossSpanMm: number;
   moduleWidthMm: number;
   moduleDepthMm: number;
+  /**
+   * Vão ao longo das longarinas (repetição ponta a ponta): max(vão, profundidade declarada).
+   * Garante retângulos alongados no sentido da fileira.
+   */
+  beamAlongModuleMm: number;
+  /** Profundidade de posição (transversal ao vão): min(vão, profundidade). */
+  rackDepthMm: number;
   corridorMm: number;
   rows: RackRowSolution[];
   corridors: CirculationZone[];

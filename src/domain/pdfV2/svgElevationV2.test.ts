@@ -10,7 +10,7 @@ const answersToSession = (a: ProjectAnswersV2): Record<string, unknown> => ({
 });
 
 describe('serializeElevationSvgV2', () => {
-  it('inclui piso, cotas verticais e cargas por nível na frontal', () => {
+  it('inclui piso, H total e resumo (frontal limpa, sem texto por nível sobre o desenho)', () => {
     const a: ProjectAnswersV2 = {
       lengthMm: 12_000,
       widthMm: 10_000,
@@ -35,10 +35,9 @@ describe('serializeElevationSvgV2', () => {
     const svg = serializeElevationSvgV2(model);
     expect(svg).toContain('PISO');
     expect(svg).toContain('H total');
-    expect(svg).toContain('Nív. 1');
-    expect(svg).toContain('Detalhe de módulo');
+    expect(svg).toContain('Vista frontal');
     expect(svg).toContain('1200');
-    expect(svg).toMatch(/2[\s\u00a0.]400/);
+    expect(svg).toMatch(/5 níveis/i);
   });
 
   it('vista lateral dupla costas menciona espinha e profundidade de faixa', () => {

@@ -102,6 +102,8 @@ export type LayoutGeometryMetadata = {
   rackDepthMode: RackDepthModeV2;
   moduleWidthMm: number;
   moduleDepthMm: number;
+  beamAlongModuleMm: number;
+  rackDepthMm: number;
   corridorMm: number;
   beamSpanMm: number;
   crossSpanMm: number;
@@ -372,6 +374,8 @@ export function buildLayoutGeometry(
       rackDepthMode: solution.rackDepthMode,
       moduleWidthMm: solution.moduleWidthMm,
       moduleDepthMm: solution.moduleDepthMm,
+      beamAlongModuleMm: solution.beamAlongModuleMm,
+      rackDepthMm: solution.rackDepthMm,
       corridorMm: solution.corridorMm,
       beamSpanMm: solution.beamSpanMm,
       crossSpanMm: solution.crossSpanMm,
@@ -383,7 +387,7 @@ export function buildLayoutGeometry(
  * Valida invariantes do modelo antes de renderizar. Falhas lançam {@link LayoutGeometryValidationError}.
  */
 export function validateLayoutGeometry(geo: LayoutGeometry): void {
-  const md = geo.metadata.moduleDepthMm;
+  const md = geo.metadata.rackDepthMm;
   const rowIds = new Set<string>();
 
   for (const row of geo.rows) {
@@ -476,10 +480,13 @@ export function findTunnelModuleGeometry(geo: LayoutGeometry): RackModule | unde
   return undefined;
 }
 
-/** Módulo de referência para elevação esquemática: túnel ou primeiro módulo normal. */
+/** Módulo de referência para elevação esquemática: prioriza módulo normal (estrutura típica). */
 export function representativeModuleForElevation(geo: LayoutGeometry): RackModule {
-  const t = findTunnelModuleGeometry(geo);
-  if (t) return t;
+  for (const row of geo.rows) {
+    for (const m of row.modules) {
+      if (m.type === 'normal') return m;
+    }
+  }
   const first = geo.rows[0]?.modules[0];
   if (!first) {
     throw new LayoutGeometryValidationError('LayoutGeometry sem módulos para elevação.');

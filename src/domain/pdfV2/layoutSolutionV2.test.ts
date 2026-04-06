@@ -110,7 +110,8 @@ describe('buildLayoutSolutionV2', () => {
     const a = {
       ...base(),
       lengthMm: 10_450,
-      widthMm: 6000,
+      /** Transversal estreita: só 1 fileira (com rackDepth=1100, 6000 mm cabiam 2 fileiras). */
+      widthMm: 4000,
       corridorMm: 3000,
       halfModuleOptimization: true,
       hasTunnel: false,
