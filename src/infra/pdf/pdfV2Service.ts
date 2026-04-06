@@ -4,6 +4,7 @@ import * as path from 'path';
 import type { Session } from '../../domain/session';
 import type { LayoutResult } from '../../domain/layoutEngine';
 import { buildLayoutSolutionV2 } from '../../domain/pdfV2/layoutSolutionV2';
+import { buildLayoutGeometry, validateLayoutGeometry } from '../../domain/pdfV2/layoutGeometryV2';
 import { buildFloorPlanModelV2 } from '../../domain/pdfV2/floorPlanModelV2';
 import { serializeFloorPlanSvgV2 } from '../../domain/pdfV2/svgFloorPlanV2';
 import { buildElevationModelV2 } from '../../domain/pdfV2/elevationModelV2';
@@ -425,16 +426,13 @@ export async function generatePdfV2FromSession(
     throw new Error('Respostas incompletas para PDF V2');
   }
   const layoutSolution = buildLayoutSolutionV2(v2answers);
-  const floorModel = buildFloorPlanModelV2(layoutSolution);
+  const layoutGeometry = buildLayoutGeometry(layoutSolution, answers);
+  validateLayoutGeometry(layoutGeometry);
+  const floorModel = buildFloorPlanModelV2(layoutGeometry);
   const floorPlanSvg = serializeFloorPlanSvgV2(floorModel);
-  const elevationModel = buildElevationModelV2(answers, layoutSolution);
+  const elevationModel = buildElevationModelV2(answers, layoutGeometry);
   const elevationSvg = serializeElevationSvgV2(elevationModel);
-  const { uprightHeightMm, levels } = elevationModel.front;
-  const rack3d = build3DModelV2(layoutSolution, {
-    uprightHeightMm,
-    levels,
-    beamElevationsMm: elevationModel.front.beamElevationsMm,
-  });
+  const rack3d = build3DModelV2(layoutGeometry);
   const projected3d = projectToIsometric(rack3d);
   const view3dSvg = render3DViewV2(projected3d);
 

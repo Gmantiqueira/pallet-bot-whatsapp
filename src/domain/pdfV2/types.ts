@@ -143,6 +143,8 @@ export type ElevationPanelPayload = {
   corridorMm: number;
   capacityKgPerLevel: number;
   tunnel: boolean;
+  /** Espessura representativa dos montantes (mm) — alinhada ao módulo de referência. */
+  uprightThicknessMm?: number;
   /** Pé livre do módulo túnel (mm) — desenho do vão inferior. */
   tunnelClearanceMm?: number;
   firstLevelOnGround: boolean;

@@ -1,4 +1,5 @@
-import type { FloorPlanDimension, FloorPlanLabel, FloorPlanModelV2, LayoutSolutionV2 } from './types';
+import type { LayoutGeometry, RackRow } from './layoutGeometryV2';
+import type { FloorPlanDimension, FloorPlanLabel, FloorPlanModelV2, RackDepthModeV2 } from './types';
 
 const VB_W = 1000;
 const VB_H = 720;
@@ -18,11 +19,33 @@ function formatMm(mm: number): string {
   return `${Math.round(mm).toLocaleString('pt-BR')} mm`;
 }
 
+function rackDepthModeFromRow(row: RackRow): RackDepthModeV2 {
+  return row.rowType === 'backToBack' ? 'double' : 'single';
+}
+
+/** Retângulo da faixa da fileira no referencial do galpão (mm). */
+function rowBandFootprintMm(row: RackRow): { x0: number; y0: number; x1: number; y1: number } {
+  if (row.layoutOrientation === 'along_length') {
+    return {
+      x0: row.originX,
+      x1: row.originX + row.rowLengthMm,
+      y0: row.originY,
+      y1: row.originY + row.rowDepthMm,
+    };
+  }
+  return {
+    x0: row.originX,
+    x1: row.originX + row.rowDepthMm,
+    y0: row.originY,
+    y1: row.originY + row.rowLengthMm,
+  };
+}
+
 /**
- * Converte a solução geométrica (mm) num modelo de planta com coordenadas de desenho.
+ * Converte o modelo geométrico canónico num modelo de planta com coordenadas de desenho.
  */
-export function buildFloorPlanModelV2(solution: LayoutSolutionV2): FloorPlanModelV2 {
-  const { lengthMm: L, widthMm: W } = solution.warehouse;
+export function buildFloorPlanModelV2(geometry: LayoutGeometry): FloorPlanModelV2 {
+  const { warehouseLengthMm: L, warehouseWidthMm: W } = geometry;
   const innerW = VB_W - 2 * PAD;
   const innerH = VB_H - PAD - HEADER - DIM_OUT - 56;
   const scale = Math.min(innerW / L, innerH / W);
@@ -35,35 +58,38 @@ export function buildFloorPlanModelV2(solution: LayoutSolutionV2): FloorPlanMode
   const toY = (ymm: number) => by + ymm * scale;
 
   const rowBandRects: FloorPlanModelV2['rowBandRects'] = [];
-  for (const row of solution.rows) {
+  for (const row of geometry.rows) {
+    const r = rowBandFootprintMm(row);
     rowBandRects.push({
       id: `${row.id}-band`,
-      x: toX(row.x0),
-      y: toY(row.y0),
-      w: Math.max(0.5, toX(row.x1) - toX(row.x0)),
-      h: Math.max(0.5, toY(row.y1) - toY(row.y0)),
-      kind: row.kind,
+      x: toX(r.x0),
+      y: toY(r.y0),
+      w: Math.max(0.5, toX(r.x1) - toX(r.x0)),
+      h: Math.max(0.5, toY(r.y1) - toY(r.y0)),
+      kind: rackDepthModeFromRow(row),
     });
   }
 
   const structureRects: FloorPlanModelV2['structureRects'] = [];
-  for (const row of solution.rows) {
+  for (const row of geometry.rows) {
+    const kind = rackDepthModeFromRow(row);
     for (const m of row.modules) {
+      const fp = m.footprint;
       structureRects.push({
         id: m.id,
-        x: toX(m.x0),
-        y: toY(m.y0),
-        w: Math.max(0.5, toX(m.x1) - toX(m.x0)),
-        h: Math.max(0.5, toY(m.y1) - toY(m.y0)),
-        kind: row.kind,
-        variant: m.variant,
+        x: toX(fp.x0),
+        y: toY(fp.y0),
+        w: Math.max(0.5, toX(fp.x1) - toX(fp.x0)),
+        h: Math.max(0.5, toY(fp.y1) - toY(fp.y0)),
+        kind,
+        variant: m.type === 'tunnel' ? 'tunnel' : 'normal',
       });
     }
   }
 
   const circulationRects: FloorPlanModelV2['circulationRects'] = [];
 
-  for (const c of solution.corridors) {
+  for (const c of geometry.circulationZones) {
     circulationRects.push({
       id: c.id,
       x: toX(c.x0),
@@ -74,7 +100,7 @@ export function buildFloorPlanModelV2(solution: LayoutSolutionV2): FloorPlanMode
       label: c.label,
     });
   }
-  for (const t of solution.tunnels) {
+  for (const t of geometry.tunnelOverlays) {
     circulationRects.push({
       id: t.id,
       x: toX(t.x0),
@@ -107,8 +133,8 @@ export function buildFloorPlanModelV2(solution: LayoutSolutionV2): FloorPlanMode
     offset: -8,
   });
 
-  if (solution.corridors.length > 0) {
-    const c0 = solution.corridors[0];
+  if (geometry.circulationZones.length > 0) {
+    const c0 = geometry.circulationZones[0];
     const yMin = Math.min(c0.y0, c0.y1);
     dimensionLines.push({
       id: 'dim-corridor',
@@ -116,7 +142,7 @@ export function buildFloorPlanModelV2(solution: LayoutSolutionV2): FloorPlanMode
       y1: toY(yMin) - 6,
       x2: toX(Math.max(c0.x0, c0.x1)),
       y2: toY(yMin) - 6,
-      text: formatMm(solution.corridorMm),
+      text: formatMm(geometry.metadata.corridorMm),
     });
   }
 

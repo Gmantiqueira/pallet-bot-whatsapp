@@ -1,4 +1,5 @@
 import { buildLayoutSolutionV2 } from './layoutSolutionV2';
+import { buildLayoutGeometry, validateLayoutGeometry } from './layoutGeometryV2';
 import { build3DModelV2 } from './model3dV2';
 import { projectToIsometric, render3DViewV2 } from './view3dV2';
 import type { ProjectAnswersV2 } from './answerMapping';
@@ -20,6 +21,13 @@ const base = (): ProjectAnswersV2 => ({
   heightMode: 'DIRECT',
   heightMm: 8000,
 });
+
+function geomFromAnswers(a: ProjectAnswersV2) {
+  const sol = buildLayoutSolutionV2(a);
+  const g = buildLayoutGeometry(sol, a);
+  validateLayoutGeometry(g);
+  return g;
+}
 
 describe('build3DModelV2 + projeção isométrica', () => {
   it('exemplo de coordenadas: (x,y,z) → isoX = x−y, isoY = (x+y)/2 − z', () => {
@@ -67,8 +75,7 @@ describe('build3DModelV2 + projeção isométrica', () => {
 
   it('1: layout simples — gera wireframe e SVG', () => {
     const a = { ...base(), lineStrategy: 'APENAS_SIMPLES' as const };
-    const sol = buildLayoutSolutionV2(a);
-    const model = build3DModelV2(sol, { uprightHeightMm: 8000, levels: 4 });
+    const model = build3DModelV2(geomFromAnswers(a));
     expect(model.lines.length).toBeGreaterThan(10);
     const projected = projectToIsometric(model);
     expect(projected.bounds.maxX - projected.bounds.minX).toBeGreaterThan(0);
@@ -89,7 +96,7 @@ describe('build3DModelV2 + projeção isométrica', () => {
     };
     const sol = buildLayoutSolutionV2(a);
     expect(sol.rows.some(r => r.modules.some(m => m.variant === 'tunnel'))).toBe(true);
-    const mTunnel = build3DModelV2(sol, { uprightHeightMm: 8000, levels: 4 });
+    const mTunnel = build3DModelV2(geomFromAnswers(a));
     const openingAtZ = mTunnel.lines.filter(
       l => l.kind === 'floor' && l.z1 > 500 && l.z2 > 500
     );
@@ -105,26 +112,23 @@ describe('build3DModelV2 + projeção isométrica', () => {
     };
     const sol = buildLayoutSolutionV2(a);
     expect(sol.rows.filter(r => r.modules.length > 0).length).toBeGreaterThanOrEqual(2);
-    const model = build3DModelV2(sol, { uprightHeightMm: 8000, levels: 4 });
+    const model = build3DModelV2(geomFromAnswers(a));
     const uprights = model.lines.filter(l => l.kind === 'upright').length;
     expect(uprights).toBeGreaterThan(8);
   });
 
   it('4: profundidade dupla — banda dupla gera retângulos profundos', () => {
     const a = { ...base(), lineStrategy: 'APENAS_DUPLOS' as const };
-    const sol = buildLayoutSolutionV2(a);
-    expect(sol.rackDepthMode).toBe('double');
-    const model = build3DModelV2(sol, { uprightHeightMm: 9000, levels: 3 });
+    expect(buildLayoutSolutionV2(a).rackDepthMode).toBe('double');
+    const model = build3DModelV2(geomFromAnswers(a));
     expect(model.lines.some(l => l.kind === 'beam')).toBe(true);
   });
 
   it('5: múltiplos níveis — mais linhas de longarina que com 1 nível', () => {
     const a = { ...base(), levels: 6 };
-    const sol = buildLayoutSolutionV2(a);
-    const m6 = build3DModelV2(sol, { uprightHeightMm: 12_000, levels: 6 });
+    const m6 = build3DModelV2(geomFromAnswers(a));
     const a1 = { ...base(), levels: 1 };
-    const sol1 = buildLayoutSolutionV2(a1);
-    const m1 = build3DModelV2(sol1, { uprightHeightMm: 12_000, levels: 1 });
+    const m1 = build3DModelV2(geomFromAnswers(a1));
     const b6 = m6.lines.filter(l => l.kind === 'beam').length;
     const b1 = m1.lines.filter(l => l.kind === 'beam').length;
     expect(b6).toBeGreaterThan(b1);

@@ -26,6 +26,7 @@ import { loadEnv } from '../config/env';
 import { resolveStoragePath } from '../config/storagePath';
 import { buildProjectAnswersV2 } from '../domain/pdfV2/answerMapping';
 import { buildLayoutSolutionV2 } from '../domain/pdfV2/layoutSolutionV2';
+import { buildLayoutGeometry, validateLayoutGeometry } from '../domain/pdfV2/layoutGeometryV2';
 import { buildFloorPlanModelV2 } from '../domain/pdfV2/floorPlanModelV2';
 import { serializeFloorPlanSvgV2 } from '../domain/pdfV2/svgFloorPlanV2';
 import { buildElevationModelV2 } from '../domain/pdfV2/elevationModelV2';
@@ -165,19 +166,15 @@ export const routeIncoming = async (
         const v2a = buildProjectAnswersV2(ans);
         if (v2a) {
           const sol = buildLayoutSolutionV2(v2a);
+          const geo = buildLayoutGeometry(sol, ans);
+          validateLayoutGeometry(geo);
           const floorSvgV2 = serializeFloorPlanSvgV2(
-            buildFloorPlanModelV2(sol)
+            buildFloorPlanModelV2(geo)
           );
-          const elevModelV2 = buildElevationModelV2(ans, sol);
+          const elevModelV2 = buildElevationModelV2(ans, geo);
           const elevSvgV2 = serializeElevationSvgV2(elevModelV2);
           const view3dSvgV2 = render3DViewV2(
-            projectToIsometric(
-              build3DModelV2(sol, {
-                uprightHeightMm: elevModelV2.front.uprightHeightMm,
-                levels: elevModelV2.front.levels,
-                beamElevationsMm: elevModelV2.front.beamElevationsMm,
-              })
-            )
+            projectToIsometric(build3DModelV2(geo))
           );
           fs.writeFileSync(
             path.join(storageDir, `planta-v2-${phone}-${ts}.svg`),

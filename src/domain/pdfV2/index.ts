@@ -1,5 +1,6 @@
 export type * from './types';
 export * from './answerMapping';
+export * from './layoutGeometryV2';
 export * from './layoutSolutionV2';
 export * from './floorPlanModelV2';
 export * from './elevationModelV2';

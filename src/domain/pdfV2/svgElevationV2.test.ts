@@ -1,4 +1,5 @@
 import { buildLayoutSolutionV2 } from './layoutSolutionV2';
+import { buildLayoutGeometry, validateLayoutGeometry } from './layoutGeometryV2';
 import { buildElevationModelV2 } from './elevationModelV2';
 import { serializeElevationSvgV2 } from './svgElevationV2';
 import type { ProjectAnswersV2 } from './answerMapping';
@@ -28,7 +29,9 @@ describe('serializeElevationSvgV2', () => {
     };
     const layout = buildLayoutSolutionV2(a);
     const session = answersToSession(a);
-    const model = buildElevationModelV2(session, layout);
+    const geo = buildLayoutGeometry(layout, session);
+    validateLayoutGeometry(geo);
+    const model = buildElevationModelV2(session, geo);
     const svg = serializeElevationSvgV2(model);
     expect(svg).toContain('PISO');
     expect(svg).toContain('H total');
@@ -57,7 +60,10 @@ describe('serializeElevationSvgV2', () => {
     };
     const layout = buildLayoutSolutionV2(a);
     expect(layout.rackDepthMode).toBe('double');
-    const model = buildElevationModelV2(answersToSession(a), layout);
+    const session = answersToSession(a);
+    const geo = buildLayoutGeometry(layout, session);
+    validateLayoutGeometry(geo);
+    const model = buildElevationModelV2(session, geo);
     const svg = serializeElevationSvgV2(model);
     expect(svg).toContain('Dupla costas');
     expect(svg).toContain('ESPINHA');

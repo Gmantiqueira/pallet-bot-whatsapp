@@ -1,6 +1,5 @@
-import type { LayoutSolutionV2 } from './types';
+import type { LayoutGeometry } from './layoutGeometryV2';
 import type { Rack3DLine3D, Rack3DModel } from './types';
-import { computeBeamElevations, computeTunnelRackBeamElevations } from './elevationLevelGeometryV2';
 
 const EPS = 0.5;
 
@@ -23,20 +22,15 @@ function uprightKey(x: number, y: number): string {
 }
 
 /**
- * Gera segmentos 3D (wireframe) a partir da solução de layout.
- * Túnel e corredores não geram estrutura — só existem onde há módulos.
- *
- * @param opts — altura e níveis devem alinhar com elevação / respostas (ex.: PDF).
- * @param opts.beamElevationsMm — cotas das longarinas (mm, do piso); se omitido, reparte uniforme em H.
+ * Gera segmentos 3D (wireframe) a partir do modelo geométrico canónico.
+ * Cada módulo usa as mesmas cotas verticais que a elevação ({@link RackModule.beamGeometry}).
  */
-export function build3DModelV2(
-  solution: LayoutSolutionV2,
-  opts: { uprightHeightMm: number; levels: number; beamElevationsMm?: number[] }
-): Rack3DModel {
-  const H = Math.max(EPS, opts.uprightHeightMm);
-  const levels = Math.max(1, Math.round(opts.levels));
+export function build3DModelV2(geometry: LayoutGeometry): Rack3DModel {
+  const firstMod = geometry.rows[0]?.modules[0];
+  const H = Math.max(EPS, firstMod?.heightMm ?? 1);
+  const levels = Math.max(1, firstMod?.globalLevels ?? 1);
   const lines: Rack3DLine3D[] = [];
-  const { lengthMm: L, widthMm: W } = solution.warehouse;
+  const { warehouseLengthMm: L, warehouseWidthMm: W } = geometry;
 
   /** Contorno do piso do galpão (Z=0) — contexto da implantação. */
   const z0 = 0;
@@ -45,53 +39,22 @@ export function build3DModelV2(
   pushLine(lines, 'floor', L, W, z0, 0, W, z0);
   pushLine(lines, 'floor', 0, W, z0, 0, 0, z0);
 
-  const defaultBeamZ: number[] = (() => {
-    const b = opts.beamElevationsMm;
-    if (
-      Array.isArray(b) &&
-      b.length === levels + 1 &&
-      b.every(x => typeof x === 'number' && Number.isFinite(x))
-    ) {
-      const out: number[] = [];
-      for (let k = 0; k <= levels; k++) {
-        const z = Math.min(H, Math.max(0, b[k]!));
-        if (z < EPS) continue;
-        out.push(z);
-      }
-      return out;
-    }
-    const geom = computeBeamElevations({
-      uprightHeightMm: H,
-      levels,
-      firstLevelOnGround: true,
-    });
-    const out: number[] = [];
-    for (let k = 0; k <= levels; k++) {
-      const z = Math.min(H, Math.max(0, geom.beamElevationsMm[k]!));
-      if (z >= EPS) out.push(z);
-    }
-    return out;
-  })();
-
   const uprightSeen = new Set<string>();
 
-  for (const row of solution.rows) {
+  for (const row of geometry.rows) {
     for (const mod of row.modules) {
-      const x0 = mod.x0;
-      const x1 = mod.x1;
-      const y0 = mod.y0;
-      const y1 = mod.y1;
+      const fp = mod.footprint;
+      const x0 = fp.x0;
+      const x1 = fp.x1;
+      const y0 = fp.y0;
+      const y1 = fp.y1;
       if (x1 - x0 <= EPS || y1 - y0 <= EPS) continue;
 
-      const isTunnel = mod.variant === 'tunnel' && mod.tunnelClearanceMm != null;
-      const clearanceMm = isTunnel ? mod.tunnelClearanceMm! : 0;
-      const beamZ: number[] = isTunnel
-        ? computeTunnelRackBeamElevations({
-            uprightHeightMm: H,
-            levels,
-            tunnelClearanceMm: clearanceMm,
-          }).beamElevationsMm.filter(z => z >= EPS && z <= H + EPS)
-        : defaultBeamZ;
+      const isTunnel = mod.type === 'tunnel';
+      const clearanceMm = mod.tunnelClearanceHeightMm ?? 0;
+      const beamZs = mod.beamGeometry.beamElevationsMm.filter(
+        z => z >= EPS && z <= mod.heightMm + EPS
+      );
 
       const corners: [number, number][] = [
         [x0, y0],
@@ -104,18 +67,18 @@ export function build3DModelV2(
         const key = uprightKey(cx, cy);
         if (uprightSeen.has(key)) continue;
         uprightSeen.add(key);
-        pushLine(lines, 'upright', cx, cy, 0, cx, cy, H);
+        pushLine(lines, 'upright', cx, cy, 0, cx, cy, mod.heightMm);
       }
 
       if (isTunnel && clearanceMm > EPS) {
-        const zOpen = Math.min(H, Math.max(0, clearanceMm));
+        const zOpen = Math.min(mod.heightMm, Math.max(0, clearanceMm));
         pushLine(lines, 'floor', x0, y0, zOpen, x1, y0, zOpen);
         pushLine(lines, 'floor', x1, y0, zOpen, x1, y1, zOpen);
         pushLine(lines, 'floor', x1, y1, zOpen, x0, y1, zOpen);
         pushLine(lines, 'floor', x0, y1, zOpen, x0, y0, zOpen);
       }
 
-      for (const z of beamZ) {
+      for (const z of beamZs) {
         if (isTunnel && z < clearanceMm - EPS) continue;
         pushLine(lines, 'beam', x0, y0, z, x1, y0, z);
         pushLine(lines, 'beam', x1, y0, z, x1, y1, z);
