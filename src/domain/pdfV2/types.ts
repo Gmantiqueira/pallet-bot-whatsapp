@@ -18,6 +18,9 @@ export type TunnelAppliesCode = 'LINHAS_SIMPLES' | 'LINHAS_DUPLOS' | 'AMBOS';
 
 export type ModuleSegmentType = 'full' | 'half';
 
+/** Variante de módulo: túnel = estrutura com vão livre em baixo e armazenagem acima. */
+export type ModuleVariantV2 = 'normal' | 'tunnel';
+
 export type CirculationKind = 'corridor' | 'tunnel';
 
 /** Solução geométrica consolidada (sem instruções de desenho). */
@@ -63,6 +66,12 @@ export type RackRowSolution = {
 export type ModuleSegment = {
   id: string;
   type: ModuleSegmentType;
+  /** Por omissão trata-se como módulo normal. */
+  variant?: ModuleVariantV2;
+  /** Pé livre de passagem (mm) até ao 1.º eixo de longarina — só módulo túnel. */
+  tunnelClearanceMm?: number;
+  /** Níveis de armazenagem ativos acima do vão (referência; cotas vêm da geometria). */
+  activeStorageLevels?: number;
   x0: number;
   x1: number;
   y0: number;
@@ -87,7 +96,15 @@ export type FloorPlanModelV2 = {
   warehouseOutline: { x: number; y: number; w: number; h: number };
   /** Faixa da fileira (estrutura) por baixo dos módulos. */
   rowBandRects: { id: string; x: number; y: number; w: number; h: number; kind: RackDepthModeV2 }[];
-  structureRects: { id: string; x: number; y: number; w: number; h: number; kind: RackDepthModeV2 }[];
+  structureRects: {
+    id: string;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    kind: RackDepthModeV2;
+    variant?: ModuleVariantV2;
+  }[];
   circulationRects: { id: string; x: number; y: number; w: number; h: number; kind: CirculationKind; label?: string }[];
   dimensionLines: FloorPlanDimension[];
   labels: FloorPlanLabel[];
@@ -126,6 +143,8 @@ export type ElevationPanelPayload = {
   corridorMm: number;
   capacityKgPerLevel: number;
   tunnel: boolean;
+  /** Pé livre do módulo túnel (mm) — desenho do vão inferior. */
+  tunnelClearanceMm?: number;
   firstLevelOnGround: boolean;
   clearHeightMm?: number;
   /** Cotas dos eixos das longarinas (mm, do piso), length = levels + 1 — de {@link computeBeamElevations}. */

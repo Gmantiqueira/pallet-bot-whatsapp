@@ -76,22 +76,38 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
   }
 
   for (const s of model.structureRects) {
+    const isTunnel = s.variant === 'tunnel';
+    const fillMod = isTunnel ? '#fff7ed' : '#f1f5f9';
     parts.push(
-      `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="#f1f5f9" stroke="${COL_MOD_STROKE}" stroke-width="0.85"/>`
+      `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="${fillMod}" stroke="${isTunnel ? COL_TUNNEL_STROKE : COL_MOD_STROKE}" stroke-width="${isTunnel ? 1.15 : 0.85}"/>`
     );
     const inset = Math.min(2.2, s.w * 0.04, s.h * 0.06);
+    if (isTunnel) {
+      const yPass = s.y + s.h * 0.38;
+      parts.push(
+        `<rect x="${s.x + inset}" y="${s.y + s.h * 0.06}" width="${s.w - 2 * inset}" height="${Math.max(4, yPass - s.y - s.h * 0.06)}" fill="url(#v2-cor-hatch)" opacity="0.55" stroke="${COL_TUNNEL_STROKE}" stroke-width="0.5" stroke-dasharray="3 2"/>`
+      );
+      parts.push(
+        `<text x="${s.x + s.w / 2}" y="${s.y + s.h * 0.22}" text-anchor="middle" class="fp-leg" fill="#92400e" font-size="8px">PASSAGEM</text>`
+      );
+    }
     parts.push(
-      `<line x1="${s.x + inset}" y1="${s.y + s.h * 0.35}" x2="${s.x + inset}" y2="${s.y + s.h * 0.92}" stroke="#1e3a8a" stroke-width="2.2"/>`
+      `<line x1="${s.x + inset}" y1="${s.y + s.h * (isTunnel ? 0.4 : 0.35)}" x2="${s.x + inset}" y2="${s.y + s.h * 0.92}" stroke="#1e3a8a" stroke-width="2.2"/>`
     );
     parts.push(
-      `<line x1="${s.x + s.w - inset}" y1="${s.y + s.h * 0.35}" x2="${s.x + s.w - inset}" y2="${s.y + s.h * 0.92}" stroke="#1e3a8a" stroke-width="2.2"/>`
+      `<line x1="${s.x + s.w - inset}" y1="${s.y + s.h * (isTunnel ? 0.4 : 0.35)}" x2="${s.x + s.w - inset}" y2="${s.y + s.h * 0.92}" stroke="#1e3a8a" stroke-width="2.2"/>`
     );
     parts.push(
-      `<line x1="${s.x + inset * 2}" y1="${s.y + s.h * 0.42}" x2="${s.x + s.w - inset * 2}" y2="${s.y + s.h * 0.42}" stroke="#ea580c" stroke-width="1.8"/>`
+      `<line x1="${s.x + inset * 2}" y1="${s.y + s.h * (isTunnel ? 0.46 : 0.42)}" x2="${s.x + s.w - inset * 2}" y2="${s.y + s.h * (isTunnel ? 0.46 : 0.42)}" stroke="#ea580c" stroke-width="1.8"/>`
     );
     parts.push(
-      `<line x1="${s.x + inset * 2}" y1="${s.y + s.h * 0.48}" x2="${s.x + s.w - inset * 2}" y2="${s.y + s.h * 0.48}" stroke="#c2410c" stroke-width="1.1"/>`
+      `<line x1="${s.x + inset * 2}" y1="${s.y + s.h * (isTunnel ? 0.52 : 0.48)}" x2="${s.x + s.w - inset * 2}" y2="${s.y + s.h * (isTunnel ? 0.52 : 0.48)}" stroke="#c2410c" stroke-width="1.1"/>`
     );
+    if (isTunnel) {
+      parts.push(
+        `<text x="${s.x + s.w / 2}" y="${s.y + s.h * 0.96}" text-anchor="middle" class="fp-leg" fill="#92400e" font-size="7.5px">Módulo túnel</text>`
+      );
+    }
   }
 
   for (const d of model.dimensionLines) {

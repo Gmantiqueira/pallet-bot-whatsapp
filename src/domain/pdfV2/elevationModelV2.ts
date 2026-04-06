@@ -1,6 +1,15 @@
 import { DEFAULT_BEAM_LENGTH_MM } from '../projectEngines';
-import type { ElevationModelV2, ElevationPanelPayload, LayoutSolutionV2 } from './types';
-import { computeBeamElevations } from './elevationLevelGeometryV2';
+import type { ElevationModelV2, ElevationPanelPayload, LayoutSolutionV2, ModuleSegment } from './types';
+import { computeBeamElevations, computeTunnelRackBeamElevations } from './elevationLevelGeometryV2';
+
+function findTunnelModule(layout: LayoutSolutionV2): ModuleSegment | undefined {
+  for (const row of layout.rows) {
+    for (const m of row.modules) {
+      if (m.variant === 'tunnel') return m;
+    }
+  }
+  return undefined;
+}
 
 /** Espinha central entre costas (mm) — alinhado a layoutSolutionV2. */
 const SPINE_BACK_TO_BACK_MM = 100;
@@ -40,11 +49,7 @@ function clearHeightFromAnswers(answers: Record<string, unknown>): number | unde
   return undefined;
 }
 
-function panelPayload(
-  answers: Record<string, unknown>,
-  layout: LayoutSolutionV2,
-  tunnel: boolean
-): ElevationPanelPayload {
+function panelPayload(answers: Record<string, unknown>, layout: LayoutSolutionV2): ElevationPanelPayload {
   const levels = typeof answers.levels === 'number' ? answers.levels : 1;
   const h = uprightHeightMmFromAnswers(answers) ?? levels * 1500;
   const beamLengthMm =
@@ -55,16 +60,29 @@ function panelPayload(
   const firstLevelOnGround =
     typeof answers.firstLevelOnGround === 'boolean' ? answers.firstLevelOnGround : true;
 
-  const geom = computeBeamElevations({
-    uprightHeightMm: h,
-    levels,
-    firstLevelOnGround,
-    equalLevelSpacing: answers.equalLevelSpacing === true,
-    levelSpacingMm: typeof answers.levelSpacingMm === 'number' ? answers.levelSpacingMm : undefined,
-    levelSpacingsMm: Array.isArray(answers.levelSpacingsMm)
-      ? (answers.levelSpacingsMm as number[])
-      : undefined,
-  });
+  const tunnelMod = findTunnelModule(layout);
+  const tunnelClear =
+    tunnelMod?.tunnelClearanceMm != null
+      ? tunnelMod.tunnelClearanceMm
+      : undefined;
+  const useTunnelGeom = tunnelMod != null && tunnelClear != null;
+
+  const geom = useTunnelGeom
+    ? computeTunnelRackBeamElevations({
+        uprightHeightMm: h,
+        levels,
+        tunnelClearanceMm: tunnelClear!,
+      })
+    : computeBeamElevations({
+        uprightHeightMm: h,
+        levels,
+        firstLevelOnGround,
+        equalLevelSpacing: answers.equalLevelSpacing === true,
+        levelSpacingMm: typeof answers.levelSpacingMm === 'number' ? answers.levelSpacingMm : undefined,
+        levelSpacingsMm: Array.isArray(answers.levelSpacingsMm)
+          ? (answers.levelSpacingsMm as number[])
+          : undefined,
+      });
 
   return {
     levels,
@@ -75,7 +93,8 @@ function panelPayload(
     rackDepthMode: layout.rackDepthMode,
     corridorMm: layout.corridorMm,
     capacityKgPerLevel: cap,
-    tunnel,
+    tunnel: useTunnelGeom,
+    tunnelClearanceMm: useTunnelGeom ? tunnelClear : undefined,
     firstLevelOnGround,
     clearHeightMm: clearHeightFromAnswers(answers),
     beamElevationsMm: geom.beamElevationsMm,
@@ -93,15 +112,16 @@ export function buildElevationModelV2(
   answers: Record<string, unknown>,
   layout: LayoutSolutionV2
 ): ElevationModelV2 {
-  const hasTunnel = answers.hasTunnel === true;
-  const front = panelPayload(answers, layout, hasTunnel);
-  const lateral = panelPayload(answers, layout, false);
+  const front = panelPayload(answers, layout);
+  const lateral = panelPayload(answers, layout);
 
   const summaryLines: string[] = [
     `Config: ${layout.totals.levels} níveis de ${front.capacityKgPerLevel} kg/palete | Prof. módulo: ${Math.round(front.moduleDepthMm)} mm | Faixa: ${Math.round(front.bandDepthMm)} mm`,
     `Módulos (equiv.): ${layout.totals.modules.toFixed(1)} | Posições: ${layout.totals.positions} | Prof. estrutura: ${layout.rackDepthMode === 'double' ? 'dupla costas' : 'simples'}`,
     `Orientação planta: ${layout.orientation === 'along_length' ? 'acompanha comprimento' : 'acompanha largura'}`,
-    `Espaçamento médio entre eixos: ${Math.round(front.meanGapMm)} mm (altura útil ${Math.round(front.usableHeightMm)} mm, folgas ${front.structuralBottomMm}+${front.structuralTopMm} mm)`,
+    front.tunnelClearanceMm != null
+      ? `Módulo túnel: pé livre ${Math.round(front.tunnelClearanceMm)} mm · entre eixos méd. ${Math.round(front.meanGapMm)} mm (H útil ${Math.round(front.usableHeightMm)} mm)`
+      : `Espaçamento médio entre eixos: ${Math.round(front.meanGapMm)} mm (altura útil ${Math.round(front.usableHeightMm)} mm, folgas ${front.structuralBottomMm}+${front.structuralTopMm} mm)`,
   ];
 
   return {

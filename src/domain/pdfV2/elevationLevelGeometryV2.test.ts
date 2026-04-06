@@ -1,6 +1,7 @@
 import {
   computeBeamElevations,
   computeLevelSpacing,
+  computeTunnelRackBeamElevations,
   DEFAULT_FIRST_LEVEL_LIFT_MM,
   DEFAULT_STRUCTURAL_BOTTOM_MM,
   DEFAULT_STRUCTURAL_TOP_MM,
@@ -85,5 +86,18 @@ describe('computeBeamElevations', () => {
     });
     expect(r.gapsScaledToFit).toBe(true);
     expect(r.beamElevationsMm[3]).toBeLessThanOrEqual(4000);
+  });
+});
+
+describe('computeTunnelRackBeamElevations', () => {
+  it('1.º eixo ao longo do pé livre; níveis acima até ao topo útil', () => {
+    const r = computeTunnelRackBeamElevations({
+      uprightHeightMm: 8000,
+      levels: 4,
+      tunnelClearanceMm: 3200,
+    });
+    expect(r.beamElevationsMm).toHaveLength(5);
+    expect(r.beamElevationsMm[0]!).toBeGreaterThanOrEqual(3200);
+    expect(r.beamElevationsMm[4]!).toBeCloseTo(8000 - DEFAULT_STRUCTURAL_TOP_MM, 3);
   });
 });

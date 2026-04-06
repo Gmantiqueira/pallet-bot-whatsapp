@@ -161,6 +161,55 @@ export function computeBeamElevations(input: BeamElevationInput): BeamElevationR
 }
 
 /**
+ * Módulo túnel: vão livre até tunnelClearanceMm, depois níveis de armazenagem uniformes até ao topo útil.
+ * Alinhado ao modelo de layout (módulo túnel = estrutura real, não faixa vazia).
+ */
+export function computeTunnelRackBeamElevations(input: {
+  uprightHeightMm: number;
+  levels: number;
+  tunnelClearanceMm: number;
+  structuralBottomMm?: number;
+  structuralTopMm?: number;
+}): BeamElevationResult {
+  const levels = Math.max(1, Math.floor(input.levels));
+  const H0 = Math.max(EPS, input.uprightHeightMm);
+  let structuralBottom = input.structuralBottomMm ?? DEFAULT_STRUCTURAL_BOTTOM_MM;
+  let structuralTop = input.structuralTopMm ?? DEFAULT_STRUCTURAL_TOP_MM;
+  structuralBottom = clamp(structuralBottom, 0, H0 * 0.25);
+  structuralTop = clamp(structuralTop, 0, H0 * 0.25);
+  const topIn = H0 - structuralTop;
+
+  let beam0 = Math.max(structuralBottom + EPS, input.tunnelClearanceMm);
+  const minSpan = levels * 200;
+  if (beam0 > topIn - minSpan) {
+    beam0 = Math.max(structuralBottom + 100, topIn - minSpan - EPS);
+  }
+  const span = Math.max(EPS, topIn - beam0);
+  const beamElevationsMm: number[] = [];
+  for (let k = 0; k <= levels; k++) {
+    beamElevationsMm.push(beam0 + (k / levels) * span);
+  }
+  beamElevationsMm[levels] = topIn;
+
+  const diffs: number[] = [];
+  for (let i = 0; i < beamElevationsMm.length - 1; i++) {
+    diffs.push(beamElevationsMm[i + 1]! - beamElevationsMm[i]!);
+  }
+  const meanGapMm =
+    diffs.length > 0 ? diffs.reduce((a, b) => a + b, 0) / diffs.length : 0;
+  const usableHeightMm = topIn - beam0;
+
+  return {
+    beamElevationsMm,
+    structuralBottomMm: structuralBottom,
+    structuralTopMm: structuralTop,
+    usableHeightMm,
+    meanGapMm,
+    gapsScaledToFit: false,
+  };
+}
+
+/**
  * Espaçamentos verticais entre eixos consecutivos (mm), derivados da altura útil.
  * Não usa valor fixo — delega em {@link computeBeamElevations}.
  */

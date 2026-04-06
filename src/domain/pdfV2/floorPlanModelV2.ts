@@ -56,6 +56,7 @@ export function buildFloorPlanModelV2(solution: LayoutSolutionV2): FloorPlanMode
         w: Math.max(0.5, toX(m.x1) - toX(m.x0)),
         h: Math.max(0.5, toY(m.y1) - toY(m.y0)),
         kind: row.kind,
+        variant: m.variant,
       });
     }
   }

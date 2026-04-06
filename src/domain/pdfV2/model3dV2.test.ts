@@ -79,7 +79,7 @@ describe('build3DModelV2 + projeção isométrica', () => {
     expect(svg).toMatch(/stroke="#0f172a"/);
   });
 
-  it('2: túnel central — gap ao longo do vão (menos segmentos de módulo)', () => {
+  it('2: túnel — módulo túnel no layout e vão inferior no 3D', () => {
     const a = {
       ...base(),
       hasTunnel: true,
@@ -88,15 +88,12 @@ describe('build3DModelV2 + projeção isométrica', () => {
       lineStrategy: 'APENAS_SIMPLES' as const,
     };
     const sol = buildLayoutSolutionV2(a);
-    const noTunnel = buildLayoutSolutionV2({
-      ...a,
-      hasTunnel: false,
-    });
+    expect(sol.rows.some(r => r.modules.some(m => m.variant === 'tunnel'))).toBe(true);
     const mTunnel = build3DModelV2(sol, { uprightHeightMm: 8000, levels: 4 });
-    const mOpen = build3DModelV2(noTunnel, { uprightHeightMm: 8000, levels: 4 });
-    const beamTunnel = mTunnel.lines.filter(l => l.kind === 'beam').length;
-    const beamOpen = mOpen.lines.filter(l => l.kind === 'beam').length;
-    expect(beamTunnel).toBeLessThan(beamOpen);
+    const openingAtZ = mTunnel.lines.filter(
+      l => l.kind === 'floor' && l.z1 > 500 && l.z2 > 500
+    );
+    expect(openingAtZ.length).toBeGreaterThan(0);
   });
 
   it('3: duas fileiras — mais módulos que uma fileira estreita', () => {

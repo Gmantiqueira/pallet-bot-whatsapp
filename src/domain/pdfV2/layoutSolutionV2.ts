@@ -10,6 +10,7 @@ import type {
   LayoutSolutionV2,
   LineStrategyCode,
   ModuleSegment,
+  ModuleVariantV2,
   RackDepthModeV2,
   RackRowSolution,
   TunnelZone,
@@ -23,6 +24,14 @@ export type BuildLayoutSolutionV2Input = ProjectAnswersV2;
 /** Largura do túnel como faixa de circulação (mm) — alinhado ao corredor operacional. */
 function tunnelWidthMm(corridorMm: number): number {
   return Math.max(800, corridorMm);
+}
+
+/**
+ * Pé livre mínimo sob o 1.º nível de carga no módulo túnel (mm) — passagem de empilhador.
+ * Deriva do corredor; não inventa valores fora desta fórmula.
+ */
+export function tunnelClearanceMmFromCorridor(corridorMm: number): number {
+  return Math.max(2200, Math.min(4500, corridorMm + 800));
 }
 
 function bandDepthForMode(depthMode: RackDepthModeV2, moduleDepthMm: number): number {
@@ -344,18 +353,24 @@ function tunnelSpanAlongBeam(
   return { t0: Math.max(0, c - half), t1: Math.min(beamSpan, c + half) };
 }
 
-function splitBeamSegments(
+type BeamSegmentKind = 'normal' | 'tunnel';
+
+type Segment1DKind = Segment1D & { kind: BeamSegmentKind };
+
+/** Parte o vão ao longo da longarina: inclui segmento de módulo túnel (não é “vazio”). */
+function splitBeamSegmentsWithTunnel(
   beamSpan: number,
   hasTunnel: boolean,
   tunnelPos: 'INICIO' | 'MEIO' | 'FIM' | undefined,
   corridorMm: number
-): Segment1D[] {
-  if (!hasTunnel || !tunnelPos) return [{ a: 0, b: beamSpan }];
+): Segment1DKind[] {
+  if (!hasTunnel || !tunnelPos) return [{ a: 0, b: beamSpan, kind: 'normal' }];
   const { t0, t1 } = tunnelSpanAlongBeam(beamSpan, corridorMm, tunnelPos);
-  const segs: Segment1D[] = [];
-  if (t0 > EPS) segs.push({ a: 0, b: t0 });
-  if (beamSpan - t1 > EPS) segs.push({ a: t1, b: beamSpan });
-  if (segs.length === 0) segs.push({ a: 0, b: beamSpan });
+  const segs: Segment1DKind[] = [];
+  if (t0 > EPS) segs.push({ a: 0, b: t0, kind: 'normal' });
+  if (t1 - t0 > EPS) segs.push({ a: t0, b: t1, kind: 'tunnel' });
+  if (beamSpan - t1 > EPS) segs.push({ a: t1, b: beamSpan, kind: 'normal' });
+  if (segs.length === 0) segs.push({ a: 0, b: beamSpan, kind: 'normal' });
   return segs;
 }
 
@@ -376,14 +391,16 @@ function fillSegmentModules(
 
 function buildModuleSegmentsForRow(
   rowId: string,
-  beamSegs: Segment1D[],
+  beamSegs: Segment1DKind[],
   crossSeg: { c0: number; c1: number },
   orientation: LayoutOrientationV2,
   moduleWidthMm: number,
   halfOpt: boolean,
   beamSpan: number,
   tunnel: { t0: number; t1: number } | null,
-  rowBandCount: number
+  rowBandCount: number,
+  corridorMm: number,
+  globalLevels: number
 ): { segments: ModuleSegment[]; moduleEquiv: number; rejectedHalf: boolean } {
   const segments: ModuleSegment[] = [];
   let moduleEquiv = 0;
@@ -393,6 +410,15 @@ function buildModuleSegmentsForRow(
   for (const bs of beamSegs) {
     const len = bs.b - bs.a;
     if (len < EPS) continue;
+
+    if (bs.kind === 'tunnel') {
+      segments.push(
+        rectForTunnelModule(orientation, rowId, idx++, bs.a, bs.b, crossSeg, corridorMm, globalLevels)
+      );
+      moduleEquiv += 1;
+      continue;
+    }
+
     const allowHalfEnd = canHaveHalfAtBeamEnd(bs.b, beamSpan, tunnel, rowBandCount);
     const { full, half, rejectedHalf: rh } = fillSegmentModules(
       len,
@@ -407,14 +433,14 @@ function buildModuleSegmentsForRow(
       for (let i = 0; i < nFull; i++) {
         const a = cursor;
         const b = cursor + moduleWidthMm;
-        segments.push(rectFor(orientation, rowId, idx++, a, b, crossSeg, 'full'));
+        segments.push(rectFor(orientation, rowId, idx++, a, b, crossSeg, 'full', 'normal'));
         cursor = b;
         moduleEquiv += 1;
       }
       if (hasHalf) {
         const a = cursor;
         const b = cursor + moduleWidthMm / 2;
-        segments.push(rectFor(orientation, rowId, idx++, a, b, crossSeg, 'half'));
+        segments.push(rectFor(orientation, rowId, idx++, a, b, crossSeg, 'half', 'normal'));
         moduleEquiv += 0.5;
       }
     };
@@ -432,71 +458,35 @@ function rectFor(
   a: number,
   b: number,
   crossSeg: { c0: number; c1: number },
-  type: 'full' | 'half'
+  type: 'full' | 'half',
+  variant: ModuleVariantV2 = 'normal'
 ): ModuleSegment {
   const id = `${rowId}-m${i}`;
-  if (orientation === 'along_length') {
-    return { id, type, x0: a, x1: b, y0: crossSeg.c0, y1: crossSeg.c1 };
-  }
-  return { id, type, x0: crossSeg.c0, x1: crossSeg.c1, y0: a, y1: b };
+  const base =
+    orientation === 'along_length'
+      ? { id, type, x0: a, x1: b, y0: crossSeg.c0, y1: crossSeg.c1 }
+      : { id, type, x0: crossSeg.c0, x1: crossSeg.c1, y0: a, y1: b };
+  return variant === 'normal' ? base : { ...base, variant };
 }
 
-function pushTunnelZones(
-  tunnels: TunnelZone[],
+function rectForTunnelModule(
   orientation: LayoutOrientationV2,
-  lengthMm: number,
-  widthMm: number,
-  hasTunnel: boolean,
-  tunnelPos: 'INICIO' | 'MEIO' | 'FIM' | undefined,
-  corridorMm: number
-): void {
-  if (!hasTunnel || !tunnelPos) return;
-
-  const beamSpan = orientation === 'along_length' ? lengthMm : widthMm;
-  const crossSpan = orientation === 'along_length' ? widthMm : lengthMm;
-  const beamT = tunnelSpanAlongBeam(beamSpan, corridorMm, tunnelPos);
-  const crossT = tunnelSpanCross(crossSpan, corridorMm, tunnelPos);
-
-  /* Túnel ao longo do vão (circulação entre blocos de módulos) */
-  if (orientation === 'along_length') {
-    tunnels.push({
-      id: 'tunnel-beam',
-      kind: 'tunnel',
-      x0: beamT.t0,
-      x1: beamT.t1,
-      y0: 0,
-      y1: widthMm,
-      label: 'Túnel',
-    });
-    tunnels.push({
-      id: 'tunnel-cross',
-      kind: 'tunnel',
-      x0: 0,
-      x1: lengthMm,
-      y0: crossT.t0,
-      y1: crossT.t1,
-      label: 'Túnel (faixa transversal)',
-    });
-  } else {
-    tunnels.push({
-      id: 'tunnel-beam',
-      kind: 'tunnel',
-      x0: 0,
-      x1: lengthMm,
-      y0: beamT.t0,
-      y1: beamT.t1,
-      label: 'Túnel',
-    });
-    tunnels.push({
-      id: 'tunnel-cross',
-      kind: 'tunnel',
-      x0: crossT.t0,
-      x1: crossT.t1,
-      y0: 0,
-      y1: widthMm,
-      label: 'Túnel (faixa transversal)',
-    });
-  }
+  rowId: string,
+  i: number,
+  a: number,
+  b: number,
+  crossSeg: { c0: number; c1: number },
+  corridorMm: number,
+  globalLevels: number
+): ModuleSegment {
+  const clearance = tunnelClearanceMmFromCorridor(corridorMm);
+  const activeStorageLevels = Math.max(1, globalLevels - 1);
+  const base = rectFor(orientation, rowId, i, a, b, crossSeg, 'full', 'tunnel');
+  return {
+    ...base,
+    tunnelClearanceMm: clearance,
+    activeStorageLevels,
+  };
 }
 
 /**
@@ -560,18 +550,11 @@ export function buildLayoutSolutionV2(answers: BuildLayoutSolutionV2Input): Layo
       ? tunnelSpanAlongBeam(beamSpan, corridorMm, tunnelPos)
       : null;
 
-  const beamSegs = splitBeamSegments(
-    beamSpan,
-    hasTunnel,
-    tunnelPos,
-    corridorMm
-  );
+  const beamSegs = splitBeamSegmentsWithTunnel(beamSpan, hasTunnel, tunnelPos, corridorMm);
 
   const corridors: CirculationZone[] = [...corridorsFromFill];
   const tunnels: TunnelZone[] = [];
   const rows: RackRowSolution[] = [];
-
-  pushTunnelZones(tunnels, orientation, lengthMm, widthMm, hasTunnel, tunnelPos, corridorMm);
 
   let totalModEquiv = 0;
   let anyRejectedHalf = false;
@@ -588,7 +571,9 @@ export function buildLayoutSolutionV2(answers: BuildLayoutSolutionV2Input): Layo
     );
 
     const segsForRow =
-      hasTunnel && appliesTunnelToThisRow ? beamSegs : [{ a: 0, b: beamSpan }];
+      hasTunnel && appliesTunnelToThisRow
+        ? beamSegs
+        : [{ a: 0, b: beamSpan, kind: 'normal' as const }];
 
     const crossSeg = { c0, c1 };
     const rowId = rb.id;
@@ -603,7 +588,9 @@ export function buildLayoutSolutionV2(answers: BuildLayoutSolutionV2Input): Layo
       halfModuleOptimization,
       beamSpan,
       tunnelForHalf,
-      rowBandCount
+      rowBandCount,
+      corridorMm,
+      levels
     );
     if (rejectedHalf) anyRejectedHalf = true;
     totalModEquiv += moduleEquiv;
