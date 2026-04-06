@@ -26,10 +26,11 @@ function uprightKey(x: number, y: number): string {
  * Túnel e corredores não geram estrutura — só existem onde há módulos.
  *
  * @param opts — altura e níveis devem alinhar com elevação / respostas (ex.: PDF).
+ * @param opts.beamElevationsMm — cotas das longarinas (mm, do piso); se omitido, reparte uniforme em H.
  */
 export function build3DModelV2(
   solution: LayoutSolutionV2,
-  opts: { uprightHeightMm: number; levels: number }
+  opts: { uprightHeightMm: number; levels: number; beamElevationsMm?: number[] }
 ): Rack3DModel {
   const H = Math.max(EPS, opts.uprightHeightMm);
   const levels = Math.max(1, Math.round(opts.levels));
@@ -43,10 +44,27 @@ export function build3DModelV2(
   pushLine(lines, 'floor', L, W, z0, 0, W, z0);
   pushLine(lines, 'floor', 0, W, z0, 0, 0, z0);
 
-  const beamZ: number[] = [];
-  for (let k = 1; k <= levels; k++) {
-    beamZ.push((k * H) / levels);
-  }
+  const beamZ: number[] = (() => {
+    const b = opts.beamElevationsMm;
+    if (
+      Array.isArray(b) &&
+      b.length === levels + 1 &&
+      b.every(x => typeof x === 'number' && Number.isFinite(x))
+    ) {
+      const out: number[] = [];
+      for (let k = 0; k <= levels; k++) {
+        const z = Math.min(H, Math.max(0, b[k]!));
+        if (z < EPS) continue;
+        out.push(z);
+      }
+      return out;
+    }
+    const out: number[] = [];
+    for (let k = 1; k <= levels; k++) {
+      out.push((k * H) / levels);
+    }
+    return out;
+  })();
 
   const uprightSeen = new Set<string>();
 

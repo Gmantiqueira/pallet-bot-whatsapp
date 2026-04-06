@@ -122,6 +122,12 @@ export type ElevationPanelPayload = {
   tunnel: boolean;
   firstLevelOnGround: boolean;
   clearHeightMm?: number;
+  /** Cotas dos eixos das longarinas (mm, do piso), length = levels + 1 — de {@link computeBeamElevations}. */
+  beamElevationsMm: number[];
+  structuralBottomMm: number;
+  structuralTopMm: number;
+  usableHeightMm: number;
+  meanGapMm: number;
 };
 
 export type ElevationModelV2 = {

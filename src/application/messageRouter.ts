@@ -175,6 +175,7 @@ export const routeIncoming = async (
               build3DModelV2(sol, {
                 uprightHeightMm: elevModelV2.front.uprightHeightMm,
                 levels: elevModelV2.front.levels,
+                beamElevationsMm: elevModelV2.front.beamElevationsMm,
               })
             )
           );

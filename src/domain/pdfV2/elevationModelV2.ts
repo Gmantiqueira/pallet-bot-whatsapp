@@ -1,4 +1,5 @@
 import type { ElevationModelV2, ElevationPanelPayload, LayoutSolutionV2 } from './types';
+import { computeBeamElevations } from './elevationLevelGeometryV2';
 
 function uprightHeightMmFromAnswers(answers: Record<string, unknown>): number | null {
   if (answers.heightMode === 'DIRECT' && typeof answers.heightMm === 'number') {
@@ -38,6 +39,17 @@ function panelPayload(answers: Record<string, unknown>, tunnel: boolean): Elevat
   const firstLevelOnGround =
     typeof answers.firstLevelOnGround === 'boolean' ? answers.firstLevelOnGround : true;
 
+  const geom = computeBeamElevations({
+    uprightHeightMm: h,
+    levels,
+    firstLevelOnGround,
+    equalLevelSpacing: answers.equalLevelSpacing === true,
+    levelSpacingMm: typeof answers.levelSpacingMm === 'number' ? answers.levelSpacingMm : undefined,
+    levelSpacingsMm: Array.isArray(answers.levelSpacingsMm)
+      ? (answers.levelSpacingsMm as number[])
+      : undefined,
+  });
+
   return {
     levels,
     uprightHeightMm: h,
@@ -47,6 +59,11 @@ function panelPayload(answers: Record<string, unknown>, tunnel: boolean): Elevat
     tunnel,
     firstLevelOnGround,
     clearHeightMm: clearHeightFromAnswers(answers),
+    beamElevationsMm: geom.beamElevationsMm,
+    structuralBottomMm: geom.structuralBottomMm,
+    structuralTopMm: geom.structuralTopMm,
+    usableHeightMm: geom.usableHeightMm,
+    meanGapMm: geom.meanGapMm,
   };
 }
 
@@ -66,6 +83,7 @@ export function buildElevationModelV2(
     `Config: ${layout.totals.levels} níveis de ${front.capacityKgPerLevel} kg | Prof: ${Math.round(front.depthMm)} mm`,
     `Módulos (equiv.): ${layout.totals.modules.toFixed(1)} | Posições: ${layout.totals.positions} | Prof. estrutura: ${layout.rackDepthMode === 'double' ? 'dupla costas' : 'simples'}`,
     `Orientação planta: ${layout.orientation === 'along_length' ? 'acompanha comprimento' : 'acompanha largura'}`,
+    `Espaçamento médio entre eixos: ${Math.round(front.meanGapMm)} mm (altura útil ${Math.round(front.usableHeightMm)} mm, folgas ${front.structuralBottomMm}+${front.structuralTopMm} mm)`,
   ];
 
   return {

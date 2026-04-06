@@ -107,10 +107,22 @@ function drawFrontRack(
     }
   }
 
-  const levDraw = innerH / levels;
+  const rawBeamH = data.beamElevationsMm;
+  const hasBeamH =
+    Array.isArray(rawBeamH) &&
+    rawBeamH.length === levels + 1 &&
+    rawBeamH.every(x => typeof x === 'number' && Number.isFinite(x));
+  const beamH = hasBeamH
+    ? rawBeamH
+    : Array.from({ length: levels + 1 }, (_, k) => (k / levels) * uprightH);
+  const levDraw = innerH / Math.max(1, levels);
   const rx = ox + (pw - totalW) / 2;
   const ry = oy + 36;
   const rackBottom = ry + innerH;
+  /** mm (piso →) → px SVG: piso em baixo (rackBottom), topo em ry */
+  const beamYsPx = beamH.map(
+    hmm => rackBottom - (hmm / uprightH) * innerH
+  );
   const beamTh = Math.max(1.5, Math.min(4.5, levDraw * 0.22));
   const capFontPx = Math.max(7.2, Math.min(10.5, levDraw * 0.38));
   const capLabel = `${capKg}kg`;
@@ -148,10 +160,18 @@ function drawFrontRack(
     const tunnelBay = tunnel && bi === 0;
     const clearFrac = tunnelBay ? 0.42 : 0;
     const yStart = tunnelBay ? ry + innerH * clearFrac : ry;
-    const minJ = tunnelBay ? Math.max(0, Math.ceil((yStart - ry) / levDraw - 0.001)) : 0;
+    let minJ = 0;
+    if (tunnelBay) {
+      for (let j = 0; j <= levels; j++) {
+        if (beamYsPx[j]! >= yStart - 0.01) {
+          minJ = j;
+          break;
+        }
+      }
+    }
 
     for (let j = minJ; j <= levels; j++) {
-      const yy = ry + j * levDraw;
+      const yy = beamYsPx[j]!;
       if (yy < yStart - 0.01) continue;
       parts.push(
         `<line x1="${bay.left}" y1="${yy}" x2="${bay.right}" y2="${yy}" stroke="${FV_BEAM_STROKE}" stroke-width="${beamTh}" stroke-linecap="butt"/>`
@@ -167,7 +187,8 @@ function drawFrontRack(
     const capDy = Math.min(3.5, levDraw * 0.12);
     const startTier = tunnelBay ? minJ : 0;
     for (let tier = startTier; tier < levels; tier++) {
-      const yMid = ry + (tier + 0.5) * levDraw;
+      const hMid = (beamH[tier]! + beamH[tier + 1]!) / 2;
+      const yMid = rackBottom - (hMid / uprightH) * innerH;
       if (yMid > rackBottom - 2) continue;
       parts.push(
         `<text x="${(bay.left + bay.right) / 2}" y="${yMid + capDy}" text-anchor="middle" font-weight="600" font-size="${capFontPx}px" fill="#111827">${escapeXml(capLabel)}</text>`
@@ -237,9 +258,16 @@ function drawLateral(
   parts.push(
     `<rect x="${x0}" y="${y0}" width="${dw}" height="${dh}" fill="#e2e8f0" stroke="#475569" stroke-width="1.1"/>`
   );
-  const lev = dh / levels;
-  for (let j = 1; j < levels; j++) {
-    const yy = y0 + j * lev;
+  const rawBeamH = data.beamElevationsMm;
+  const hasBeamH =
+    Array.isArray(rawBeamH) &&
+    rawBeamH.length === levels + 1 &&
+    rawBeamH.every(x => typeof x === 'number' && Number.isFinite(x));
+  const beamH = hasBeamH
+    ? rawBeamH
+    : Array.from({ length: levels + 1 }, (_, k) => (k / levels) * uprightH);
+  for (let k = 1; k < levels; k++) {
+    const yy = y0 + dh - (beamH[k]! / uprightH) * dh;
     parts.push(
       `<line x1="${x0}" y1="${yy}" x2="${x0 + dw}" y2="${yy}" stroke="#ea580c" stroke-width="2"/>`
     );

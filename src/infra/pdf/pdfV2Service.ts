@@ -430,7 +430,11 @@ export async function generatePdfV2FromSession(
   const elevationModel = buildElevationModelV2(answers, layoutSolution);
   const elevationSvg = serializeElevationSvgV2(elevationModel);
   const { uprightHeightMm, levels } = elevationModel.front;
-  const rack3d = build3DModelV2(layoutSolution, { uprightHeightMm, levels });
+  const rack3d = build3DModelV2(layoutSolution, {
+    uprightHeightMm,
+    levels,
+    beamElevationsMm: elevationModel.front.beamElevationsMm,
+  });
   const projected3d = projectToIsometric(rack3d);
   const view3dSvg = render3DViewV2(projected3d);
 
