@@ -30,6 +30,8 @@ import { buildFloorPlanModelV2 } from '../domain/pdfV2/floorPlanModelV2';
 import { serializeFloorPlanSvgV2 } from '../domain/pdfV2/svgFloorPlanV2';
 import { buildElevationModelV2 } from '../domain/pdfV2/elevationModelV2';
 import { serializeElevationSvgV2 } from '../domain/pdfV2/svgElevationV2';
+import { build3DModelV2 } from '../domain/pdfV2/model3dV2';
+import { projectToIsometric, render3DViewV2 } from '../domain/pdfV2/view3dV2';
 
 export interface IncomingPayload {
   from: string;
@@ -166,8 +168,15 @@ export const routeIncoming = async (
           const floorSvgV2 = serializeFloorPlanSvgV2(
             buildFloorPlanModelV2(sol)
           );
-          const elevSvgV2 = serializeElevationSvgV2(
-            buildElevationModelV2(ans, sol)
+          const elevModelV2 = buildElevationModelV2(ans, sol);
+          const elevSvgV2 = serializeElevationSvgV2(elevModelV2);
+          const view3dSvgV2 = render3DViewV2(
+            projectToIsometric(
+              build3DModelV2(sol, {
+                uprightHeightMm: elevModelV2.front.uprightHeightMm,
+                levels: elevModelV2.front.levels,
+              })
+            )
           );
           fs.writeFileSync(
             path.join(storageDir, `planta-v2-${phone}-${ts}.svg`),
@@ -177,6 +186,11 @@ export const routeIncoming = async (
           fs.writeFileSync(
             path.join(storageDir, `elevacao-v2-${phone}-${ts}.svg`),
             elevSvgV2,
+            'utf8'
+          );
+          fs.writeFileSync(
+            path.join(storageDir, `vista-3d-v2-${phone}-${ts}.svg`),
+            view3dSvgV2,
             'utf8'
           );
         }

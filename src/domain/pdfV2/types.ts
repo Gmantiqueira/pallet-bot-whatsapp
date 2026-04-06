@@ -132,3 +132,39 @@ export type ElevationModelV2 = {
   detail: ElevationPanelPayload;
   summaryLines: string[];
 };
+
+/** Segmento 3D em mm: X/Y = planta do galpão, Z = altura. */
+export type Rack3DLine3D = {
+  kind: 'upright' | 'beam' | 'floor';
+  x1: number;
+  y1: number;
+  z1: number;
+  x2: number;
+  y2: number;
+  z2: number;
+};
+
+/** Geometria wireframe derivada de {@link LayoutSolutionV2} (sem motor 3D). */
+export type Rack3DModel = {
+  warehouse: { lengthMm: number; widthMm: number };
+  uprightHeightMm: number;
+  levels: number;
+  lines: Rack3DLine3D[];
+};
+
+export type ProjectedLine2D = {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  kind: 'upright' | 'beam' | 'floor';
+};
+
+/** Após projeção isométrica (unidades arbitrárias até encaixe no viewBox). */
+export type Projected2D = {
+  lines: ProjectedLine2D[];
+  bounds: { minX: number; maxX: number; minY: number; maxY: number };
+};
+
+/** Fragmento `<g>...</g>` ou documento SVG completo, conforme função. */
+export type SvgGroup = string;

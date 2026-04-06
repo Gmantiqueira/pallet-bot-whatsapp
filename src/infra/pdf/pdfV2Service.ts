@@ -9,6 +9,8 @@ import { serializeFloorPlanSvgV2 } from '../../domain/pdfV2/svgFloorPlanV2';
 import { buildElevationModelV2 } from '../../domain/pdfV2/elevationModelV2';
 import { serializeElevationSvgV2 } from '../../domain/pdfV2/svgElevationV2';
 import { buildProjectAnswersV2 } from '../../domain/pdfV2/answerMapping';
+import { build3DModelV2 } from '../../domain/pdfV2/model3dV2';
+import { projectToIsometric, render3DViewV2 } from '../../domain/pdfV2/view3dV2';
 import {
   fitRasterInBox,
   svgRasterToPng,
@@ -162,10 +164,12 @@ export type GenerateProjectPdfV2Input = {
   layout: LayoutResult;
   floorPlanSvg: string;
   elevationSvg: string;
+  /** Vista 3D isométrica (wireframe) alinhada ao layout V2. */
+  view3dSvg: string;
 };
 
 /**
- * Renderiza PDF V2: capa + planta técnica + página de elevações (sem vista isométrica legada).
+ * Renderiza PDF V2: capa + planta técnica + elevações + visualização 3D isométrica.
  * Apenas desenha; SVGs devem vir prontos.
  */
 export async function renderPdfV2(
@@ -185,10 +189,12 @@ export async function renderPdfV2(
 
   let floorRaster: { buffer: Buffer; widthPx: number; heightPx: number };
   let elevRaster: { buffer: Buffer; widthPx: number; heightPx: number };
+  let view3dRaster: { buffer: Buffer; widthPx: number; heightPx: number };
   try {
-    [floorRaster, elevRaster] = await Promise.all([
+    [floorRaster, elevRaster, view3dRaster] = await Promise.all([
       svgRasterToPng(input.floorPlanSvg, pxW, pxH),
       svgRasterToPng(input.elevationSvg, pxW, pxH),
+      svgRasterToPng(input.view3dSvg, pxW, pxH),
     ]);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -370,6 +376,23 @@ export async function renderPdfV2(
   doc.moveDown(0.38);
   embedFullWidthDrawing(elevRaster);
 
+  doc.addPage();
+  doc.y = doc.page.margins.top + 6;
+  drawCentered('VISUALIZAÇÃO 3D', {
+    size: 12,
+    font: 'Helvetica-Bold',
+    color: COL_INK,
+    moveDown: 0.18,
+  });
+  drawCentered('Projeção isométrica do layout calculado (wireframe)', {
+    size: 8.5,
+    color: COL_MUTED,
+    moveDown: 0.28,
+  });
+  horizontalRule(doc.y + 3, 0.1, COL_RULE);
+  doc.moveDown(0.38);
+  embedFullWidthDrawing(view3dRaster);
+
   doc.end();
   await writeDone;
 
@@ -406,6 +429,10 @@ export async function generatePdfV2FromSession(
   const floorPlanSvg = serializeFloorPlanSvgV2(floorModel);
   const elevationModel = buildElevationModelV2(answers, layoutSolution);
   const elevationSvg = serializeElevationSvgV2(elevationModel);
+  const { uprightHeightMm, levels } = elevationModel.front;
+  const rack3d = build3DModelV2(layoutSolution, { uprightHeightMm, levels });
+  const projected3d = projectToIsometric(rack3d);
+  const view3dSvg = render3DViewV2(projected3d);
 
   return renderPdfV2(
     {
@@ -413,6 +440,7 @@ export async function generatePdfV2FromSession(
       layout,
       floorPlanSvg,
       elevationSvg,
+      view3dSvg,
     },
     options
   );
