@@ -57,7 +57,8 @@ describe('buildLayoutSolutionV2', () => {
       lineStrategy: 'APENAS_SIMPLES' as const,
     };
     const s = buildLayoutSolutionV2(a);
-    expect(s.tunnels.length).toBe(1);
+    expect(s.tunnels.length).toBe(2);
+    expect(s.tunnels.some(t => t.id === 'tunnel-beam')).toBe(true);
     expect(s.rows.some(r => r.modules.length > 0)).toBe(true);
   });
 
@@ -70,7 +71,7 @@ describe('buildLayoutSolutionV2', () => {
       lineStrategy: 'APENAS_SIMPLES' as const,
     };
     const s = buildLayoutSolutionV2(a);
-    expect(s.tunnels.length).toBe(1);
+    expect(s.tunnels.length).toBe(2);
     const firstRow = s.rows[0];
     const xs = firstRow.modules.map(m => m.x0);
     const gap = Math.min(...xs.filter(x => x > 1000));
@@ -86,7 +87,7 @@ describe('buildLayoutSolutionV2', () => {
       lineStrategy: 'APENAS_SIMPLES' as const,
     };
     const s = buildLayoutSolutionV2(a);
-    expect(s.tunnels.length).toBe(1);
+    expect(s.tunnels.length).toBe(2);
   });
 
   it('7: meio módulo aceito (com túnel adjacente / extremos)', () => {
@@ -130,10 +131,12 @@ describe('buildLayoutSolutionV2', () => {
     };
     const s = buildLayoutSolutionV2(a);
     const m = s.rows[0].modules;
-    expect(s.tunnels.length).toBe(1);
-    const tun = s.tunnels[0];
-    const maxLeft = Math.max(...m.filter(mod => mod.x1 <= tun.x0 + 1).map(mod => mod.x1), -1);
-    const minRight = Math.min(...m.filter(mod => mod.x0 >= tun.x1 - 1).map(mod => mod.x0), Infinity);
+    expect(s.tunnels.length).toBe(2);
+    const beam = s.tunnels.find(t => t.id === 'tunnel-beam');
+    expect(beam).toBeDefined();
+    if (!beam) return;
+    const maxLeft = Math.max(...m.filter(mod => mod.x1 <= beam.x0 + 1).map(mod => mod.x1), -1);
+    const minRight = Math.min(...m.filter(mod => mod.x0 >= beam.x1 - 1).map(mod => mod.x0), Infinity);
     expect(maxLeft).toBeGreaterThan(0);
     expect(minRight).toBeLessThan(Infinity);
     expect(minRight - maxLeft).toBeGreaterThan(0);

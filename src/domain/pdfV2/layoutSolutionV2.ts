@@ -25,25 +25,196 @@ function tunnelWidthMm(corridorMm: number): number {
   return Math.max(800, corridorMm);
 }
 
-function rowBandsSingleDepth(
-  crossSpanMm: number,
-  moduleDepthMm: number,
-  corridorMm: number
-): number {
-  const step = moduleDepthMm + corridorMm;
-  if (step <= 0) return 0;
-  return Math.floor(crossSpanMm / step);
+function bandDepthForMode(depthMode: RackDepthModeV2, moduleDepthMm: number): number {
+  return depthMode === 'single'
+    ? moduleDepthMm
+    : 2 * moduleDepthMm + SPINE_BACK_TO_BACK_MM;
 }
 
-function rowBandsDoubleDepth(
-  crossSpanMm: number,
-  moduleDepthMm: number,
+/**
+ * Máximo de fileiras numa faixa de profundidade (transversal ao vão) quando
+ * se alterna fileira + corredor: n·band + (n−1)·corridor ≤ zoneLen.
+ */
+function maxRowsInZone(zoneLen: number, bandDepth: number, corridorMm: number): number {
+  if (zoneLen <= 0 || bandDepth <= 0) return 0;
+  if (zoneLen < bandDepth) return 0;
+  return Math.floor((zoneLen + corridorMm) / (bandDepth + corridorMm));
+}
+
+/** Espaço transversal ocupado por n fileiras e (n−1) corredores entre elas. */
+function usedCrossForRows(n: number, bandDepth: number, corridorMm: number): number {
+  if (n <= 0) return 0;
+  return n * bandDepth + Math.max(0, n - 1) * corridorMm;
+}
+
+/** Faixa de túnel ao longo da direção transversal (divide o galpão em zonas de fileiras). */
+function tunnelSpanCross(
+  crossSpan: number,
+  corridorMm: number,
+  pos: 'INICIO' | 'MEIO' | 'FIM'
+): { t0: number; t1: number } {
+  const tw = Math.min(tunnelWidthMm(corridorMm), crossSpan);
+  if (pos === 'INICIO') return { t0: 0, t1: tw };
+  if (pos === 'FIM') return { t0: Math.max(0, crossSpan - tw), t1: crossSpan };
+  const c = crossSpan / 2;
+  const half = tw / 2;
+  return { t0: Math.max(0, c - half), t1: Math.min(crossSpan, c + half) };
+}
+
+type CrossZone = { z0: number; z1: number; id: string };
+
+/** Particiona o comprimento transversal em zonas livres de racks (acima / abaixo da faixa de túnel). */
+function crossZonesForTunnel(
+  crossSpan: number,
+  hasTunnel: boolean,
+  tunnelPos: 'INICIO' | 'MEIO' | 'FIM' | undefined,
   corridorMm: number
+): CrossZone[] {
+  if (!hasTunnel || !tunnelPos) {
+    return [{ z0: 0, z1: crossSpan, id: 'zone-all' }];
+  }
+  const { t0, t1 } = tunnelSpanCross(crossSpan, corridorMm, tunnelPos);
+  if (tunnelPos === 'MEIO') {
+    const zones: CrossZone[] = [];
+    if (t0 > EPS) zones.push({ z0: 0, z1: t0, id: 'zone-below' });
+    if (crossSpan - t1 > EPS) zones.push({ z0: t1, z1: crossSpan, id: 'zone-above' });
+    return zones.length > 0 ? zones : [{ z0: 0, z1: crossSpan, id: 'zone-all' }];
+  }
+  if (tunnelPos === 'INICIO') {
+    if (t1 >= crossSpan - EPS) return [];
+    return [{ z0: t1, z1: crossSpan, id: 'zone-after-tunnel' }];
+  }
+  /* FIM */
+  if (t0 <= EPS) return [];
+  return [{ z0: 0, z1: t0, id: 'zone-before-tunnel' }];
+}
+
+export type RowBandCross = { id: string; c0: number; c1: number };
+
+/**
+ * Preenche uma zona [zoneStart, zoneEnd] com fileiras e corredores até não caber mais;
+ * sobra é repartida em margem simétrica (evita “bloco” só de um lado).
+ */
+function fillCrossZone(
+  zone: CrossZone,
+  bandDepth: number,
+  corridorMm: number,
+  idPrefix: string,
+  orientation: LayoutOrientationV2,
+  lengthMm: number,
+  widthMm: number
+): { rows: RowBandCross[]; corridors: CirculationZone[] } {
+  const zoneLen = zone.z1 - zone.z0;
+  const n = maxRowsInZone(zoneLen, bandDepth, corridorMm);
+  const used = usedCrossForRows(n, bandDepth, corridorMm);
+  const margin = n > 0 ? (zoneLen - used) / 2 : 0;
+  let y = zone.z0 + margin;
+
+  const rows: RowBandCross[] = [];
+  const corridors: CirculationZone[] = [];
+
+  for (let i = 0; i < n; i++) {
+    const c0 = y;
+    const c1 = y + bandDepth;
+    rows.push({ id: `${idPrefix}-r${i}`, c0, c1 });
+    y = c1;
+    if (i < n - 1) {
+      const cor0 = y;
+      const cor1 = y + corridorMm;
+      if (orientation === 'along_length') {
+        corridors.push({
+          id: `${idPrefix}-cor-${i}`,
+          kind: 'corridor',
+          x0: 0,
+          x1: lengthMm,
+          y0: cor0,
+          y1: cor1,
+          label: 'Corredor operacional',
+        });
+      } else {
+        corridors.push({
+          id: `${idPrefix}-cor-${i}`,
+          kind: 'corridor',
+          x0: cor0,
+          x1: cor1,
+          y0: 0,
+          y1: widthMm,
+          label: 'Corredor operacional',
+        });
+      }
+      y += corridorMm;
+    }
+  }
+
+  return { rows, corridors };
+}
+
+type FillContext = {
+  orientation: LayoutOrientationV2;
+  lengthMm: number;
+  widthMm: number;
+  beamSpan: number;
+  crossSpan: number;
+  bandDepth: number;
+  corridorMm: number;
+  depthMode: RackDepthModeV2;
+  hasTunnel: boolean;
+  tunnelPosition: 'INICIO' | 'MEIO' | 'FIM' | undefined;
+};
+
+/**
+ * Motor de preenchimento do espaço transversal: fileira → corredor → fileira → …
+ * Respeita zonas separadas pela faixa de túnel (ocupação real + menos fileiras onde o túnel “come” profundidade).
+ * Alias: {@link fillWarehouseWidth} (nome alternativo no pedido).
+ */
+export function fillWarehouseCross(ctx: FillContext): {
+  rowBands: RowBandCross[];
+  corridors: CirculationZone[];
+} {
+  const zones = crossZonesForTunnel(
+    ctx.crossSpan,
+    ctx.hasTunnel,
+    ctx.tunnelPosition,
+    ctx.corridorMm
+  );
+
+  const rowBands: RowBandCross[] = [];
+  const corridors: CirculationZone[] = [];
+
+  for (const z of zones) {
+    const { rows, corridors: corrs } = fillCrossZone(
+      z,
+      ctx.bandDepth,
+      ctx.corridorMm,
+      z.id,
+      ctx.orientation,
+      ctx.lengthMm,
+      ctx.widthMm
+    );
+    rowBands.push(...rows);
+    corridors.push(...corrs);
+  }
+
+  return { rowBands, corridors };
+}
+
+/** Alias semântico: preenche a “largura” útil (eixo transversal ao vão) do galpão. */
+export const fillWarehouseWidth = fillWarehouseCross;
+
+/** Conta fileiras totais para comparação de variantes (mesma lógica que fillWarehouseCross). */
+function countRowsAcrossZones(
+  crossSpan: number,
+  bandDepth: number,
+  corridorMm: number,
+  hasTunnel: boolean,
+  tunnelPos: 'INICIO' | 'MEIO' | 'FIM' | undefined
 ): number {
-  const band = 2 * moduleDepthMm + SPINE_BACK_TO_BACK_MM;
-  const step = band + corridorMm;
-  if (step <= 0) return 0;
-  return Math.floor(crossSpanMm / step);
+  const zones = crossZonesForTunnel(crossSpan, hasTunnel, tunnelPos, corridorMm);
+  let total = 0;
+  for (const z of zones) {
+    total += maxRowsInZone(z.z1 - z.z0, bandDepth, corridorMm);
+  }
+  return total;
 }
 
 function modulesAlongBeam(beamSpanMm: number, moduleWidthMm: number): number {
@@ -65,12 +236,18 @@ function evaluateVariant(
   moduleDepthMm: number,
   moduleWidthMm: number,
   corridorMm: number,
-  levels: number
+  levels: number,
+  hasTunnel: boolean,
+  tunnelPosition: 'INICIO' | 'MEIO' | 'FIM' | undefined
 ): VariantEval {
-  const rows =
-    depthMode === 'single'
-      ? rowBandsSingleDepth(crossSpanMm, moduleDepthMm, corridorMm)
-      : rowBandsDoubleDepth(crossSpanMm, moduleDepthMm, corridorMm);
+  const band = bandDepthForMode(depthMode, moduleDepthMm);
+  const rows = countRowsAcrossZones(
+    crossSpanMm,
+    band,
+    corridorMm,
+    hasTunnel,
+    tunnelPosition
+  );
   const along = modulesAlongBeam(beamSpanMm, moduleWidthMm);
   const depthFactor = depthMode === 'double' ? 2 : 1;
   const cells = rows * along;
@@ -85,7 +262,9 @@ function chooseDepthModeFromStrategy(
   moduleDepthMm: number,
   moduleWidthMm: number,
   corridorMm: number,
-  levels: number
+  levels: number,
+  hasTunnel: boolean,
+  tunnelPosition: 'INICIO' | 'MEIO' | 'FIM' | undefined
 ): RackDepthModeV2 {
   if (strategy === 'APENAS_SIMPLES') return 'single';
   if (strategy === 'APENAS_DUPLOS') return 'double';
@@ -97,7 +276,9 @@ function chooseDepthModeFromStrategy(
     moduleDepthMm,
     moduleWidthMm,
     corridorMm,
-    levels
+    levels,
+    hasTunnel,
+    tunnelPosition
   );
   const d = evaluateVariant(
     'double',
@@ -106,7 +287,9 @@ function chooseDepthModeFromStrategy(
     moduleDepthMm,
     moduleWidthMm,
     corridorMm,
-    levels
+    levels,
+    hasTunnel,
+    tunnelPosition
   );
   return d.positions > s.positions ? 'double' : 'single';
 }
@@ -258,45 +441,61 @@ function rectFor(
   return { id, type, x0: crossSeg.c0, x1: crossSeg.c1, y0: a, y1: b };
 }
 
-function pushCorridorsBetweenRows(
+function pushTunnelZones(
+  tunnels: TunnelZone[],
   orientation: LayoutOrientationV2,
-  depthMode: RackDepthModeV2,
-  crossSpan: number,
-  moduleDepthMm: number,
-  corridorMm: number,
-  rowCount: number,
-  list: CirculationZone[]
+  lengthMm: number,
+  widthMm: number,
+  hasTunnel: boolean,
+  tunnelPos: 'INICIO' | 'MEIO' | 'FIM' | undefined,
+  corridorMm: number
 ): void {
-  if (rowCount < 2) return;
-  const band =
-    depthMode === 'single'
-      ? moduleDepthMm
-      : 2 * moduleDepthMm + SPINE_BACK_TO_BACK_MM;
-  for (let i = 0; i < rowCount - 1; i++) {
-    const crossStart = (i + 1) * band + i * corridorMm;
-    const c0 = crossStart;
-    const c1 = crossStart + corridorMm;
-    if (orientation === 'along_length') {
-      list.push({
-        id: `cor-between-${i}`,
-        kind: 'corridor',
-        x0: 0,
-        x1: crossSpan,
-        y0: c0,
-        y1: c1,
-        label: 'Corredor operacional',
-      });
-    } else {
-      list.push({
-        id: `cor-between-${i}`,
-        kind: 'corridor',
-        x0: c0,
-        x1: c1,
-        y0: 0,
-        y1: crossSpan,
-        label: 'Corredor operacional',
-      });
-    }
+  if (!hasTunnel || !tunnelPos) return;
+
+  const beamSpan = orientation === 'along_length' ? lengthMm : widthMm;
+  const crossSpan = orientation === 'along_length' ? widthMm : lengthMm;
+  const beamT = tunnelSpanAlongBeam(beamSpan, corridorMm, tunnelPos);
+  const crossT = tunnelSpanCross(crossSpan, corridorMm, tunnelPos);
+
+  /* Túnel ao longo do vão (circulação entre blocos de módulos) */
+  if (orientation === 'along_length') {
+    tunnels.push({
+      id: 'tunnel-beam',
+      kind: 'tunnel',
+      x0: beamT.t0,
+      x1: beamT.t1,
+      y0: 0,
+      y1: widthMm,
+      label: 'Túnel',
+    });
+    tunnels.push({
+      id: 'tunnel-cross',
+      kind: 'tunnel',
+      x0: 0,
+      x1: lengthMm,
+      y0: crossT.t0,
+      y1: crossT.t1,
+      label: 'Túnel (faixa transversal)',
+    });
+  } else {
+    tunnels.push({
+      id: 'tunnel-beam',
+      kind: 'tunnel',
+      x0: 0,
+      x1: lengthMm,
+      y0: beamT.t0,
+      y1: beamT.t1,
+      label: 'Túnel',
+    });
+    tunnels.push({
+      id: 'tunnel-cross',
+      kind: 'tunnel',
+      x0: crossT.t0,
+      x1: crossT.t1,
+      y0: 0,
+      y1: widthMm,
+      label: 'Túnel (faixa transversal)',
+    });
   }
 }
 
@@ -325,6 +524,8 @@ export function buildLayoutSolutionV2(answers: BuildLayoutSolutionV2Input): Layo
   const beamSpan = orientation === 'along_length' ? lengthMm : widthMm;
   const crossSpan = orientation === 'along_length' ? widthMm : lengthMm;
 
+  const tunnelPos = tunnelPosition as 'INICIO' | 'MEIO' | 'FIM' | undefined;
+
   const depthMode = chooseDepthModeFromStrategy(
     lineStrategy,
     crossSpan,
@@ -332,84 +533,54 @@ export function buildLayoutSolutionV2(answers: BuildLayoutSolutionV2Input): Layo
     moduleDepthMm,
     moduleWidthMm,
     corridorMm,
-    levels
+    levels,
+    hasTunnel,
+    tunnelPos
   );
 
-  const rowBandCount =
-    depthMode === 'single'
-      ? rowBandsSingleDepth(crossSpan, moduleDepthMm, corridorMm)
-      : rowBandsDoubleDepth(crossSpan, moduleDepthMm, corridorMm);
+  const band = bandDepthForMode(depthMode, moduleDepthMm);
+
+  const ctx: FillContext = {
+    orientation,
+    lengthMm,
+    widthMm,
+    beamSpan,
+    crossSpan,
+    bandDepth: band,
+    corridorMm,
+    depthMode,
+    hasTunnel,
+    tunnelPosition: tunnelPos,
+  };
+
+  const { rowBands, corridors: corridorsFromFill } = fillWarehouseCross(ctx);
 
   const tunnelSpec =
-    hasTunnel && tunnelPosition
-      ? tunnelSpanAlongBeam(
-          beamSpan,
-          corridorMm,
-          tunnelPosition as 'INICIO' | 'MEIO' | 'FIM'
-        )
+    hasTunnel && tunnelPos
+      ? tunnelSpanAlongBeam(beamSpan, corridorMm, tunnelPos)
       : null;
 
   const beamSegs = splitBeamSegments(
     beamSpan,
     hasTunnel,
-    tunnelPosition as 'INICIO' | 'MEIO' | 'FIM' | undefined,
+    tunnelPos,
     corridorMm
   );
 
-  const corridors: CirculationZone[] = [];
+  const corridors: CirculationZone[] = [...corridorsFromFill];
   const tunnels: TunnelZone[] = [];
   const rows: RackRowSolution[] = [];
 
-  pushCorridorsBetweenRows(
-    orientation,
-    depthMode,
-    orientation === 'along_length' ? lengthMm : widthMm,
-    moduleDepthMm,
-    corridorMm,
-    rowBandCount,
-    corridors
-  );
-
-  if (tunnelSpec && hasTunnel) {
-    const tw = tunnelSpec.t1 - tunnelSpec.t0;
-    if (orientation === 'along_length') {
-      tunnels.push({
-        id: 'tunnel-main',
-        kind: 'tunnel',
-        x0: tunnelSpec.t0,
-        x1: tunnelSpec.t1,
-        y0: 0,
-        y1: widthMm,
-        label: 'Túnel',
-      });
-    } else {
-      tunnels.push({
-        id: 'tunnel-main',
-        kind: 'tunnel',
-        x0: 0,
-        x1: lengthMm,
-        y0: tunnelSpec.t0,
-        y1: tunnelSpec.t1,
-        label: 'Túnel',
-      });
-    }
-    if (tw + EPS < tunnelWidthMm(corridorMm) * 0.5) {
-      /* faixa mínima já garantida em tunnelSpanAlongBeam */
-    }
-  }
-
-  const band =
-    depthMode === 'single'
-      ? moduleDepthMm
-      : 2 * moduleDepthMm + SPINE_BACK_TO_BACK_MM;
-  const step = band + corridorMm;
+  pushTunnelZones(tunnels, orientation, lengthMm, widthMm, hasTunnel, tunnelPos, corridorMm);
 
   let totalModEquiv = 0;
   let anyRejectedHalf = false;
 
-  for (let r = 0; r < rowBandCount; r++) {
-    const c0 = r * step;
-    const c1 = c0 + band;
+  const rowBandCount = rowBands.length;
+
+  for (const rb of rowBands) {
+    const c0 = rb.c0;
+    const c1 = rb.c1;
     const rowKind: RackDepthModeV2 = depthMode;
     const appliesTunnelToThisRow = tunnelAppliesToRow(
       tunnelAppliesTo,
@@ -420,7 +591,7 @@ export function buildLayoutSolutionV2(answers: BuildLayoutSolutionV2Input): Layo
       hasTunnel && appliesTunnelToThisRow ? beamSegs : [{ a: 0, b: beamSpan }];
 
     const crossSeg = { c0, c1 };
-    const rowId = `row-${r}`;
+    const rowId = rb.id;
     const tunnelForHalf =
       hasTunnel && appliesTunnelToThisRow ? tunnelSpec : null;
     const { segments, moduleEquiv, rejectedHalf } = buildModuleSegmentsForRow(

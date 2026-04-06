@@ -141,14 +141,14 @@ function maxModulesSingleDepth(
   return rows * along;
 }
 
+/** n fileiras: n·profundidade + (n−1)·corredor ≤ largura transversal */
 function rowBandsSingleDepth(
   crossSpanMm: number,
   moduleDepthMm: number,
   corridorMm: number
 ): number {
-  const step = moduleDepthMm + corridorMm;
-  if (step <= 0) return 0;
-  return Math.floor(crossSpanMm / step);
+  if (moduleDepthMm <= 0) return 0;
+  return Math.floor((crossSpanMm + corridorMm) / (moduleDepthMm + corridorMm));
 }
 
 export function tunnelAppliesToRow(
