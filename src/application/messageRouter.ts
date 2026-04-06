@@ -157,6 +157,8 @@ export const routeIncoming = async (
         layout: engines.layout,
         structure: engines.structure,
         budget: engines.budget,
+        // TODO(pdf): usar generate3d para omitir ou destacar vista isométrica quando false
+        generate3d: ans.generate3d === true,
       };
 
       const floorSvg = generateFloorPlanSvg(
@@ -234,10 +236,9 @@ export const routeIncoming = async (
     }
   }
 
-  // Detect if image was analyzed (transitioned from WAIT_PLANT_IMAGE)
   const imageAnalyzed =
     previousState === 'WAIT_PLANT_IMAGE' &&
-    updatedSession.state !== 'WAIT_PLANT_IMAGE';
+    updatedSession.state === 'WAIT_PLANT_CONFIRM_DIMS';
 
   // Build messages with context
   const ctx: MessageContext = {

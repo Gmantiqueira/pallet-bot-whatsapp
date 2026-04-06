@@ -78,7 +78,7 @@ describe('MessageRouter', () => {
 
       const result = await routeIncoming(session, incoming, repository);
 
-      expect(result.session.state).toBe('WAIT_CORRIDOR');
+      expect(result.session.state).toBe('WAIT_PLANT_CONFIRM_DIMS');
     });
 
     it('should convert text to TEXT input', async () => {
@@ -170,16 +170,20 @@ describe('MessageRouter', () => {
 
     it('should finalize engines, save SVGs and PDF, DONE message with document', async () => {
       const session = createSession(
-        'SUMMARY_CONFIRM',
+        'FINAL_CONFIRM',
         finalizeSummaryAnswers({
           lengthMm: 12000,
           widthMm: 10000,
           corridorMm: 3000,
+          moduleDepthMm: 2700,
+          beamLengthMm: 1100,
           capacityKg: 2000,
           heightMode: 'DIRECT',
           heightMm: 5000,
           levels: 4,
-          guardRail: 'ambos',
+          guardRailSimple: false,
+          guardRailDouble: false,
+          generate3d: false,
         })
       );
 
@@ -223,16 +227,20 @@ describe('MessageRouter', () => {
 
     it('integração: fluxo GERAR inclui SVG isométrico no PDF (4 páginas)', async () => {
       const session = createSession(
-        'SUMMARY_CONFIRM',
+        'FINAL_CONFIRM',
         finalizeSummaryAnswers({
           lengthMm: 12000,
           widthMm: 10000,
           corridorMm: 3000,
+          moduleDepthMm: 2700,
+          beamLengthMm: 1100,
           capacityKg: 2000,
           heightMode: 'DIRECT',
           heightMm: 5000,
           levels: 4,
-          guardRail: 'ambos',
+          guardRailSimple: false,
+          guardRailDouble: false,
+          generate3d: true,
         })
       );
 
@@ -280,16 +288,20 @@ describe('MessageRouter', () => {
         .mockRejectedValue(new Error('pdf fail'));
 
       const session = createSession(
-        'SUMMARY_CONFIRM',
+        'FINAL_CONFIRM',
         finalizeSummaryAnswers({
           lengthMm: 12000,
           widthMm: 10000,
           corridorMm: 3000,
+          moduleDepthMm: 2700,
+          beamLengthMm: 1100,
           capacityKg: 2000,
           heightMode: 'DIRECT',
           heightMm: 5000,
           levels: 4,
-          guardRail: 'ambos',
+          guardRailSimple: false,
+          guardRailDouble: false,
+          generate3d: false,
         })
       );
 
@@ -327,7 +339,7 @@ describe('MessageRouter', () => {
 
       // Should have image analyzed message
       const imageMessage = result.outgoingMessages.find((m) =>
-        m.text?.includes('IMAGEM ANALISADA')
+        m.text?.includes('Imagem recebida')
       );
       expect(imageMessage).toBeDefined();
     });

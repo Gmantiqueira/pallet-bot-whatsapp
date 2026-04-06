@@ -37,6 +37,12 @@ export const migrate = (): void => {
       updatedAt INTEGER NOT NULL
     )
   `);
+
+  try {
+    database.exec(`ALTER TABLE sessions ADD COLUMN editStopBefore TEXT`);
+  } catch {
+    /* coluna já existe */
+  }
 };
 
 export const closeDb = (): void => {

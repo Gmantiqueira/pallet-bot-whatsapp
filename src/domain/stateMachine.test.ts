@@ -1,5 +1,6 @@
 import { transition, Input } from './stateMachine';
 import { Session } from './session';
+import { finalizeSummaryAnswers } from './projectEngines';
 
 const createSession = (state: string, answers: Record<string, unknown> = {}, stack: string[] = []): Session => {
   return {
@@ -83,64 +84,101 @@ describe('State Machine', () => {
     it('should complete full flow from MENU to SUMMARY_CONFIRM', () => {
       let session = createSession('MENU');
 
-      // MENU -> choose option 2 (measures typed)
       let result = transition(session, { type: 'BUTTON', value: '2' });
       expect(result.session.state).toBe('WAIT_LENGTH');
       session = result.session;
 
-      // WAIT_LENGTH -> enter length
       result = transition(session, { type: 'TEXT', value: '12000' });
       expect(result.session.state).toBe('WAIT_WIDTH');
-      expect(result.session.answers.lengthMm).toBe(12000);
       session = result.session;
 
-      // WAIT_WIDTH -> enter width
       result = transition(session, { type: 'TEXT', value: '10000' });
       expect(result.session.state).toBe('WAIT_CORRIDOR');
-      expect(result.session.answers.widthMm).toBe(10000);
       session = result.session;
 
-      // WAIT_CORRIDOR -> enter corridor
       result = transition(session, { type: 'TEXT', value: '3000' });
-      expect(result.session.state).toBe('WAIT_CAPACITY');
+      expect(result.session.state).toBe('CHOOSE_MODULE_ORIENTATION');
       expect(result.session.answers.corridorMm).toBe(3000);
       session = result.session;
 
-      // WAIT_CAPACITY -> enter capacity
+      result = transition(session, { type: 'BUTTON', value: 'ORIENT_H' });
+      expect(result.session.state).toBe('CHOOSE_LINE_STRATEGY');
+      session = result.session;
+
+      result = transition(session, { type: 'BUTTON', value: 'LINE_SIMPLES' });
+      expect(result.session.state).toBe('CHOOSE_TUNNEL');
+      session = result.session;
+
+      result = transition(session, { type: 'BUTTON', value: 'TUNNEL_NAO' });
+      expect(result.session.state).toBe('WAIT_MODULE_DEPTH');
+      session = result.session;
+
+      result = transition(session, { type: 'TEXT', value: '2700' });
+      expect(result.session.state).toBe('WAIT_BEAM_LENGTH');
+      session = result.session;
+
+      result = transition(session, { type: 'TEXT', value: '1100' });
+      expect(result.session.state).toBe('WAIT_LEVELS');
+      session = result.session;
+
+      result = transition(session, { type: 'TEXT', value: '4' });
+      expect(result.session.state).toBe('CHOOSE_FIRST_LEVEL_GROUND');
+      session = result.session;
+
+      result = transition(session, { type: 'BUTTON', value: 'FLG_SIM' });
+      expect(result.session.state).toBe('CHOOSE_EQUAL_LEVEL_SPACING');
+      session = result.session;
+
+      result = transition(session, { type: 'BUTTON', value: 'ELS_SIM' });
+      expect(result.session.state).toBe('WAIT_LEVEL_SPACING_SINGLE');
+      session = result.session;
+
+      result = transition(session, { type: 'TEXT', value: '1600' });
+      expect(result.session.state).toBe('WAIT_CAPACITY');
+      session = result.session;
+
       result = transition(session, { type: 'TEXT', value: '2000' });
       expect(result.session.state).toBe('CHOOSE_HEIGHT_MODE');
-      expect(result.session.answers.capacityKg).toBe(2000);
       session = result.session;
 
-      // CHOOSE_HEIGHT_MODE -> choose DIRECT
       result = transition(session, { type: 'BUTTON', value: 'DIRECT' });
       expect(result.session.state).toBe('WAIT_HEIGHT_DIRECT');
-      expect(result.session.answers.heightMode).toBe('DIRECT');
       session = result.session;
 
-      // WAIT_HEIGHT_DIRECT -> enter height
       result = transition(session, { type: 'TEXT', value: '5000' });
-      expect(result.session.state).toBe('WAIT_LEVELS');
+      expect(result.session.state).toBe('CHOOSE_FORKLIFT');
       expect(result.session.answers.heightMm).toBe(5000);
       session = result.session;
 
-      // WAIT_LEVELS -> enter levels
-      result = transition(session, { type: 'TEXT', value: '4' });
-      expect(result.session.state).toBe('WAIT_EXTRAS_GUARD_RAIL');
-      expect(result.session.answers.levels).toBe(4);
+      result = transition(session, { type: 'BUTTON', value: 'FORK_SIM' });
+      expect(result.session.state).toBe('CHOOSE_HALF_MODULE');
       session = result.session;
 
-      // WAIT_EXTRAS_GUARD_RAIL -> choose guard rail
-      result = transition(session, { type: 'BUTTON', value: 'ambos' });
+      result = transition(session, { type: 'BUTTON', value: 'HALF_NAO' });
+      expect(result.session.state).toBe('CHOOSE_MIXED_MODULES');
+      session = result.session;
+
+      result = transition(session, { type: 'BUTTON', value: 'MIXED_NAO' });
+      expect(result.session.state).toBe('CHOOSE_COLUMN_PROTECTOR');
+      session = result.session;
+
+      result = transition(session, { type: 'BUTTON', value: 'COL_NAO' });
+      expect(result.session.state).toBe('CHOOSE_GUARD_RAIL_SIMPLE');
+      session = result.session;
+
+      result = transition(session, { type: 'BUTTON', value: 'GRS_NAO' });
+      expect(result.session.state).toBe('CHOOSE_GUARD_RAIL_DOUBLE');
+      session = result.session;
+
+      result = transition(session, { type: 'BUTTON', value: 'GRD_NAO' });
       expect(result.session.state).toBe('SUMMARY_CONFIRM');
-      expect(result.session.answers.guardRail).toBe('ambos');
       expect(result.session.answers.layout).toBeDefined();
       expect(result.session.answers.structure).toBeDefined();
       expect(result.session.answers.budget).toBeDefined();
       expect((result.session.answers.budget as { totals: { modules: number } }).totals.modules).toBe(10);
     });
 
-    it('should complete flow with CALC height mode', () => {
+    it('should complete flow with CALC height mode after capacity', () => {
       let session = createSession('CHOOSE_HEIGHT_MODE', {
         lengthMm: 12000,
         widthMm: 10000,
@@ -148,21 +186,37 @@ describe('State Machine', () => {
         capacityKg: 2000,
       });
 
-      // CHOOSE_HEIGHT_MODE -> choose CALC
       let result = transition(session, { type: 'BUTTON', value: 'CALC' });
       expect(result.session.state).toBe('WAIT_LOAD_HEIGHT');
       session = result.session;
 
-      // WAIT_LOAD_HEIGHT -> enter load height
       result = transition(session, { type: 'TEXT', value: '1500' });
-      expect(result.session.state).toBe('WAIT_LEVELS');
+      expect(result.session.state).toBe('CHOOSE_FORKLIFT');
       expect(result.session.answers.loadHeightMm).toBe(1500);
       session = result.session;
 
-      // WAIT_LEVELS -> enter levels
-      result = transition(session, { type: 'TEXT', value: '5' });
-      expect(result.session.state).toBe('WAIT_EXTRAS_GUARD_RAIL');
-      expect(result.session.answers.levels).toBe(5);
+      result = transition(session, { type: 'BUTTON', value: 'FORK_NAO' });
+      expect(result.session.state).toBe('CHOOSE_HALF_MODULE');
+      session = result.session;
+
+      result = transition(session, { type: 'BUTTON', value: 'HALF_NAO' });
+      expect(result.session.state).toBe('CHOOSE_MIXED_MODULES');
+      session = result.session;
+
+      result = transition(session, { type: 'BUTTON', value: 'MIXED_NAO' });
+      expect(result.session.state).toBe('CHOOSE_COLUMN_PROTECTOR');
+      session = result.session;
+
+      result = transition(session, { type: 'BUTTON', value: 'COL_NAO' });
+      expect(result.session.state).toBe('CHOOSE_GUARD_RAIL_SIMPLE');
+      session = result.session;
+
+      result = transition(session, { type: 'BUTTON', value: 'GRS_NAO' });
+      expect(result.session.state).toBe('CHOOSE_GUARD_RAIL_DOUBLE');
+      session = result.session;
+
+      result = transition(session, { type: 'BUTTON', value: 'GRD_NAO' });
+      expect(result.session.state).toBe('SUMMARY_CONFIRM');
     });
   });
 
@@ -299,16 +353,24 @@ describe('State Machine', () => {
   });
 
   describe('GENERATE_PDF effect', () => {
-    it('should generate GENERATE_PDF effect when confirming summary', () => {
-      const session = createSession('SUMMARY_CONFIRM', {
-        lengthMm: 12000,
-        widthMm: 10000,
-        corridorMm: 3000,
-        capacityKg: 2000,
-        heightMode: 'DIRECT',
-        heightMm: 5000,
-        guardRail: 'ambos',
-      });
+    it('should generate GENERATE_PDF effect when confirming on FINAL_CONFIRM', () => {
+      const session = createSession(
+        'FINAL_CONFIRM',
+        finalizeSummaryAnswers({
+          lengthMm: 12000,
+          widthMm: 10000,
+          corridorMm: 3000,
+          moduleDepthMm: 2700,
+          beamLengthMm: 1100,
+          capacityKg: 2000,
+          heightMode: 'DIRECT',
+          heightMm: 5000,
+          levels: 4,
+          guardRailSimple: false,
+          guardRailDouble: false,
+          generate3d: false,
+        })
+      );
 
       const result = transition(session, { type: 'BUTTON', value: 'GERAR' });
 

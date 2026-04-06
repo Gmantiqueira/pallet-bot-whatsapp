@@ -14,6 +14,7 @@ export class SqliteSessionRepository implements SessionRepository {
           answers: string;
           stack: string;
           updatedAt: number;
+          editStopBefore?: string | null;
         }
       | undefined;
 
@@ -27,25 +28,28 @@ export class SqliteSessionRepository implements SessionRepository {
       answers: JSON.parse(row.answers),
       stack: JSON.parse(row.stack),
       updatedAt: row.updatedAt,
+      editStopBefore: row.editStopBefore ?? undefined,
     };
   }
 
   upsert(session: Session): void {
     const db = getDb();
     db.prepare(
-      `INSERT INTO sessions (phone, state, answers, stack, updatedAt)
-       VALUES (?, ?, ?, ?, ?)
+      `INSERT INTO sessions (phone, state, answers, stack, updatedAt, editStopBefore)
+       VALUES (?, ?, ?, ?, ?, ?)
        ON CONFLICT(phone) DO UPDATE SET
          state = excluded.state,
          answers = excluded.answers,
          stack = excluded.stack,
-         updatedAt = excluded.updatedAt`
+         updatedAt = excluded.updatedAt,
+         editStopBefore = excluded.editStopBefore`
     ).run(
       session.phone,
       session.state,
       JSON.stringify(session.answers),
       JSON.stringify(session.stack),
-      session.updatedAt
+      session.updatedAt,
+      session.editStopBefore ?? null
     );
   }
 

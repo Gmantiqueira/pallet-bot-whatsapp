@@ -8,9 +8,9 @@ import { selectStructure, type StructureResult } from './structureEngine';
 import type { FrontViewInput } from './drawingEngine';
 import type { IsometricViewInput } from './isometricDrawingEngine';
 
-/** Profundidade de módulo padrão (mm) — não coletada no fluxo atual. */
+/** Profundidade de módulo padrão (mm) se não for informada. */
 export const DEFAULT_MODULE_DEPTH_MM = 2700;
-/** Largura de módulo padrão (mm) — não coletada no fluxo atual. */
+/** Comprimento de longarina / largura de módulo padrão (mm) se não for informada. */
 export const DEFAULT_MODULE_WIDTH_MM = 1100;
 
 export type ProjectEnginesSnapshot = {
@@ -55,12 +55,22 @@ export function computeProjectEngines(
     return null;
   }
 
+  const moduleDepthMm =
+    typeof answers.moduleDepthMm === 'number'
+      ? answers.moduleDepthMm
+      : DEFAULT_MODULE_DEPTH_MM;
+  const moduleWidthMm =
+    typeof answers.beamLengthMm === 'number'
+      ? answers.beamLengthMm
+      : DEFAULT_MODULE_WIDTH_MM;
+
+  // TODO(layout): usar moduleOrientation, lineStrategy, hasTunnel e tunnelAppliesTo no motor de planta quando existir modelo.
   const layoutInput: LayoutInput = {
     warehouseWidthMm: widthMm,
     warehouseLengthMm: lengthMm,
     corridorMm,
-    moduleDepthMm: DEFAULT_MODULE_DEPTH_MM,
-    moduleWidthMm: DEFAULT_MODULE_WIDTH_MM,
+    moduleDepthMm,
+    moduleWidthMm,
   };
   const layout = calculateLayout(layoutInput);
 
@@ -103,7 +113,9 @@ export function buildFrontViewInputFromAnswers(
   }
   const cap = typeof answers.capacityKg === 'number' ? answers.capacityKg : 0;
   const depthMm =
-    typeof answers.depthMm === 'number' ? answers.depthMm : DEFAULT_MODULE_DEPTH_MM;
+    typeof answers.moduleDepthMm === 'number'
+      ? answers.moduleDepthMm
+      : DEFAULT_MODULE_DEPTH_MM;
   const beamLengthMm =
     typeof answers.beamLengthMm === 'number'
       ? answers.beamLengthMm
@@ -115,7 +127,8 @@ export function buildFrontViewInputFromAnswers(
     depthMm,
     capacityKgPerLevel: cap,
   };
-  return answers.tunnel === true ? { ...base, tunnel: true as const } : base;
+  const hasTunnel = answers.hasTunnel === true;
+  return hasTunnel ? { ...base, tunnel: true as const } : base;
 }
 
 /** Dados para vista isométrica 3D a partir do layout e das respostas. */
@@ -130,12 +143,22 @@ export function buildIsometricInputFromAnswers(
   if (uprightHeightMm === null) {
     return null;
   }
+  const moduleWidthMm =
+    typeof answers.beamLengthMm === 'number'
+      ? answers.beamLengthMm
+      : DEFAULT_MODULE_WIDTH_MM;
+  const moduleDepthMm =
+    typeof answers.moduleDepthMm === 'number'
+      ? answers.moduleDepthMm
+      : DEFAULT_MODULE_DEPTH_MM;
+
+  // TODO(3d): respeitar answers.generate3d === false para omitir vista isométrica no PDF quando o pipeline suportar.
   return {
     rows: layout.rows,
     modulesPerRow: layout.modulesPerRow,
     levels: answers.levels,
-    moduleWidthMm: DEFAULT_MODULE_WIDTH_MM,
-    moduleDepthMm: DEFAULT_MODULE_DEPTH_MM,
+    moduleWidthMm,
+    moduleDepthMm,
     uprightHeightMm,
   };
 }
