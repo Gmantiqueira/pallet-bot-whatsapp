@@ -1,0 +1,29 @@
+---
+description: Commit Git ao fim de cada prompt com alterações; nunca apagar trabalho local sem pedido explícito
+alwaysApply: true
+---
+
+# Commits após cada prompt (segurança do trabalho local)
+
+## Obrigatório
+
+Quando **nesta conversa** alterares ficheiros no repositório (código, testes, docs) e a tarefa do utilizador estiver concluída ou num ponto estável:
+
+1. Executa `git status` e `git diff --stat` para rever o âmbito.
+2. Faz **commit** com mensagem clara em inglês ou português, no estilo imperativo curto, por exemplo:  
+   `feat: add floor plan dimension hints` ou `refactor: extract floor plan renderer`.
+3. Inclui só ficheiros relacionados com o trabalho deste turno (evita `git add .` cego se houver lixo local).
+
+Isto aplica-se **no fim do prompt** em que deixaste o projeto num estado válido (testes a passar quando existirem para o que mudaste).
+
+## Não fazer (salvo ordem explícita do utilizador)
+
+- `git reset --hard`, `git clean -fd`, `git checkout -- .` ou equivalentes que **descartem** alterações não commitadas.
+- Assumir que o utilizador “quer limpar o repo” sem texto explícito pedindo isso.
+
+Se o utilizador pedir para “voltar atrás” ou “desfazer”, confirma se quer **reverter commit**, **reset para commit X**, ou **descartar working tree** — e avisa do risco de perda de ficheiros não rastreados com `git clean`.
+
+## Exceções
+
+- Se não houver alterações (`nothing to commit`), não cries commit vazio.
+- Se o utilizador disser explicitamente para **não** commitar neste turno, respeita.
