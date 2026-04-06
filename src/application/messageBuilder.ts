@@ -357,18 +357,16 @@ const buildStateMessage = (session: Session): OutgoingMessage | null => {
     case 'SUMMARY_CONFIRM':
       return {
         to: session.phone,
-        text: `${buildSummary(session)}\n\nToque em *Continuar* para definir a vista 3D e confirmar.`,
+        text: `${buildSummary(session)}\n\nToque em *Continuar* para confirmar e gerar o projeto.`,
         buttons: [{ id: 'CONTINUAR', label: 'Continuar' }],
       };
 
     case 'ASK_GENERATE_3D':
       return {
         to: session.phone,
-        text: 'Deseja incluir vista 3D isométrica no projeto?',
-        buttons: [
-          { id: 'SIM_3D', label: 'Sim' },
-          { id: 'NAO_3D', label: 'Não' },
-        ],
+        text:
+          'A vista 3D isométrica está incluída no projeto.\n\nToque em *Continuar* para a confirmação final.',
+        buttons: [{ id: 'CONTINUAR', label: 'Continuar' }],
       };
 
     case 'FINAL_CONFIRM':
@@ -453,14 +451,8 @@ const projectTypeLabel = (v: unknown): string => {
   return typeof v === 'string' ? (m[v] ?? v) : '—';
 };
 
-function buildFinalConfirmText(session: Session): string {
-  const g3d =
-    session.answers.generate3d === true
-      ? 'Sim'
-      : session.answers.generate3d === false
-        ? 'Não'
-        : '—';
-  return `Confirmação final\n\nIncluir 3D: ${g3d}\n\nToque em *Gerar projeto* para produzir o PDF ou *Editar* para rever secções.`;
+function buildFinalConfirmText(_session: Session): string {
+  return `Confirmação final\n\nToque em *Gerar projeto* para produzir o PDF ou *Editar* para rever secções.`;
 }
 
 const buildSummary = (session: Session): string => {
@@ -539,20 +531,6 @@ const buildSummary = (session: Session): string => {
     lines.push(`Altura dos montantes: ${a.heightMm} mm (entrada direta)`);
   } else if (a.heightMode === 'CALC' && typeof a.loadHeightMm === 'number') {
     lines.push(`Altura da carga (base): ${a.loadHeightMm} mm (modo calculado)`);
-  }
-
-  if (typeof a.forkliftUsage === 'boolean') {
-    lines.push(`Empilhador previsto: ${a.forkliftUsage ? 'Sim' : 'Não'}`);
-  }
-  if (typeof a.halfModuleOptimization === 'boolean') {
-    lines.push(
-      `Otimizar com meio-módulo: ${a.halfModuleOptimization ? 'Sim' : 'Não'}`
-    );
-  }
-  if (typeof a.mixedModules === 'boolean') {
-    lines.push(
-      `Módulos mistos na mesma linha: ${a.mixedModules ? 'Sim' : 'Não'}`
-    );
   }
 
   if (typeof a.columnProtector === 'boolean') {

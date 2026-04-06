@@ -183,7 +183,6 @@ describe('MessageRouter', () => {
           levels: 4,
           guardRailSimple: false,
           guardRailDouble: false,
-          generate3d: false,
         })
       );
 
@@ -195,6 +194,7 @@ describe('MessageRouter', () => {
       const result = await routeIncoming(session, incoming, repository);
 
       expect(result.session.state).toBe('DONE');
+      expect(result.session.answers.generate3d).toBe(true);
       const textMsg = result.outgoingMessages.find((m) => m.type === 'text');
       expect(textMsg?.text).toBe(
         'Projeto gerado com sucesso. Segue o layout do galpão.'
@@ -240,7 +240,6 @@ describe('MessageRouter', () => {
           levels: 4,
           guardRailSimple: false,
           guardRailDouble: false,
-          generate3d: true,
         })
       );
 
@@ -252,6 +251,7 @@ describe('MessageRouter', () => {
       const result = await routeIncoming(session, incoming, repository);
 
       expect(result.session.state).toBe('DONE');
+      expect(result.session.answers.generate3d).toBe(true);
       const textMsg = result.outgoingMessages.find((m) => m.type === 'text');
       expect(textMsg?.text).toContain('Projeto gerado com sucesso');
       expect(
@@ -301,7 +301,6 @@ describe('MessageRouter', () => {
           levels: 4,
           guardRailSimple: false,
           guardRailDouble: false,
-          generate3d: false,
         })
       );
 

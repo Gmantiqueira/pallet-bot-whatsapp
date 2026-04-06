@@ -547,7 +547,7 @@ export const transition = (session: Session, input: Input): TransitionResult => 
         if (ve) {
           return { session: newSession, effects, error: ve };
         }
-        newSession = goNext(newSession, { heightMm: height }, 'CHOOSE_FORKLIFT');
+        newSession = goNext(newSession, { heightMm: height }, 'CHOOSE_COLUMN_PROTECTOR');
         effects.push({ type: 'SEND' });
       }
       return { session: newSession, effects, error };
@@ -566,7 +566,11 @@ export const transition = (session: Session, input: Input): TransitionResult => 
         if (ve) {
           return { session: newSession, effects, error: ve };
         }
-        newSession = goNext(newSession, { loadHeightMm: loadHeight }, 'CHOOSE_FORKLIFT');
+        newSession = goNext(
+          newSession,
+          { loadHeightMm: loadHeight },
+          'CHOOSE_COLUMN_PROTECTOR'
+        );
         effects.push({ type: 'SEND' });
       }
       return { session: newSession, effects, error };
@@ -699,7 +703,8 @@ export const transition = (session: Session, input: Input): TransitionResult => 
       if (input.type === 'BUTTON' && input.value === 'CONTINUAR') {
         newSession = {
           ...newSession,
-          state: 'ASK_GENERATE_3D',
+          state: 'FINAL_CONFIRM',
+          answers: finalizeSummaryAnswers(newSession.answers),
           stack: [...newSession.stack, newSession.state],
           updatedAt: Date.now(),
         };
@@ -709,14 +714,15 @@ export const transition = (session: Session, input: Input): TransitionResult => 
 
     case 'ASK_GENERATE_3D':
       if (input.type === 'BUTTON') {
-        if (input.value === 'SIM_3D' || input.value === 'NAO_3D') {
+        if (
+          input.value === 'SIM_3D' ||
+          input.value === 'NAO_3D' ||
+          input.value === 'CONTINUAR'
+        ) {
           newSession = {
             ...newSession,
             state: 'FINAL_CONFIRM',
-            answers: {
-              ...newSession.answers,
-              generate3d: input.value === 'SIM_3D',
-            },
+            answers: finalizeSummaryAnswers(newSession.answers),
             stack: [...newSession.stack, newSession.state],
             updatedAt: Date.now(),
           };

@@ -97,6 +97,15 @@ export function finalizeSummaryAnswers(
     layout: engines.layout,
     structure: engines.structure,
     budget: engines.budget,
+    generate3d: true,
+    forkliftUsage:
+      typeof answers.forkliftUsage === 'boolean' ? answers.forkliftUsage : true,
+    halfModuleOptimization:
+      typeof answers.halfModuleOptimization === 'boolean'
+        ? answers.halfModuleOptimization
+        : true,
+    mixedModules:
+      typeof answers.mixedModules === 'boolean' ? answers.mixedModules : false,
   };
 }
 
@@ -152,7 +161,6 @@ export function buildIsometricInputFromAnswers(
       ? answers.moduleDepthMm
       : DEFAULT_MODULE_DEPTH_MM;
 
-  // TODO(3d): respeitar answers.generate3d === false para omitir vista isométrica no PDF quando o pipeline suportar.
   return {
     rows: layout.rows,
     modulesPerRow: layout.modulesPerRow,

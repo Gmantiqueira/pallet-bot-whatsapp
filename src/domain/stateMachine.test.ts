@@ -146,20 +146,8 @@ describe('State Machine', () => {
       session = result.session;
 
       result = transition(session, { type: 'TEXT', value: '5000' });
-      expect(result.session.state).toBe('CHOOSE_FORKLIFT');
-      expect(result.session.answers.heightMm).toBe(5000);
-      session = result.session;
-
-      result = transition(session, { type: 'BUTTON', value: 'FORK_SIM' });
-      expect(result.session.state).toBe('CHOOSE_HALF_MODULE');
-      session = result.session;
-
-      result = transition(session, { type: 'BUTTON', value: 'HALF_NAO' });
-      expect(result.session.state).toBe('CHOOSE_MIXED_MODULES');
-      session = result.session;
-
-      result = transition(session, { type: 'BUTTON', value: 'MIXED_NAO' });
       expect(result.session.state).toBe('CHOOSE_COLUMN_PROTECTOR');
+      expect(result.session.answers.heightMm).toBe(5000);
       session = result.session;
 
       result = transition(session, { type: 'BUTTON', value: 'COL_NAO' });
@@ -191,20 +179,8 @@ describe('State Machine', () => {
       session = result.session;
 
       result = transition(session, { type: 'TEXT', value: '1500' });
-      expect(result.session.state).toBe('CHOOSE_FORKLIFT');
-      expect(result.session.answers.loadHeightMm).toBe(1500);
-      session = result.session;
-
-      result = transition(session, { type: 'BUTTON', value: 'FORK_NAO' });
-      expect(result.session.state).toBe('CHOOSE_HALF_MODULE');
-      session = result.session;
-
-      result = transition(session, { type: 'BUTTON', value: 'HALF_NAO' });
-      expect(result.session.state).toBe('CHOOSE_MIXED_MODULES');
-      session = result.session;
-
-      result = transition(session, { type: 'BUTTON', value: 'MIXED_NAO' });
       expect(result.session.state).toBe('CHOOSE_COLUMN_PROTECTOR');
+      expect(result.session.answers.loadHeightMm).toBe(1500);
       session = result.session;
 
       result = transition(session, { type: 'BUTTON', value: 'COL_NAO' });
@@ -368,7 +344,6 @@ describe('State Machine', () => {
           levels: 4,
           guardRailSimple: false,
           guardRailDouble: false,
-          generate3d: false,
         })
       );
 
