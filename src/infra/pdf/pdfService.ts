@@ -86,7 +86,7 @@ export async function svgRasterToPng(
 }
 
 /** Encaixa bitmap (proporção da imagem) num retângulo em pontos PDF. */
-function fitRasterInBox(
+export function fitRasterInBox(
   imgWpx: number,
   imgHpx: number,
   boxWpt: number,
@@ -186,7 +186,7 @@ function formatPosicoesEstimadas(
   return '—';
 }
 
-function technicalSummaryRows(
+export function technicalSummaryRows(
   project: Record<string, unknown>,
   layout: LayoutResult
 ): { label: string; value: string }[] {
@@ -598,8 +598,16 @@ export class PdfService {
 
   /**
    * Monta SVGs a partir da sessão e chama {@link generateProjectPdf}.
+   * Com `PDF_PIPELINE=v2`, usa a pipeline V2 (planta + elevações) em ficheiros paralelos.
    */
   async generatePdf(session: Session): Promise<GenerateProjectPdfResult> {
+    if (process.env.PDF_PIPELINE === 'v2') {
+      const { generatePdfV2FromSession } = await import('./pdfV2Service');
+      return generatePdfV2FromSession(session, {
+        storagePath: this.storagePath,
+        port: this.port,
+      });
+    }
     const answers = session.answers;
     const layout = answers.layout as LayoutResult | undefined;
     if (!layout) {

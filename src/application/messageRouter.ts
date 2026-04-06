@@ -24,6 +24,12 @@ import {
 } from '../infra/pdf/pdfService';
 import { loadEnv } from '../config/env';
 import { resolveStoragePath } from '../config/storagePath';
+import { buildProjectAnswersV2 } from '../domain/pdfV2/answerMapping';
+import { buildLayoutSolutionV2 } from '../domain/pdfV2/layoutSolutionV2';
+import { buildFloorPlanModelV2 } from '../domain/pdfV2/floorPlanModelV2';
+import { serializeFloorPlanSvgV2 } from '../domain/pdfV2/svgFloorPlanV2';
+import { buildElevationModelV2 } from '../domain/pdfV2/elevationModelV2';
+import { serializeElevationSvgV2 } from '../domain/pdfV2/svgElevationV2';
 
 export interface IncomingPayload {
   from: string;
@@ -152,53 +158,64 @@ export const routeIncoming = async (
         throw new Error('Layout ausente');
       }
       const { layout } = engines;
-      const projectForPdf = {
-        ...ans,
-        layout: engines.layout,
-        structure: engines.structure,
-        budget: engines.budget,
-        // TODO(pdf): usar generate3d para omitir ou destacar vista isométrica quando false
-        generate3d: ans.generate3d === true,
-      };
 
-      const floorSvg = generateFloorPlanSvg(
-        layout,
-        resolveFloorPlanWarehouse(layout, ans)
-      );
-      fs.writeFileSync(
-        path.join(storageDir, `planta-${phone}-${ts}.svg`),
-        floorSvg,
-        'utf8'
-      );
-
-      const fv = buildFrontViewInputFromAnswers(ans);
-      const frontSvg = fv ? generateFrontViewSvg(fv) : FRONT_VIEW_PLACEHOLDER_SVG;
-      if (fv) {
+      if (process.env.PDF_PIPELINE === 'v2') {
+        const v2a = buildProjectAnswersV2(ans);
+        if (v2a) {
+          const sol = buildLayoutSolutionV2(v2a);
+          const floorSvgV2 = serializeFloorPlanSvgV2(
+            buildFloorPlanModelV2(sol)
+          );
+          const elevSvgV2 = serializeElevationSvgV2(
+            buildElevationModelV2(ans, sol)
+          );
+          fs.writeFileSync(
+            path.join(storageDir, `planta-v2-${phone}-${ts}.svg`),
+            floorSvgV2,
+            'utf8'
+          );
+          fs.writeFileSync(
+            path.join(storageDir, `elevacao-v2-${phone}-${ts}.svg`),
+            elevSvgV2,
+            'utf8'
+          );
+        }
+      } else {
+        const floorSvg = generateFloorPlanSvg(
+          layout,
+          resolveFloorPlanWarehouse(layout, ans)
+        );
         fs.writeFileSync(
-          path.join(storageDir, `vista-frontal-${phone}-${ts}.svg`),
-          frontSvg,
+          path.join(storageDir, `planta-${phone}-${ts}.svg`),
+          floorSvg,
+          'utf8'
+        );
+
+        const fv = buildFrontViewInputFromAnswers(ans);
+        const frontSvg = fv
+          ? generateFrontViewSvg(fv)
+          : FRONT_VIEW_PLACEHOLDER_SVG;
+        if (fv) {
+          fs.writeFileSync(
+            path.join(storageDir, `vista-frontal-${phone}-${ts}.svg`),
+            frontSvg,
+            'utf8'
+          );
+        }
+
+        const isoIn = buildIsometricInputFromAnswers(ans, layout);
+        const isometricSvg = isoIn
+          ? generateIsometricView(isoIn)
+          : ISOMETRIC_PLACEHOLDER_SVG;
+        fs.writeFileSync(
+          path.join(storageDir, `vista-isometrica-${phone}-${ts}.svg`),
+          isometricSvg,
           'utf8'
         );
       }
 
-      const isoIn = buildIsometricInputFromAnswers(ans, layout);
-      const isometricSvg = isoIn
-        ? generateIsometricView(isoIn)
-        : ISOMETRIC_PLACEHOLDER_SVG;
-      fs.writeFileSync(
-        path.join(storageDir, `vista-isometrica-${phone}-${ts}.svg`),
-        isometricSvg,
-        'utf8'
-      );
-
       const pdfService = new PdfService(storageDir, env.PORT);
-      const pdfResult = await pdfService.generateProjectPdf({
-        project: projectForPdf,
-        layout,
-        floorPlanSvg: floorSvg,
-        frontViewSvg: frontSvg,
-        isometricSvg,
-      });
+      const pdfResult = await pdfService.generatePdf(genSession);
 
       const nextAnswers = { ...genSession.answers };
       delete nextAnswers.pdfFilename;
