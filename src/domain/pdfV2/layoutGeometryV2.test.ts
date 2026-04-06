@@ -1,4 +1,5 @@
 import { buildLayoutSolutionV2 } from './layoutSolutionV2';
+import { tunnelActiveStorageLevelsFromGlobal } from './elevationLevelGeometryV2';
 import {
   buildLayoutGeometry,
   LayoutGeometryValidationError,
@@ -48,6 +49,8 @@ describe('buildLayoutGeometry + validateLayoutGeometry', () => {
     expect(tun!.openBelow).toBe(true);
     expect(tun!.uprightThicknessMm).toBe(100);
     expect(tun!.activeStorageLevels).toBeLessThan(tun!.globalLevels);
+    expect(tun!.activeStorageLevels).toBe(tunnelActiveStorageLevelsFromGlobal(5));
+    expect(tun!.beamGeometry.beamElevationsMm.length).toBe(tun!.activeStorageLevels + 1);
     validateLayoutGeometry(geo);
   });
 

@@ -6,6 +6,7 @@
 import {
   computeBeamElevations,
   computeTunnelRackBeamElevations,
+  tunnelActiveStorageLevelsFromGlobal,
   type BeamElevationResult,
 } from './elevationLevelGeometryV2';
 import type {
@@ -54,6 +55,10 @@ export type RackModule = {
   widthMm: number;
   /** Extensão ao longo da profundidade da estanteria (eixo transversal ao vão) (mm). */
   depthMm: number;
+  /** Eixo de extensão da fileira (ponta com ponta) — coincide com widthMm. */
+  moduleLengthAxisMm: number;
+  /** Profundidade de posição (transversal ao vão) — coincide com depthMm. */
+  moduleDepthAxisMm: number;
   heightMm: number;
   uprightThicknessMm: number;
   beamSpanMm: number;
@@ -172,18 +177,18 @@ function uprightHeightMmFromAnswers(answers: Record<string, unknown>): number {
 
 function buildStorageLevels(
   geom: BeamElevationResult,
-  levels: number,
   capacityKg: number,
   moduleType: RackModuleType,
   activeStorageLevels: number
 ): StorageLevel[] {
   const beams = geom.beamElevationsMm;
+  const nTiers = beams.length - 1;
   const out: StorageLevel[] = [];
-  for (let i = 0; i < levels; i++) {
+  for (let i = 0; i < nTiers; i++) {
     const beamY = beams[i + 1]!;
     const clearHeightBelow = beams[i + 1]! - beams[i]!;
     const active =
-      moduleType === 'tunnel' ? i < Math.min(levels, activeStorageLevels) : true;
+      moduleType === 'tunnel' ? i < activeStorageLevels : true;
     out.push({
       index: i,
       beamY,
@@ -199,20 +204,24 @@ function buildStorageLevels(
 function beamResultForModule(
   m: ModuleSegment,
   uprightHeightMm: number,
-  levels: number,
+  globalLevels: number,
   firstLevelOnGround: boolean,
   answers: Record<string, unknown>
 ): BeamElevationResult {
   if (m.variant === 'tunnel' && m.tunnelClearanceMm != null) {
+    const tunnelLv =
+      m.activeStorageLevels != null
+        ? m.activeStorageLevels
+        : tunnelActiveStorageLevelsFromGlobal(globalLevels);
     return computeTunnelRackBeamElevations({
       uprightHeightMm,
-      levels,
+      levels: tunnelLv,
       tunnelClearanceMm: m.tunnelClearanceMm,
     });
   }
   return computeBeamElevations({
     uprightHeightMm,
-    levels,
+    levels: globalLevels,
     firstLevelOnGround,
     equalLevelSpacing: answers.equalLevelSpacing === true,
     levelSpacingMm: typeof answers.levelSpacingMm === 'number' ? answers.levelSpacingMm : undefined,
@@ -243,23 +252,19 @@ function rackModuleFromSegment(
     m.activeStorageLevels != null
       ? m.activeStorageLevels
       : type === 'tunnel'
-        ? Math.max(1, levels - 1)
+        ? tunnelActiveStorageLevelsFromGlobal(levels)
         : levels;
 
   const beamGeometry = beamResultForModule(m, H, levels, firstLevelOnGround, answers);
-  if (beamGeometry.beamElevationsMm.length !== levels + 1) {
+  const expectedBeamAxes =
+    type === 'tunnel' ? activeStorageLevels + 1 : levels + 1;
+  if (beamGeometry.beamElevationsMm.length !== expectedBeamAxes) {
     throw new LayoutGeometryValidationError(
-      `Módulo ${m.id}: cotas verticais incoerentes (esperado ${levels + 1} eixos).`
+      `Módulo ${m.id}: cotas verticais incoerentes (esperado ${expectedBeamAxes} eixos).`
     );
   }
 
-  const storageLevels = buildStorageLevels(
-    beamGeometry,
-    levels,
-    cap,
-    type,
-    activeStorageLevels
-  );
+  const storageLevels = buildStorageLevels(beamGeometry, cap, type, activeStorageLevels);
 
   const tunnelClearance =
     type === 'tunnel' && m.tunnelClearanceMm != null ? m.tunnelClearanceMm : undefined;
@@ -273,6 +278,8 @@ function rackModuleFromSegment(
     layoutOrientation: orientation,
     widthMm,
     depthMm,
+    moduleLengthAxisMm: widthMm,
+    moduleDepthAxisMm: depthMm,
     heightMm: H,
     uprightThicknessMm,
     beamSpanMm: widthMm,
@@ -386,8 +393,53 @@ export function buildLayoutGeometry(
 /**
  * Valida invariantes do modelo antes de renderizar. Falhas lançam {@link LayoutGeometryValidationError}.
  */
+function beamStartCoord(m: RackModule, ori: LayoutOrientationV2): number {
+  return ori === 'along_length'
+    ? Math.min(m.footprint.x0, m.footprint.x1)
+    : Math.min(m.footprint.y0, m.footprint.y1);
+}
+
+/** Garante mesma profundidade transversal ao longo da fileira (mesma banda). */
+function validateRowModuleChaining(row: RackRow, ori: LayoutOrientationV2): void {
+  const mods = [...row.modules].sort((a, b) => beamStartCoord(a, ori) - beamStartCoord(b, ori));
+  const ref = mods[0]!;
+  const cref0 =
+    ori === 'along_length'
+      ? Math.min(ref.footprint.y0, ref.footprint.y1)
+      : Math.min(ref.footprint.x0, ref.footprint.x1);
+  const cref1 =
+    ori === 'along_length'
+      ? Math.max(ref.footprint.y0, ref.footprint.y1)
+      : Math.max(ref.footprint.x0, ref.footprint.x1);
+
+  for (const m of mods) {
+    const c0 =
+      ori === 'along_length'
+        ? Math.min(m.footprint.y0, m.footprint.y1)
+        : Math.min(m.footprint.x0, m.footprint.x1);
+    const c1 =
+      ori === 'along_length'
+        ? Math.max(m.footprint.y0, m.footprint.y1)
+        : Math.max(m.footprint.x0, m.footprint.x1);
+    if (Math.abs(c0 - cref0) > 1.5 || Math.abs(c1 - cref1) > 1.5) {
+      throw new LayoutGeometryValidationError(
+        `Fileira ${row.id}: módulo ${m.id} não partilha o mesmo eixo de profundidade (não encadeado na mesma banda).`
+      );
+    }
+  }
+
+  /* Encadeamento ponta-a-ponta: o motor de layout já coloca módulos ao longo do vão.
+   * Não exigimos aqui contacto estrito entre pares ordenados (restos de vão / segmentos). */
+}
+
 export function validateLayoutGeometry(geo: LayoutGeometry): void {
   const md = geo.metadata.rackDepthMm;
+  const { beamAlongModuleMm, rackDepthMm } = geo.metadata;
+  if (beamAlongModuleMm < rackDepthMm - EPS) {
+    throw new LayoutGeometryValidationError(
+      'Layout: o vão ao longo das longarinas (ponta com ponta) deve ser maior ou igual à profundidade de posição (eixo transversal).'
+    );
+  }
   const rowIds = new Set<string>();
 
   for (const row of geo.rows) {
@@ -410,6 +462,8 @@ export function validateLayoutGeometry(geo: LayoutGeometry): void {
     }
 
     const ori = row.layoutOrientation;
+    validateRowModuleChaining(row, ori);
+
     for (const m of row.modules) {
       if (m.rowId !== row.id) {
         throw new LayoutGeometryValidationError(`Módulo ${m.id} com rowId inválido.`);
@@ -434,12 +488,20 @@ export function validateLayoutGeometry(geo: LayoutGeometry): void {
             `Módulo túnel ${m.id}: montantes devem ser ${UPRIGHT_THICKNESS_TUNNEL_MM} mm.`
           );
         }
-        if (
-          m.globalLevels > 1 &&
-          m.activeStorageLevels >= m.globalLevels
-        ) {
+        if (m.activeStorageLevels >= m.globalLevels) {
           throw new LayoutGeometryValidationError(
-            `Módulo túnel ${m.id}: deve ter menos níveis ativos que o global (${m.globalLevels}).`
+            `Módulo túnel ${m.id}: níveis ativos (${m.activeStorageLevels}) devem ser inferiores ao total do projeto (${m.globalLevels}).`
+          );
+        }
+        if (m.globalLevels >= 4 && m.activeStorageLevels > m.globalLevels - 2) {
+          throw new LayoutGeometryValidationError(
+            `Módulo túnel ${m.id}: esperado pelo menos dois níveis a menos que o armazenagem global quando há 4+ níveis.`
+          );
+        }
+        const beams = m.beamGeometry.beamElevationsMm;
+        if (m.tunnelClearanceHeightMm != null && beams[0]! < m.tunnelClearanceHeightMm - 1) {
+          throw new LayoutGeometryValidationError(
+            `Módulo túnel ${m.id}: eixos de longarina não podem ficar abaixo do pé livre (${m.tunnelClearanceHeightMm} mm).`
           );
         }
       } else {
@@ -462,9 +524,12 @@ export function validateLayoutGeometry(geo: LayoutGeometry): void {
         }
       }
 
-      const L = m.globalLevels;
-      if (m.beamGeometry.beamElevationsMm.length !== L + 1) {
-        throw new LayoutGeometryValidationError(`Módulo ${m.id}: número de eixos verticais inválido.`);
+      const expectedAxes =
+        m.type === 'tunnel' ? m.activeStorageLevels + 1 : m.globalLevels + 1;
+      if (m.beamGeometry.beamElevationsMm.length !== expectedAxes) {
+        throw new LayoutGeometryValidationError(
+          `Módulo ${m.id}: número de eixos verticais (${m.beamGeometry.beamElevationsMm.length}) não corresponde aos níveis ativos.`
+        );
       }
     }
   }

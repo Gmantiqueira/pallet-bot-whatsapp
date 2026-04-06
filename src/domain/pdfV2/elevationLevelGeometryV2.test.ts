@@ -2,6 +2,7 @@ import {
   computeBeamElevations,
   computeLevelSpacing,
   computeTunnelRackBeamElevations,
+  tunnelActiveStorageLevelsFromGlobal,
   DEFAULT_FIRST_LEVEL_LIFT_MM,
   DEFAULT_STRUCTURAL_BOTTOM_MM,
   DEFAULT_STRUCTURAL_TOP_MM,
@@ -90,14 +91,23 @@ describe('computeBeamElevations', () => {
 });
 
 describe('computeTunnelRackBeamElevations', () => {
-  it('1.º eixo ao longo do pé livre; níveis acima até ao topo útil', () => {
+  it('1.º eixo ao longo do pé livre; níveis ativos acima (menos que o global) até ao topo útil', () => {
+    const activeTiers = 3;
     const r = computeTunnelRackBeamElevations({
       uprightHeightMm: 8000,
-      levels: 4,
+      levels: activeTiers,
       tunnelClearanceMm: 3200,
     });
-    expect(r.beamElevationsMm).toHaveLength(5);
+    expect(r.beamElevationsMm).toHaveLength(activeTiers + 1);
     expect(r.beamElevationsMm[0]!).toBeGreaterThanOrEqual(3200);
-    expect(r.beamElevationsMm[4]!).toBeCloseTo(8000 - DEFAULT_STRUCTURAL_TOP_MM, 3);
+    expect(r.beamElevationsMm[activeTiers]!).toBeCloseTo(8000 - DEFAULT_STRUCTURAL_TOP_MM, 3);
+  });
+});
+
+describe('tunnelActiveStorageLevelsFromGlobal', () => {
+  it('reduz níveis ativos em relação ao projeto', () => {
+    expect(tunnelActiveStorageLevelsFromGlobal(5)).toBe(3);
+    expect(tunnelActiveStorageLevelsFromGlobal(3)).toBe(1);
+    expect(tunnelActiveStorageLevelsFromGlobal(2)).toBe(1);
   });
 });

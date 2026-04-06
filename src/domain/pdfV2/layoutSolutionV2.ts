@@ -4,6 +4,7 @@ import {
   tunnelAppliesToRow,
   type ProjectAnswersV2,
 } from './answerMapping';
+import { tunnelActiveStorageLevelsFromGlobal } from './elevationLevelGeometryV2';
 import type {
   CirculationZone,
   LayoutOrientationV2,
@@ -480,7 +481,7 @@ function rectForTunnelModule(
   globalLevels: number
 ): ModuleSegment {
   const clearance = tunnelClearanceMmFromCorridor(corridorMm);
-  const activeStorageLevels = Math.max(1, globalLevels - 1);
+  const activeStorageLevels = tunnelActiveStorageLevelsFromGlobal(globalLevels);
   const base = rectFor(orientation, rowId, i, a, b, crossSeg, 'full', 'tunnel');
   return {
     ...base,

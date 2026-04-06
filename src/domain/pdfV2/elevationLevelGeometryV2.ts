@@ -5,6 +5,16 @@
 
 const EPS = 0.5;
 
+/**
+ * Níveis de armazenagem ativos acima do vão de passagem no módulo túnel (sempre abaixo do total do projeto).
+ * Não reutiliza a contagem total — evita comprimir todos os níveis na zona superior.
+ */
+export function tunnelActiveStorageLevelsFromGlobal(globalLevels: number): number {
+  const g = Math.max(1, Math.floor(globalLevels));
+  if (g <= 2) return 1;
+  return Math.max(1, g - 2);
+}
+
 export const DEFAULT_STRUCTURAL_BOTTOM_MM = 80;
 export const DEFAULT_STRUCTURAL_TOP_MM = 80;
 export const DEFAULT_FIRST_LEVEL_LIFT_MM = 280;
@@ -161,11 +171,13 @@ export function computeBeamElevations(input: BeamElevationInput): BeamElevationR
 }
 
 /**
- * Módulo túnel: vão livre até tunnelClearanceMm, depois níveis de armazenagem uniformes até ao topo útil.
- * Alinhado ao modelo de layout (módulo túnel = estrutura real, não faixa vazia).
+ * Módulo túnel: vão livre até tunnelClearanceMm; acima, apenas `levels` níveis de armazenagem ativos
+ * (menor que o global do projeto), com espaçamento uniforme até ao topo útil — sem empilhar o mesmo
+ * número de níveis do módulo normal na zona superior.
  */
 export function computeTunnelRackBeamElevations(input: {
   uprightHeightMm: number;
+  /** Número de níveis de armazenagem ativos acima do pé livre (tipicamente {@link tunnelActiveStorageLevelsFromGlobal}). */
   levels: number;
   tunnelClearanceMm: number;
   structuralBottomMm?: number;
