@@ -2,6 +2,16 @@ import { DEFAULT_BEAM_LENGTH_MM } from '../projectEngines';
 import type { ElevationModelV2, ElevationPanelPayload, LayoutSolutionV2 } from './types';
 import { computeBeamElevations } from './elevationLevelGeometryV2';
 
+/** Espinha central entre costas (mm) — alinhado a layoutSolutionV2. */
+const SPINE_BACK_TO_BACK_MM = 100;
+
+function bandDepthMmFromLayout(layout: LayoutSolutionV2): number {
+  const d = layout.moduleDepthMm;
+  return layout.rackDepthMode === 'single'
+    ? d
+    : 2 * d + SPINE_BACK_TO_BACK_MM;
+}
+
 function uprightHeightMmFromAnswers(answers: Record<string, unknown>): number | null {
   if (typeof answers.heightMm === 'number') {
     return answers.heightMm;
@@ -30,12 +40,17 @@ function clearHeightFromAnswers(answers: Record<string, unknown>): number | unde
   return undefined;
 }
 
-function panelPayload(answers: Record<string, unknown>, tunnel: boolean): ElevationPanelPayload {
+function panelPayload(
+  answers: Record<string, unknown>,
+  layout: LayoutSolutionV2,
+  tunnel: boolean
+): ElevationPanelPayload {
   const levels = typeof answers.levels === 'number' ? answers.levels : 1;
   const h = uprightHeightMmFromAnswers(answers) ?? levels * 1500;
   const beamLengthMm =
     typeof answers.beamLengthMm === 'number' ? answers.beamLengthMm : DEFAULT_BEAM_LENGTH_MM;
-  const depthMm = typeof answers.moduleDepthMm === 'number' ? answers.moduleDepthMm : 2700;
+  const moduleDepthMm = layout.moduleDepthMm;
+  const bandDepthMm = bandDepthMmFromLayout(layout);
   const cap = typeof answers.capacityKg === 'number' ? answers.capacityKg : 0;
   const firstLevelOnGround =
     typeof answers.firstLevelOnGround === 'boolean' ? answers.firstLevelOnGround : true;
@@ -55,7 +70,10 @@ function panelPayload(answers: Record<string, unknown>, tunnel: boolean): Elevat
     levels,
     uprightHeightMm: h,
     beamLengthMm,
-    depthMm,
+    moduleDepthMm,
+    bandDepthMm,
+    rackDepthMode: layout.rackDepthMode,
+    corridorMm: layout.corridorMm,
     capacityKgPerLevel: cap,
     tunnel,
     firstLevelOnGround,
@@ -76,11 +94,11 @@ export function buildElevationModelV2(
   layout: LayoutSolutionV2
 ): ElevationModelV2 {
   const hasTunnel = answers.hasTunnel === true;
-  const front = panelPayload(answers, hasTunnel);
-  const lateral = panelPayload(answers, false);
+  const front = panelPayload(answers, layout, hasTunnel);
+  const lateral = panelPayload(answers, layout, false);
 
   const summaryLines: string[] = [
-    `Config: ${layout.totals.levels} níveis de ${front.capacityKgPerLevel} kg | Prof: ${Math.round(front.depthMm)} mm`,
+    `Config: ${layout.totals.levels} níveis de ${front.capacityKgPerLevel} kg/palete | Prof. módulo: ${Math.round(front.moduleDepthMm)} mm | Faixa: ${Math.round(front.bandDepthMm)} mm`,
     `Módulos (equiv.): ${layout.totals.modules.toFixed(1)} | Posições: ${layout.totals.positions} | Prof. estrutura: ${layout.rackDepthMode === 'double' ? 'dupla costas' : 'simples'}`,
     `Orientação planta: ${layout.orientation === 'along_length' ? 'acompanha comprimento' : 'acompanha largura'}`,
     `Espaçamento médio entre eixos: ${Math.round(front.meanGapMm)} mm (altura útil ${Math.round(front.usableHeightMm)} mm, folgas ${front.structuralBottomMm}+${front.structuralTopMm} mm)`,
@@ -88,8 +106,8 @@ export function buildElevationModelV2(
 
   return {
     viewBoxW: 1000,
-    /** Duas faixas (frontal + lateral) + rodapé com resumo. */
-    viewBoxH: 1000,
+    /** Duas faixas (frontal + lateral) + rodapé com resumo e cotas. */
+    viewBoxH: 1100,
     front,
     lateral,
     summaryLines,

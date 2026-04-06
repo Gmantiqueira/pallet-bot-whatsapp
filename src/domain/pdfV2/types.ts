@@ -117,7 +117,13 @@ export type ElevationPanelPayload = {
   levels: number;
   uprightHeightMm: number;
   beamLengthMm: number;
-  depthMm: number;
+  /** Profundidade do módulo (palete), mm — alinhado ao layout. */
+  moduleDepthMm: number;
+  /** Profundidade total da faixa em planta (simples = módulo; dupla costas = 2×módulo + espinha). */
+  bandDepthMm: number;
+  rackDepthMode: RackDepthModeV2;
+  /** Corredor principal (mm) — contexto operacional no PDF. */
+  corridorMm: number;
   capacityKgPerLevel: number;
   tunnel: boolean;
   firstLevelOnGround: boolean;
