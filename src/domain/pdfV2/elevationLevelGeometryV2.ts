@@ -159,3 +159,24 @@ export function computeBeamElevations(input: BeamElevationInput): BeamElevationR
     gapsScaledToFit,
   };
 }
+
+/**
+ * Espaçamentos verticais entre eixos consecutivos (mm), derivados da altura útil.
+ * Não usa valor fixo — delega em {@link computeBeamElevations}.
+ */
+export function computeLevelSpacing(args: {
+  heightMm: number;
+  levels: number;
+  firstLevelOnGround: boolean;
+}): { gapsMm: number[]; meanGapMm: number } {
+  const r = computeBeamElevations({
+    uprightHeightMm: args.heightMm,
+    levels: args.levels,
+    firstLevelOnGround: args.firstLevelOnGround,
+  });
+  const gapsMm: number[] = [];
+  for (let i = 0; i < r.beamElevationsMm.length - 1; i++) {
+    gapsMm.push(r.beamElevationsMm[i + 1]! - r.beamElevationsMm[i]!);
+  }
+  return { gapsMm, meanGapMm: r.meanGapMm };
+}

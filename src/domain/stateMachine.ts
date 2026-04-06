@@ -1,12 +1,9 @@
 import { Session } from './session';
-import { finalizeSummaryAnswers } from './projectEngines';
+import { DEFAULT_BEAM_LENGTH_MM, finalizeSummaryAnswers } from './projectEngines';
 import {
-  parseCommaSeparatedNumbers,
   parseNumber,
   validateCorridor,
   validateKg,
-  validateLevelGap,
-  validateLevelGapsList,
   validateLevels,
   validateMm,
 } from './conversationHelpers';
@@ -25,19 +22,10 @@ export type State =
   | 'CHOOSE_TUNNEL_POSITION'
   | 'CHOOSE_TUNNEL_APPLIES'
   | 'WAIT_MODULE_DEPTH'
-  | 'WAIT_BEAM_LENGTH'
   | 'WAIT_LEVELS'
   | 'CHOOSE_FIRST_LEVEL_GROUND'
-  | 'CHOOSE_EQUAL_LEVEL_SPACING'
-  | 'WAIT_LEVEL_SPACING_SINGLE'
-  | 'WAIT_LEVEL_SPACINGS_LIST'
   | 'WAIT_CAPACITY'
-  | 'CHOOSE_HEIGHT_MODE'
   | 'WAIT_HEIGHT_DIRECT'
-  | 'WAIT_LOAD_HEIGHT'
-  | 'CHOOSE_FORKLIFT'
-  | 'CHOOSE_HALF_MODULE'
-  | 'CHOOSE_MIXED_MODULES'
   | 'CHOOSE_COLUMN_PROTECTOR'
   | 'CHOOSE_GUARD_RAIL_SIMPLE'
   | 'CHOOSE_GUARD_RAIL_SIMPLE_POS'
@@ -380,26 +368,11 @@ export const transition = (session: Session, input: Input): TransitionResult => 
         if (ve) {
           return { session: newSession, effects, error: ve };
         }
-        newSession = goNext(newSession, { moduleDepthMm: depth }, 'WAIT_BEAM_LENGTH');
-        effects.push({ type: 'SEND' });
-      }
-      return { session: newSession, effects, error };
-
-    case 'WAIT_BEAM_LENGTH':
-      if (input.type === 'TEXT') {
-        const beam = parseNumber(input.value);
-        if (beam === null) {
-          return {
-            session: newSession,
-            effects,
-            error: 'Por favor, digite um número válido em mm',
-          };
-        }
-        const ve = validateMm(beam);
-        if (ve) {
-          return { session: newSession, effects, error: ve };
-        }
-        newSession = goNext(newSession, { beamLengthMm: beam }, 'WAIT_LEVELS');
+        newSession = goNext(
+          newSession,
+          { moduleDepthMm: depth, beamLengthMm: DEFAULT_BEAM_LENGTH_MM },
+          'WAIT_LEVELS'
+        );
         effects.push({ type: 'SEND' });
       }
       return { session: newSession, effects, error };
@@ -430,78 +403,10 @@ export const transition = (session: Session, input: Input): TransitionResult => 
           return { session: newSession, effects };
         }
         const onGround = input.value === 'FLG_SIM';
-        newSession = goNext(newSession, { firstLevelOnGround: onGround }, 'CHOOSE_EQUAL_LEVEL_SPACING');
+        newSession = goNext(newSession, { firstLevelOnGround: onGround }, 'WAIT_CAPACITY');
         effects.push({ type: 'SEND' });
       }
       return { session: newSession, effects };
-
-    case 'CHOOSE_EQUAL_LEVEL_SPACING':
-      if (input.type === 'BUTTON') {
-        if (input.value !== 'ELS_SIM' && input.value !== 'ELS_NAO') {
-          return { session: newSession, effects };
-        }
-        const equal = input.value === 'ELS_SIM';
-        const next: State = equal ? 'WAIT_LEVEL_SPACING_SINGLE' : 'WAIT_LEVEL_SPACINGS_LIST';
-        newSession = goNext(
-          newSession,
-          {
-            equalLevelSpacing: equal,
-            levelSpacingMm: undefined,
-            levelSpacingsMm: undefined,
-          },
-          next
-        );
-        effects.push({ type: 'SEND' });
-      }
-      return { session: newSession, effects };
-
-    case 'WAIT_LEVEL_SPACING_SINGLE':
-      if (input.type === 'TEXT') {
-        const gap = parseNumber(input.value);
-        if (gap === null) {
-          return {
-            session: newSession,
-            effects,
-            error: 'Por favor, digite um número válido em mm',
-          };
-        }
-        const ve = validateLevelGap(gap);
-        if (ve) {
-          return { session: newSession, effects, error: ve };
-        }
-        newSession = goNext(
-          newSession,
-          { levelSpacingMm: gap, levelSpacingsMm: undefined },
-          'WAIT_CAPACITY'
-        );
-        effects.push({ type: 'SEND' });
-      }
-      return { session: newSession, effects, error };
-
-    case 'WAIT_LEVEL_SPACINGS_LIST':
-      if (input.type === 'TEXT') {
-        const levels = newSession.answers.levels as number;
-        const expected = Math.max(0, levels - 1);
-        const nums = parseCommaSeparatedNumbers(input.value);
-        if (nums === null) {
-          return {
-            session: newSession,
-            effects,
-            error: 'Use números separados por vírgula',
-          };
-        }
-        const ve = validateLevelGapsList(nums, expected);
-        if (ve) {
-          return { session: newSession, effects, error: ve };
-        }
-        newSession = goNext(
-          newSession,
-          { levelSpacingsMm: nums, levelSpacingMm: undefined },
-          'WAIT_CAPACITY'
-        );
-        effects.push({ type: 'SEND' });
-      }
-      return { session: newSession, effects, error };
 
     case 'WAIT_CAPACITY':
       if (input.type === 'TEXT') {
@@ -517,21 +422,14 @@ export const transition = (session: Session, input: Input): TransitionResult => 
         if (ve) {
           return { session: newSession, effects, error: ve };
         }
-        newSession = goNext(newSession, { capacityKg: capacity }, 'CHOOSE_HEIGHT_MODE');
+        newSession = goNext(
+          newSession,
+          { capacityKg: capacity, heightMode: 'DIRECT' },
+          'WAIT_HEIGHT_DIRECT'
+        );
         effects.push({ type: 'SEND' });
       }
       return { session: newSession, effects, error };
-
-    case 'CHOOSE_HEIGHT_MODE':
-      if (input.type === 'BUTTON') {
-        if (input.value === 'DIRECT') {
-          newSession = goNext(newSession, { heightMode: 'DIRECT' }, 'WAIT_HEIGHT_DIRECT');
-        } else if (input.value === 'CALC') {
-          newSession = goNext(newSession, { heightMode: 'CALC' }, 'WAIT_LOAD_HEIGHT');
-        }
-        effects.push({ type: 'SEND' });
-      }
-      return { session: newSession, effects };
 
     case 'WAIT_HEIGHT_DIRECT':
       if (input.type === 'TEXT') {
@@ -547,75 +445,14 @@ export const transition = (session: Session, input: Input): TransitionResult => 
         if (ve) {
           return { session: newSession, effects, error: ve };
         }
-        newSession = goNext(newSession, { heightMm: height }, 'CHOOSE_COLUMN_PROTECTOR');
-        effects.push({ type: 'SEND' });
-      }
-      return { session: newSession, effects, error };
-
-    case 'WAIT_LOAD_HEIGHT':
-      if (input.type === 'TEXT') {
-        const loadHeight = parseNumber(input.value);
-        if (loadHeight === null) {
-          return {
-            session: newSession,
-            effects,
-            error: 'Por favor, digite um número válido em mm',
-          };
-        }
-        const ve = validateMm(loadHeight);
-        if (ve) {
-          return { session: newSession, effects, error: ve };
-        }
         newSession = goNext(
           newSession,
-          { loadHeightMm: loadHeight },
+          { heightMm: height, heightMode: 'DIRECT' },
           'CHOOSE_COLUMN_PROTECTOR'
         );
         effects.push({ type: 'SEND' });
       }
       return { session: newSession, effects, error };
-
-    case 'CHOOSE_FORKLIFT':
-      if (input.type === 'BUTTON') {
-        if (input.value !== 'FORK_SIM' && input.value !== 'FORK_NAO') {
-          return { session: newSession, effects };
-        }
-        newSession = goNext(
-          newSession,
-          { forkliftUsage: input.value === 'FORK_SIM' },
-          'CHOOSE_HALF_MODULE'
-        );
-        effects.push({ type: 'SEND' });
-      }
-      return { session: newSession, effects };
-
-    case 'CHOOSE_HALF_MODULE':
-      if (input.type === 'BUTTON') {
-        if (input.value !== 'HALF_SIM' && input.value !== 'HALF_NAO') {
-          return { session: newSession, effects };
-        }
-        newSession = goNext(
-          newSession,
-          { halfModuleOptimization: input.value === 'HALF_SIM' },
-          'CHOOSE_MIXED_MODULES'
-        );
-        effects.push({ type: 'SEND' });
-      }
-      return { session: newSession, effects };
-
-    case 'CHOOSE_MIXED_MODULES':
-      if (input.type === 'BUTTON') {
-        if (input.value !== 'MIXED_SIM' && input.value !== 'MIXED_NAO') {
-          return { session: newSession, effects };
-        }
-        newSession = goNext(
-          newSession,
-          { mixedModules: input.value === 'MIXED_SIM' },
-          'CHOOSE_COLUMN_PROTECTOR'
-        );
-        effects.push({ type: 'SEND' });
-      }
-      return { session: newSession, effects };
 
     case 'CHOOSE_COLUMN_PROTECTOR':
       if (input.type === 'BUTTON') {

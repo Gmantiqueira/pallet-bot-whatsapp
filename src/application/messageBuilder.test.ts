@@ -109,15 +109,12 @@ describe('MessageBuilder', () => {
       expect(messages[0].text).toContain('3000');
     });
 
-    it('should build CHOOSE_HEIGHT_MODE message with buttons', () => {
-      const session = createSession('CHOOSE_HEIGHT_MODE');
+    it('should build WAIT_HEIGHT_DIRECT message', () => {
+      const session = createSession('WAIT_HEIGHT_DIRECT');
       const messages = buildMessages(session);
 
-      expect(messages[0].buttons).toHaveLength(2);
-      expect(messages[0].buttons?.[0].id).toBe('DIRECT');
-      expect(messages[0].buttons?.[0].label).toBe('Altura direta');
-      expect(messages[0].buttons?.[1].id).toBe('CALC');
-      expect(messages[0].buttons?.[1].label).toBe('Pela altura da carga');
+      expect(messages[0].text).toContain('Altura útil do sistema');
+      expect(messages[0].text).toContain('5000');
     });
 
     it('should build CHOOSE_GUARD_RAIL_SIMPLE message with buttons', () => {
@@ -154,6 +151,8 @@ describe('MessageBuilder', () => {
       expect(messages[0].text).toContain('3000');
       expect(messages[0].text).toContain('2000');
       expect(messages[0].text).toContain('5000');
+      expect(messages[0].text).toContain('Altura útil do sistema');
+      expect(messages[0].text).toContain('Profundidade da posição');
       expect(messages[0].text).toContain('Níveis por módulo: 4');
       expect(messages[0].text).toContain('Ambos');
       expect(messages[0].text).toContain('Módulos: 10');

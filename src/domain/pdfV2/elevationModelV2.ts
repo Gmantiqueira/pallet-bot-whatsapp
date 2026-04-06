@@ -1,8 +1,9 @@
+import { DEFAULT_BEAM_LENGTH_MM } from '../projectEngines';
 import type { ElevationModelV2, ElevationPanelPayload, LayoutSolutionV2 } from './types';
 import { computeBeamElevations } from './elevationLevelGeometryV2';
 
 function uprightHeightMmFromAnswers(answers: Record<string, unknown>): number | null {
-  if (answers.heightMode === 'DIRECT' && typeof answers.heightMm === 'number') {
+  if (typeof answers.heightMm === 'number') {
     return answers.heightMm;
   }
   if (
@@ -33,7 +34,7 @@ function panelPayload(answers: Record<string, unknown>, tunnel: boolean): Elevat
   const levels = typeof answers.levels === 'number' ? answers.levels : 1;
   const h = uprightHeightMmFromAnswers(answers) ?? levels * 1500;
   const beamLengthMm =
-    typeof answers.beamLengthMm === 'number' ? answers.beamLengthMm : 1100;
+    typeof answers.beamLengthMm === 'number' ? answers.beamLengthMm : DEFAULT_BEAM_LENGTH_MM;
   const depthMm = typeof answers.moduleDepthMm === 'number' ? answers.moduleDepthMm : 2700;
   const cap = typeof answers.capacityKg === 'number' ? answers.capacityKg : 0;
   const firstLevelOnGround =

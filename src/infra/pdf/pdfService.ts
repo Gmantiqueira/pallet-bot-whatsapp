@@ -155,7 +155,7 @@ function coverDataEmissao(project: Record<string, unknown>): string {
 }
 
 function formatPeDireitoAltura(project: Record<string, unknown>): string {
-  if (project.heightMode === 'DIRECT' && typeof project.heightMm === 'number') {
+  if (typeof project.heightMm === 'number') {
     return formatMm(project.heightMm);
   }
   if (

@@ -12,6 +12,8 @@ import type { IsometricViewInput } from './isometricDrawingEngine';
 export const DEFAULT_MODULE_DEPTH_MM = 2700;
 /** Comprimento de longarina / largura de módulo padrão (mm) se não for informada. */
 export const DEFAULT_MODULE_WIDTH_MM = 1100;
+/** Alias explícito: vão de longarina quando o fluxo não pergunta ao utilizador. */
+export const DEFAULT_BEAM_LENGTH_MM = DEFAULT_MODULE_WIDTH_MM;
 
 export type ProjectEnginesSnapshot = {
   layout: LayoutResult;
@@ -22,7 +24,7 @@ export type ProjectEnginesSnapshot = {
 function uprightHeightMmFromAnswers(
   answers: Record<string, unknown>
 ): number | null {
-  if (answers.heightMode === 'DIRECT' && typeof answers.heightMm === 'number') {
+  if (typeof answers.heightMm === 'number') {
     return answers.heightMm;
   }
   if (
@@ -62,7 +64,7 @@ export function computeProjectEngines(
   const moduleWidthMm =
     typeof answers.beamLengthMm === 'number'
       ? answers.beamLengthMm
-      : DEFAULT_MODULE_WIDTH_MM;
+      : DEFAULT_BEAM_LENGTH_MM;
 
   // TODO(layout): usar moduleOrientation, lineStrategy, hasTunnel e tunnelAppliesTo no motor de planta quando existir modelo.
   const layoutInput: LayoutInput = {
@@ -98,6 +100,11 @@ export function finalizeSummaryAnswers(
     structure: engines.structure,
     budget: engines.budget,
     generate3d: true,
+    heightMode: 'DIRECT',
+    beamLengthMm:
+      typeof answers.beamLengthMm === 'number'
+        ? answers.beamLengthMm
+        : DEFAULT_BEAM_LENGTH_MM,
     forkliftUsage:
       typeof answers.forkliftUsage === 'boolean' ? answers.forkliftUsage : true,
     halfModuleOptimization:
@@ -128,7 +135,7 @@ export function buildFrontViewInputFromAnswers(
   const beamLengthMm =
     typeof answers.beamLengthMm === 'number'
       ? answers.beamLengthMm
-      : DEFAULT_MODULE_WIDTH_MM;
+      : DEFAULT_BEAM_LENGTH_MM;
   const base = {
     levels: answers.levels,
     uprightHeightMm: totalH,
@@ -155,7 +162,7 @@ export function buildIsometricInputFromAnswers(
   const moduleWidthMm =
     typeof answers.beamLengthMm === 'number'
       ? answers.beamLengthMm
-      : DEFAULT_MODULE_WIDTH_MM;
+      : DEFAULT_BEAM_LENGTH_MM;
   const moduleDepthMm =
     typeof answers.moduleDepthMm === 'number'
       ? answers.moduleDepthMm

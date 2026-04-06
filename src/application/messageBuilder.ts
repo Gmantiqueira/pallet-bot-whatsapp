@@ -195,13 +195,7 @@ const buildStateMessage = (session: Session): OutgoingMessage | null => {
     case 'WAIT_MODULE_DEPTH':
       return {
         to: session.phone,
-        text: 'Profundidade do módulo em mm (profundidade de armazenagem)\n\nExemplo: 2700',
-      };
-
-    case 'WAIT_BEAM_LENGTH':
-      return {
-        to: session.phone,
-        text: 'Comprimento da longarina / vão do feixe em mm\n\nExemplo: 2700 ou 3300',
+        text: 'Profundidade da posição (palete) em mm\n\nExemplos: 1000 ou 1100',
       };
 
     case 'WAIT_LEVELS':
@@ -220,86 +214,16 @@ const buildStateMessage = (session: Session): OutgoingMessage | null => {
         ],
       };
 
-    case 'CHOOSE_EQUAL_LEVEL_SPACING':
-      return {
-        to: session.phone,
-        text: 'O espaçamento vertical entre níveis é uniforme?',
-        buttons: [
-          { id: 'ELS_SIM', label: 'Sim' },
-          { id: 'ELS_NAO', label: 'Não' },
-        ],
-      };
-
-    case 'WAIT_LEVEL_SPACING_SINGLE':
-      return {
-        to: session.phone,
-        text: 'Espaçamento padrão entre níveis em mm\n\nExemplo: 1600',
-      };
-
-    case 'WAIT_LEVEL_SPACINGS_LIST':
-      return {
-        to: session.phone,
-        text:
-          'Indique os espaçamentos entre níveis em mm, do nível inferior ao superior, separados por vírgula.\n\n' +
-          'Ex.: com 4 níveis são 3 espaços → 1500, 1600, 1600',
-      };
-
     case 'WAIT_CAPACITY':
       return {
         to: session.phone,
         text: 'Capacidade por nível de feixe em kg\n\nExemplos: 1200, 1500 ou 2000',
       };
 
-    case 'CHOOSE_HEIGHT_MODE':
-      return {
-        to: session.phone,
-        text: 'Como definir a altura dos montantes?',
-        buttons: [
-          { id: 'DIRECT', label: 'Altura direta' },
-          { id: 'CALC', label: 'Pela altura da carga' },
-        ],
-      };
-
     case 'WAIT_HEIGHT_DIRECT':
       return {
         to: session.phone,
-        text: 'Altura útil dos montantes em mm\n\nExemplo: 5000',
-      };
-
-    case 'WAIT_LOAD_HEIGHT':
-      return {
-        to: session.phone,
-        text: 'Altura da carga (palete + mercadoria) em mm\n\nExemplo: 1500',
-      };
-
-    case 'CHOOSE_FORKLIFT':
-      return {
-        to: session.phone,
-        text: 'O projeto considera uso de empilhador neste layout?',
-        buttons: [
-          { id: 'FORK_SIM', label: 'Sim' },
-          { id: 'FORK_NAO', label: 'Não' },
-        ],
-      };
-
-    case 'CHOOSE_HALF_MODULE':
-      return {
-        to: session.phone,
-        text: 'Permitir meio-módulo para otimizar o espaço nas extremidades?',
-        buttons: [
-          { id: 'HALF_SIM', label: 'Sim' },
-          { id: 'HALF_NAO', label: 'Não' },
-        ],
-      };
-
-    case 'CHOOSE_MIXED_MODULES':
-      return {
-        to: session.phone,
-        text: 'Permitir módulos mistos na mesma linha (níveis/cargas diferentes)?',
-        buttons: [
-          { id: 'MIXED_SIM', label: 'Sim' },
-          { id: 'MIXED_NAO', label: 'Não' },
-        ],
+        text: 'Altura útil do sistema em mm\n\nExemplo: 5000',
       };
 
     case 'CHOOSE_COLUMN_PROTECTOR':
@@ -498,10 +422,7 @@ const buildSummary = (session: Session): string => {
   }
 
   if (typeof a.moduleDepthMm === 'number') {
-    lines.push(`Profundidade do módulo: ${a.moduleDepthMm} mm`);
-  }
-  if (typeof a.beamLengthMm === 'number') {
-    lines.push(`Longarina / vão: ${a.beamLengthMm} mm`);
+    lines.push(`Profundidade da posição (palete): ${a.moduleDepthMm} mm`);
   }
   if (typeof a.levels === 'number') {
     lines.push(`Níveis por módulo: ${a.levels}`);
@@ -509,28 +430,13 @@ const buildSummary = (session: Session): string => {
   if (typeof a.firstLevelOnGround === 'boolean') {
     lines.push(`1.º nível ao chão: ${a.firstLevelOnGround ? 'Sim' : 'Não'}`);
   }
-  if (typeof a.equalLevelSpacing === 'boolean') {
-    lines.push(
-      `Espaçamento uniforme entre níveis: ${a.equalLevelSpacing ? 'Sim' : 'Não'}`
-    );
-  }
-  if (typeof a.levelSpacingMm === 'number') {
-    lines.push(`Espaçamento entre níveis: ${a.levelSpacingMm} mm`);
-  }
-  if (Array.isArray(a.levelSpacingsMm) && a.levelSpacingsMm.length > 0) {
-    lines.push(
-      `Espaçamentos entre níveis: ${(a.levelSpacingsMm as number[]).join(', ')} mm`
-    );
-  }
 
   if (typeof a.capacityKg === 'number') {
     lines.push(`Capacidade por nível: ${a.capacityKg} kg`);
   }
 
-  if (a.heightMode === 'DIRECT' && typeof a.heightMm === 'number') {
-    lines.push(`Altura dos montantes: ${a.heightMm} mm (entrada direta)`);
-  } else if (a.heightMode === 'CALC' && typeof a.loadHeightMm === 'number') {
-    lines.push(`Altura da carga (base): ${a.loadHeightMm} mm (modo calculado)`);
+  if (typeof a.heightMm === 'number') {
+    lines.push(`Altura útil do sistema: ${a.heightMm} mm`);
   }
 
   if (typeof a.columnProtector === 'boolean') {

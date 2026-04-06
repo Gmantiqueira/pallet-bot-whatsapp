@@ -1,6 +1,6 @@
 import { transition, Input } from './stateMachine';
 import { Session } from './session';
-import { finalizeSummaryAnswers } from './projectEngines';
+import { DEFAULT_BEAM_LENGTH_MM, finalizeSummaryAnswers } from './projectEngines';
 
 const createSession = (state: string, answers: Record<string, unknown> = {}, stack: string[] = []): Session => {
   return {
@@ -114,11 +114,8 @@ describe('State Machine', () => {
       session = result.session;
 
       result = transition(session, { type: 'TEXT', value: '2700' });
-      expect(result.session.state).toBe('WAIT_BEAM_LENGTH');
-      session = result.session;
-
-      result = transition(session, { type: 'TEXT', value: '1100' });
       expect(result.session.state).toBe('WAIT_LEVELS');
+      expect(result.session.answers.beamLengthMm).toBe(DEFAULT_BEAM_LENGTH_MM);
       session = result.session;
 
       result = transition(session, { type: 'TEXT', value: '4' });
@@ -126,23 +123,12 @@ describe('State Machine', () => {
       session = result.session;
 
       result = transition(session, { type: 'BUTTON', value: 'FLG_SIM' });
-      expect(result.session.state).toBe('CHOOSE_EQUAL_LEVEL_SPACING');
-      session = result.session;
-
-      result = transition(session, { type: 'BUTTON', value: 'ELS_SIM' });
-      expect(result.session.state).toBe('WAIT_LEVEL_SPACING_SINGLE');
-      session = result.session;
-
-      result = transition(session, { type: 'TEXT', value: '1600' });
       expect(result.session.state).toBe('WAIT_CAPACITY');
       session = result.session;
 
       result = transition(session, { type: 'TEXT', value: '2000' });
-      expect(result.session.state).toBe('CHOOSE_HEIGHT_MODE');
-      session = result.session;
-
-      result = transition(session, { type: 'BUTTON', value: 'DIRECT' });
       expect(result.session.state).toBe('WAIT_HEIGHT_DIRECT');
+      expect(result.session.answers.heightMode).toBe('DIRECT');
       session = result.session;
 
       result = transition(session, { type: 'TEXT', value: '5000' });
@@ -166,33 +152,19 @@ describe('State Machine', () => {
       expect((result.session.answers.budget as { totals: { modules: number } }).totals.modules).toBe(10);
     });
 
-    it('should complete flow with CALC height mode after capacity', () => {
-      let session = createSession('CHOOSE_HEIGHT_MODE', {
+    it('should reach WAIT_HEIGHT_DIRECT after capacity with heightMode DIRECT', () => {
+      const session = createSession('WAIT_CAPACITY', {
         lengthMm: 12000,
         widthMm: 10000,
         corridorMm: 3000,
-        capacityKg: 2000,
+        moduleDepthMm: 2700,
+        beamLengthMm: DEFAULT_BEAM_LENGTH_MM,
+        levels: 4,
+        firstLevelOnGround: true,
       });
-
-      let result = transition(session, { type: 'BUTTON', value: 'CALC' });
-      expect(result.session.state).toBe('WAIT_LOAD_HEIGHT');
-      session = result.session;
-
-      result = transition(session, { type: 'TEXT', value: '1500' });
-      expect(result.session.state).toBe('CHOOSE_COLUMN_PROTECTOR');
-      expect(result.session.answers.loadHeightMm).toBe(1500);
-      session = result.session;
-
-      result = transition(session, { type: 'BUTTON', value: 'COL_NAO' });
-      expect(result.session.state).toBe('CHOOSE_GUARD_RAIL_SIMPLE');
-      session = result.session;
-
-      result = transition(session, { type: 'BUTTON', value: 'GRS_NAO' });
-      expect(result.session.state).toBe('CHOOSE_GUARD_RAIL_DOUBLE');
-      session = result.session;
-
-      result = transition(session, { type: 'BUTTON', value: 'GRD_NAO' });
-      expect(result.session.state).toBe('SUMMARY_CONFIRM');
+      const result = transition(session, { type: 'TEXT', value: '2000' });
+      expect(result.session.state).toBe('WAIT_HEIGHT_DIRECT');
+      expect(result.session.answers.heightMode).toBe('DIRECT');
     });
   });
 
@@ -270,9 +242,6 @@ describe('State Machine', () => {
         lengthMm: 12000,
         widthMm: 10000,
         corridorMm: 3000,
-        capacityKg: 2000,
-        heightMode: 'CALC',
-        loadHeightMm: 1500,
       });
       const input: Input = { type: 'TEXT', value: '0' };
 
@@ -287,9 +256,6 @@ describe('State Machine', () => {
         lengthMm: 12000,
         widthMm: 10000,
         corridorMm: 3000,
-        capacityKg: 2000,
-        heightMode: 'CALC',
-        loadHeightMm: 1500,
       });
       const input: Input = { type: 'TEXT', value: '15' };
 

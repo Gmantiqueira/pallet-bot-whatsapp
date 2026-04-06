@@ -1,5 +1,6 @@
 import {
   computeBeamElevations,
+  computeLevelSpacing,
   DEFAULT_FIRST_LEVEL_LIFT_MM,
   DEFAULT_STRUCTURAL_BOTTOM_MM,
   DEFAULT_STRUCTURAL_TOP_MM,
@@ -55,6 +56,24 @@ describe('computeBeamElevations', () => {
     });
     expect(r.beamElevationsMm).toHaveLength(5);
     expect(r.beamElevationsMm[4]).toBeCloseTo(6000 - DEFAULT_STRUCTURAL_TOP_MM, 2);
+  });
+
+  it('computeLevelSpacing: 5000 mm, 5 níveis, primeiro ao chão', () => {
+    const { gapsMm, meanGapMm } = computeLevelSpacing({
+      heightMm: 5000,
+      levels: 5,
+      firstLevelOnGround: true,
+    });
+    expect(gapsMm).toHaveLength(5);
+    const r = computeBeamElevations({
+      uprightHeightMm: 5000,
+      levels: 5,
+      firstLevelOnGround: true,
+    });
+    expect(meanGapMm).toBeCloseTo(r.meanGapMm, 4);
+    gapsMm.forEach(g => {
+      expect(g).toBeCloseTo(gapsMm[0]!, 3);
+    });
   });
 
   it('escala lista se soma exceder o vão útil', () => {
