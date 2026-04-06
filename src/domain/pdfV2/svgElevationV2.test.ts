@@ -32,10 +32,10 @@ describe('serializeElevationSvgV2', () => {
     const svg = serializeElevationSvgV2(model);
     expect(svg).toContain('PISO');
     expect(svg).toContain('H total');
-    expect(svg).toContain('H útil');
-    expect(svg).toContain('Eixo a eixo');
+    expect(svg).toContain('Nív. 1');
+    expect(svg).toContain('Detalhe de módulo');
     expect(svg).toContain('1200');
-    expect(svg).toContain('2.400');
+    expect(svg).toMatch(/2[\s\u00a0.]400/);
   });
 
   it('vista lateral dupla costas menciona espinha e profundidade de faixa', () => {
