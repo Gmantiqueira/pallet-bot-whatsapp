@@ -523,16 +523,16 @@ export async function generateProjectPdf(
   doc.moveDown(0.38);
   embedFullWidthDrawing(floorRaster);
 
-  // ----- Página 3 — detalhe técnico -----
+  // ----- Página 3 — elevação frontal -----
   doc.addPage();
   doc.y = doc.page.margins.top + 6;
-  drawCentered('DETALHE TÉCNICO', {
+  drawCentered('ELEVAÇÃO FRONTAL', {
     size: 12,
     font: 'Helvetica-Bold',
     color: COL_INK,
     moveDown: 0.18,
   });
-  drawCentered('Elevação frontal', {
+  drawCentered('Cotas e níveis (esquemático)', {
     size: 8.5,
     color: COL_MUTED,
     moveDown: 0.28,

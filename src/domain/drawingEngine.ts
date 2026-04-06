@@ -370,7 +370,7 @@ export function generateFrontViewSvg(data: FrontViewInput): string {
   parts.push(
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${FV_VB_W} ${vbH}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">`
   );
-  parts.push('<title>Detalhe técnico frontal</title>');
+  parts.push('<title>Elevação frontal</title>');
   parts.push('<defs>');
   parts.push(`<style>
     .tf-title { font: 700 18px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #111827; letter-spacing: 0.04em; }
@@ -392,10 +392,10 @@ export function generateFrontViewSvg(data: FrontViewInput): string {
 
   const fvcx = FV_VB_W / 2;
   parts.push(
-    `<text x="${fvcx}" y="${FV_PAD + 28}" text-anchor="middle" class="tf-title">${escapeXml('DETALHE TÉCNICO')}</text>`
+    `<text x="${fvcx}" y="${FV_PAD + 28}" text-anchor="middle" class="tf-title">${escapeXml('ELEVAÇÃO FRONTAL')}</text>`
   );
   parts.push(
-    `<text x="${fvcx}" y="${FV_PAD + 50}" text-anchor="middle" class="tf-sub">${escapeXml('Elevação frontal')}</text>`
+    `<text x="${fvcx}" y="${FV_PAD + 50}" text-anchor="middle" class="tf-sub">${escapeXml('Cotas e níveis (esquemático)')}</text>`
   );
   parts.push(
     `<line x1="${fvcx - 160}" y1="${FV_PAD + 64}" x2="${fvcx + 160}" y2="${FV_PAD + 64}" class="tf-rule"/>`

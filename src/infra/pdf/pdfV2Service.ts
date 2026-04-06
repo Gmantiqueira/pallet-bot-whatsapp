@@ -367,7 +367,7 @@ export async function renderPdfV2(
     color: COL_INK,
     moveDown: 0.18,
   });
-  drawCentered('Vista frontal, lateral e detalhe', {
+  drawCentered('Vista frontal e lateral', {
     size: 8.5,
     color: COL_MUTED,
     moveDown: 0.28,

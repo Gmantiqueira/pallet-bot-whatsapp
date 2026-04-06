@@ -110,8 +110,8 @@ describe('generateFrontViewSvg', () => {
     expect(svg).toContain('</svg>');
     expect(svg).toMatch(/viewBox="\s*0\s+0\s+1000\s+\d+"/);
     expect(svg).toContain('preserveAspectRatio="xMidYMid meet"');
-    expect(svg).toContain('DETALHE TÉCNICO');
-    expect(svg).toContain('Elevação frontal');
+    expect(svg).toContain('ELEVAÇÃO FRONTAL');
+    expect(svg).toContain('Cotas e níveis (esquemático)');
     expect(svg).toContain('kg');
     expect(svg).toContain('mm');
     expect(svg).toContain('2000kg');
@@ -162,7 +162,7 @@ describe('generateFrontViewSvg', () => {
         capacityKgPerLevel: 800,
       });
       expect(svg.length).toBeGreaterThan(400);
-      expect(svg).toContain('DETALHE TÉCNICO');
+      expect(svg).toContain('ELEVAÇÃO FRONTAL');
       expect(svg).toContain(`${n} níveis`);
       expect(svg).toContain('entre níveis');
     }

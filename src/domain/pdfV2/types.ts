@@ -135,7 +135,6 @@ export type ElevationModelV2 = {
   viewBoxH: number;
   front: ElevationPanelPayload;
   lateral: ElevationPanelPayload;
-  detail: ElevationPanelPayload;
   summaryLines: string[];
 };
 

@@ -69,7 +69,7 @@ function panelPayload(answers: Record<string, unknown>, tunnel: boolean): Elevat
 }
 
 /**
- * Monta o modelo de elevações (vista frontal, lateral, detalhe) a partir das respostas e da solução de layout.
+ * Monta o modelo de elevações (vista frontal e lateral) a partir das respostas e da solução de layout.
  */
 export function buildElevationModelV2(
   answers: Record<string, unknown>,
@@ -78,7 +78,6 @@ export function buildElevationModelV2(
   const hasTunnel = answers.hasTunnel === true;
   const front = panelPayload(answers, hasTunnel);
   const lateral = panelPayload(answers, false);
-  const detail = panelPayload(answers, true);
 
   const summaryLines: string[] = [
     `Config: ${layout.totals.levels} níveis de ${front.capacityKgPerLevel} kg | Prof: ${Math.round(front.depthMm)} mm`,
@@ -89,10 +88,10 @@ export function buildElevationModelV2(
 
   return {
     viewBoxW: 1000,
-    viewBoxH: 1280,
+    /** Duas faixas (frontal + lateral) + rodapé com resumo. */
+    viewBoxH: 1000,
     front,
     lateral,
-    detail,
     summaryLines,
   };
 }

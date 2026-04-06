@@ -285,29 +285,8 @@ function drawLateral(
   return parts.join('');
 }
 
-/** Detalhe simplificado: dois vãos (túnel + referência). */
-function drawDetail(
-  ox: number,
-  oy: number,
-  pw: number,
-  ph: number,
-  data: ElevationPanelPayload
-): string {
-  const parts: string[] = [];
-  parts.push(
-    `<text x="${ox + pw / 2}" y="${oy + 16}" text-anchor="middle" font-weight="700" font-size="11px" fill="#374151">Detalhe técnico</text>`
-  );
-  const sub = drawFrontRack(ox, oy + 8, pw, ph - 36, { ...data, tunnel: true }, '');
-  parts.push(sub);
-  const ch = data.clearHeightMm ?? data.uprightHeightMm * 0.35;
-  parts.push(
-    `<text x="${ox + pw / 2}" y="${oy + ph - 8}" text-anchor="middle" font-size="8.5px" fill="#6b7280">Pé livre túnel (ref.): ${escapeXml(formatMmPtBr(Math.round(ch)))}</text>`
-  );
-  return parts.join('');
-}
-
 /**
- * Serializa o modelo de elevação em SVG composto (3 faixas verticais).
+ * Serializa o modelo de elevação em SVG composto (duas faixas: frontal e lateral).
  */
 export function serializeElevationSvgV2(model: ElevationModelV2): string {
   const w = model.viewBoxW;
@@ -327,8 +306,6 @@ export function serializeElevationSvgV2(model: ElevationModelV2): string {
   parts.push(drawFrontRack(48, y, w - 96, bandH, model.front, 'Vista frontal'));
   y += bandH + gap;
   parts.push(drawLateral(48, y, w - 96, bandH, model.lateral));
-  y += bandH + gap;
-  parts.push(drawDetail(48, y, w - 96, bandH, model.detail));
 
   let sy = h - 72;
   for (let i = model.summaryLines.length - 1; i >= 0; i--) {
