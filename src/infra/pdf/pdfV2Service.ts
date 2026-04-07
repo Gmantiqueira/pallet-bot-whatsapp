@@ -183,6 +183,7 @@ function attachPdfFileStream(
 }
 
 export type GenerateProjectPdfV2Input = {
+  /** `hasTunnel === true` inclui folhas de elevação com túnel; caso contrário omite-as. */
   project: Record<string, unknown>;
   layout: LayoutResult;
   floorPlanSvg: string;
@@ -211,6 +212,7 @@ export async function renderPdfV2(
 
   const { pxW, pxH } = drawingRasterPixelSize();
   const { pxW: elW, pxH: elH } = elevationDrawingRasterPixelSize();
+  const hasTunnel = input.project.hasTunnel === true;
 
   let floorRaster: { buffer: Buffer; widthPx: number; heightPx: number };
   let elevFrontStdRaster: { buffer: Buffer; widthPx: number; heightPx: number };
@@ -227,8 +229,8 @@ export async function renderPdfV2(
   } | null;
   let view3dRaster: { buffer: Buffer; widthPx: number; heightPx: number };
   try {
-    const tunSvg = input.elevationPages.frontWithTunnel;
-    const latTunSvg = input.elevationPages.lateralWithTunnel;
+    const tunSvg = hasTunnel ? input.elevationPages.frontWithTunnel : null;
+    const latTunSvg = hasTunnel ? input.elevationPages.lateralWithTunnel : null;
     const rasterAll = await Promise.all([
       svgRasterToPng(input.floorPlanSvg, pxW, pxH),
       svgRasterToPng(input.elevationPages.frontWithoutTunnel, elW, elH),
@@ -468,29 +470,31 @@ export async function renderPdfV2(
   doc.moveDown(0.38);
   embedFullWidthDrawing(elevFrontStdRaster);
 
-  doc.addPage();
-  doc.y = doc.page.margins.top + 6;
-  drawCentered('Elevação frontal — com túnel', {
-    size: 12,
-    font: 'Helvetica-Bold',
-    color: COL_INK,
-    moveDown: 0.18,
-  });
-  if (elevFrontTunRaster) {
-    drawCentered('Mesmo modelo estrutural; vão de passagem na zona inferior', {
-      size: 8.5,
-      color: COL_MUTED,
-      moveDown: 0.28,
+  if (hasTunnel) {
+    doc.addPage();
+    doc.y = doc.page.margins.top + 6;
+    drawCentered('Elevação frontal — com túnel', {
+      size: 12,
+      font: 'Helvetica-Bold',
+      color: COL_INK,
+      moveDown: 0.18,
     });
-    horizontalRule(doc.y + 3, 0.1, COL_RULE);
-    doc.moveDown(0.38);
-    embedFullWidthDrawing(elevFrontTunRaster);
-  } else {
-    drawCentered('Não aplicável neste projeto (sem módulo túnel).', {
-      size: 10,
-      color: COL_MUTED,
-      moveDown: 0.85,
-    });
+    if (elevFrontTunRaster) {
+      drawCentered('Mesmo modelo estrutural; vão de passagem na zona inferior', {
+        size: 8.5,
+        color: COL_MUTED,
+        moveDown: 0.28,
+      });
+      horizontalRule(doc.y + 3, 0.1, COL_RULE);
+      doc.moveDown(0.38);
+      embedFullWidthDrawing(elevFrontTunRaster);
+    } else {
+      drawCentered('Não aplicável neste projeto (sem módulo túnel).', {
+        size: 10,
+        color: COL_MUTED,
+        moveDown: 0.85,
+      });
+    }
   }
 
   doc.addPage();
@@ -510,29 +514,31 @@ export async function renderPdfV2(
   doc.moveDown(0.38);
   embedFullWidthDrawing(elevLateralRaster);
 
-  doc.addPage();
-  doc.y = doc.page.margins.top + 6;
-  drawCentered('Vista lateral — com túnel', {
-    size: 12,
-    font: 'Helvetica-Bold',
-    color: COL_INK,
-    moveDown: 0.18,
-  });
-  if (elevLateralTunRaster) {
-    drawCentered('Abertura inferior e níveis ativos alinhados ao módulo túnel', {
-      size: 8.5,
-      color: COL_MUTED,
-      moveDown: 0.28,
+  if (hasTunnel) {
+    doc.addPage();
+    doc.y = doc.page.margins.top + 6;
+    drawCentered('Vista lateral — com túnel', {
+      size: 12,
+      font: 'Helvetica-Bold',
+      color: COL_INK,
+      moveDown: 0.18,
     });
-    horizontalRule(doc.y + 3, 0.1, COL_RULE);
-    doc.moveDown(0.38);
-    embedFullWidthDrawing(elevLateralTunRaster);
-  } else {
-    drawCentered('Não aplicável neste projeto (sem módulo túnel).', {
-      size: 10,
-      color: COL_MUTED,
-      moveDown: 0.85,
-    });
+    if (elevLateralTunRaster) {
+      drawCentered('Abertura inferior e níveis ativos alinhados ao módulo túnel', {
+        size: 8.5,
+        color: COL_MUTED,
+        moveDown: 0.28,
+      });
+      horizontalRule(doc.y + 3, 0.1, COL_RULE);
+      doc.moveDown(0.38);
+      embedFullWidthDrawing(elevLateralTunRaster);
+    } else {
+      drawCentered('Não aplicável neste projeto (sem módulo túnel).', {
+        size: 10,
+        color: COL_MUTED,
+        moveDown: 0.85,
+      });
+    }
   }
 
   doc.addPage();
