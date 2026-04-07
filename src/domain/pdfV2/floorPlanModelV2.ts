@@ -120,7 +120,7 @@ export function buildFloorPlanModelV2(geometry: LayoutGeometry): FloorPlanModelV
   }
 
   const dimensionLines: FloorPlanDimension[] = [];
-  const dimY = by + boxH + 18;
+  const dimY = by + boxH + 22;
   dimensionLines.push({
     id: 'dim-length',
     x1: bx,
@@ -129,7 +129,7 @@ export function buildFloorPlanModelV2(geometry: LayoutGeometry): FloorPlanModelV
     y2: dimY,
     text: `Compr. = ${formatMm(L)}`,
   });
-  const dimX = bx - 22;
+  const dimX = bx - 44;
   dimensionLines.push({
     id: 'dim-width',
     x1: dimX,
@@ -137,7 +137,7 @@ export function buildFloorPlanModelV2(geometry: LayoutGeometry): FloorPlanModelV
     x2: dimX,
     y2: by + boxH,
     text: `Comp. = ${formatMm(W)}`,
-    offset: -8,
+    offset: -28,
   });
 
   if (geometry.circulationZones.length > 0) {

@@ -29,10 +29,10 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
     <line x1="0" y1="0" x2="0" y2="6" stroke="#94a3b8" stroke-width="0.55" opacity="0.35"/>
   </pattern>`);
   parts.push(`<style>
-    .fp-title { font: 700 20px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: ${COL_INK}; letter-spacing: 0.05em; }
-    .fp-sub { font: 500 12.5px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #4b5563; }
-    .fp-leg { font: 600 10px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #475569; letter-spacing: 0.1em; }
-    .fp-dim { font: 600 10px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: ${COL_DIM}; }
+    .fp-title { font: 700 40px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: ${COL_INK}; letter-spacing: 0.05em; }
+    .fp-sub { font: 500 25px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #4b5563; }
+    .fp-leg { font: 600 20px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #475569; letter-spacing: 0.1em; }
+    .fp-dim { font: 600 20px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: ${COL_DIM}; }
   </style>`);
   parts.push('</defs>');
   parts.push(`<rect width="${w}" height="${h}" fill="${COL_BG}"/>`);
@@ -89,7 +89,7 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
         `<rect x="${s.x + inset}" y="${s.y + s.h * 0.06}" width="${s.w - 2 * inset}" height="${Math.max(4, yPass - s.y - s.h * 0.06)}" fill="url(#v2-cor-hatch)" opacity="0.55" stroke="${COL_TUNNEL_STROKE}" stroke-width="0.5" stroke-dasharray="3 2"/>`
       );
       parts.push(
-        `<text x="${s.x + s.w / 2}" y="${s.y + s.h * 0.22}" text-anchor="middle" class="fp-leg" fill="#92400e" font-size="8px">PASSAGEM</text>`
+        `<text x="${s.x + s.w / 2}" y="${s.y + s.h * 0.22}" text-anchor="middle" class="fp-leg" fill="#92400e" font-size="16px">PASSAGEM</text>`
       );
     }
     parts.push(
@@ -106,7 +106,7 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
     );
     if (isTunnel) {
       parts.push(
-        `<text x="${s.x + s.w / 2}" y="${s.y + s.h * 0.96}" text-anchor="middle" class="fp-leg" fill="#92400e" font-size="7.5px">Módulo túnel</text>`
+        `<text x="${s.x + s.w / 2}" y="${s.y + s.h * 0.96}" text-anchor="middle" class="fp-leg" fill="#92400e" font-size="15px">Módulo túnel</text>`
       );
     }
   }
@@ -119,12 +119,13 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
     const midY = (d.y1 + d.y2) / 2;
     const isVert = Math.abs(d.x2 - d.x1) < 1;
     if (isVert) {
+      const ox = d.offset ?? -14;
       parts.push(
-        `<text transform="translate(${d.x1 - 6},${midY}) rotate(-90)" text-anchor="middle" class="fp-dim">${escapeXml(d.text)}</text>`
+        `<text transform="translate(${d.x1 + ox},${midY}) rotate(-90)" text-anchor="middle" class="fp-dim">${escapeXml(d.text)}</text>`
       );
     } else {
       parts.push(
-        `<text x="${midX}" y="${d.y1 - 6}" text-anchor="middle" class="fp-dim">${escapeXml(d.text)}</text>`
+        `<text x="${midX}" y="${d.y1 - 12}" text-anchor="middle" class="fp-dim">${escapeXml(d.text)}</text>`
       );
     }
   }

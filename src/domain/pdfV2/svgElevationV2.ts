@@ -59,7 +59,7 @@ function dimensionLineHArrows(
   const L = 6;
   const w = 3.4;
   return [
-    `<line x1="${xa}" y1="${y}" x2="${xb}" y2="${y}" stroke="${stroke}" stroke-width="0.55"/>`,
+    `<line x1="${xa}" y1="${y}" x2="${xb}" y2="${y}" stroke="${stroke}" stroke-width="0.45"/>`,
     `<polygon points="${x1},${y} ${x1 + L},${y - w} ${x1 + L},${y + w}" fill="${stroke}"/>`,
     `<polygon points="${x2},${y} ${x2 - L},${y - w} ${x2 - L},${y + w}" fill="${stroke}"/>`,
   ].join('');
@@ -85,6 +85,27 @@ function dimensionLineVArrows(
   ].join('');
 }
 
+/** Cota vertical fina (setas pequenas, traço leve) — cadeia de cotas sem dominar o desenho. */
+function dimensionLineVArrowsThin(
+  x: number,
+  y1: number,
+  y2: number,
+  stroke: string
+): string {
+  const yt = Math.min(y1, y2);
+  const yb = Math.max(y1, y2);
+  const inset = 3.6;
+  const ya = yt + inset;
+  const yb2 = yb - inset;
+  const L = 4.5;
+  const w = 2.6;
+  return [
+    `<line x1="${x}" y1="${ya}" x2="${x}" y2="${yb2}" stroke="${stroke}" stroke-width="0.38"/>`,
+    `<polygon points="${x},${yt} ${x - w},${yt + L} ${x + w},${yt + L}" fill="${stroke}"/>`,
+    `<polygon points="${x},${yb} ${x - w},${yb - L} ${x + w},${yb - L}" fill="${stroke}"/>`,
+  ].join('');
+}
+
 /** Prolongamentos horizontais + cota vertical (estilo desenho de engenharia). */
 function verticalDimWithTicks(
   xDim: number,
@@ -99,6 +120,22 @@ function verticalDimWithTicks(
     `<line x1="${tickLeft}" y1="${yTop}" x2="${tickRight}" y2="${yTop}" stroke="${stroke}" stroke-width="${strokeW}" opacity="0.9"/>`,
     `<line x1="${tickLeft}" y1="${yBot}" x2="${tickRight}" y2="${yBot}" stroke="${stroke}" stroke-width="${strokeW}" opacity="0.9"/>`,
     dimensionLineVArrows(xDim, yTop, yBot, stroke),
+  ].join('');
+}
+
+function verticalDimWithTicksThin(
+  xDim: number,
+  yTop: number,
+  yBot: number,
+  tickLeft: number,
+  tickRight: number,
+  stroke: string,
+  strokeW: number
+): string {
+  return [
+    `<line x1="${tickLeft}" y1="${yTop}" x2="${tickRight}" y2="${yTop}" stroke="${stroke}" stroke-width="${strokeW}" opacity="0.88"/>`,
+    `<line x1="${tickLeft}" y1="${yBot}" x2="${tickRight}" y2="${yBot}" stroke="${stroke}" stroke-width="${strokeW}" opacity="0.88"/>`,
+    dimensionLineVArrowsThin(xDim, yTop, yBot, stroke),
   ].join('');
 }
 
@@ -132,39 +169,122 @@ function textLines(
   return `<text x="${x}" y="${yStart}" fill="${attrs.fill}" font-size="${fs}px"${fwText}>${inner}</text>`;
 }
 
-/** Cotas verticais à direita: só H total + nota de espaçamento médio (sem pilha por nível). */
-function drawMinimalVerticalDims(
+/**
+ * Cadeia de cotas verticais à direita (um só lado): H total na linha exterior;
+ * cotas interiores com espaçamentos entre eixos, 1.º eixo, tampo — sem sobrepor traços.
+ */
+function drawVerticalDimChain(
   rackRight: number,
-  floorTop: number,
-  ry: number,
+  yFloor: number,
+  yTop: number,
+  beamYsPx: number[],
+  beamH: number[],
+  axisGapsMm: number[],
   uprightH: number,
-  meanGapMm: number,
-  labelScale: number = 1
+  labelScale: number
 ): string {
-  const xDim = rackRight + 10;
+  const ls = labelScale;
+  const nB = beamYsPx.length;
+  if (nB < 1 || beamH.length < 1) {
+    return '';
+  }
+
+  const b0 = beamH[0];
+  const bLast = beamH[beamH.length - 1];
+  if (b0 === undefined || bLast === undefined) {
+    return '';
+  }
+
+  const mmSegs: number[] = [];
+  mmSegs.push(b0);
+  for (let i = 0; i < axisGapsMm.length; i++) {
+    const g = axisGapsMm[i];
+    if (g === undefined) return '';
+    mmSegs.push(g);
+  }
+  mmSegs.push(uprightH - bLast);
+
+  const yHi: number[] = [];
+  const yLo: number[] = [];
+  const yBeam0 = beamYsPx[0];
+  if (yBeam0 === undefined) return '';
+  yHi.push(yBeam0);
+  yLo.push(yFloor);
+  for (let i = 0; i < nB - 1; i++) {
+    const yUp = beamYsPx[i + 1];
+    const yDn = beamYsPx[i];
+    if (yUp === undefined || yDn === undefined) return '';
+    yHi.push(yUp);
+    yLo.push(yDn);
+  }
+  const yBeamLast = beamYsPx[nB - 1];
+  if (yBeamLast === undefined) return '';
+  yHi.push(yTop);
+  yLo.push(yBeamLast);
+
+  const detailCount = mmSegs.length;
+  if (detailCount !== yHi.length || yHi.length !== yLo.length) {
+    return '';
+  }
+
+  const step = 12.5 * ls;
   const tickL = rackRight + 2;
-  const tickR = tickL + 8;
+  const tickR = tickL + 7.5;
   const parts: string[] = [];
-  parts.push(extensionToDim(rackRight, xDim - 2, floorTop, DIM_MAJOR));
-  parts.push(extensionToDim(rackRight, xDim - 2, ry, DIM_MAJOR));
+
+  const xTotal = rackRight + 10 + (detailCount + 1) * step;
+  parts.push(extensionToDim(rackRight, xTotal - 2, yFloor, DIM_MAJOR));
+  parts.push(extensionToDim(rackRight, xTotal - 2, yTop, DIM_MAJOR));
   parts.push(
-    verticalDimWithTicks(xDim, ry, floorTop, tickL, tickR, DIM_MAJOR, 0.55)
+    verticalDimWithTicks(xTotal, yTop, yFloor, tickL, tickR, DIM_MAJOR, 0.48)
   );
   parts.push(
     textLines(
-      xDim + 6,
-      (ry + floorTop) / 2 - 9 * labelScale,
+      xTotal + 5,
+      (yTop + yFloor) / 2 - 10 * ls,
       ['H total', formatMmPtBr(Math.round(uprightH))],
       {
-        fontSize: 10.5 * labelScale,
+        fontSize: 10 * ls,
         fill: DIM_MAJOR,
         fontWeight: '600',
       }
     )
   );
-  parts.push(
-    `<text x="${xDim + 6}" y="${floorTop + 18 * labelScale}" font-size="${8.6 * labelScale}px" fill="${DIM_MINOR}">Eixo médio ≈ ${escapeXml(formatMmPtBr(Math.round(meanGapMm)))}</text>`
-  );
+
+  const segLabel = (idx: number): string => {
+    if (idx === 0) return '1.º eixo';
+    if (idx === detailCount - 1) return 'Topo / tampo';
+    return `Livre ${idx}–${idx + 1}`;
+  };
+
+  for (let k = 0; k < detailCount; k++) {
+    const yT = yHi[k];
+    const yB = yLo[k];
+    if (yT === undefined || yB === undefined) continue;
+    const xDim = rackRight + 10 + (k + 1) * step;
+    parts.push(extensionToDim(rackRight, xDim - 2, yT, DIM_MINOR));
+    parts.push(extensionToDim(rackRight, xDim - 2, yB, DIM_MINOR));
+    parts.push(
+      verticalDimWithTicksThin(xDim, yT, yB, tickL, tickR, DIM_MINOR, 0.38)
+    );
+    const midY = (yT + yB) / 2;
+    const mmVal = mmSegs[k];
+    if (mmVal === undefined) continue;
+    const mmRounded = Math.round(mmVal);
+    parts.push(
+      textLines(
+        xDim + 4.5,
+        midY - 8 * ls,
+        [segLabel(k), formatMmPtBr(mmRounded)],
+        {
+          fontSize: 8.2 * ls,
+          fill: DIM_MINOR,
+          fontWeight: '500',
+        }
+      )
+    );
+  }
+
   return parts.join('');
 }
 
@@ -393,7 +513,10 @@ function drawFrontRack(
 ): string {
   const ls = options?.labelScale ?? 1;
   const nMod = FV_FRONT_BAY_COUNT;
-  const rackMaxW = Math.max(210, pw - 20 - 40);
+  const levelsEst = Math.max(1, Math.min(32, Math.floor(data.levels)));
+  const estSegCount = levelsEst + 2;
+  const dimChainRightPx = Math.min(210, 95 + 11 * ls * (estSegCount + 1));
+  const rackMaxW = Math.max(210, pw - 20 - 40 - dimChainRightPx);
   const rackMaxH = Math.max(
     120,
     ph - Math.round(78 / ls) - frontRackBelowFloorReservePx(ls)
@@ -403,7 +526,17 @@ function drawFrontRack(
   const uprightWidthsPx = slimmed.uprightWidthsPx;
   const beamWithFrontVis = slimmed.beamPx;
   const gapPx = g.gapPx;
-  const { storageTiers, uprightH, beamYsPx, innerH, rackBottom, ry, totalWidthMm, beamH } = g;
+  const {
+    storageTiers,
+    uprightH,
+    beamYsPx,
+    innerH,
+    rackBottom,
+    ry,
+    totalWidthMm,
+    beamH,
+    axisGapsMm,
+  } = g;
   const beamPx = beamWithFrontVis;
   const totalW =
     uprightWidthsPx.reduce((a, b) => a + b, 0) +
@@ -579,12 +712,14 @@ function drawFrontRack(
   );
 
   parts.push(
-    drawMinimalVerticalDims(
+    drawVerticalDimChain(
       rx + totalW,
       floorTop,
       ry,
+      beamYsPx,
+      beamH,
+      axisGapsMm,
       uprightH,
-      data.meanGapMm,
       ls
     )
   );
@@ -754,13 +889,16 @@ function drawLateral(
     )}</text>`
   );
 
+  const beamYsLat = beamH.map((_, j) => beamYLocal(j));
   parts.push(
-    drawMinimalVerticalDims(
+    drawVerticalDimChain(
       x0 + dw,
       floorTopLat,
       y0,
+      beamYsLat,
+      beamH,
+      g.axisGapsMm,
       uprightH,
-      data.meanGapMm,
       ls
     )
   );
