@@ -4,21 +4,16 @@ const FV_FOLGA_MM = 75;
 const FV_INTER_BAY_MM = FV_FOLGA_MM * 2;
 /** Largura de montante padrão (mm) — documentação tipo 519-R01. */
 const UPRIGHT_DEFAULT_MM = 75;
-/** Montantes de zona de túnel (1.º pórtico) — reforço visual. */
-const UPRIGHT_TUNNEL_MM = 100;
 /** Um vão frontal (dois montantes) por diagrama — comparação de módulos, não multi-baias genérico. */
 const FV_FRONT_BAY_COUNT = 1;
-/**
- * Vista frontal: montantes mais estreitos em px do que a escala mm, redistribuindo largura para o vão
- * (face de armazenagem dominada pelas longarinas, não pórtico estreito).
- */
-const FV_FRONT_UPRIGHT_SLIM = 0.46;
-/** Marcadores discretos ao longo do vão (posições de carga na longarina). */
+/** Marcadores discretos ao longo do vão (posição de carga). */
 const FV_ALONG_BEAM_DIVISIONS = 3;
-/** Armazenagem entre longarinas: preenchimento técnico suave (posição de palete). */
+/** Piso do nível (fundo suave) + palete por cima. */
 const FV_PALLET_TIER_FILL = '#fff7ed';
 const FV_PALLET_TIER_STROKE = '#fdba74';
-const FV_PALLET_TIER_OPACITY = 0.38;
+const FV_PALLET_TIER_OPACITY = 0.28;
+const FV_PALLET_DECK_FILL = '#cfa075';
+const FV_PALLET_DECK_STROKE = '#78350f';
 
 const COL_BG = '#ffffff';
 const COL_FRAME = '#d4d4d4';
@@ -114,12 +109,10 @@ function extensionToDim(
   return `<line x1="${xFrom}" y1="${y}" x2="${xTo}" y2="${y}" stroke="${stroke}" stroke-width="0.28" stroke-dasharray="2.5 2" opacity="0.65"/>`;
 }
 
-function uprightWidthsMm(nMod: number, tunnel: boolean): number[] {
-  const w: number[] = [];
-  for (let i = 0; i <= nMod; i++) {
-    w.push(tunnel && i <= 1 ? UPRIGHT_TUNNEL_MM : UPRIGHT_DEFAULT_MM);
-  }
-  return w;
+/** Largura dos montantes na escala do desenho (75 / 100 mm conforme módulo). */
+function uprightWidthsMmFromThickness(nMod: number, thicknessMm: number): number[] {
+  const t = Math.max(40, Math.round(thicknessMm));
+  return Array.from({ length: nMod + 1 }, () => t);
 }
 
 /** Bloco de texto multilinha (SVG). */
@@ -219,8 +212,11 @@ function buildBeamGeometry(
   const uprightH = Math.max(1, data.uprightHeightMm);
   const beamL = Math.max(1, data.beamLengthMm);
   const bayCount = Math.max(1, Math.min(4, Math.floor(nMod)));
-  /** Montantes padrão: o túnel altera níveis e abertura vertical, não a largura do vão entre faces. */
-  const widthsMm = uprightWidthsMm(bayCount, false);
+  const colMm =
+    typeof data.uprightThicknessMm === 'number' && data.uprightThicknessMm > 0
+      ? data.uprightThicknessMm
+      : UPRIGHT_DEFAULT_MM;
+  const widthsMm = uprightWidthsMmFromThickness(bayCount, colMm);
   const gapTotalMm = FV_INTER_BAY_MM;
   const sumUprightsMm = widthsMm.reduce((a, b) => a + b, 0);
   const totalRackMm =
@@ -308,35 +304,66 @@ function buildBeamGeometry(
 
 type BaySpan = { left: number; right: number };
 
-/**
- * Vista frontal só: montantes mais estreitos em px; largura devolvida ao vão (face de armazenagem mais legível).
- * Cotas em mm continuam a usar {@link BeamGeometry.totalWidthMm} / vão declarado.
- */
-function frontSlimUprightsWidenBay(
-  uprightWidthsPx: number[],
-  beamPx: number,
-  bayCount: number
-): { uprightWidthsPx: number[]; beamPx: number } {
-  const slim = uprightWidthsPx.map(w => Math.max(2.25, w * FV_FRONT_UPRIGHT_SLIM));
-  let saved = 0;
-  for (let i = 0; i < uprightWidthsPx.length; i++) {
-    saved += uprightWidthsPx[i]! - slim[i]!;
+/** Palete em vista frontal (tábua + lambris + seta sentido, estilo folha tipo 519). */
+function drawPalletBlockFront(
+  bayLeft: number,
+  bayRight: number,
+  yTop: number,
+  yBot: number,
+  capKg: number | undefined,
+  ls: number
+): string {
+  const parts: string[] = [];
+  const availW = bayRight - bayLeft;
+  if (availW < 12 || yBot - yTop < 6) return '';
+  const deckW = Math.max(16, availW * 0.72);
+  const x0 = bayLeft + (availW - deckW) / 2;
+  const deckH = Math.max(5, (yBot - yTop) * 0.5);
+  const yDeck = yTop + (yBot - yTop - deckH) * 0.32;
+  parts.push(
+    `<rect x="${x0}" y="${yDeck}" width="${deckW}" height="${deckH}" rx="0.65" fill="${FV_PALLET_DECK_FILL}" stroke="${FV_PALLET_DECK_STROKE}" stroke-width="0.55" opacity="0.94"/>`
+  );
+  for (const fr of [0.2, 0.45, 0.7]) {
+    const yy = yDeck + deckH * fr;
+    parts.push(
+      `<line x1="${x0 + deckW * 0.07}" y1="${yy}" x2="${x0 + deckW * 0.93}" y2="${yy}" stroke="${FV_PALLET_DECK_STROKE}" stroke-width="0.4" opacity="0.9"/>`
+    );
   }
-  const newBeam = beamPx + saved / Math.max(1, bayCount);
-  return { uprightWidthsPx: slim, beamPx: newBeam };
+  const ay = yDeck + deckH * 0.55;
+  const ax1 = x0 + deckW * 0.18;
+  const ax2 = x0 + deckW * 0.82;
+  parts.push(
+    `<line x1="${ax1}" y1="${ay}" x2="${ax2}" y2="${ay}" stroke="${DIM_MINOR}" stroke-width="0.5" stroke-linecap="round"/>`
+  );
+  parts.push(
+    `<polygon points="${ax2},${ay} ${ax2 - 5},${ay - 3.2} ${ax2 - 5},${ay + 3.2}" fill="${DIM_MINOR}"/>`
+  );
+  parts.push(
+    `<text x="${(x0 + deckW / 2).toFixed(2)}" y="${(yDeck - 5 * ls).toFixed(2)}" text-anchor="middle" font-size="${6.4 * ls}px" fill="${DIM_MINOR}" font-style="italic">Sentido do palete</text>`
+  );
+  if (typeof capKg === 'number' && capKg > 0) {
+    const kgTxt = `${Math.round(capKg).toLocaleString('pt-BR')} kg`;
+    parts.push(
+      `<text x="${(bayRight - 3).toFixed(2)}" y="${(yDeck + deckH / 2 + 3 * ls).toFixed(2)}" text-anchor="end" font-size="${7.4 * ls}px" fill="${DIM_MAJOR}" font-weight="600">${escapeXml(kgTxt)}</text>`
+    );
+  }
+  return parts.join('');
 }
 
-/** Faixas entre eixos de longarina = indicação suave de nível de armazenagem (paletes). */
+/** Faixas entre eixos: nível + palete esquemático. */
 function drawFrontStorageTiers(
   bay: BaySpan,
   beamYsPx: number[],
   storageTiers: number,
   beamTh: number,
   yClipTop: number,
-  yClipBottom: number
+  yClipBottom: number,
+  opts?: { capacityKgPerLevel?: number; labelScale?: number }
 ): string {
+  const ls = opts?.labelScale ?? 1;
+  const cap = opts?.capacityKgPerLevel;
   const parts: string[] = [];
-  const insetX = Math.max(2.8, (bay.right - bay.left) * 0.04);
+  const insetX = Math.max(2.2, (bay.right - bay.left) * 0.03);
   const xl = bay.left + insetX;
   const xr = bay.right - insetX;
   for (let i = 0; i < storageTiers; i++) {
@@ -350,12 +377,9 @@ function drawFrontStorageTiers(
     const b = Math.min(yClipBottom, bot);
     if (b - t < 2) continue;
     parts.push(
-      `<rect x="${xl}" y="${t}" width="${xr - xl}" height="${b - t}" rx="1.2" fill="${FV_PALLET_TIER_FILL}" stroke="${FV_PALLET_TIER_STROKE}" stroke-width="0.35" opacity="${FV_PALLET_TIER_OPACITY}"/>`
+      `<rect x="${xl}" y="${t}" width="${xr - xl}" height="${b - t}" rx="1.2" fill="${FV_PALLET_TIER_FILL}" stroke="${FV_PALLET_TIER_STROKE}" stroke-width="0.38" opacity="${FV_PALLET_TIER_OPACITY}"/>`
     );
-    const mx = (xl + xr) / 2;
-    parts.push(
-      `<line x1="${mx}" y1="${t + 1.5}" x2="${mx}" y2="${b - 1.5}" stroke="${FV_PALLET_TIER_STROKE}" stroke-width="0.28" opacity="0.28" stroke-dasharray="2 3"/>`
-    );
+    parts.push(drawPalletBlockFront(xl, xr, t, b, cap, ls));
     const bw = xr - xl;
     if (bw > 28) {
       for (let k = 1; k <= FV_ALONG_BEAM_DIVISIONS; k++) {
@@ -385,12 +409,14 @@ function drawFrontRack(
   const rackMaxW = Math.max(210, pw - 20 - 40);
   const rackMaxH = ph - Math.round(78 / ls);
   const g = buildBeamGeometry(data, rackMaxW, rackMaxH, ox, oy, pw, ph);
-  const slimmed = frontSlimUprightsWidenBay(g.uprightWidthsPx, g.beamPx, nMod);
-  const uprightWidthsPx = slimmed.uprightWidthsPx;
-  const beamWithFrontVis = slimmed.beamPx;
+  const uprightWidthsPx = g.uprightWidthsPx;
   const gapPx = g.gapPx;
   const { storageTiers, uprightH, beamYsPx, innerH, rackBottom, ry, totalWidthMm, beamH } = g;
-  const beamPx = beamWithFrontVis;
+  const beamPx = g.beamPx;
+  const colThicknessMm =
+    typeof data.uprightThicknessMm === 'number' && data.uprightThicknessMm > 0
+      ? Math.round(data.uprightThicknessMm)
+      : UPRIGHT_DEFAULT_MM;
   const totalW =
     uprightWidthsPx.reduce((a, b) => a + b, 0) +
     nMod * beamPx +
@@ -483,6 +509,30 @@ function drawFrontRack(
   const lastUw = uprightWidthsPx[nMod]!;
   const topY = ry;
 
+  const nBeamAxes = beamH.length;
+  /** Só níveis de carga: o último eixo é limite estrutural — não desenhar longarina/capa na baia (evita “nível extra”). */
+  const nStorageBeams = Math.max(0, nBeamAxes - 1);
+  /** Longarinas contínuas face externa a face externa dos montantes (sem “vão” entre vigas). */
+  const beamSpanLeft = uprightXs[0]!;
+  const beamSpanRight = uprightXs[nMod]! + uprightWidthsPx[nMod]!;
+  const beamSpanW = Math.max(0, beamSpanRight - beamSpanLeft);
+  for (let bi = 0; bi < bays.length; bi++) {
+    for (let j = 0; j < nStorageBeams; j++) {
+      const yy = beamYsPx[j]!;
+      const bh = Math.max(beamTh, 2.2);
+      const bw = beamSpanW;
+      parts.push(
+        `<rect x="${beamSpanLeft}" y="${yy - bh / 2}" width="${bw}" height="${bh}" rx="1.1" fill="${FV_BEAM_FILL}" stroke="${FV_BEAM_STROKE}" stroke-width="1.05"/>`
+      );
+      parts.push(
+        `<rect x="${beamSpanLeft + bw * 0.015}" y="${yy - bh * 0.42}" width="${bw * 0.97}" height="${bh * 0.38}" rx="0.45" fill="${FV_BEAM_HIGHLIGHT}" opacity="0.55"/>`
+      );
+      parts.push(
+        `<line x1="${beamSpanLeft}" y1="${yy - bh * 0.28}" x2="${beamSpanRight}" y2="${yy - bh * 0.28}" stroke="${FV_BEAM_EDGE}" stroke-width="0.55" opacity="0.88"/>`
+      );
+    }
+  }
+
   for (let bi = 0; bi < bays.length; bi++) {
     parts.push(
       drawFrontStorageTiers(
@@ -491,31 +541,18 @@ function drawFrontRack(
         storageTiers,
         beamTh,
         ry + 1,
-        rackBottom - 1
+        rackBottom - 1,
+        { capacityKgPerLevel: data.capacityKgPerLevel, labelScale: ls }
       )
     );
   }
 
-  const nBeamAxes = beamH.length;
-  /** Só níveis de carga: o último eixo é limite estrutural — não desenhar longarina/capa na baia (evita “nível extra”). */
-  const nStorageBeams = Math.max(0, nBeamAxes - 1);
-  for (let bi = 0; bi < bays.length; bi++) {
-    const bay = bays[bi]!;
-    for (let j = 0; j < nStorageBeams; j++) {
-      const yy = beamYsPx[j]!;
-      const bh = Math.max(beamTh, 2.2);
-      const bw = bay.right - bay.left;
-      parts.push(
-        `<rect x="${bay.left}" y="${yy - bh / 2}" width="${bw}" height="${bh}" rx="1.1" fill="${FV_BEAM_FILL}" stroke="${FV_BEAM_STROKE}" stroke-width="1.05"/>`
-      );
-      parts.push(
-        `<rect x="${bay.left + bw * 0.03}" y="${yy - bh * 0.42}" width="${bw * 0.94}" height="${bh * 0.38}" rx="0.45" fill="${FV_BEAM_HIGHLIGHT}" opacity="0.55"/>`
-      );
-      parts.push(
-        `<line x1="${bay.left}" y1="${yy - bh * 0.28}" x2="${bay.right}" y2="${yy - bh * 0.28}" stroke="${FV_BEAM_EDGE}" stroke-width="0.55" opacity="0.88"/>`
-      );
-    }
-  }
+  parts.push(
+    `<text x="${uprightXs[0]! + uprightWidthsPx[0]! / 2}" y="${floorTop + 12 * ls}" text-anchor="middle" font-size="${7.6 * ls}px" fill="${DIM_MINOR}">Montante ${escapeXml(String(colThicknessMm))} mm</text>`
+  );
+  parts.push(
+    `<text x="${uprightXs[nMod]! + uprightWidthsPx[nMod]! / 2}" y="${floorTop + 12 * ls}" text-anchor="middle" font-size="${7.6 * ls}px" fill="${DIM_MINOR}">Montante ${escapeXml(String(colThicknessMm))} mm</text>`
+  );
 
   parts.push(
     `<line x1="${uprightXs[0]}" y1="${topY}" x2="${lastUx + lastUw}" y2="${topY}" stroke="#475569" stroke-width="1.05" stroke-linecap="square" opacity="0.75"/>`
@@ -592,7 +629,7 @@ function drawLateral(
   const rackMaxH = ph - Math.round(72 / ls);
   const g = buildBeamGeometry(data, rackMaxW * 0.98, rackMaxH, ox, oy, pw, ph);
 
-  const { storageTiers, uprightH, beamH, uprightWidthsPx } = g;
+  const { storageTiers, uprightH, beamH } = g;
   const nBeamAxes = beamH.length;
 
   const bandMm = Math.max(1, data.bandDepthMm);
@@ -650,27 +687,31 @@ function drawLateral(
     `<text x="${x0 + dw / 2}" y="${floorTopLat + 8 * ls}" text-anchor="middle" font-size="${9 * ls}px" font-weight="700" fill="${COL_FLOOR}">PISO</text>`
   );
 
-  const uSide = Math.max(5.5, uprightWidthsPx[0]! * 0.42);
+  const colMmLat =
+    typeof data.uprightThicknessMm === 'number' && data.uprightThicknessMm > 0
+      ? Math.round(data.uprightThicknessMm)
+      : UPRIGHT_DEFAULT_MM;
+  const uW = Math.max(4.5, colMmLat * s);
   const xLeftU = x0;
-  const xRightU = x0 + dw - uSide;
-  const bayLeft = x0 + uSide;
-  const bayRight = x0 + dw - uSide;
+  const xRightU = x0 + dw - uW;
+  const bayLeft = x0 + uW;
+  const bayRight = x0 + dw - uW;
 
   const drawUprightSplit = (ux: number): void => {
     if (showTunnelOpening && yPassTop < floorTopLat - 2.5 && yPassTop > y0 + 4) {
       const hTop = Math.max(0, yPassTop - y0);
       if (hTop > 0.5) {
         parts.push(
-          `<rect x="${ux}" y="${y0}" width="${uSide}" height="${hTop}" fill="${FV_UPRIGHT_FILL}" stroke="${FV_UPRIGHT_STROKE}" stroke-width="1.05" opacity="0.92"/>`
+          `<rect x="${ux}" y="${y0}" width="${uW}" height="${hTop}" fill="${FV_UPRIGHT_FILL}" stroke="${FV_UPRIGHT_STROKE}" stroke-width="1.05" opacity="0.92"/>`
         );
       }
       const hOpen = Math.max(0, floorTopLat - yPassTop);
       parts.push(
-        `<rect x="${ux}" y="${yPassTop}" width="${uSide}" height="${hOpen}" fill="#f8fafc" stroke="${FV_UPRIGHT_STROKE}" stroke-width="0.65" stroke-dasharray="4 3"/>`
+        `<rect x="${ux}" y="${yPassTop}" width="${uW}" height="${hOpen}" fill="#f8fafc" stroke="${FV_UPRIGHT_STROKE}" stroke-width="0.65" stroke-dasharray="4 3"/>`
       );
     } else {
       parts.push(
-        `<rect x="${ux}" y="${y0}" width="${uSide}" height="${dh}" fill="${FV_UPRIGHT_FILL}" stroke="${FV_UPRIGHT_STROKE}" stroke-width="1.1"/>`
+        `<rect x="${ux}" y="${y0}" width="${uW}" height="${dh}" fill="${FV_UPRIGHT_FILL}" stroke="${FV_UPRIGHT_STROKE}" stroke-width="1.1"/>`
       );
     }
   };
@@ -695,7 +736,7 @@ function drawLateral(
     const yy = beamYLocal(j);
     const bh = Math.max(2, 2.2 * scaleY);
     parts.push(
-      `<rect x="${bayLeft}" y="${yy - bh / 2}" width="${bayRight - bayLeft}" height="${bh}" fill="${FV_BEAM_FILL}" stroke="${FV_BEAM_STROKE}" stroke-width="0.65"/>`
+      `<rect x="${x0}" y="${yy - bh / 2}" width="${dw}" height="${bh}" fill="${FV_BEAM_FILL}" stroke="${FV_BEAM_STROKE}" stroke-width="0.65"/>`
     );
   }
 
@@ -714,6 +755,34 @@ function drawLateral(
     const yHi = beamYLocal(j + 1);
     parts.push(braceBetween(bayLeft, bayRight, yLo, yHi, j % 2 === 0));
   }
+
+  for (let i = 0; i < storageTiers; i++) {
+    const yLo = beamYLocal(i);
+    const yHi = beamYLocal(i + 1);
+    const bhLat = Math.max(2, 2.2 * scaleY);
+    const top = yHi + bhLat * 0.48;
+    const bot = yLo - bhLat * 0.48;
+    if (bot - top < 5) continue;
+    const deckD = Math.max(4, (bot - top) * 0.35);
+    const xd = x0 + dw / 2 - deckD / 2;
+    const yd = top + (bot - top - deckD) * 0.35;
+    parts.push(
+      `<rect x="${xd}" y="${yd}" width="${deckD}" height="${(bot - top) * 0.55}" rx="0.4" fill="${FV_PALLET_DECK_FILL}" stroke="${FV_PALLET_DECK_STROKE}" stroke-width="0.45" opacity="0.9"/>`
+    );
+    if (typeof data.capacityKgPerLevel === 'number' && data.capacityKgPerLevel > 0) {
+      const kgTxt = `${Math.round(data.capacityKgPerLevel).toLocaleString('pt-BR')} kg`;
+      parts.push(
+        `<text x="${x0 + dw - 3}" y="${(top + bot) / 2 + 2 * ls}" text-anchor="end" font-size="${7 * ls}px" fill="${DIM_MAJOR}" font-weight="600">${escapeXml(kgTxt)}</text>`
+      );
+    }
+  }
+
+  parts.push(
+    `<text x="${xLeftU + uW / 2}" y="${floorTopLat + 11 * ls}" text-anchor="middle" font-size="${7.2 * ls}px" fill="${DIM_MINOR}">Montante ${escapeXml(String(colMmLat))} mm</text>`
+  );
+  parts.push(
+    `<text x="${xRightU + uW / 2}" y="${floorTopLat + 11 * ls}" text-anchor="middle" font-size="${7.2 * ls}px" fill="${DIM_MINOR}">Montante ${escapeXml(String(colMmLat))} mm</text>`
+  );
 
   parts.push(
     dimensionLineHArrows(x0, floorTopLat + 22 * ls, x0 + dw, DIM_MINOR)
