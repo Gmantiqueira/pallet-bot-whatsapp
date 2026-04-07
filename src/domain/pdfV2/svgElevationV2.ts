@@ -31,6 +31,10 @@ const FV_BEAM_FILL = '#fb923c';
 const FV_BEAM_STROKE = '#c2410c';
 const FV_BEAM_EDGE = '#9a3412';
 const FV_BEAM_HIGHLIGHT = '#fed7aa';
+/** Último eixo de elevação = tampo / limite estrutural (não longarina de nível de carga). */
+const FV_STRUCT_CAP_FILL = '#e2e8f0';
+const FV_STRUCT_CAP_STROKE = '#64748b';
+
 /** Cotas: hierarquia — principal / secundária. */
 const DIM_MAJOR = '#0f172a';
 const DIM_MINOR = '#64748b';
@@ -504,6 +508,17 @@ function drawFrontRack(
       const yy = beamYsPx[j]!;
       const bh = Math.max(beamTh, 2.2);
       const bw = bay.right - bay.left;
+      const isTopStructuralCap = nBeamAxes >= 2 && j === nBeamAxes - 1;
+      if (isTopStructuralCap) {
+        const capH = Math.max(1.35, bh * 0.4);
+        parts.push(
+          `<rect x="${bay.left}" y="${yy - capH / 2}" width="${bw}" height="${capH}" rx="0.4" fill="${FV_STRUCT_CAP_FILL}" stroke="${FV_STRUCT_CAP_STROKE}" stroke-width="0.6" opacity="0.95"/>`
+        );
+        parts.push(
+          `<line x1="${bay.left}" y1="${yy}" x2="${bay.right}" y2="${yy}" stroke="${DIM_MINOR}" stroke-width="0.45" opacity="0.7" stroke-dasharray="4 3"/>`
+        );
+        continue;
+      }
       parts.push(
         `<rect x="${bay.left}" y="${yy - bh / 2}" width="${bw}" height="${bh}" rx="1.1" fill="${FV_BEAM_FILL}" stroke="${FV_BEAM_STROKE}" stroke-width="1.05"/>`
       );
@@ -646,6 +661,14 @@ function drawLateral(
     for (let j = 0; j < nBeamAxes; j++) {
       const yy = beamYLocal(j);
       const bh = Math.max(2, 2.2 * scaleY);
+      const isTopCap = nBeamAxes >= 2 && j === nBeamAxes - 1;
+      if (isTopCap) {
+        const capH = Math.max(1.2, bh * 0.42);
+        parts.push(
+          `<rect x="${x0 + uSide}" y="${yy - capH / 2}" width="${dw - 2 * uSide}" height="${capH}" fill="${FV_STRUCT_CAP_FILL}" stroke="${FV_STRUCT_CAP_STROKE}" stroke-width="0.5" opacity="0.95"/>`
+        );
+        continue;
+      }
       parts.push(
         `<rect x="${x0 + uSide}" y="${yy - bh / 2}" width="${dw - 2 * uSide}" height="${bh}" fill="${FV_BEAM_FILL}" stroke="${FV_BEAM_STROKE}" stroke-width="0.65"/>`
       );
@@ -674,6 +697,14 @@ function drawLateral(
     for (let j = 0; j < nBeamAxes; j++) {
       const yy = beamYLocal(j);
       const bh = Math.max(2, 2.2 * scaleY);
+      const isTopCap = nBeamAxes >= 2 && j === nBeamAxes - 1;
+      if (isTopCap) {
+        const capH = Math.max(1.2, bh * 0.42);
+        parts.push(
+          `<rect x="${xL + uSide}" y="${yy - capH / 2}" width="${dw - 2 * uSide}" height="${capH}" fill="${FV_STRUCT_CAP_FILL}" stroke="${FV_STRUCT_CAP_STROKE}" stroke-width="0.5" opacity="0.95"/>`
+        );
+        continue;
+      }
       parts.push(
         `<rect x="${xL + uSide}" y="${yy - bh / 2}" width="${dw - 2 * uSide}" height="${bh}" fill="${FV_BEAM_FILL}" stroke="${FV_BEAM_STROKE}" stroke-width="0.65"/>`
       );
