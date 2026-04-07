@@ -147,12 +147,9 @@ describe('State Machine', () => {
       session = result.session;
 
       result = transition(session, { type: 'TEXT', value: '3000' });
-      expect(result.session.state).toBe('CHOOSE_MODULE_ORIENTATION');
+      expect(result.session.state).toBe('CHOOSE_LINE_STRATEGY');
       expect(result.session.answers.corridorMm).toBe(3000);
       session = result.session;
-
-      result = transition(session, { type: 'BUTTON', value: 'ORIENT_H' });
-      expect(result.session.state).toBe('CHOOSE_LINE_STRATEGY');
       session = result.session;
 
       result = transition(session, { type: 'BUTTON', value: 'LINE_SIMPLES' });

@@ -14,7 +14,6 @@ const base = (): ProjectAnswersV2 => ({
   levels: 4,
   capacityKg: 2000,
   lineStrategy: 'MELHOR_LAYOUT',
-  moduleOrientation: 'HORIZONTAL',
   hasTunnel: false,
   halfModuleOptimization: false,
   firstLevelOnGround: true,

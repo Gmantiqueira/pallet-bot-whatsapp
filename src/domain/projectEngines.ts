@@ -66,7 +66,7 @@ export function computeProjectEngines(
       ? answers.beamLengthMm
       : DEFAULT_BEAM_LENGTH_MM;
 
-  // TODO(layout): usar moduleOrientation, lineStrategy, hasTunnel e tunnelAppliesTo no motor de planta quando existir modelo.
+  // TODO(layout): usar lineStrategy, hasTunnel e tunnelAppliesTo no motor de planta quando existir modelo.
   const layoutInput: LayoutInput = {
     warehouseWidthMm: widthMm,
     warehouseLengthMm: lengthMm,

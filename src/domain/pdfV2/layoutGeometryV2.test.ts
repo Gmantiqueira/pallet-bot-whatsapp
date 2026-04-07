@@ -16,7 +16,6 @@ const minimal = (): ProjectAnswersV2 => ({
   levels: 4,
   capacityKg: 1200,
   lineStrategy: 'APENAS_SIMPLES',
-  moduleOrientation: 'HORIZONTAL',
   hasTunnel: false,
   halfModuleOptimization: false,
   firstLevelOnGround: true,

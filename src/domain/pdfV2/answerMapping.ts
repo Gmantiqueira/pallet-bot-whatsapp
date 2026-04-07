@@ -53,8 +53,6 @@ export function buildProjectAnswersV2(
     levels: answers.levels,
     capacityKg: answers.capacityKg,
     lineStrategy,
-    moduleOrientation: typeof answers.moduleOrientation === 'string' ? answers.moduleOrientation : undefined,
-    layoutOrientation: answers.layoutOrientation as LayoutOrientationV2 | undefined,
     hasTunnel: answers.hasTunnel === true,
     tunnelPosition,
     tunnelAppliesTo,
@@ -77,9 +75,6 @@ export type ProjectAnswersV2 = {
   levels: number;
   capacityKg: number;
   lineStrategy: LineStrategyCode;
-  moduleOrientation?: string;
-  /** Compatível com nomes alternativos do utilizador. */
-  layoutOrientation?: LayoutOrientationV2;
   hasTunnel: boolean;
   tunnelPosition?: TunnelPositionCode;
   tunnelAppliesTo?: TunnelAppliesCode;
@@ -90,21 +85,6 @@ export type ProjectAnswersV2 = {
   loadHeightMm?: number;
   clearHeightMm?: number;
 };
-
-export function resolveLayoutOrientationV2(
-  answers: ProjectAnswersV2
-): LayoutOrientationV2 {
-  if (answers.layoutOrientation === 'along_length' || answers.layoutOrientation === 'along_width') {
-    return answers.layoutOrientation;
-  }
-  if (answers.moduleOrientation === 'VERTICAL') {
-    return 'along_width';
-  }
-  if (answers.moduleOrientation === 'HORIZONTAL') {
-    return 'along_length';
-  }
-  return 'along_length';
-}
 
 /**
  * Melhor aproveitamento com viés para along_length:

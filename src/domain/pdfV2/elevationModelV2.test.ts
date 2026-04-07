@@ -23,7 +23,6 @@ describe('buildElevationModelV2 axis mapping', () => {
       levels: 4,
       capacityKg: 1500,
       lineStrategy: 'APENAS_SIMPLES',
-      moduleOrientation: 'HORIZONTAL',
       hasTunnel: false,
       halfModuleOptimization: false,
       firstLevelOnGround: true,

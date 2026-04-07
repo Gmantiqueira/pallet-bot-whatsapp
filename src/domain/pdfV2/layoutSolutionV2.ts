@@ -1,6 +1,5 @@
 import {
   pickBetterOrientationBySimpleCount,
-  resolveLayoutOrientationV2,
   tunnelAppliesToRow,
   type ProjectAnswersV2,
 } from './answerMapping';
@@ -306,19 +305,13 @@ function chooseDepthModeFromStrategy(
 }
 
 function resolveOrientation(answers: ProjectAnswersV2): LayoutOrientationV2 {
-  if (answers.layoutOrientation === 'along_length' || answers.layoutOrientation === 'along_width') {
-    return answers.layoutOrientation;
-  }
-  if (answers.moduleOrientation === 'MELHOR_APROVEITAMENTO') {
-    return pickBetterOrientationBySimpleCount(
-      answers.lengthMm,
-      answers.widthMm,
-      answers.corridorMm,
-      answers.moduleDepthMm,
-      answers.moduleWidthMm
-    );
-  }
-  return resolveLayoutOrientationV2(answers);
+  return pickBetterOrientationBySimpleCount(
+    answers.lengthMm,
+    answers.widthMm,
+    answers.corridorMm,
+    answers.moduleDepthMm,
+    answers.moduleWidthMm
+  );
 }
 
 /** Determina se o extremo ao longo do vão pode receber meio módulo (circulação adjacente). */

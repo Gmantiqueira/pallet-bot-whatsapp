@@ -16,7 +16,6 @@ export type State =
   | 'WAIT_LENGTH'
   | 'WAIT_WIDTH'
   | 'WAIT_CORRIDOR'
-  | 'CHOOSE_MODULE_ORIENTATION'
   | 'CHOOSE_LINE_STRATEGY'
   | 'CHOOSE_TUNNEL'
   | 'CHOOSE_TUNNEL_POSITION'
@@ -278,26 +277,10 @@ export const transition = (session: Session, input: Input): TransitionResult => 
       if (ve) {
         return { session: newSession, effects, error: ve };
       }
-      newSession = goNext(newSession, { corridorMm: corridor }, 'CHOOSE_MODULE_ORIENTATION');
+      newSession = goNext(newSession, { corridorMm: corridor }, 'CHOOSE_LINE_STRATEGY');
       effects.push({ type: 'SEND' });
       return { session: newSession, effects, error };
     }
-
-    case 'CHOOSE_MODULE_ORIENTATION':
-      if (input.type === 'BUTTON') {
-        const map: Record<string, string> = {
-          ORIENT_H: 'HORIZONTAL',
-          ORIENT_V: 'VERTICAL',
-          ORIENT_AUTO: 'MELHOR_APROVEITAMENTO',
-        };
-        const v = map[input.value];
-        if (!v) {
-          return { session: newSession, effects };
-        }
-        newSession = goNext(newSession, { moduleOrientation: v }, 'CHOOSE_LINE_STRATEGY');
-        effects.push({ type: 'SEND' });
-      }
-      return { session: newSession, effects };
 
     case 'CHOOSE_LINE_STRATEGY':
       if (input.type === 'BUTTON') {

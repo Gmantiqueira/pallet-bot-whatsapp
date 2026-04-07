@@ -137,20 +137,6 @@ const buildStateMessage = (session: Session): OutgoingMessage | null => {
         text: 'Largura do corredor principal em mm\n\nExemplos: 2800 ou 3000',
       };
 
-    case 'CHOOSE_MODULE_ORIENTATION':
-      return {
-        to: session.phone,
-        text:
-          'Na planta, o lado mais comprido de cada módulo (ponta com ponta) deve seguir qual direção?\n\n' +
-          '• Horizontal (recomendado): comprimento do módulo na mesma direção do comprimento do galpão (↔ no desenho).\n' +
-          '• Vertical: comprimento do módulo na direção da largura do galpão (↕ no desenho).',
-        buttons: [
-          { id: 'ORIENT_H', label: '↔ Comprimento horizontal' },
-          { id: 'ORIENT_V', label: '↕ Comprimento vertical' },
-          { id: 'ORIENT_AUTO', label: 'Melhor aproveitamento' },
-        ],
-      };
-
     case 'CHOOSE_LINE_STRATEGY':
       return {
         to: session.phone,
@@ -290,8 +276,7 @@ const buildStateMessage = (session: Session): OutgoingMessage | null => {
     case 'ASK_GENERATE_3D':
       return {
         to: session.phone,
-        text:
-          'A vista 3D isométrica está incluída no projeto.\n\nToque em *Continuar* para a confirmação final.',
+        text: 'A vista 3D isométrica está incluída no projeto.\n\nToque em *Continuar* para a confirmação final.',
         buttons: [{ id: 'CONTINUAR', label: 'Continuar' }],
       };
 
@@ -337,15 +322,6 @@ const posLabel = (v: unknown): string => {
     AMBOS: 'Ambos',
     MEIO: 'Meio',
     FIM: 'Fim',
-  };
-  return typeof v === 'string' ? (m[v] ?? v) : '—';
-};
-
-const orientLabel = (v: unknown): string => {
-  const m: Record<string, string> = {
-    HORIZONTAL: 'Horizontal',
-    VERTICAL: 'Vertical',
-    MELHOR_APROVEITAMENTO: 'Melhor aproveitamento',
   };
   return typeof v === 'string' ? (m[v] ?? v) : '—';
 };
@@ -403,9 +379,6 @@ const buildSummary = (session: Session): string => {
   }
   if (typeof a.corridorMm === 'number') {
     lines.push(`Corredor: ${a.corridorMm} mm`);
-  }
-  if (a.moduleOrientation) {
-    lines.push(`Orientação dos módulos: ${orientLabel(a.moduleOrientation)}`);
   }
   if (a.lineStrategy) {
     lines.push(`Linhas: ${lineLabel(a.lineStrategy)}`);

@@ -11,7 +11,6 @@ const base = (): ProjectAnswersV2 => ({
   levels: 4,
   capacityKg: 2000,
   lineStrategy: 'MELHOR_LAYOUT',
-  moduleOrientation: 'HORIZONTAL',
   hasTunnel: false,
   halfModuleOptimization: false,
   firstLevelOnGround: true,
@@ -146,24 +145,19 @@ describe('buildLayoutSolutionV2', () => {
     expect(minRight - maxLeft).toBeGreaterThan(0);
   });
 
-  it('10: orientação acompanha a largura (vertical no fluxo)', () => {
-    const a = {
-      ...base(),
-      moduleOrientation: 'VERTICAL',
-      lineStrategy: 'APENAS_SIMPLES' as const,
-    };
-    const s = buildLayoutSolutionV2(a);
-    expect(s.orientation).toBe('along_width');
+  it('10: orientação do vão vem só do ajuste ao galpão (along_length quando o comprimento é o eixo dominante)', () => {
+    const s = buildLayoutSolutionV2({ ...base(), lineStrategy: 'APENAS_SIMPLES' });
+    expect(s.orientation).toBe('along_length');
   });
 
-  it('11: orientação acompanha o comprimento (horizontal no fluxo)', () => {
-    const a = {
+  it('11: galpão mais largo que longo favorece along_width', () => {
+    const s = buildLayoutSolutionV2({
       ...base(),
-      moduleOrientation: 'HORIZONTAL',
+      lengthMm: 16_000,
+      widthMm: 40_000,
       lineStrategy: 'APENAS_SIMPLES' as const,
-    };
-    const s = buildLayoutSolutionV2(a);
-    expect(s.orientation).toBe('along_length');
+    });
+    expect(s.orientation).toBe('along_width');
   });
 
   it('12: usa moduleWidthMm quando beamLengthMm ausente (eixo longo não pode cair no curto)', () => {

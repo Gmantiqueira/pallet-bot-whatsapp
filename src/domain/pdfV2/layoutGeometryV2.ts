@@ -51,7 +51,6 @@ export type RackModule = {
   type: RackModuleType;
   /** Retângulo em coordenadas do galpão (mm), eixo X = comprimento, Y = largura. */
   footprint: { x0: number; y0: number; x1: number; y1: number };
-  layoutOrientation: LayoutOrientationV2;
   /** Extensão ao longo do vão / longarina (mm). */
   widthMm: number;
   /** Extensão ao longo da profundidade da estanteria (eixo transversal ao vão) (mm). */
@@ -140,11 +139,17 @@ export class LayoutGeometryValidationError extends Error {
   }
 }
 
+/**
+ * Eixo do vão (ponta com ponta) vs profundidade de faixa vêm da orientação **calculada** na solução
+ * (não do utilizador). Não usar max(dx,dy): em dupla costas a faixa transversal pode ser mais longa que o vão.
+ */
 function moduleDims(m: ModuleSegment, orientation: LayoutOrientationV2): { widthMm: number; depthMm: number } {
+  const dx = Math.abs(m.x1 - m.x0);
+  const dy = Math.abs(m.y1 - m.y0);
   if (orientation === 'along_length') {
-    return { widthMm: m.x1 - m.x0, depthMm: m.y1 - m.y0 };
+    return { widthMm: dx, depthMm: dy };
   }
-  return { widthMm: m.y1 - m.y0, depthMm: m.x1 - m.x0 };
+  return { widthMm: dy, depthMm: dx };
 }
 
 function clearHeightFromAnswers(answers: Record<string, unknown>): number | undefined {
@@ -255,8 +260,7 @@ function rackModuleFromSegment(
     typeof answers.firstLevelOnGround === 'boolean' ? answers.firstLevelOnGround : true;
   const cap = typeof answers.capacityKg === 'number' ? answers.capacityKg : 0;
   const H = uprightHeightMmFromAnswers(answers);
-  const orientation = solution.orientation;
-  const { widthMm, depthMm } = moduleDims(m, orientation);
+  const { widthMm, depthMm } = moduleDims(m, solution.orientation);
   const type: RackModuleType = m.variant === 'tunnel' ? 'tunnel' : 'normal';
   const uprightThicknessMm =
     type === 'tunnel' ? UPRIGHT_THICKNESS_TUNNEL_MM : UPRIGHT_THICKNESS_NORMAL_MM;
@@ -287,7 +291,6 @@ function rackModuleFromSegment(
     moduleIndexInRow,
     type,
     footprint: { x0: m.x0, y0: m.y0, x1: m.x1, y1: m.y1 },
-    layoutOrientation: orientation,
     widthMm,
     depthMm,
     moduleLengthAxisMm: widthMm,
@@ -518,11 +521,6 @@ export function validateLayoutGeometry(geo: LayoutGeometry): void {
       if (m.rowId !== row.id) {
         throw new LayoutGeometryValidationError(`Módulo ${m.id} com rowId inválido.`);
       }
-      if (m.layoutOrientation !== geo.orientation) {
-        throw new LayoutGeometryValidationError(
-          `Módulo ${m.id}: orientação inconsistente com o layout.`
-        );
-      }
 
       if (m.type === 'tunnel') {
         if (!m.openBelow) {
@@ -565,16 +563,14 @@ export function validateLayoutGeometry(geo: LayoutGeometry): void {
         }
       }
 
-      const w = m.footprint.x1 - m.footprint.x0;
-      const d = m.footprint.y1 - m.footprint.y0;
-      if (ori === 'along_length') {
-        if (Math.abs(w - m.widthMm) > 1 || Math.abs(d - m.depthMm) > 1) {
-          throw new LayoutGeometryValidationError(`Módulo ${m.id}: largura/profundidade incoerentes com a pegada.`);
-        }
-      } else {
-        if (Math.abs(d - m.widthMm) > 1 || Math.abs(w - m.depthMm) > 1) {
-          throw new LayoutGeometryValidationError(`Módulo ${m.id}: largura/profundidade incoerentes com a pegada.`);
-        }
+      const dx = Math.abs(m.footprint.x1 - m.footprint.x0);
+      const dy = Math.abs(m.footprint.y1 - m.footprint.y0);
+      const beamExtent = ori === 'along_length' ? dx : dy;
+      const crossExtent = ori === 'along_length' ? dy : dx;
+      if (Math.abs(beamExtent - m.widthMm) > 1 || Math.abs(crossExtent - m.depthMm) > 1) {
+        throw new LayoutGeometryValidationError(
+          `Módulo ${m.id}: vão / profundidade de faixa incoerentes com a pegada.`
+        );
       }
 
       const expectedAxes =
