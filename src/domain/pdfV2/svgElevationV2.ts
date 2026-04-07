@@ -369,6 +369,15 @@ function drawFrontStorageTiers(
   return parts.join('');
 }
 
+/**
+ * Espaço sob o piso da estrutura: cota horizontal (`rackBottom + 26·ls`) + texto «Largura total»
+ * (`rackBottom + 44·ls`) deve caber em `ph` sem sobrepor a legenda da folha (`wrapElevationDrawingPage`).
+ */
+function frontRackBelowFloorReservePx(labelScale: number): number {
+  const ls = labelScale;
+  return Math.round(26 * ls + 44 * ls + 22);
+}
+
 /** Vista frontal: estrutura, longarinas, piso, cotas e carga (kg) centrada acima de cada nível. */
 function drawFrontRack(
   ox: number,
@@ -383,7 +392,10 @@ function drawFrontRack(
   const ls = options?.labelScale ?? 1;
   const nMod = FV_FRONT_BAY_COUNT;
   const rackMaxW = Math.max(210, pw - 20 - 40);
-  const rackMaxH = ph - Math.round(78 / ls);
+  const rackMaxH = Math.max(
+    120,
+    ph - Math.round(78 / ls) - frontRackBelowFloorReservePx(ls)
+  );
   const g = buildBeamGeometry(data, rackMaxW, rackMaxH, ox, oy, pw, ph);
   const slimmed = frontSlimUprightsWidenBay(g.uprightWidthsPx, g.beamPx, nMod);
   const uprightWidthsPx = slimmed.uprightWidthsPx;
@@ -781,7 +793,7 @@ function wrapElevationDrawingPage(
   );
   parts.push(inner);
   parts.push(
-    `<text x="${width / 2}" y="${height - 32}" text-anchor="middle" font-size="${fsFoot}px" fill="#64748b">${escapeXml(footerLine)}</text>`
+    `<text x="${width / 2}" y="${height - 22}" text-anchor="middle" font-size="${fsFoot}px" fill="#64748b">${escapeXml(footerLine)}</text>`
   );
   parts.push('</svg>');
   return parts.join('');
