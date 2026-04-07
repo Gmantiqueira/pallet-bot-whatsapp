@@ -6,8 +6,8 @@ const FV_INTER_BAY_MM = FV_FOLGA_MM * 2;
 const UPRIGHT_DEFAULT_MM = 75;
 /** Montantes de zona de túnel (1.º pórtico) — reforço visual. */
 const UPRIGHT_TUNNEL_MM = 100;
-/** Duas posições de palete por nível na vista frontal (duas baias entre montantes). A lateral permanece uma célula em profundidade. */
-const FV_FRONT_BAY_COUNT = 2;
+/** Uma baia estrutural no diagrama frontal; dentro do vão, duas posições de palete separadas por linha vertical ao centro. */
+const FV_FRONT_BAY_COUNT = 1;
 /**
  * Vista frontal: montantes mais estreitos em px do que a escala mm, redistribuindo largura para o vão
  * (face de armazenagem dominada pelas longarinas, não pórtico estreito).
@@ -333,7 +333,9 @@ function drawFrontStorageTiers(
   storageTiers: number,
   beamTh: number,
   yClipTop: number,
-  yClipBottom: number
+  yClipBottom: number,
+  /** Duas posições ao longo da longarina: linha vertical visível ao meio do vão (entre faixas). */
+  splitTwoPalletPositions: boolean
 ): string {
   const parts: string[] = [];
   const insetX = Math.max(2.8, (bay.right - bay.left) * 0.04);
@@ -353,16 +355,22 @@ function drawFrontStorageTiers(
       `<rect x="${xl}" y="${t}" width="${xr - xl}" height="${b - t}" rx="1.2" fill="${FV_PALLET_TIER_FILL}" stroke="${FV_PALLET_TIER_STROKE}" stroke-width="0.35" opacity="${FV_PALLET_TIER_OPACITY}"/>`
     );
     const mx = (xl + xr) / 2;
-    parts.push(
-      `<line x1="${mx}" y1="${t + 1.5}" x2="${mx}" y2="${b - 1.5}" stroke="${FV_PALLET_TIER_STROKE}" stroke-width="0.28" opacity="0.28" stroke-dasharray="2 3"/>`
-    );
-    const bw = xr - xl;
-    if (bw > 28) {
-      for (let k = 1; k <= FV_ALONG_BEAM_DIVISIONS; k++) {
-        const xDiv = xl + (k / (FV_ALONG_BEAM_DIVISIONS + 1)) * bw;
-        parts.push(
-          `<line x1="${xDiv}" y1="${t + 2.5}" x2="${xDiv}" y2="${b - 2.5}" stroke="${FV_PALLET_TIER_STROKE}" stroke-width="0.22" opacity="0.22"/>`
-        );
+    if (splitTwoPalletPositions) {
+      parts.push(
+        `<line x1="${mx}" y1="${t + 1.2}" x2="${mx}" y2="${b - 1.2}" stroke="#475569" stroke-width="1.15" stroke-linecap="square" opacity="0.92"/>`
+      );
+    } else {
+      parts.push(
+        `<line x1="${mx}" y1="${t + 1.5}" x2="${mx}" y2="${b - 1.5}" stroke="${FV_PALLET_TIER_STROKE}" stroke-width="0.28" opacity="0.28" stroke-dasharray="2 3"/>`
+      );
+      const bw = xr - xl;
+      if (bw > 28) {
+        for (let k = 1; k <= FV_ALONG_BEAM_DIVISIONS; k++) {
+          const xDiv = xl + (k / (FV_ALONG_BEAM_DIVISIONS + 1)) * bw;
+          parts.push(
+            `<line x1="${xDiv}" y1="${t + 2.5}" x2="${xDiv}" y2="${b - 2.5}" stroke="${FV_PALLET_TIER_STROKE}" stroke-width="0.22" opacity="0.22"/>`
+          );
+        }
       }
     }
   }
@@ -505,7 +513,8 @@ function drawFrontRack(
         storageTiers,
         beamTh,
         ry + 1,
-        rackBottom - 1
+        rackBottom - 1,
+        true
       )
     );
   }
@@ -536,16 +545,20 @@ function drawFrontRack(
     const capFs = 14.5 * ls;
     for (let bi = 0; bi < bays.length; bi++) {
       const bay = bays[bi]!;
+      const xm = (bay.left + bay.right) / 2;
       for (let j = 0; j < nStorageBeams; j++) {
         const yy = beamYsPx[j]!;
         const bh = Math.max(beamTh, 2.2);
-        const cx = (bay.left + bay.right) / 2;
         const ty = yy - bh / 2 - 4.5 * ls;
-        parts.push(
-          `<text x="${cx}" y="${ty}" text-anchor="middle" font-size="${capFs}px" font-weight="700" fill="#111827" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif">${escapeXml(
-            capText
-          )}</text>`
-        );
+        const cxLeft = (bay.left + xm) / 2;
+        const cxRight = (xm + bay.right) / 2;
+        for (const cx of [cxLeft, cxRight]) {
+          parts.push(
+            `<text x="${cx}" y="${ty}" text-anchor="middle" font-size="${capFs}px" font-weight="700" fill="#111827" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif">${escapeXml(
+              capText
+            )}</text>`
+          );
+        }
       }
     }
   }
@@ -555,10 +568,9 @@ function drawFrontRack(
   );
 
   parts.push(dimensionLineHArrows(faceSpanLeft, dimTopY, faceSpanRight, DIM_MINOR));
-  const faceTitle =
-    nMod > 1
-      ? `Face de armazenagem · ${nMod} posições/nível · vão unit. ${escapeXml(formatMmPtBr(Math.round(beamL)))}`
-      : `Face de armazenagem · vão ${escapeXml(formatMmPtBr(Math.round(beamL)))}`;
+  const faceTitle = `Face de armazenagem · vão ${escapeXml(
+    formatMmPtBr(Math.round(beamL))
+  )} · 2 pos./nível`;
   parts.push(
     `<text x="${ox + pw / 2}" y="${dimTopY - 6 * ls}" text-anchor="middle" font-size="${10.5 * ls}px" font-weight="700" fill="${DIM_MAJOR}">${faceTitle}</text>`
   );

@@ -36,11 +36,12 @@ describe('serializeElevationPagesV2', () => {
     expect(svg).toContain('PISO');
     expect(svg).toContain('H total');
     expect(svg).toMatch(/Face de armazenagem/);
-    expect(svg).toMatch(/posições\/nível|vão/);
-    expect(svg).toContain('1200kg');
-    // Duas baias × `levels` longarinas de armazenagem (último eixo não é longarina de carga)
+    expect(svg).toMatch(/2 pos\./);
+    const kgLabels = svg.match(/1200kg/g) ?? [];
+    expect(kgLabels.length).toBe(a.levels * 2);
+    // Uma baia: uma longarina laranja por nível de carga
     const orangeBeams = svg.match(/fill="#fb923c"/g) ?? [];
-    expect(orangeBeams.length).toBe(a.levels * 2);
+    expect(orangeBeams.length).toBe(a.levels);
   });
 
   it('vista lateral dupla costas menciona espinha e profundidade de faixa', () => {
