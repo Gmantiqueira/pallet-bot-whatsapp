@@ -181,7 +181,13 @@ function drawMinimalVerticalDims(
 }
 
 type BeamGeometry = {
+  /** Níveis declarados no projeto (payload). */
   levels: number;
+  /**
+   * Patamares de armazenagem a desenhar: entre eixos consecutivos, excluindo intervalos de topo
+   * quando há mais eixos que níveis (o último eixo é tampo / referência, não um “nível” extra).
+   */
+  storageTiers: number;
   uprightH: number;
   beamH: number[];
   beamYsPx: number[];
@@ -194,7 +200,7 @@ type BeamGeometry = {
   uprightWidthsPx: number[];
   beamPx: number;
   gapPx: number;
-  /** Folga entre eixos consecutivos de longarina (mm), length = levels. */
+  /** Folga entre eixos consecutivos de longarina (mm), length = beamH.length - 1. */
   axisGapsMm: number[];
   /** Largura total em mm (faces externas). */
   totalWidthMm: number;
@@ -258,17 +264,23 @@ function buildBeamGeometry(
   }
 
   const rawBeamH = data.beamElevationsMm;
-  const hasBeamH =
+  const rawBeamOk =
     Array.isArray(rawBeamH) &&
-    rawBeamH.length === levels + 1 &&
+    rawBeamH.length >= 2 &&
     rawBeamH.every(x => typeof x === 'number' && Number.isFinite(x));
-  const beamH = hasBeamH
-    ? rawBeamH
-    : Array.from({ length: levels + 1 }, (_, k) => (k / levels) * uprightH);
+
+  const beamH =
+    rawBeamOk && rawBeamH.length >= levels + 1
+      ? rawBeamH
+      : Array.from({ length: levels + 1 }, (_, k) => (k / levels) * uprightH);
+
+  const nBeamAxes = beamH.length;
+  const maxIntervals = Math.max(0, nBeamAxes - 1);
+  const storageTiers = Math.max(1, Math.min(levels, maxIntervals));
 
   const axisGapsMm: number[] = [];
-  for (let i = 0; i < levels; i++) {
-    axisGapsMm.push(beamH[i + 1] - beamH[i]);
+  for (let i = 0; i < nBeamAxes - 1; i++) {
+    axisGapsMm.push(beamH[i + 1]! - beamH[i]!);
   }
 
   const ry = oy + 44;
@@ -278,6 +290,7 @@ function buildBeamGeometry(
 
   return {
     levels,
+    storageTiers,
     uprightH,
     beamH,
     beamYsPx,
@@ -318,7 +331,7 @@ function frontSlimUprightsWidenBay(
 function drawFrontStorageTiers(
   bay: BaySpan,
   beamYsPx: number[],
-  levels: number,
+  storageTiers: number,
   beamTh: number,
   yClipTop: number,
   yClipBottom: number
@@ -327,7 +340,7 @@ function drawFrontStorageTiers(
   const insetX = Math.max(2.8, (bay.right - bay.left) * 0.04);
   const xl = bay.left + insetX;
   const xr = bay.right - insetX;
-  for (let i = 0; i < levels; i++) {
+  for (let i = 0; i < storageTiers; i++) {
     const yBelow = beamYsPx[i];
     const yAbove = beamYsPx[i + 1];
     if (yBelow == null || yAbove == null) continue;
@@ -377,7 +390,7 @@ function drawFrontRack(
   const uprightWidthsPx = slimmed.uprightWidthsPx;
   const beamWithFrontVis = slimmed.beamPx;
   const gapPx = g.gapPx;
-  const { levels, uprightH, beamYsPx, innerH, rackBottom, ry, totalWidthMm } = g;
+  const { storageTiers, uprightH, beamYsPx, innerH, rackBottom, ry, totalWidthMm, beamH } = g;
   const beamPx = beamWithFrontVis;
   const totalW =
     uprightWidthsPx.reduce((a, b) => a + b, 0) +
@@ -387,7 +400,7 @@ function drawFrontRack(
 
   const beamL = Math.max(1, data.beamLengthMm);
 
-  const levDraw = innerH / Math.max(1, levels);
+  const levDraw = innerH / Math.max(1, storageTiers);
   const beamTh = Math.max(2.35, Math.min(5.8, levDraw * 0.24));
 
   const bays: BaySpan[] = [];
@@ -476,7 +489,7 @@ function drawFrontRack(
       drawFrontStorageTiers(
         bays[bi]!,
         beamYsPx,
-        levels,
+        storageTiers,
         beamTh,
         ry + 1,
         rackBottom - 1
@@ -484,9 +497,10 @@ function drawFrontRack(
     );
   }
 
+  const nBeamAxes = beamH.length;
   for (let bi = 0; bi < bays.length; bi++) {
     const bay = bays[bi]!;
-    for (let j = 0; j <= levels; j++) {
+    for (let j = 0; j < nBeamAxes; j++) {
       const yy = beamYsPx[j]!;
       const bh = Math.max(beamTh, 2.2);
       const bw = bay.right - bay.left;
@@ -577,7 +591,8 @@ function drawLateral(
   const rackMaxH = ph - Math.round(100 / ls);
   const g = buildBeamGeometry(data, rackMaxW * 0.95, rackMaxH, ox, oy, pw, ph);
 
-  const { levels, uprightH, beamH, uprightWidthsPx } = g;
+  const { storageTiers, uprightH, beamH, uprightWidthsPx } = g;
+  const nBeamAxes = beamH.length;
 
   const bandMm = Math.max(1, data.bandDepthMm);
   const modMm = Math.max(1, data.moduleDepthMm);
@@ -628,7 +643,7 @@ function drawLateral(
 
   if (!isDouble) {
     const uSide = Math.max(5, uprightWidthsPx[0] * 0.42);
-    for (let j = 0; j <= levels; j++) {
+    for (let j = 0; j < nBeamAxes; j++) {
       const yy = beamYLocal(j);
       const bh = Math.max(2, 2.2 * scaleY);
       parts.push(
@@ -641,7 +656,7 @@ function drawLateral(
     parts.push(
       `<rect x="${x0 + dw - uSide}" y="${y0}" width="${uSide}" height="${dh}" fill="${FV_UPRIGHT_FILL}" stroke="${FV_UPRIGHT_STROKE}" stroke-width="1.1"/>`
     );
-    for (let j = 0; j < levels; j++) {
+    for (let j = 0; j < storageTiers; j++) {
       const yLo = beamYLocal(j);
       const yHi = beamYLocal(j + 1);
       parts.push(
@@ -656,7 +671,7 @@ function drawLateral(
     const xR = x0 + wMod + wSp;
     const uSide = Math.max(5, uprightWidthsPx[0] * 0.38);
 
-    for (let j = 0; j <= levels; j++) {
+    for (let j = 0; j < nBeamAxes; j++) {
       const yy = beamYLocal(j);
       const bh = Math.max(2, 2.2 * scaleY);
       parts.push(
@@ -684,7 +699,7 @@ function drawLateral(
     );
 
     const braceCell = (xa: number, xb: number, flipOff: number) => {
-      for (let j = 0; j < levels; j++) {
+      for (let j = 0; j < storageTiers; j++) {
         const yLo = beamYLocal(j);
         const yHi = beamYLocal(j + 1);
         parts.push(braceBetween(xa, xb, yLo, yHi, (j + flipOff) % 2 === 0));
@@ -703,10 +718,6 @@ function drawLateral(
     )}</text>`
   );
 
-  const beamYsLat: number[] = [];
-  for (let j = 0; j <= levels; j++) {
-    beamYsLat.push(beamYLocal(j));
-  }
   parts.push(
     drawMinimalVerticalDims(
       x0 + dw,
