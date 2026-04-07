@@ -1,7 +1,7 @@
 import {
   computeBeamElevations,
   computeLevelSpacing,
-  computeTunnelRackBeamElevations,
+  computeTunnelRackBeamElevationsAlignedToNormal,
   tunnelActiveStorageLevelsFromGlobal,
   DEFAULT_FIRST_LEVEL_LIFT_MM,
   DEFAULT_STRUCTURAL_BOTTOM_MM,
@@ -91,19 +91,33 @@ describe('computeBeamElevations', () => {
   });
 });
 
-describe('computeTunnelRackBeamElevations', () => {
-  it('1.º eixo ao longo do pé livre; níveis ativos acima (menos que o global) até ao topo útil', () => {
-    const activeTiers = 3;
-    const r = computeTunnelRackBeamElevations({
+describe('computeTunnelRackBeamElevationsAlignedToNormal', () => {
+  it('reutiliza as folgas verticais do módulo normal nos patamares superiores (menos níveis, mesmo espaçamento)', () => {
+    const globalLevels = 5;
+    const tunnelTiers = 2;
+    const normal = computeBeamElevations({
       uprightHeightMm: 8000,
-      levels: activeTiers,
+      levels: globalLevels,
+      firstLevelOnGround: true,
+    });
+    const r = computeTunnelRackBeamElevationsAlignedToNormal({
+      normal,
+      globalLevels,
+      tunnelLevels: tunnelTiers,
       tunnelClearanceMm: 3200,
     });
-    expect(r.beamElevationsMm).toHaveLength(activeTiers + 1);
+    expect(r.beamElevationsMm).toHaveLength(tunnelTiers + 1);
     expect(r.beamElevationsMm[0]!).toBeGreaterThanOrEqual(
       3200 + TUNNEL_FIRST_BEAM_OFFSET_ABOVE_CLEARANCE_MM
     );
-    expect(r.beamElevationsMm[activeTiers]!).toBeCloseTo(8000 - DEFAULT_STRUCTURAL_TOP_MM, 3);
+    expect(r.beamElevationsMm[tunnelTiers]!).toBeCloseTo(normal.beamElevationsMm[globalLevels]!, 3);
+    const start = globalLevels - tunnelTiers;
+    for (let j = 0; j < tunnelTiers; j++) {
+      const gN =
+        normal.beamElevationsMm[start + j + 1]! - normal.beamElevationsMm[start + j]!;
+      const gT = r.beamElevationsMm[j + 1]! - r.beamElevationsMm[j]!;
+      expect(gT).toBeCloseTo(gN, 2);
+    }
   });
 });
 

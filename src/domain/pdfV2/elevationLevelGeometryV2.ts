@@ -174,55 +174,103 @@ export function computeBeamElevations(input: BeamElevationInput): BeamElevationR
   };
 }
 
-/**
- * Módulo túnel: vão livre até tunnelClearanceMm; acima, apenas `levels` níveis de armazenagem ativos
- * (menor que o global do projeto), com espaçamento uniforme até ao topo útil — sem empilhar o mesmo
- * número de níveis do módulo normal na zona superior.
- */
-export function computeTunnelRackBeamElevations(input: {
-  uprightHeightMm: number;
-  /** Número de níveis de armazenagem ativos acima do pé livre (tipicamente {@link tunnelActiveStorageLevelsFromGlobal}). */
-  levels: number;
-  tunnelClearanceMm: number;
-  structuralBottomMm?: number;
-  structuralTopMm?: number;
-  /** Folga estrutural acima do pé livre antes do primeiro eixo de armazenagem (mm). */
-  firstBeamOffsetAboveClearanceMm?: number;
-}): BeamElevationResult {
-  const levels = Math.max(1, Math.floor(input.levels));
-  const H0 = Math.max(EPS, input.uprightHeightMm);
-  let structuralBottom = input.structuralBottomMm ?? DEFAULT_STRUCTURAL_BOTTOM_MM;
-  let structuralTop = input.structuralTopMm ?? DEFAULT_STRUCTURAL_TOP_MM;
-  structuralBottom = clamp(structuralBottom, 0, H0 * 0.25);
-  structuralTop = clamp(structuralTop, 0, H0 * 0.25);
-  const topIn = H0 - structuralTop;
-
-  const off = input.firstBeamOffsetAboveClearanceMm ?? TUNNEL_FIRST_BEAM_OFFSET_ABOVE_CLEARANCE_MM;
-  const beam0Min = input.tunnelClearanceMm + off;
-  let beam0 = Math.max(structuralBottom + EPS, beam0Min);
-  const span = Math.max(EPS, topIn - beam0);
-  const beamElevationsMm: number[] = [];
-  for (let k = 0; k <= levels; k++) {
-    beamElevationsMm.push(beam0 + (k / levels) * span);
-  }
-  beamElevationsMm[levels] = topIn;
-
+function beamElevationResultFromRungs(
+  beamElevationsMm: number[],
+  structuralBottomMm: number,
+  structuralTopMm: number,
+  gapsScaledToFit: boolean
+): BeamElevationResult {
   const diffs: number[] = [];
   for (let i = 0; i < beamElevationsMm.length - 1; i++) {
     diffs.push(beamElevationsMm[i + 1]! - beamElevationsMm[i]!);
   }
   const meanGapMm =
     diffs.length > 0 ? diffs.reduce((a, b) => a + b, 0) / diffs.length : 0;
-  const usableHeightMm = topIn - beam0;
+  const topIn = beamElevationsMm[beamElevationsMm.length - 1]!;
+  const beam0 = beamElevationsMm[0]!;
+  const usableHeightMm = Math.max(EPS, topIn - beam0);
 
   return {
     beamElevationsMm,
-    structuralBottomMm: structuralBottom,
-    structuralTopMm: structuralTop,
+    structuralBottomMm,
+    structuralTopMm,
     usableHeightMm,
     meanGapMm,
-    gapsScaledToFit: false,
+    gapsScaledToFit,
   };
+}
+
+/**
+ * Módulo túnel: mesmos intervalos verticais entre eixos que no módulo normal (parte superior da escada de cotas),
+ * com menos níveis ativos — não redistribuir o espaço útil restante com folgas mais estreitas.
+ *
+ * Usa os últimos `tunnelLevels` patamares da curva do módulo normal (alinhado ao topo útil). Se o pé livre
+ * for mais alto que o 1.º desses eixos, ancora no pé livre + offset e reproduz as mesmas folgas do normal;
+ * se não couber, escala só essas folgas proporcionalmente (marca `gapsScaledToFit`).
+ */
+export function computeTunnelRackBeamElevationsAlignedToNormal(input: {
+  /** Mesma lei de cotas que o módulo normal adjacente (globalLevels + 1 eixos). */
+  normal: BeamElevationResult;
+  globalLevels: number;
+  tunnelLevels: number;
+  tunnelClearanceMm: number;
+  firstBeamOffsetAboveClearanceMm?: number;
+}): BeamElevationResult {
+  const L = Math.max(1, Math.floor(input.globalLevels));
+  const t = Math.max(1, Math.floor(input.tunnelLevels));
+  const b = input.normal.beamElevationsMm;
+  const structuralBottom = input.normal.structuralBottomMm;
+  const structuralTop = input.normal.structuralTopMm;
+
+  if (b.length !== L + 1) {
+    throw new Error(
+      `computeTunnelRackBeamElevationsAlignedToNormal: normal tem ${b.length} eixos, esperado ${L + 1}.`
+    );
+  }
+
+  const off = input.firstBeamOffsetAboveClearanceMm ?? TUNNEL_FIRST_BEAM_OFFSET_ABOVE_CLEARANCE_MM;
+  const clearMin = input.tunnelClearanceMm + off;
+  const topIn = b[L]!;
+
+  const start = L - t;
+  if (start < 0) {
+    throw new Error('computeTunnelRackBeamElevationsAlignedToNormal: tunnelLevels > globalLevels.');
+  }
+
+  let beamElevationsMm: number[];
+  let gapsScaledToFit = false;
+
+  if (b[start]! + EPS >= clearMin) {
+    beamElevationsMm = b.slice(start);
+  } else {
+    const gaps: number[] = [];
+    for (let j = 0; j < t; j++) {
+      gaps.push(b[start + j + 1]! - b[start + j]!);
+    }
+    const first = clearMin;
+    const available = topIn - first;
+    const sumG = gaps.reduce((a, x) => a + x, 0);
+    let useGaps = gaps;
+    if (sumG > available + EPS) {
+      const s = available / sumG;
+      useGaps = gaps.map(g => g * s);
+      gapsScaledToFit = true;
+    }
+    beamElevationsMm = [first];
+    let acc = first;
+    for (let j = 0; j < t; j++) {
+      acc += useGaps[j]!;
+      beamElevationsMm.push(j === t - 1 ? topIn : acc);
+    }
+    beamElevationsMm[t] = topIn;
+  }
+
+  return beamElevationResultFromRungs(
+    beamElevationsMm,
+    structuralBottom,
+    structuralTop,
+    gapsScaledToFit
+  );
 }
 
 /**

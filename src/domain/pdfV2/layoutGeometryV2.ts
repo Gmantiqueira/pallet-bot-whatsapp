@@ -5,7 +5,7 @@
 
 import {
   computeBeamElevations,
-  computeTunnelRackBeamElevations,
+  computeTunnelRackBeamElevationsAlignedToNormal,
   TUNNEL_FIRST_BEAM_OFFSET_ABOVE_CLEARANCE_MM,
   tunnelActiveStorageLevelsFromGlobal,
   type BeamElevationResult,
@@ -214,9 +214,20 @@ function beamResultForModule(
       m.activeStorageLevels != null
         ? m.activeStorageLevels
         : tunnelActiveStorageLevelsFromGlobal(globalLevels);
-    return computeTunnelRackBeamElevations({
+    const normal = computeBeamElevations({
       uprightHeightMm,
-      levels: tunnelLv,
+      levels: globalLevels,
+      firstLevelOnGround,
+      equalLevelSpacing: answers.equalLevelSpacing === true,
+      levelSpacingMm: typeof answers.levelSpacingMm === 'number' ? answers.levelSpacingMm : undefined,
+      levelSpacingsMm: Array.isArray(answers.levelSpacingsMm)
+        ? (answers.levelSpacingsMm as number[])
+        : undefined,
+    });
+    return computeTunnelRackBeamElevationsAlignedToNormal({
+      normal,
+      globalLevels,
+      tunnelLevels: tunnelLv,
       tunnelClearanceMm: m.tunnelClearanceMm,
     });
   }
