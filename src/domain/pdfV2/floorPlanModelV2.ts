@@ -1,11 +1,17 @@
 import type { LayoutGeometry, RackRow } from './layoutGeometryV2';
 import type { FloorPlanDimension, FloorPlanLabel, FloorPlanModelV2, RackDepthModeV2 } from './types';
 
-/** Canvas SVG da planta: maior → galpão desenhado maior em relação às margens do desenho. */
+/**
+ * Canvas SVG da planta.
+ * - Para L ≈ W, se `innerH` < `innerW`, `scale = innerH/W` fica baixo e o bitmap fica “paisagem”; no PDF
+ *   o encaixe limita pela largura e sobra ~metade da página em branco. Por isso `VB_H` é alto o suficiente
+ *   para `innerH >= innerW` (escala passa a usar a largura útil) e a razão VB_W/VB_H ≈ 0,72 aproxima a
+ *   zona útil A4 (largura/altura) para o `fitRasterInBox` encher altura e largura ao mesmo tempo.
+ */
 const VB_W = 1360;
-const VB_H = 960;
+const VB_H = 1900;
 const PAD = 22;
-const HEADER = 52;
+const HEADER = 50;
 const DIM_OUT = 24;
 
 function escapeXml(text: string): string {
@@ -151,14 +157,14 @@ export function buildFloorPlanModelV2(geometry: LayoutGeometry): FloorPlanModelV
     {
       id: 'title',
       x: VB_W / 2,
-      y: PAD + 22,
+      y: PAD + 24,
       text: 'PLANTA — IMPLANTAÇÃO',
       className: 'fp-title',
     },
     {
       id: 'sub',
       x: VB_W / 2,
-      y: PAD + 44,
+      y: PAD + 54,
       text: `${formatMm(L)} × ${formatMm(W)}`,
       className: 'fp-sub',
     },
