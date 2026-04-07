@@ -448,18 +448,14 @@ function validateRowModuleChaining(row: RackRow, ori: LayoutOrientationV2): void
 }
 
 /**
- * Garante que a dimensão da pegada ao longo do vão é o passo ponta-a-ponta (lado longo do módulo),
- * e não o eixo de profundidade de posição (lado curto) — evita fileiras “lado com lado”.
+ * Garante que a dimensão da pegada ao longo do vão é o passo ponta-a-ponta (vão declarado),
+ * e não a profundidade de posição — evita fileiras “lado com lado”.
  */
 function validateModulesSpanLengthAxis(
   row: RackRow,
   beamAlongMm: number,
   rackDepthMm: number
 ): void {
-  if (beamAlongMm <= rackDepthMm + EPS) {
-    return;
-  }
-
   for (const m of row.modules) {
     if (m.type === 'tunnel') continue;
 
@@ -487,9 +483,9 @@ function validateModulesSpanLengthAxis(
 export function validateLayoutGeometry(geo: LayoutGeometry): void {
   const md = geo.metadata.rackDepthMm;
   const { beamAlongModuleMm, rackDepthMm } = geo.metadata;
-  if (beamAlongModuleMm < rackDepthMm - EPS) {
+  if (beamAlongModuleMm <= EPS || rackDepthMm <= EPS) {
     throw new LayoutGeometryValidationError(
-      'Layout: o vão ao longo das longarinas (ponta com ponta) deve ser maior ou igual à profundidade de posição (eixo transversal).'
+      'Layout: vão e profundidade de posição devem ser positivos.'
     );
   }
   const rowIds = new Set<string>();

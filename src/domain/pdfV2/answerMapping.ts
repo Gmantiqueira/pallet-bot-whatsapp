@@ -24,10 +24,7 @@ export function buildProjectAnswersV2(
     return null;
   }
 
-  /**
-   * Duas dimensões ortogonais da pegada em planta (valores do fluxo podem trocar nomes).
-   * Layout V2 tira o eixo “comprimento do módulo na fileira” com max(·) em buildLayoutSolutionV2.
-   */
+  /** Profundidade de posição e vão (longarina): campos explícitos; não misturar com max/min. */
   const moduleDepthMm =
     typeof answers.moduleDepthMm === 'number'
       ? answers.moduleDepthMm
@@ -88,8 +85,7 @@ export type ProjectAnswersV2 = {
 
 /**
  * Melhor aproveitamento com viés para along_length:
- * na planta V2 o eixo X é o comprimento do galpão — `along_length` mantém o lado longo do módulo na
- * horizontal do desenho (ponta com ponta ↔), alinhado ao pedido típico do projeto.
+ * Usa vão = `moduleWidthMm` e profundidade = `moduleDepthMm` (sem max/min).
  * Só adota `along_width` quando calcula claramente mais células que o along_length.
  */
 export function pickBetterOrientationBySimpleCount(
@@ -99,8 +95,8 @@ export function pickBetterOrientationBySimpleCount(
   moduleDepthMm: number,
   moduleWidthMm: number
 ): LayoutOrientationV2 {
-  const rackDepthMm = Math.min(moduleWidthMm, moduleDepthMm);
-  const beamAlongMm = Math.max(moduleWidthMm, moduleDepthMm);
+  const rackDepthMm = moduleDepthMm;
+  const beamAlongMm = moduleWidthMm;
   const alongL = maxModulesSingleDepth(
     lengthMm,
     widthMm,

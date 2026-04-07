@@ -510,12 +510,13 @@ export function buildLayoutSolutionV2(answers: BuildLayoutSolutionV2Input): Layo
     firstLevelOnGround,
   } = answers;
 
-  /** Lado mais longo da pegada: único eixo onde os módulos se encadeiam ponta com ponta. */
-  const moduleLengthAxisMm = Math.max(moduleWidthMm, moduleDepthMm);
-  /** Lado mais curto (profundidade de posição): dupla costas empilha dois neste eixo + espinha. */
-  const moduleDepthAxisMm = Math.min(moduleWidthMm, moduleDepthMm);
-  const beamAlongModuleMm = moduleLengthAxisMm;
-  const rackDepthMm = moduleDepthAxisMm;
+  /**
+   * Vão / longarina (passo ponta-a-ponta ao longo da fileira) = campo de vão (`moduleWidthMm`), nunca max(dim).
+   * Profundidade de posição (transversal à fileira) = `moduleDepthMm`. Se usássemos max/min, quando prof. > vão
+   * os rectângulos ficavam trocados (crescimento “lado com lado”).
+   */
+  const beamAlongModuleMm = moduleWidthMm;
+  const rackDepthMm = moduleDepthMm;
 
   const orientation = resolveOrientation(answers);
 

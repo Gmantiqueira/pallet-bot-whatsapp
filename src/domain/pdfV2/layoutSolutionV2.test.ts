@@ -182,4 +182,26 @@ describe('buildLayoutSolutionV2', () => {
     expect(s.beamAlongModuleMm).toBe(2700);
     expect(s.rackDepthMm).toBe(1100);
   });
+
+  it('13: vão < prof. em mm — pegada along_length tem extensão X = vão e Y = prof. (ponta com ponta no X)', () => {
+    const a = {
+      ...base(),
+      moduleWidthMm: 1100,
+      moduleDepthMm: 2700,
+      lineStrategy: 'APENAS_SIMPLES' as const,
+    };
+    const s = buildLayoutSolutionV2(a);
+    expect(s.orientation).toBe('along_length');
+    expect(s.beamAlongModuleMm).toBe(1100);
+    expect(s.rackDepthMm).toBe(2700);
+    const full = s.rows[0]?.modules.find(m => m.type === 'full' && m.variant !== 'tunnel');
+    expect(full).toBeDefined();
+    if (!full) return;
+    const dx = Math.abs(full.x1 - full.x0);
+    const dy = Math.abs(full.y1 - full.y0);
+    expect(dx).toBe(1100);
+    expect(dy).toBe(2700);
+    expect(Math.max(dx, dy)).toBe(2700);
+    expect(Math.min(dx, dy)).toBe(1100);
+  });
 });
