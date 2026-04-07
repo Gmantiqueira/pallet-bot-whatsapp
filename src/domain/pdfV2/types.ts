@@ -3,6 +3,10 @@
  * Coordenadas em mm no referencial do galpão: eixo X = comprimento, eixo Y = largura.
  */
 
+/**
+ * - `along_length`: vão / repetição ponta-a-ponta paralelos ao **comprimento** do galpão (eixo X na planta V2) — lado longo do módulo na horizontal do desenho.
+ * - `along_width`: vão paralelos à **largura** (eixo Y) — lado longo do módulo na vertical do desenho.
+ */
 export type LayoutOrientationV2 = 'along_length' | 'along_width';
 
 export type RackDepthModeV2 = 'single' | 'double';

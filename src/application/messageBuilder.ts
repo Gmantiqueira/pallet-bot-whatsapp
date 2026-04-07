@@ -141,10 +141,13 @@ const buildStateMessage = (session: Session): OutgoingMessage | null => {
     case 'CHOOSE_MODULE_ORIENTATION':
       return {
         to: session.phone,
-        text: 'Orientação dos módulos',
+        text:
+          'Na planta, o lado mais comprido de cada módulo (ponta com ponta) deve seguir qual direção?\n\n' +
+          '• Horizontal (recomendado): comprimento do módulo na mesma direção do comprimento do galpão (↔ no desenho).\n' +
+          '• Vertical: comprimento do módulo na direção da largura do galpão (↕ no desenho).',
         buttons: [
-          { id: 'ORIENT_H', label: 'Horizontal' },
-          { id: 'ORIENT_V', label: 'Vertical' },
+          { id: 'ORIENT_H', label: '↔ Comprimento horizontal' },
+          { id: 'ORIENT_V', label: '↕ Comprimento vertical' },
           { id: 'ORIENT_AUTO', label: 'Melhor aproveitamento' },
         ],
       };

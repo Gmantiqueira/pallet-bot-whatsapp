@@ -106,7 +106,12 @@ export function resolveLayoutOrientationV2(
   return 'along_length';
 }
 
-/** Melhor aproveitamento: escolhe orientação com mais módulos (usa profundidade simples como proxy). */
+/**
+ * Melhor aproveitamento com viés para along_length:
+ * na planta V2 o eixo X é o comprimento do galpão — `along_length` mantém o lado longo do módulo na
+ * horizontal do desenho (ponta com ponta ↔), alinhado ao pedido típico do projeto.
+ * Só adota `along_width` quando calcula claramente mais células que o along_length.
+ */
 export function pickBetterOrientationBySimpleCount(
   lengthMm: number,
   widthMm: number,
@@ -132,7 +137,12 @@ export function pickBetterOrientationBySimpleCount(
     beamAlongMm,
     'along_width'
   );
-  return alongW > alongL ? 'along_width' : 'along_length';
+  if (alongW <= alongL) {
+    return 'along_length';
+  }
+  const lead = alongW - alongL;
+  const minLead = Math.max(3, Math.ceil(alongL * 0.08));
+  return lead >= minLead ? 'along_width' : 'along_length';
 }
 
 function maxModulesSingleDepth(
