@@ -150,11 +150,13 @@ describe('buildLayoutSolutionV2', () => {
     expect(s.orientation).toBe('along_length');
   });
 
-  it('11: galpão mais largo que longo favorece along_width', () => {
+  it('11: galpão mais largo que longo favorece along_width quando o contagem de posições ganha', () => {
+    // Com reserva perimetral no eixo transversal, 16×40 m pode preferir along_length.
+    // Com comprimento curto, vigas ao longo da largura maximizam módulos ao longo do vão.
     const s = buildLayoutSolutionV2({
       ...base(),
-      lengthMm: 16_000,
-      widthMm: 40_000,
+      lengthMm: 6_000,
+      widthMm: 50_000,
       lineStrategy: 'APENAS_SIMPLES' as const,
     });
     expect(s.orientation).toBe('along_width');

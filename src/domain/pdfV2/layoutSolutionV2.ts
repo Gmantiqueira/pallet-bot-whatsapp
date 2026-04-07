@@ -56,6 +56,30 @@ function usedCrossForRows(n: number, bandDepth: number, corridorMm: number): num
   return n * bandDepth + Math.max(0, n - 1) * corridorMm;
 }
 
+/**
+ * Faixa útil para empacotar fileiras com corredor operacional (`corridorMm`) também junto aos limites
+ * da zona (exceto quando o galpão é demasiado estreito — aí mantém-se o vão todo para não perder a última fileira).
+ */
+function crossAxisPerimeterReserve(
+  zoneLen: number,
+  bandDepth: number,
+  corridorMm: number
+): { innerLen: number; leadingG: number; trailingG: number } {
+  const g = Math.max(0, corridorMm);
+  if (g <= EPS || bandDepth <= 0) {
+    return { innerLen: Math.max(0, zoneLen), leadingG: 0, trailingG: 0 };
+  }
+  const minForOneRowWithSideAisles = 2 * g + bandDepth;
+  if (zoneLen + EPS >= minForOneRowWithSideAisles) {
+    return {
+      innerLen: Math.max(0, zoneLen - 2 * g),
+      leadingG: g,
+      trailingG: g,
+    };
+  }
+  return { innerLen: Math.max(0, zoneLen), leadingG: 0, trailingG: 0 };
+}
+
 /** Faixa de túnel ao longo da direção transversal (divide o galpão em zonas de fileiras). */
 function tunnelSpanCross(
   crossSpan: number,
@@ -114,13 +138,65 @@ function fillCrossZone(
   widthMm: number
 ): { rows: RowBandCross[]; corridors: CirculationZone[] } {
   const zoneLen = zone.z1 - zone.z0;
-  const n = maxRowsInZone(zoneLen, bandDepth, corridorMm);
+  const { innerLen, leadingG, trailingG } = crossAxisPerimeterReserve(
+    zoneLen,
+    bandDepth,
+    corridorMm
+  );
+  const n = maxRowsInZone(innerLen, bandDepth, corridorMm);
   const used = usedCrossForRows(n, bandDepth, corridorMm);
-  const margin = n > 0 ? (zoneLen - used) / 2 : 0;
-  let y = zone.z0 + margin;
+  const margin = n > 0 && innerLen > used ? (innerLen - used) / 2 : 0;
+  let y = zone.z0 + leadingG + margin;
 
   const rows: RowBandCross[] = [];
   const corridors: CirculationZone[] = [];
+
+  const pushPerimeterStrip = (
+    id: string,
+    crossA: number,
+    crossB: number,
+    label: string
+  ): void => {
+    if (crossB - crossA <= EPS) return;
+    if (orientation === 'along_length') {
+      corridors.push({
+        id,
+        kind: 'corridor',
+        x0: 0,
+        x1: lengthMm,
+        y0: crossA,
+        y1: crossB,
+        label,
+      });
+    } else {
+      corridors.push({
+        id,
+        kind: 'corridor',
+        x0: crossA,
+        x1: crossB,
+        y0: 0,
+        y1: widthMm,
+        label,
+      });
+    }
+  };
+
+  if (leadingG > EPS) {
+    pushPerimeterStrip(
+      `${idPrefix}-peri-start`,
+      zone.z0,
+      zone.z0 + leadingG,
+      'Circulação (bordo)'
+    );
+  }
+  if (trailingG > EPS) {
+    pushPerimeterStrip(
+      `${idPrefix}-peri-end`,
+      zone.z1 - trailingG,
+      zone.z1,
+      'Circulação (bordo)'
+    );
+  }
 
   for (let i = 0; i < n; i++) {
     const c0 = y;
@@ -221,7 +297,9 @@ function countRowsAcrossZones(
   const zones = crossZonesForTunnel(crossSpan, hasTunnel, tunnelPos, corridorMm);
   let total = 0;
   for (const z of zones) {
-    total += maxRowsInZone(z.z1 - z.z0, bandDepth, corridorMm);
+    const zLen = z.z1 - z.z0;
+    const { innerLen } = crossAxisPerimeterReserve(zLen, bandDepth, corridorMm);
+    total += maxRowsInZone(innerLen, bandDepth, corridorMm);
   }
   return total;
 }

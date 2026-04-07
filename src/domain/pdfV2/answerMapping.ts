@@ -135,14 +135,21 @@ function maxModulesSingleDepth(
   return rows * along;
 }
 
-/** n fileiras: n·profundidade + (n−1)·corredor ≤ largura transversal */
+/**
+ * Nº de fileiras em profundidade simples — alinhado a {@link layoutSolutionV2}:
+ * quando cabe, reserva `corridorMm` em cada bordo da faixa antes de contar fileiras.
+ */
 function rowBandsSingleDepth(
   crossSpanMm: number,
   moduleDepthMm: number,
   corridorMm: number
 ): number {
   if (moduleDepthMm <= 0) return 0;
-  return Math.floor((crossSpanMm + corridorMm) / (moduleDepthMm + corridorMm));
+  const g = Math.max(0, corridorMm);
+  const minOne = 2 * g + moduleDepthMm;
+  const innerLen =
+    crossSpanMm + 1e-6 >= minOne ? crossSpanMm - 2 * g : crossSpanMm;
+  return Math.floor((innerLen + corridorMm) / (moduleDepthMm + corridorMm));
 }
 
 export function tunnelAppliesToRow(
