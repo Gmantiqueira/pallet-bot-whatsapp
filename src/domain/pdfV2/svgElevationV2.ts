@@ -304,15 +304,14 @@ function buildBeamGeometry(
 
 type BaySpan = { left: number; right: number };
 
-/** Palete em vista frontal (tábua + lambris; sentido/carga só no 1.º nível para não poluir). */
+/** Palete em vista frontal (tábua + lambris + seta sentido, estilo folha tipo 519). */
 function drawPalletBlockFront(
   bayLeft: number,
   bayRight: number,
   yTop: number,
   yBot: number,
   capKg: number | undefined,
-  ls: number,
-  tierIdx: number
+  ls: number
 ): string {
   const parts: string[] = [];
   const availW = bayRight - bayLeft;
@@ -339,12 +338,10 @@ function drawPalletBlockFront(
   parts.push(
     `<polygon points="${ax2},${ay} ${ax2 - 5},${ay - 3.2} ${ax2 - 5},${ay + 3.2}" fill="${DIM_MINOR}"/>`
   );
-  if (tierIdx === 0) {
-    parts.push(
-      `<text x="${(x0 + deckW / 2).toFixed(2)}" y="${(yDeck - 5 * ls).toFixed(2)}" text-anchor="middle" font-size="${6.4 * ls}px" fill="${DIM_MINOR}" font-style="italic">Sentido do palete</text>`
-    );
-  }
-  if (tierIdx === 0 && typeof capKg === 'number' && capKg > 0) {
+  parts.push(
+    `<text x="${(x0 + deckW / 2).toFixed(2)}" y="${(yDeck - 5 * ls).toFixed(2)}" text-anchor="middle" font-size="${6.4 * ls}px" fill="${DIM_MINOR}" font-style="italic">Sentido do palete</text>`
+  );
+  if (typeof capKg === 'number' && capKg > 0) {
     const kgTxt = `${Math.round(capKg).toLocaleString('pt-BR')} kg`;
     parts.push(
       `<text x="${(bayRight - 3).toFixed(2)}" y="${(yDeck + deckH / 2 + 3 * ls).toFixed(2)}" text-anchor="end" font-size="${7.4 * ls}px" fill="${DIM_MAJOR}" font-weight="600">${escapeXml(kgTxt)}</text>`
@@ -382,7 +379,7 @@ function drawFrontStorageTiers(
     parts.push(
       `<rect x="${xl}" y="${t}" width="${xr - xl}" height="${b - t}" rx="1.2" fill="${FV_PALLET_TIER_FILL}" stroke="${FV_PALLET_TIER_STROKE}" stroke-width="0.38" opacity="${FV_PALLET_TIER_OPACITY}"/>`
     );
-    parts.push(drawPalletBlockFront(xl, xr, t, b, cap, ls, i));
+    parts.push(drawPalletBlockFront(xl, xr, t, b, cap, ls));
     const bw = xr - xl;
     if (bw > 28) {
       for (let k = 1; k <= FV_ALONG_BEAM_DIVISIONS; k++) {
@@ -515,24 +512,23 @@ function drawFrontRack(
   const nBeamAxes = beamH.length;
   /** Só níveis de carga: o último eixo é limite estrutural — não desenhar longarina/capa na baia (evita “nível extra”). */
   const nStorageBeams = Math.max(0, nBeamAxes - 1);
-  /** Longarinas entre faces internas dos montantes (vão útil), com ligação visual sem folga. */
-  const beamOverlap = 0.35;
+  /** Longarinas contínuas face externa a face externa dos montantes (sem “vão” entre vigas). */
+  const beamSpanLeft = uprightXs[0]!;
+  const beamSpanRight = uprightXs[nMod]! + uprightWidthsPx[nMod]!;
+  const beamSpanW = Math.max(0, beamSpanRight - beamSpanLeft);
   for (let bi = 0; bi < bays.length; bi++) {
-    const bay = bays[bi]!;
-    const bl = bay.left - beamOverlap;
-    const br = bay.right + beamOverlap;
-    const bw = Math.max(0, br - bl);
     for (let j = 0; j < nStorageBeams; j++) {
       const yy = beamYsPx[j]!;
       const bh = Math.max(beamTh, 2.2);
+      const bw = beamSpanW;
       parts.push(
-        `<rect x="${bl}" y="${yy - bh / 2}" width="${bw}" height="${bh}" rx="1.1" fill="${FV_BEAM_FILL}" stroke="${FV_BEAM_STROKE}" stroke-width="1.05"/>`
+        `<rect x="${beamSpanLeft}" y="${yy - bh / 2}" width="${bw}" height="${bh}" rx="1.1" fill="${FV_BEAM_FILL}" stroke="${FV_BEAM_STROKE}" stroke-width="1.05"/>`
       );
       parts.push(
-        `<rect x="${bl + bw * 0.015}" y="${yy - bh * 0.42}" width="${bw * 0.97}" height="${bh * 0.38}" rx="0.45" fill="${FV_BEAM_HIGHLIGHT}" opacity="0.55"/>`
+        `<rect x="${beamSpanLeft + bw * 0.015}" y="${yy - bh * 0.42}" width="${bw * 0.97}" height="${bh * 0.38}" rx="0.45" fill="${FV_BEAM_HIGHLIGHT}" opacity="0.55"/>`
       );
       parts.push(
-        `<line x1="${bl}" y1="${yy - bh * 0.28}" x2="${br}" y2="${yy - bh * 0.28}" stroke="${FV_BEAM_EDGE}" stroke-width="0.55" opacity="0.88"/>`
+        `<line x1="${beamSpanLeft}" y1="${yy - bh * 0.28}" x2="${beamSpanRight}" y2="${yy - bh * 0.28}" stroke="${FV_BEAM_EDGE}" stroke-width="0.55" opacity="0.88"/>`
       );
     }
   }
@@ -552,7 +548,10 @@ function drawFrontRack(
   }
 
   parts.push(
-    `<text x="${rx + totalW / 2}" y="${floorTop + 12 * ls}" text-anchor="middle" font-size="${7.6 * ls}px" fill="${DIM_MINOR}">Montantes ${escapeXml(String(colThicknessMm))} mm (perfil típico 519-R01)</text>`
+    `<text x="${uprightXs[0]! + uprightWidthsPx[0]! / 2}" y="${floorTop + 12 * ls}" text-anchor="middle" font-size="${7.6 * ls}px" fill="${DIM_MINOR}">Montante ${escapeXml(String(colThicknessMm))} mm</text>`
+  );
+  parts.push(
+    `<text x="${uprightXs[nMod]! + uprightWidthsPx[nMod]! / 2}" y="${floorTop + 12 * ls}" text-anchor="middle" font-size="${7.6 * ls}px" fill="${DIM_MINOR}">Montante ${escapeXml(String(colThicknessMm))} mm</text>`
   );
 
   parts.push(
@@ -733,15 +732,11 @@ function drawLateral(
   }
 
   const nLatBeams = Math.max(0, nBeamAxes - 1);
-  const latBeamPad = Math.min(0.4, uW * 0.04);
-  const blLat = bayLeft - latBeamPad;
-  const brLat = bayRight + latBeamPad;
-  const bwLat = Math.max(0, brLat - blLat);
   for (let j = 0; j < nLatBeams; j++) {
     const yy = beamYLocal(j);
     const bh = Math.max(2, 2.2 * scaleY);
     parts.push(
-      `<rect x="${blLat}" y="${yy - bh / 2}" width="${bwLat}" height="${bh}" fill="${FV_BEAM_FILL}" stroke="${FV_BEAM_STROKE}" stroke-width="0.65"/>`
+      `<rect x="${x0}" y="${yy - bh / 2}" width="${dw}" height="${bh}" fill="${FV_BEAM_FILL}" stroke="${FV_BEAM_STROKE}" stroke-width="0.65"/>`
     );
   }
 
@@ -774,11 +769,7 @@ function drawLateral(
     parts.push(
       `<rect x="${xd}" y="${yd}" width="${deckD}" height="${(bot - top) * 0.55}" rx="0.4" fill="${FV_PALLET_DECK_FILL}" stroke="${FV_PALLET_DECK_STROKE}" stroke-width="0.45" opacity="0.9"/>`
     );
-    if (
-      i === 0 &&
-      typeof data.capacityKgPerLevel === 'number' &&
-      data.capacityKgPerLevel > 0
-    ) {
+    if (typeof data.capacityKgPerLevel === 'number' && data.capacityKgPerLevel > 0) {
       const kgTxt = `${Math.round(data.capacityKgPerLevel).toLocaleString('pt-BR')} kg`;
       parts.push(
         `<text x="${x0 + dw - 3}" y="${(top + bot) / 2 + 2 * ls}" text-anchor="end" font-size="${7 * ls}px" fill="${DIM_MAJOR}" font-weight="600">${escapeXml(kgTxt)}</text>`
@@ -787,7 +778,10 @@ function drawLateral(
   }
 
   parts.push(
-    `<text x="${x0 + dw / 2}" y="${floorTopLat + 11 * ls}" text-anchor="middle" font-size="${7.2 * ls}px" fill="${DIM_MINOR}">Montantes ${escapeXml(String(colMmLat))} mm</text>`
+    `<text x="${xLeftU + uW / 2}" y="${floorTopLat + 11 * ls}" text-anchor="middle" font-size="${7.2 * ls}px" fill="${DIM_MINOR}">Montante ${escapeXml(String(colMmLat))} mm</text>`
+  );
+  parts.push(
+    `<text x="${xRightU + uW / 2}" y="${floorTopLat + 11 * ls}" text-anchor="middle" font-size="${7.2 * ls}px" fill="${DIM_MINOR}">Montante ${escapeXml(String(colMmLat))} mm</text>`
   );
 
   parts.push(
