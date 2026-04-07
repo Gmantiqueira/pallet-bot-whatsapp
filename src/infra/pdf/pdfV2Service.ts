@@ -301,14 +301,18 @@ export async function renderPdfV2(
     doc.strokeColor(color).lineWidth(0.75).moveTo(x0, y).lineTo(x1, y).stroke();
   };
 
-  const embedFullWidthDrawing = (raster: {
-    buffer: Buffer;
-    widthPx: number;
-    heightPx: number;
-  }): void => {
+  const embedFullWidthDrawing = (
+    raster: {
+      buffer: Buffer;
+      widthPx: number;
+      heightPx: number;
+    },
+    opts?: { bottomPadPt?: number }
+  ): void => {
     doc.moveDown(0.12);
     const yImg = doc.y + 6;
-    const availH = pageBottom - yImg - imgBottomPad;
+    const bottomPad = opts?.bottomPadPt ?? imgBottomPad;
+    const availH = pageBottom - yImg - bottomPad;
     const { dw, dh } = fitRasterInBox(
       raster.widthPx,
       raster.heightPx,
@@ -436,16 +440,16 @@ export async function renderPdfV2(
     size: 12,
     font: 'Helvetica-Bold',
     color: COL_INK,
-    moveDown: 0.18,
+    moveDown: 0.14,
   });
   drawCentered('Implantação — corredores e túnel', {
     size: 8.5,
     color: COL_MUTED,
-    moveDown: 0.28,
+    moveDown: 0.22,
   });
   horizontalRule(doc.y + 3, 0.1, COL_RULE);
-  doc.moveDown(0.38);
-  embedFullWidthDrawing(floorRaster);
+  doc.moveDown(0.28);
+  embedFullWidthDrawing(floorRaster, { bottomPadPt: 8 });
 
   doc.addPage();
   doc.y = doc.page.margins.top + 6;

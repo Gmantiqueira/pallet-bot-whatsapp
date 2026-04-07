@@ -1,11 +1,12 @@
 import type { LayoutGeometry, RackRow } from './layoutGeometryV2';
 import type { FloorPlanDimension, FloorPlanLabel, FloorPlanModelV2, RackDepthModeV2 } from './types';
 
-const VB_W = 1120;
-const VB_H = 780;
+/** Canvas SVG da planta: maior → galpão desenhado maior em relação às margens do desenho. */
+const VB_W = 1360;
+const VB_H = 960;
 const PAD = 22;
-const HEADER = 58;
-const DIM_OUT = 26;
+const HEADER = 52;
+const DIM_OUT = 24;
 
 function escapeXml(text: string): string {
   return text
@@ -47,7 +48,7 @@ function rowBandFootprintMm(row: RackRow): { x0: number; y0: number; x1: number;
 export function buildFloorPlanModelV2(geometry: LayoutGeometry): FloorPlanModelV2 {
   const { warehouseLengthMm: L, warehouseWidthMm: W } = geometry;
   const innerW = VB_W - 2 * PAD;
-  const innerH = VB_H - PAD - HEADER - DIM_OUT - 34;
+  const innerH = VB_H - PAD - HEADER - DIM_OUT - 28;
   const scale = Math.min(innerW / L, innerH / W);
   const boxW = L * scale;
   const boxH = W * scale;
