@@ -171,7 +171,7 @@ function textLines(
 
 /**
  * Cadeia de cotas verticais à direita (um só lado): H total na linha exterior;
- * cotas interiores com espaçamentos entre eixos, 1.º eixo, tampo — sem sobrepor traços.
+ * cotas interiores: com túnel — vão túnel + até 1.º eixo + folgas; sem túnel — piso→1.º eixo + folgas + tampo.
  */
 function drawVerticalDimChain(
   rackRight: number,
@@ -181,7 +181,8 @@ function drawVerticalDimChain(
   beamH: number[],
   axisGapsMm: number[],
   uprightH: number,
-  labelScale: number
+  labelScale: number,
+  tunnelDim?: { clearanceMm: number; yPassTop: number }
 ): string {
   const ls = labelScale;
   const nB = beamYsPx.length;
@@ -196,31 +197,66 @@ function drawVerticalDimChain(
   }
 
   const mmSegs: number[] = [];
-  mmSegs.push(b0);
-  for (let i = 0; i < axisGapsMm.length; i++) {
-    const g = axisGapsMm[i];
-    if (g === undefined) return '';
-    mmSegs.push(g);
-  }
-  mmSegs.push(uprightH - bLast);
-
   const yHi: number[] = [];
   const yLo: number[] = [];
+
   const yBeam0 = beamYsPx[0];
-  if (yBeam0 === undefined) return '';
-  yHi.push(yBeam0);
-  yLo.push(yFloor);
-  for (let i = 0; i < nB - 1; i++) {
-    const yUp = beamYsPx[i + 1];
-    const yDn = beamYsPx[i];
-    if (yUp === undefined || yDn === undefined) return '';
-    yHi.push(yUp);
-    yLo.push(yDn);
-  }
   const yBeamLast = beamYsPx[nB - 1];
-  if (yBeamLast === undefined) return '';
-  yHi.push(yTop);
-  yLo.push(yBeamLast);
+  if (yBeam0 === undefined || yBeamLast === undefined) return '';
+
+  const tunnelSplit =
+    tunnelDim !== undefined &&
+    tunnelDim.clearanceMm > 0 &&
+    tunnelDim.yPassTop < yFloor - 1 &&
+    tunnelDim.yPassTop > yTop + 1;
+
+  if (tunnelSplit) {
+    const clearMm = tunnelDim.clearanceMm;
+    const yPassTop = tunnelDim.yPassTop;
+    const aboveTunnelMm = Math.max(0, b0 - clearMm);
+    mmSegs.push(clearMm);
+    mmSegs.push(aboveTunnelMm);
+    for (let i = 0; i < axisGapsMm.length; i++) {
+      const g = axisGapsMm[i];
+      if (g === undefined) return '';
+      mmSegs.push(g);
+    }
+    mmSegs.push(uprightH - bLast);
+
+    yHi.push(yPassTop);
+    yLo.push(yFloor);
+    yHi.push(yBeam0);
+    yLo.push(yPassTop);
+    for (let i = 0; i < nB - 1; i++) {
+      const yUp = beamYsPx[i + 1];
+      const yDn = beamYsPx[i];
+      if (yUp === undefined || yDn === undefined) return '';
+      yHi.push(yUp);
+      yLo.push(yDn);
+    }
+    yHi.push(yTop);
+    yLo.push(yBeamLast);
+  } else {
+    mmSegs.push(b0);
+    for (let i = 0; i < axisGapsMm.length; i++) {
+      const g = axisGapsMm[i];
+      if (g === undefined) return '';
+      mmSegs.push(g);
+    }
+    mmSegs.push(uprightH - bLast);
+
+    yHi.push(yBeam0);
+    yLo.push(yFloor);
+    for (let i = 0; i < nB - 1; i++) {
+      const yUp = beamYsPx[i + 1];
+      const yDn = beamYsPx[i];
+      if (yUp === undefined || yDn === undefined) return '';
+      yHi.push(yUp);
+      yLo.push(yDn);
+    }
+    yHi.push(yTop);
+    yLo.push(yBeamLast);
+  }
 
   const detailCount = mmSegs.length;
   if (detailCount !== yHi.length || yHi.length !== yLo.length) {
@@ -252,6 +288,12 @@ function drawVerticalDimChain(
   );
 
   const segLabel = (idx: number): string => {
+    if (tunnelSplit) {
+      if (idx === 0) return 'Vão túnel';
+      if (idx === 1) return 'Até 1.º eixo';
+      if (idx === detailCount - 1) return 'Topo / tampo';
+      return `Livre ${idx - 1}–${idx}`;
+    }
     if (idx === 0) return '1.º eixo';
     if (idx === detailCount - 1) return 'Topo / tampo';
     return `Livre ${idx}–${idx + 1}`;
@@ -514,7 +556,9 @@ function drawFrontRack(
   const ls = options?.labelScale ?? 1;
   const nMod = FV_FRONT_BAY_COUNT;
   const levelsEst = Math.max(1, Math.min(32, Math.floor(data.levels)));
-  const estSegCount = levelsEst + 2;
+  const tunnelExtraSeg =
+    data.tunnel === true && typeof data.tunnelClearanceMm === 'number' ? 1 : 0;
+  const estSegCount = levelsEst + 2 + tunnelExtraSeg;
   const dimChainRightPx = Math.min(210, 95 + 11 * ls * (estSegCount + 1));
   const rackMaxW = Math.max(210, pw - 20 - 40 - dimChainRightPx);
   const rackMaxH = Math.max(
@@ -563,7 +607,6 @@ function drawFrontRack(
 
   const faceSpanLeft = bays[0]!.left;
   const faceSpanRight = bays[nMod - 1]!.right;
-  const tunnelFaceBay = bays[0]!;
   const dimTopY = ry - 20;
   const floorTop = rackBottom;
   const floorPad = 6;
@@ -580,57 +623,50 @@ function drawFrontRack(
     `<text x="${rx + totalW / 2}" y="${floorTop + 8.5 * ls}" text-anchor="middle" font-size="${9.25 * ls}px" font-weight="700" fill="${COL_FLOOR}">PISO</text>`
   );
 
-  const showTunnelOpening =
-    data.tunnel === true && typeof data.tunnelClearanceMm === 'number';
-  const yPassTop = showTunnelOpening ? beamYsPx[0] - beamTh * 1.15 : floorTop;
+  const clearanceMm =
+    data.tunnel === true && typeof data.tunnelClearanceMm === 'number'
+      ? Math.max(0, data.tunnelClearanceMm)
+      : 0;
+  const showTunnelOpening = clearanceMm > 0;
+  const yPassTop =
+    showTunnelOpening && uprightH > 0
+      ? floorTop - (clearanceMm / uprightH) * innerH
+      : floorTop;
 
   for (let fi = 0; fi < uprightXs.length; fi++) {
     const ux = uprightXs[fi];
     const uw = uprightWidthsPx[fi];
-    /** Túnel só na 1.ª baia: montante exterior esquerdo com zona livre inferior; centro e direita até ao piso. */
-    const tunnelSplitThisUpright =
-      showTunnelOpening &&
-      fi === 0 &&
-      yPassTop < floorTop - 2.5 &&
-      yPassTop > ry + 4;
-    if (tunnelSplitThisUpright) {
-      const hTop = Math.max(0, yPassTop - ry);
-      if (hTop > 0.5) {
-        parts.push(
-          `<rect x="${ux}" y="${ry}" width="${uw}" height="${hTop}" fill="${FV_UPRIGHT_FILL}" stroke="${FV_UPRIGHT_STROKE}" stroke-width="0.72" opacity="0.92"/>`
-        );
-        parts.push(
-          `<rect x="${ux + uw * 0.06}" y="${ry}" width="${uw * 0.2}" height="${hTop}" fill="${FV_UPRIGHT_FACE}" opacity="0.35"/>`
-        );
-      }
-      const hOpen = Math.max(0, floorTop - yPassTop);
-      parts.push(
-        `<rect x="${ux}" y="${yPassTop}" width="${uw}" height="${hOpen}" fill="#f8fafc" stroke="${FV_UPRIGHT_STROKE}" stroke-width="0.65" stroke-dasharray="4 3"/>`
-      );
-    } else {
-      parts.push(
-        `<rect x="${ux}" y="${ry}" width="${uw}" height="${innerH}" fill="${FV_UPRIGHT_FILL}" stroke="${FV_UPRIGHT_STROKE}" stroke-width="0.72" opacity="0.92"/>`
-      );
-      parts.push(
-        `<rect x="${ux + uw * 0.06}" y="${ry}" width="${uw * 0.2}" height="${innerH}" fill="${FV_UPRIGHT_FACE}" opacity="0.35"/>`
-      );
-    }
+    parts.push(
+      `<rect x="${ux}" y="${ry}" width="${uw}" height="${innerH}" fill="${FV_UPRIGHT_FILL}" stroke="${FV_UPRIGHT_STROKE}" stroke-width="0.72" opacity="0.92"/>`
+    );
+    parts.push(
+      `<rect x="${ux + uw * 0.06}" y="${ry}" width="${uw * 0.2}" height="${innerH}" fill="${FV_UPRIGHT_FACE}" opacity="0.35"/>`
+    );
     parts.push(
       `<rect x="${ux - 0.35}" y="${floorTop - 2.5}" width="${uw + 0.7}" height="3.2" fill="#334155" stroke="${FV_UPRIGHT_STROKE}" stroke-width="0.45"/>`
     );
   }
 
   if (showTunnelOpening && yPassTop < floorTop - 2.5) {
-    const tx0 = tunnelFaceBay.left;
-    const tx1 = tunnelFaceBay.right;
+    const tx0 = faceSpanLeft;
+    const tx1 = faceSpanRight;
     parts.push(
-      `<rect x="${tx0}" y="${yPassTop}" width="${Math.max(0, tx1 - tx0)}" height="${floorTop - yPassTop}" fill="#e2e8f0" fill-opacity="0.35" stroke="#64748b" stroke-width="0.75" stroke-dasharray="5 4"/>`
+      `<rect x="${tx0}" y="${yPassTop}" width="${Math.max(0, tx1 - tx0)}" height="${floorTop - yPassTop}" fill="#fef3c7" fill-opacity="0.42" stroke="#b45309" stroke-width="0.55" opacity="0.95"/>`
     );
     parts.push(
-      `<line x1="${tx0}" y1="${yPassTop}" x2="${tx1}" y2="${yPassTop}" stroke="${FV_UPRIGHT_STROKE}" stroke-width="1.6" stroke-dasharray="3 2" opacity="0.85"/>`
+      `<line x1="${tx0}" y1="${yPassTop}" x2="${tx1}" y2="${yPassTop}" stroke="#b45309" stroke-width="1.05" opacity="0.9"/>`
     );
     parts.push(
-      `<text x="${(tx0 + tx1) / 2}" y="${(yPassTop + floorTop) / 2 + 4 * ls}" text-anchor="middle" font-size="${10.5 * ls}px" font-weight="700" fill="#b91c1c">TÚNEL</text>`
+      textLines(
+        (tx0 + tx1) / 2,
+        (yPassTop + floorTop) / 2 - 4 * ls,
+        ['TÚNEL / PASSAGEM'],
+        {
+          fontSize: 10 * ls,
+          fill: '#b45309',
+          fontWeight: '700',
+        }
+      )
     );
   }
 
@@ -659,6 +695,12 @@ function drawFrontRack(
     const bay = bays[bi]!;
     for (let j = 0; j < nStorageBeams; j++) {
       const yy = beamYsPx[j]!;
+      if (
+        showTunnelOpening &&
+        yy >= yPassTop - beamTh * 0.55
+      ) {
+        continue;
+      }
       const bh = Math.max(beamTh, 2.2);
       const bw = bay.right - bay.left;
       parts.push(
@@ -680,6 +722,12 @@ function drawFrontRack(
       const bay = bays[bi]!;
       for (let j = 0; j < nStorageBeams; j++) {
         const yy = beamYsPx[j]!;
+        if (
+          showTunnelOpening &&
+          yy >= yPassTop - beamTh * 0.55
+        ) {
+          continue;
+        }
         const bh = Math.max(beamTh, 2.2);
         const ty = yy - bh / 2 - 4.5 * ls;
         const cx = (bay.left + bay.right) / 2;
@@ -720,7 +768,10 @@ function drawFrontRack(
       beamH,
       axisGapsMm,
       uprightH,
-      ls
+      ls,
+      showTunnelOpening
+        ? { clearanceMm: clearanceMm, yPassTop }
+        : undefined
     )
   );
 
@@ -831,46 +882,46 @@ function drawLateral(
   const bayLeft = x0 + uSide;
   const bayRight = x0 + dw - uSide;
 
-  const drawUprightSplit = (ux: number): void => {
-    if (showTunnelOpening && yPassTop < floorTopLat - 2.5 && yPassTop > y0 + 4) {
-      const hTop = Math.max(0, yPassTop - y0);
-      if (hTop > 0.5) {
-        parts.push(
-          `<rect x="${ux}" y="${y0}" width="${uSide}" height="${hTop}" fill="${FV_UPRIGHT_FILL}" stroke="${FV_UPRIGHT_STROKE}" stroke-width="1.05" opacity="0.92"/>`
-        );
-      }
-      const hOpen = Math.max(0, floorTopLat - yPassTop);
-      parts.push(
-        `<rect x="${ux}" y="${yPassTop}" width="${uSide}" height="${hOpen}" fill="#f8fafc" stroke="${FV_UPRIGHT_STROKE}" stroke-width="0.65" stroke-dasharray="4 3"/>`
-      );
-    } else {
-      parts.push(
-        `<rect x="${ux}" y="${y0}" width="${uSide}" height="${dh}" fill="${FV_UPRIGHT_FILL}" stroke="${FV_UPRIGHT_STROKE}" stroke-width="1.1"/>`
-      );
-    }
-  };
-
-  drawUprightSplit(xLeftU);
-  drawUprightSplit(xRightU);
+  parts.push(
+    `<rect x="${xLeftU}" y="${y0}" width="${uSide}" height="${dh}" fill="${FV_UPRIGHT_FILL}" stroke="${FV_UPRIGHT_STROKE}" stroke-width="1.1"/>`
+  );
+  parts.push(
+    `<rect x="${xRightU}" y="${y0}" width="${uSide}" height="${dh}" fill="${FV_UPRIGHT_FILL}" stroke="${FV_UPRIGHT_STROKE}" stroke-width="1.1"/>`
+  );
 
   if (showTunnelOpening && yPassTop < floorTopLat - 2.5) {
     parts.push(
-      `<rect x="${bayLeft}" y="${yPassTop}" width="${Math.max(0, bayRight - bayLeft)}" height="${floorTopLat - yPassTop}" fill="#e2e8f0" fill-opacity="0.35" stroke="#64748b" stroke-width="0.75" stroke-dasharray="5 4"/>`
+      `<rect x="${bayLeft}" y="${yPassTop}" width="${Math.max(0, bayRight - bayLeft)}" height="${floorTopLat - yPassTop}" fill="#fef3c7" fill-opacity="0.42" stroke="#b45309" stroke-width="0.55" opacity="0.95"/>`
     );
     parts.push(
-      `<line x1="${xLeftU}" y1="${yPassTop}" x2="${x0 + dw}" y2="${yPassTop}" stroke="${FV_UPRIGHT_STROKE}" stroke-width="1.6" stroke-dasharray="3 2" opacity="0.85"/>`
+      `<line x1="${bayLeft}" y1="${yPassTop}" x2="${bayRight}" y2="${yPassTop}" stroke="#b45309" stroke-width="1.05" opacity="0.9"/>`
     );
     parts.push(
-      `<text x="${(bayLeft + bayRight) / 2}" y="${(yPassTop + floorTopLat) / 2 + 4 * ls}" text-anchor="middle" font-size="${9.75 * ls}px" font-weight="600" fill="#475569">Passagem</text>`
+      textLines(
+        (bayLeft + bayRight) / 2,
+        (yPassTop + floorTopLat) / 2 - 3 * ls,
+        ['TÚNEL / PASSAGEM'],
+        {
+          fontSize: 9.5 * ls,
+          fill: '#b45309',
+          fontWeight: '700',
+        }
+      )
     );
   }
 
   const nLatBeams = Math.max(0, nBeamAxes - 1);
+  const bhLat = Math.max(2, 2.2 * scaleY);
   for (let j = 0; j < nLatBeams; j++) {
     const yy = beamYLocal(j);
-    const bh = Math.max(2, 2.2 * scaleY);
+    if (
+      showTunnelOpening &&
+      yy >= yPassTop - bhLat * 0.55
+    ) {
+      continue;
+    }
     parts.push(
-      `<rect x="${bayLeft}" y="${yy - bh / 2}" width="${bayRight - bayLeft}" height="${bh}" fill="${FV_BEAM_FILL}" stroke="${FV_BEAM_STROKE}" stroke-width="0.65"/>`
+      `<rect x="${bayLeft}" y="${yy - bhLat / 2}" width="${bayRight - bayLeft}" height="${bhLat}" fill="${FV_BEAM_FILL}" stroke="${FV_BEAM_STROKE}" stroke-width="0.65"/>`
     );
   }
 
@@ -890,6 +941,10 @@ function drawLateral(
   );
 
   const beamYsLat = beamH.map((_, j) => beamYLocal(j));
+  const clearanceLatMm =
+    showTunnelOpening && typeof data.tunnelClearanceMm === 'number'
+      ? Math.max(0, data.tunnelClearanceMm)
+      : 0;
   parts.push(
     drawVerticalDimChain(
       x0 + dw,
@@ -899,7 +954,10 @@ function drawLateral(
       beamH,
       g.axisGapsMm,
       uprightH,
-      ls
+      ls,
+      clearanceLatMm > 0
+        ? { clearanceMm: clearanceLatMm, yPassTop }
+        : undefined
     )
   );
 
