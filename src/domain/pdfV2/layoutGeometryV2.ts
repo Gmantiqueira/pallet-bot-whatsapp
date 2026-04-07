@@ -6,6 +6,7 @@
 import {
   computeBeamElevations,
   computeTunnelRackBeamElevations,
+  TUNNEL_FIRST_BEAM_OFFSET_ABOVE_CLEARANCE_MM,
   tunnelActiveStorageLevelsFromGlobal,
   type BeamElevationResult,
 } from './elevationLevelGeometryV2';
@@ -493,15 +494,18 @@ export function validateLayoutGeometry(geo: LayoutGeometry): void {
             `Módulo túnel ${m.id}: níveis ativos (${m.activeStorageLevels}) devem ser inferiores ao total do projeto (${m.globalLevels}).`
           );
         }
-        if (m.globalLevels >= 4 && m.activeStorageLevels > m.globalLevels - 2) {
+        const capTunnelActive = tunnelActiveStorageLevelsFromGlobal(m.globalLevels);
+        if (m.activeStorageLevels > capTunnelActive) {
           throw new LayoutGeometryValidationError(
-            `Módulo túnel ${m.id}: esperado pelo menos dois níveis a menos que o armazenagem global quando há 4+ níveis.`
+            `Módulo túnel ${m.id}: níveis ativos (${m.activeStorageLevels}) não podem exceder ${capTunnelActive} (armazenagem só acima do vão, sem preservar a contagem global comprimida no topo).`
           );
         }
         const beams = m.beamGeometry.beamElevationsMm;
-        if (m.tunnelClearanceHeightMm != null && beams[0]! < m.tunnelClearanceHeightMm - 1) {
+        const minFirstBeamAxis =
+          m.tunnelClearanceHeightMm! + TUNNEL_FIRST_BEAM_OFFSET_ABOVE_CLEARANCE_MM;
+        if (beams[0]! + 0.5 < minFirstBeamAxis) {
           throw new LayoutGeometryValidationError(
-            `Módulo túnel ${m.id}: eixos de longarina não podem ficar abaixo do pé livre (${m.tunnelClearanceHeightMm} mm).`
+            `Módulo túnel ${m.id}: primeiro eixo de armazenagem deve ficar acima do pé livre + folga estrutural (≥ ${Math.round(minFirstBeamAxis)} mm).`
           );
         }
       } else {

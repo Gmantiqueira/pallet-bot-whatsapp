@@ -6,7 +6,8 @@ const FV_INTER_BAY_MM = FV_FOLGA_MM * 2;
 const UPRIGHT_DEFAULT_MM = 75;
 /** Montantes de zona de túnel (1.º pórtico) — reforço visual. */
 const UPRIGHT_TUNNEL_MM = 100;
-const FV_MODULE_COUNT = 3;
+/** Um vão frontal (dois montantes) por diagrama — comparação de módulos, não multi-baias genérico. */
+const FV_FRONT_BAY_COUNT = 1;
 
 const COL_BG = '#ffffff';
 const COL_FRAME = '#d4d4d4';
@@ -171,17 +172,18 @@ function buildBeamGeometry(
   ox: number,
   oy: number,
   pw: number,
-  ph: number
+  ph: number,
+  nMod: number = FV_FRONT_BAY_COUNT
 ): BeamGeometry {
   const levels = Math.max(1, Math.min(32, Math.floor(data.levels)));
   const uprightH = Math.max(1, data.uprightHeightMm);
   const beamL = Math.max(1, data.beamLengthMm);
-  const nMod = FV_MODULE_COUNT;
+  const bayCount = Math.max(1, Math.min(4, Math.floor(nMod)));
   const tunnel = data.tunnel === true;
-  const widthsMm = uprightWidthsMm(nMod, tunnel);
+  const widthsMm = uprightWidthsMm(bayCount, tunnel);
   const gapTotalMm = FV_INTER_BAY_MM;
   const sumUprightsMm = widthsMm.reduce((a, b) => a + b, 0);
-  const totalRackMm = sumUprightsMm + nMod * beamL + (nMod - 1) * gapTotalMm;
+  const totalRackMm = sumUprightsMm + bayCount * beamL + (bayCount - 1) * gapTotalMm;
 
   const minInnerHPx = Math.max(19, ph / (levels + 2)) * levels * 1.03;
 
@@ -196,7 +198,7 @@ function buildBeamGeometry(
   let { uprightWidthsPx, beamPx, gapPx, innerH } = applyScale(scale);
 
   let totalW =
-    uprightWidthsPx.reduce((a, b) => a + b, 0) + nMod * beamPx + (nMod - 1) * gapPx;
+    uprightWidthsPx.reduce((a, b) => a + b, 0) + bayCount * beamPx + (bayCount - 1) * gapPx;
   if (totalW > rackMaxW) {
     scale *= rackMaxW / totalW;
     ({ uprightWidthsPx, beamPx, gapPx, innerH } = applyScale(scale));
@@ -207,7 +209,7 @@ function buildBeamGeometry(
     scale *= minInnerHPx / innerH;
     ({ uprightWidthsPx, beamPx, gapPx, innerH } = applyScale(scale));
     totalW =
-      uprightWidthsPx.reduce((a, b) => a + b, 0) + nMod * beamPx + (nMod - 1) * gapPx;
+      uprightWidthsPx.reduce((a, b) => a + b, 0) + bayCount * beamPx + (bayCount - 1) * gapPx;
     if (totalW > rackMaxW) {
       scale *= rackMaxW / totalW;
       ({ uprightWidthsPx, beamPx, gapPx, innerH } = applyScale(scale));
@@ -261,9 +263,10 @@ function drawFrontRack(
   pw: number,
   ph: number,
   data: ElevationPanelPayload,
-  sectionTitle: string
+  sectionTitle: string,
+  subtitle?: string
 ): string {
-  const nMod = FV_MODULE_COUNT;
+  const nMod = FV_FRONT_BAY_COUNT;
   const rackMaxW = Math.max(140, pw - 52 - 78);
   const rackMaxH = ph - 120;
   const g = buildBeamGeometry(data, rackMaxW, rackMaxH, ox, oy, pw, ph);
@@ -318,17 +321,48 @@ function drawFrontRack(
     `<text x="${rx + totalW / 2}" y="${floorTop + 7.5}" text-anchor="middle" font-size="7.5px" font-weight="700" fill="${COL_FLOOR}">PISO</text>`
   );
 
+  const showTunnelOpening = data.tunnel === true && typeof data.tunnelClearanceMm === 'number';
+  const yPassTop = showTunnelOpening ? beamYsPx[0]! - beamTh * 1.15 : floorTop;
+
   for (let fi = 0; fi < uprightXs.length; fi++) {
     const ux = uprightXs[fi]!;
     const uw = uprightWidthsPx[fi]!;
-    parts.push(
-      `<rect x="${ux}" y="${ry}" width="${uw}" height="${innerH}" fill="${FV_UPRIGHT_FILL}" stroke="${FV_UPRIGHT_STROKE}" stroke-width="1.35"/>`
-    );
-    parts.push(
-      `<rect x="${ux + uw * 0.08}" y="${ry}" width="${uw * 0.22}" height="${innerH}" fill="${FV_UPRIGHT_FACE}" opacity="0.45"/>`
-    );
+    if (showTunnelOpening && yPassTop < floorTop - 2.5 && yPassTop > ry + 4) {
+      const hTop = Math.max(0, yPassTop - ry);
+      if (hTop > 0.5) {
+        parts.push(
+          `<rect x="${ux}" y="${ry}" width="${uw}" height="${hTop}" fill="${FV_UPRIGHT_FILL}" stroke="${FV_UPRIGHT_STROKE}" stroke-width="1.35"/>`
+        );
+        parts.push(
+          `<rect x="${ux + uw * 0.08}" y="${ry}" width="${uw * 0.22}" height="${hTop}" fill="${FV_UPRIGHT_FACE}" opacity="0.45"/>`
+        );
+      }
+      const hOpen = Math.max(0, floorTop - yPassTop);
+      parts.push(
+        `<rect x="${ux}" y="${yPassTop}" width="${uw}" height="${hOpen}" fill="#f8fafc" stroke="${FV_UPRIGHT_STROKE}" stroke-width="1" stroke-dasharray="4 3"/>`
+      );
+    } else {
+      parts.push(
+        `<rect x="${ux}" y="${ry}" width="${uw}" height="${innerH}" fill="${FV_UPRIGHT_FILL}" stroke="${FV_UPRIGHT_STROKE}" stroke-width="1.35"/>`
+      );
+      parts.push(
+        `<rect x="${ux + uw * 0.08}" y="${ry}" width="${uw * 0.22}" height="${innerH}" fill="${FV_UPRIGHT_FACE}" opacity="0.45"/>`
+      );
+    }
     parts.push(
       `<rect x="${ux - 0.5}" y="${floorTop - 3}" width="${uw + 1}" height="4" fill="#1e293b" stroke="${FV_UPRIGHT_STROKE}" stroke-width="0.6"/>`
+    );
+  }
+
+  if (showTunnelOpening && yPassTop < floorTop - 2.5) {
+    parts.push(
+      `<rect x="${spanLeft}" y="${yPassTop}" width="${Math.max(0, spanRight - spanLeft)}" height="${floorTop - yPassTop}" fill="#e2e8f0" fill-opacity="0.35" stroke="#64748b" stroke-width="0.75" stroke-dasharray="5 4"/>`
+    );
+    parts.push(
+      `<line x1="${uprightXs[0]!}" y1="${yPassTop}" x2="${uprightXs[nMod]! + uprightWidthsPx[nMod]!}" y2="${yPassTop}" stroke="${FV_UPRIGHT_STROKE}" stroke-width="1.6" stroke-dasharray="3 2" opacity="0.85"/>`
+    );
+    parts.push(
+      `<text x="${(spanLeft + spanRight) / 2}" y="${(yPassTop + floorTop) / 2 + 3.5}" text-anchor="middle" font-size="8px" font-weight="600" fill="#475569">Passagem</text>`
     );
   }
 
@@ -370,6 +404,11 @@ function drawFrontRack(
   if (sectionTitle) {
     parts.push(
       `<text x="${ox + pw / 2}" y="${oy + 14}" text-anchor="middle" font-weight="700" font-size="12px" fill="#0f172a">${escapeXml(sectionTitle)}</text>`
+    );
+  }
+  if (subtitle) {
+    parts.push(
+      `<text x="${ox + pw / 2}" y="${oy + 28}" text-anchor="middle" font-size="7.25px" fill="#64748b">${escapeXml(subtitle)}</text>`
     );
   }
 
@@ -541,14 +580,28 @@ export function serializeElevationSvgV2(model: ElevationModelV2): string {
     `<rect x="28" y="28" width="${w - 56}" height="${h - 56}" fill="none" stroke="${COL_FRAME}" stroke-width="0.5"/>`
   );
 
-  const bandH = 445;
-  const gap = 30;
+  const bandH = 430;
+  const colGap = 28;
   let y = 36;
-  parts.push(
-    drawFrontRack(36, y, w - 72, bandH, model.front, 'Vista frontal — estrutura típica')
-  );
+  const std = model.frontWithoutTunnel;
+  const subStandard =
+    std.rackDepthMode === 'double' ? 'Dupla costas · armazenagem normal (sem vão de passagem)' : undefined;
+
+  if (model.frontWithTunnel) {
+    const panelW = (w - 72 - colGap) / 2;
+    const tun = model.frontWithTunnel;
+    const tunTitle = tun.rackDepthMode === 'double' ? 'Elevação dupla com túnel' : 'Elevação com túnel';
+    const tunSub =
+      'Vão inferior explícito · menos níveis ativos acima (mesma altura de montante, sem comprimir o total na zona superior)';
+    parts.push(drawFrontRack(36, y, panelW, bandH, std, 'Elevação sem túnel', subStandard));
+    parts.push(drawFrontRack(36 + panelW + colGap, y, panelW, bandH, tun, tunTitle, tunSub));
+  } else {
+    parts.push(drawFrontRack(36, y, w - 72, bandH, std, 'Elevação sem túnel', subStandard));
+  }
+
+  const gap = 32;
   y += bandH + gap;
-  parts.push(drawLateral(36, y, w - 72, bandH, model.lateral));
+  parts.push(drawLateral(36, y, w - 72, 340, model.lateral));
 
   let sy = h - 58;
   for (let i = model.summaryLines.length - 1; i >= 0; i--) {

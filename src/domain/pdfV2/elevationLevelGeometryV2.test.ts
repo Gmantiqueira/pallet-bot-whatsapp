@@ -6,6 +6,7 @@ import {
   DEFAULT_FIRST_LEVEL_LIFT_MM,
   DEFAULT_STRUCTURAL_BOTTOM_MM,
   DEFAULT_STRUCTURAL_TOP_MM,
+  TUNNEL_FIRST_BEAM_OFFSET_ABOVE_CLEARANCE_MM,
 } from './elevationLevelGeometryV2';
 
 describe('computeBeamElevations', () => {
@@ -99,14 +100,17 @@ describe('computeTunnelRackBeamElevations', () => {
       tunnelClearanceMm: 3200,
     });
     expect(r.beamElevationsMm).toHaveLength(activeTiers + 1);
-    expect(r.beamElevationsMm[0]!).toBeGreaterThanOrEqual(3200);
+    expect(r.beamElevationsMm[0]!).toBeGreaterThanOrEqual(
+      3200 + TUNNEL_FIRST_BEAM_OFFSET_ABOVE_CLEARANCE_MM
+    );
     expect(r.beamElevationsMm[activeTiers]!).toBeCloseTo(8000 - DEFAULT_STRUCTURAL_TOP_MM, 3);
   });
 });
 
 describe('tunnelActiveStorageLevelsFromGlobal', () => {
   it('reduz níveis ativos em relação ao projeto', () => {
-    expect(tunnelActiveStorageLevelsFromGlobal(5)).toBe(3);
+    expect(tunnelActiveStorageLevelsFromGlobal(5)).toBe(2);
+    expect(tunnelActiveStorageLevelsFromGlobal(4)).toBe(1);
     expect(tunnelActiveStorageLevelsFromGlobal(3)).toBe(1);
     expect(tunnelActiveStorageLevelsFromGlobal(2)).toBe(1);
   });

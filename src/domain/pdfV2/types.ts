@@ -167,7 +167,14 @@ export type ElevationPanelPayload = {
 export type ElevationModelV2 = {
   viewBoxW: number;
   viewBoxH: number;
-  front: ElevationPanelPayload;
+  /** Vista frontal do módulo normal (sem vão de passagem) — linha de base para comparação. */
+  frontWithoutTunnel: ElevationPanelPayload;
+  /**
+   * Vista frontal do módulo túnel (menos níveis ativos, vão inferior explícito).
+   * Ausente quando o projeto não inclui módulo túnel.
+   */
+  frontWithTunnel?: ElevationPanelPayload;
+  /** Vista lateral de apoio (geometria alinhada ao módulo normal). */
   lateral: ElevationPanelPayload;
   summaryLines: string[];
 };

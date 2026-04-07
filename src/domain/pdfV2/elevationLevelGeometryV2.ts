@@ -7,13 +7,17 @@ const EPS = 0.5;
 
 /**
  * Níveis de armazenagem ativos acima do vão de passagem no módulo túnel (sempre abaixo do total do projeto).
- * Não reutiliza a contagem total — evita comprimir todos os níveis na zona superior.
+ * Regra: menos níveis ativos que o normal — não redistribuir o mesmo número de patamares só na zona superior.
  */
 export function tunnelActiveStorageLevelsFromGlobal(globalLevels: number): number {
   const g = Math.max(1, Math.floor(globalLevels));
   if (g <= 2) return 1;
-  return Math.max(1, g - 2);
+  if (g === 3) return 1;
+  return Math.max(1, g - 3);
 }
+
+/** Espaço mínimo entre pé livre declarado e primeiro eixo de armazenagem (mm). */
+export const TUNNEL_FIRST_BEAM_OFFSET_ABOVE_CLEARANCE_MM = 120;
 
 export const DEFAULT_STRUCTURAL_BOTTOM_MM = 80;
 export const DEFAULT_STRUCTURAL_TOP_MM = 80;
@@ -182,6 +186,8 @@ export function computeTunnelRackBeamElevations(input: {
   tunnelClearanceMm: number;
   structuralBottomMm?: number;
   structuralTopMm?: number;
+  /** Folga estrutural acima do pé livre antes do primeiro eixo de armazenagem (mm). */
+  firstBeamOffsetAboveClearanceMm?: number;
 }): BeamElevationResult {
   const levels = Math.max(1, Math.floor(input.levels));
   const H0 = Math.max(EPS, input.uprightHeightMm);
@@ -191,11 +197,9 @@ export function computeTunnelRackBeamElevations(input: {
   structuralTop = clamp(structuralTop, 0, H0 * 0.25);
   const topIn = H0 - structuralTop;
 
-  let beam0 = Math.max(structuralBottom + EPS, input.tunnelClearanceMm);
-  const minSpan = levels * 200;
-  if (beam0 > topIn - minSpan) {
-    beam0 = Math.max(structuralBottom + 100, topIn - minSpan - EPS);
-  }
+  const off = input.firstBeamOffsetAboveClearanceMm ?? TUNNEL_FIRST_BEAM_OFFSET_ABOVE_CLEARANCE_MM;
+  const beam0Min = input.tunnelClearanceMm + off;
+  let beam0 = Math.max(structuralBottom + EPS, beam0Min);
   const span = Math.max(EPS, topIn - beam0);
   const beamElevationsMm: number[] = [];
   for (let k = 0; k <= levels; k++) {
