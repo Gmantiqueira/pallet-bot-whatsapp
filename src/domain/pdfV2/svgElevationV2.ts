@@ -6,8 +6,8 @@ const FV_INTER_BAY_MM = FV_FOLGA_MM * 2;
 const UPRIGHT_DEFAULT_MM = 75;
 /** Montantes de zona de túnel (1.º pórtico) — reforço visual. */
 const UPRIGHT_TUNNEL_MM = 100;
-/** Um vão frontal (dois montantes) por diagrama — comparação de módulos, não multi-baias genérico. */
-const FV_FRONT_BAY_COUNT = 1;
+/** Duas posições de palete por nível na vista frontal (duas baias entre montantes). A lateral permanece uma célula em profundidade. */
+const FV_FRONT_BAY_COUNT = 2;
 /**
  * Vista frontal: montantes mais estreitos em px do que a escala mm, redistribuindo largura para o vão
  * (face de armazenagem dominada pelas longarinas, não pórtico estreito).
@@ -426,9 +426,9 @@ function drawFrontRack(
     }
   }
 
-  const refBay = bays[Math.min(1, bays.length - 1)];
-  const spanLeft = refBay.left;
-  const spanRight = refBay.right;
+  const faceSpanLeft = bays[0]!.left;
+  const faceSpanRight = bays[nMod - 1]!.right;
+  const tunnelFaceBay = bays[0]!;
   const dimTopY = ry - 20;
   const floorTop = rackBottom;
   const floorPad = 6;
@@ -480,14 +480,16 @@ function drawFrontRack(
   }
 
   if (showTunnelOpening && yPassTop < floorTop - 2.5) {
+    const tx0 = tunnelFaceBay.left;
+    const tx1 = tunnelFaceBay.right;
     parts.push(
-      `<rect x="${spanLeft}" y="${yPassTop}" width="${Math.max(0, spanRight - spanLeft)}" height="${floorTop - yPassTop}" fill="#e2e8f0" fill-opacity="0.35" stroke="#64748b" stroke-width="0.75" stroke-dasharray="5 4"/>`
+      `<rect x="${tx0}" y="${yPassTop}" width="${Math.max(0, tx1 - tx0)}" height="${floorTop - yPassTop}" fill="#e2e8f0" fill-opacity="0.35" stroke="#64748b" stroke-width="0.75" stroke-dasharray="5 4"/>`
     );
     parts.push(
-      `<line x1="${uprightXs[0]}" y1="${yPassTop}" x2="${uprightXs[nMod] + uprightWidthsPx[nMod]}" y2="${yPassTop}" stroke="${FV_UPRIGHT_STROKE}" stroke-width="1.6" stroke-dasharray="3 2" opacity="0.85"/>`
+      `<line x1="${tx0}" y1="${yPassTop}" x2="${tx1}" y2="${yPassTop}" stroke="${FV_UPRIGHT_STROKE}" stroke-width="1.6" stroke-dasharray="3 2" opacity="0.85"/>`
     );
     parts.push(
-      `<text x="${(spanLeft + spanRight) / 2}" y="${(yPassTop + floorTop) / 2 + 4 * ls}" text-anchor="middle" font-size="${9.75 * ls}px" font-weight="600" fill="#475569">Passagem</text>`
+      `<text x="${(tx0 + tx1) / 2}" y="${(yPassTop + floorTop) / 2 + 4 * ls}" text-anchor="middle" font-size="${9.75 * ls}px" font-weight="600" fill="#475569">Passagem</text>`
     );
   }
 
@@ -552,9 +554,13 @@ function drawFrontRack(
     `<line x1="${uprightXs[0]}" y1="${topY}" x2="${lastUx + lastUw}" y2="${topY}" stroke="#475569" stroke-width="1.05" stroke-linecap="square" opacity="0.75"/>`
   );
 
-  parts.push(dimensionLineHArrows(spanLeft, dimTopY, spanRight, DIM_MINOR));
+  parts.push(dimensionLineHArrows(faceSpanLeft, dimTopY, faceSpanRight, DIM_MINOR));
+  const faceTitle =
+    nMod > 1
+      ? `Face de armazenagem · ${nMod} posições/nível · vão unit. ${escapeXml(formatMmPtBr(Math.round(beamL)))}`
+      : `Face de armazenagem · vão ${escapeXml(formatMmPtBr(Math.round(beamL)))}`;
   parts.push(
-    `<text x="${ox + pw / 2}" y="${dimTopY - 6 * ls}" text-anchor="middle" font-size="${10.5 * ls}px" font-weight="700" fill="${DIM_MAJOR}">Face de armazenagem · vão ${escapeXml(formatMmPtBr(Math.round(beamL)))}</text>`
+    `<text x="${ox + pw / 2}" y="${dimTopY - 6 * ls}" text-anchor="middle" font-size="${10.5 * ls}px" font-weight="700" fill="${DIM_MAJOR}">${faceTitle}</text>`
   );
 
   parts.push(

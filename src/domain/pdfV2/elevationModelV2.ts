@@ -26,6 +26,20 @@ function bandDepthMmFromGeometry(geometry: LayoutGeometry): number {
     : 2 * d + SPINE_BACK_TO_BACK_MM;
 }
 
+/**
+ * Elevação frontal = face de maior extensão em planta (vão típico); a lateral usa a menor (prof. de posição).
+ */
+function frontLoadingFaceAndPositionDepthMm(mod: RackModule): {
+  loadingFaceSpanMm: number;
+  positionDepthMm: number;
+} {
+  const a = mod.beamSpanMm;
+  const b = mod.moduleDepthAxisMm;
+  return a >= b
+    ? { loadingFaceSpanMm: a, positionDepthMm: b }
+    : { loadingFaceSpanMm: b, positionDepthMm: a };
+}
+
 function clearHeightFromAnswers(
   answers: Record<string, unknown>
 ): number | undefined {
@@ -49,10 +63,9 @@ function panelFromRackModule(
   opts: { tunnelVisual: boolean }
 ): ElevationPanelPayload {
   const geom = mod.beamGeometry;
-  /** Horizontal da elevação frontal = vão / comprimento ao longo das longarinas (eixo do módulo na planta). */
-  const beamLengthMm = mod.beamSpanMm;
-  /** Profundidade de posição (face estreita em planta). */
-  const moduleDepthMm = mod.moduleDepthAxisMm;
+  const { loadingFaceSpanMm, positionDepthMm } = frontLoadingFaceAndPositionDepthMm(mod);
+  const beamLengthMm = loadingFaceSpanMm;
+  const moduleDepthMm = positionDepthMm;
   const bandDepthMm = bandDepthMmFromGeometry(geometry);
   const cap = typeof answers.capacityKg === 'number' ? answers.capacityKg : 0;
   const firstLevelOnGround =
@@ -116,8 +129,9 @@ function buildFrontWithoutTunnelPayload(
       ? (answers.levelSpacingsMm as number[])
       : undefined,
   });
-  const beamLengthMm = rep.beamSpanMm;
-  const moduleDepthMm = rep.moduleDepthAxisMm;
+  const { loadingFaceSpanMm, positionDepthMm } = frontLoadingFaceAndPositionDepthMm(rep);
+  const beamLengthMm = loadingFaceSpanMm;
+  const moduleDepthMm = positionDepthMm;
   const bandDepthMm = bandDepthMmFromGeometry(geometry);
   const cap = typeof answers.capacityKg === 'number' ? answers.capacityKg : 0;
 
@@ -195,17 +209,16 @@ export function validateElevationAxesAgainstGeometry(
 ): void {
   const rep = representativeModuleForElevation(geometry);
   const front = model.frontWithoutTunnel;
+  const { loadingFaceSpanMm, positionDepthMm } = frontLoadingFaceAndPositionDepthMm(rep);
 
-  if (Math.abs(front.beamLengthMm - rep.beamSpanMm) > ELEV_AXIS_TOL_MM) {
+  if (Math.abs(front.beamLengthMm - loadingFaceSpanMm) > ELEV_AXIS_TOL_MM) {
     throw new ElevationModelValidationError(
-      `Elevação frontal: vão horizontal (${front.beamLengthMm} mm) não alinha com o módulo (${rep.beamSpanMm} mm).`
+      `Elevação frontal: vão da face de carga (${front.beamLengthMm} mm) não alinha com o módulo (esperado maior lado ${loadingFaceSpanMm} mm).`
     );
   }
-  if (
-    Math.abs(front.moduleDepthMm - rep.moduleDepthAxisMm) > ELEV_AXIS_TOL_MM
-  ) {
+  if (Math.abs(front.moduleDepthMm - positionDepthMm) > ELEV_AXIS_TOL_MM) {
     throw new ElevationModelValidationError(
-      `Elevação: profundidade de posição (${front.moduleDepthMm} mm) não alinha com o módulo (${rep.moduleDepthAxisMm} mm).`
+      `Elevação: profundidade de posição (${front.moduleDepthMm} mm) não alinha (esperado menor lado ${positionDepthMm} mm).`
     );
   }
 
@@ -228,9 +241,10 @@ export function validateElevationAxesAgainstGeometry(
         'Elevação túnel: módulo túnel ausente na geometria.'
       );
     }
-    if (Math.abs(tun.beamLengthMm - tunMod.beamSpanMm) > ELEV_AXIS_TOL_MM) {
+    const { loadingFaceSpanMm } = frontLoadingFaceAndPositionDepthMm(tunMod);
+    if (Math.abs(tun.beamLengthMm - loadingFaceSpanMm) > ELEV_AXIS_TOL_MM) {
       throw new ElevationModelValidationError(
-        `Elevação túnel: vão (${tun.beamLengthMm} mm) não alinha com módulo túnel (${tunMod.beamSpanMm} mm).`
+        `Elevação túnel: vão da face (${tun.beamLengthMm} mm) não alinha com módulo túnel (esperado ${loadingFaceSpanMm} mm).`
       );
     }
   }

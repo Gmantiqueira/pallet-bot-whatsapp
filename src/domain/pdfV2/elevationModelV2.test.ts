@@ -12,7 +12,7 @@ const answersToSession = (a: ProjectAnswersV2): Record<string, unknown> => ({
 });
 
 describe('buildElevationModelV2 axis mapping', () => {
-  it('uses plan beam span for front and module depth for lateral (depth > width in form)', () => {
+  it('front uses larger plan dimension as loading face; lateral uses band depth (depth > width in form)', () => {
     const a: ProjectAnswersV2 = {
       lengthMm: 12_000,
       widthMm: 10_000,
@@ -36,8 +36,10 @@ describe('buildElevationModelV2 axis mapping', () => {
     const model = buildElevationModelV2(session, geo);
     const rep = geo.rows[0]!.modules.find(m => m.type === 'normal')!;
 
-    expect(model.frontWithoutTunnel.beamLengthMm).toBeCloseTo(rep.beamSpanMm, 0);
-    expect(model.frontWithoutTunnel.moduleDepthMm).toBeCloseTo(rep.moduleDepthAxisMm, 0);
+    const expLong = Math.max(rep.beamSpanMm, rep.moduleDepthAxisMm);
+    const expShort = Math.min(rep.beamSpanMm, rep.moduleDepthAxisMm);
+    expect(model.frontWithoutTunnel.beamLengthMm).toBeCloseTo(expLong, 0);
+    expect(model.frontWithoutTunnel.moduleDepthMm).toBeCloseTo(expShort, 0);
     expect(model.frontWithoutTunnel.beamLengthMm).not.toBe(model.frontWithoutTunnel.moduleDepthMm);
     validateElevationAxesAgainstGeometry(model, geo);
   });
