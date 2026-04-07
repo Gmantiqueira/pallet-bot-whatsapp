@@ -35,13 +35,13 @@ describe('serializeElevationPagesV2', () => {
     const svg = pages.frontWithoutTunnel;
     expect(svg).toContain('PISO');
     expect(svg).toContain('H total');
-    expect(svg).toMatch(/Face de armazenagem/);
-    expect(svg).toMatch(/2 pos\./);
+    expect(svg).toMatch(/2 baias/);
+    expect(svg).toMatch(/vão/);
     const kgLabels = svg.match(/1200kg/g) ?? [];
     expect(kgLabels.length).toBe(a.levels * 2);
-    // Uma baia: uma longarina laranja por nível de carga
+    // Duas baias: uma longarina por baia e por nível
     const orangeBeams = svg.match(/fill="#fb923c"/g) ?? [];
-    expect(orangeBeams.length).toBe(a.levels);
+    expect(orangeBeams.length).toBe(a.levels * 2);
   });
 
   it('vista lateral dupla costas menciona espinha e profundidade de faixa', () => {
@@ -100,8 +100,8 @@ describe('serializeElevationPagesV2', () => {
     expect(pages.frontWithTunnel).toBeDefined();
     expect(model.lateralWithTunnel).toBeDefined();
     expect(pages.lateralWithTunnel).toBeDefined();
-    expect(pages.frontWithoutTunnel).not.toContain('Passagem');
-    expect(pages.frontWithTunnel!).toContain('Passagem');
+    expect(pages.frontWithoutTunnel).not.toContain('TÚNEL');
+    expect(pages.frontWithTunnel!).toContain('TÚNEL');
     expect(pages.lateral).not.toContain('Passagem');
     expect(pages.lateralWithTunnel!).toContain('Passagem');
   });

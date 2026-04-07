@@ -6,13 +6,14 @@ const FV_INTER_BAY_MM = FV_FOLGA_MM * 2;
 const UPRIGHT_DEFAULT_MM = 75;
 /** Montantes de zona de túnel (1.º pórtico) — reforço visual. */
 const UPRIGHT_TUNNEL_MM = 100;
-/** Uma baia estrutural no diagrama frontal; dentro do vão, duas posições de palete separadas por linha vertical ao centro. */
-const FV_FRONT_BAY_COUNT = 1;
+/** Um módulo frontal = duas baias lado a lado (3 montantes), como desenho técnico tipo 2× vão. */
+const FV_FRONT_BAY_COUNT = 2;
 /**
- * Vista frontal: montantes mais estreitos em px do que a escala mm, redistribuindo largura para o vão
- * (face de armazenagem dominada pelas longarinas, não pórtico estreito).
+ * Montantes exteriores: mais estreitos em px; largura ganha o vão.
+ * Interiores (entre baias): fator maior para o pórtico central ler claramente no desenho.
  */
 const FV_FRONT_UPRIGHT_SLIM = 0.46;
+const FV_FRONT_CENTER_UPRIGHT_SLIM = 0.86;
 /** Marcadores discretos ao longo do vão (posições de carga na longarina). */
 const FV_ALONG_BEAM_DIVISIONS = 3;
 /** Armazenagem entre longarinas: preenchimento técnico suave (posição de palete). */
@@ -317,7 +318,12 @@ function frontSlimUprightsWidenBay(
   beamPx: number,
   bayCount: number
 ): { uprightWidthsPx: number[]; beamPx: number } {
-  const slim = uprightWidthsPx.map(w => Math.max(2.25, w * FV_FRONT_UPRIGHT_SLIM));
+  const nU = uprightWidthsPx.length;
+  const slim = uprightWidthsPx.map((w, i) => {
+    const outer = i === 0 || i === nU - 1;
+    const factor = outer ? FV_FRONT_UPRIGHT_SLIM : FV_FRONT_CENTER_UPRIGHT_SLIM;
+    return Math.max(outer ? 2.25 : 5.5, w * factor);
+  });
   let saved = 0;
   for (let i = 0; i < uprightWidthsPx.length; i++) {
     saved += uprightWidthsPx[i]! - slim[i]!;
@@ -334,7 +340,7 @@ function drawFrontStorageTiers(
   beamTh: number,
   yClipTop: number,
   yClipBottom: number,
-  /** Duas posições ao longo da longarina: linha vertical visível ao meio do vão (entre faixas). */
+  /** `true` = uma só baia com linha de separação ao centro; `false` = uma posição por baia (2 baias no módulo). */
   splitTwoPalletPositions: boolean
 ): string {
   const parts: string[] = [];
@@ -460,7 +466,13 @@ function drawFrontRack(
   for (let fi = 0; fi < uprightXs.length; fi++) {
     const ux = uprightXs[fi];
     const uw = uprightWidthsPx[fi];
-    if (showTunnelOpening && yPassTop < floorTop - 2.5 && yPassTop > ry + 4) {
+    /** Túnel só na 1.ª baia: montante exterior esquerdo com zona livre inferior; centro e direita até ao piso. */
+    const tunnelSplitThisUpright =
+      showTunnelOpening &&
+      fi === 0 &&
+      yPassTop < floorTop - 2.5 &&
+      yPassTop > ry + 4;
+    if (tunnelSplitThisUpright) {
       const hTop = Math.max(0, yPassTop - ry);
       if (hTop > 0.5) {
         parts.push(
@@ -497,7 +509,7 @@ function drawFrontRack(
       `<line x1="${tx0}" y1="${yPassTop}" x2="${tx1}" y2="${yPassTop}" stroke="${FV_UPRIGHT_STROKE}" stroke-width="1.6" stroke-dasharray="3 2" opacity="0.85"/>`
     );
     parts.push(
-      `<text x="${(tx0 + tx1) / 2}" y="${(yPassTop + floorTop) / 2 + 4 * ls}" text-anchor="middle" font-size="${9.75 * ls}px" font-weight="600" fill="#475569">Passagem</text>`
+      `<text x="${(tx0 + tx1) / 2}" y="${(yPassTop + floorTop) / 2 + 4 * ls}" text-anchor="middle" font-size="${10.5 * ls}px" font-weight="700" fill="#b91c1c">TÚNEL</text>`
     );
   }
 
@@ -514,7 +526,7 @@ function drawFrontRack(
         beamTh,
         ry + 1,
         rackBottom - 1,
-        true
+        false
       )
     );
   }
@@ -545,20 +557,16 @@ function drawFrontRack(
     const capFs = 14.5 * ls;
     for (let bi = 0; bi < bays.length; bi++) {
       const bay = bays[bi]!;
-      const xm = (bay.left + bay.right) / 2;
       for (let j = 0; j < nStorageBeams; j++) {
         const yy = beamYsPx[j]!;
         const bh = Math.max(beamTh, 2.2);
         const ty = yy - bh / 2 - 4.5 * ls;
-        const cxLeft = (bay.left + xm) / 2;
-        const cxRight = (xm + bay.right) / 2;
-        for (const cx of [cxLeft, cxRight]) {
-          parts.push(
-            `<text x="${cx}" y="${ty}" text-anchor="middle" font-size="${capFs}px" font-weight="700" fill="#111827" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif">${escapeXml(
-              capText
-            )}</text>`
-          );
-        }
+        const cx = (bay.left + bay.right) / 2;
+        parts.push(
+          `<text x="${cx}" y="${ty}" text-anchor="middle" font-size="${capFs}px" font-weight="700" fill="#111827" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif">${escapeXml(
+            capText
+          )}</text>`
+        );
       }
     }
   }
@@ -568,9 +576,9 @@ function drawFrontRack(
   );
 
   parts.push(dimensionLineHArrows(faceSpanLeft, dimTopY, faceSpanRight, DIM_MINOR));
-  const faceTitle = `Face de armazenagem · vão ${escapeXml(
+  const faceTitle = `Módulo 2 baias · vão ${escapeXml(
     formatMmPtBr(Math.round(beamL))
-  )} · 2 pos./nível`;
+  )} mm/baia · face de armazenagem`;
   parts.push(
     `<text x="${ox + pw / 2}" y="${dimTopY - 6 * ls}" text-anchor="middle" font-size="${10.5 * ls}px" font-weight="700" fill="${DIM_MAJOR}">${faceTitle}</text>`
   );
