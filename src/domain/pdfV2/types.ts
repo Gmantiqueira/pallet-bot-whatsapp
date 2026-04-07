@@ -196,6 +196,10 @@ export type ElevationModelV2 = {
   frontWithTunnel?: ElevationPanelPayload;
   /** Vista lateral de apoio (geometria alinhada ao módulo normal). */
   lateral: ElevationPanelPayload;
+  /**
+   * Vista lateral do módulo túnel (abertura inferior, menos níveis) — só quando há túnel no projeto.
+   */
+  lateralWithTunnel?: ElevationPanelPayload;
   summaryLines: string[];
 };
 

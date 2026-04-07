@@ -1,11 +1,11 @@
 import type { LayoutGeometry, RackRow } from './layoutGeometryV2';
 import type { FloorPlanDimension, FloorPlanLabel, FloorPlanModelV2, RackDepthModeV2 } from './types';
 
-const VB_W = 1000;
-const VB_H = 720;
-const PAD = 48;
-const HEADER = 88;
-const DIM_OUT = 42;
+const VB_W = 1120;
+const VB_H = 780;
+const PAD = 22;
+const HEADER = 58;
+const DIM_OUT = 26;
 
 function escapeXml(text: string): string {
   return text
@@ -47,7 +47,7 @@ function rowBandFootprintMm(row: RackRow): { x0: number; y0: number; x1: number;
 export function buildFloorPlanModelV2(geometry: LayoutGeometry): FloorPlanModelV2 {
   const { warehouseLengthMm: L, warehouseWidthMm: W } = geometry;
   const innerW = VB_W - 2 * PAD;
-  const innerH = VB_H - PAD - HEADER - DIM_OUT - 56;
+  const innerH = VB_H - PAD - HEADER - DIM_OUT - 34;
   const scale = Math.min(innerW / L, innerH / W);
   const boxW = L * scale;
   const boxH = W * scale;
@@ -150,14 +150,14 @@ export function buildFloorPlanModelV2(geometry: LayoutGeometry): FloorPlanModelV
     {
       id: 'title',
       x: VB_W / 2,
-      y: PAD + 26,
+      y: PAD + 22,
       text: 'PLANTA — IMPLANTAÇÃO',
       className: 'fp-title',
     },
     {
       id: 'sub',
       x: VB_W / 2,
-      y: PAD + 48,
+      y: PAD + 44,
       text: `${formatMm(L)} × ${formatMm(W)}`,
       className: 'fp-sub',
     },

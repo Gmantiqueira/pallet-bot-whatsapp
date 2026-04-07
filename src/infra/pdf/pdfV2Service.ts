@@ -48,11 +48,11 @@ function drawingRasterPixelSize(): { pxW: number; pxH: number } {
   const pageBottom = pageH - MARGIN_PT;
   const headerFromTop = 46;
   const imgTop = MARGIN_PT + headerFromTop;
-  const imgBottomPad = 20;
+  const imgBottomPad = 14;
   const imgBoxH = pageBottom - imgTop - imgBottomPad;
   return {
     pxW: ptToPx(usableW),
-    pxH: ptToPx(Math.max(80, imgBoxH)),
+    pxH: ptToPx(Math.max(96, imgBoxH * 1.06)),
   };
 }
 
@@ -186,7 +186,7 @@ export type GenerateProjectPdfV2Input = {
   project: Record<string, unknown>;
   layout: LayoutResult;
   floorPlanSvg: string;
-  /** Uma folha SVG por tipo de elevação (sem túnel, com túnel ou null, lateral). */
+  /** Folhas SVG de elevação (frontal ×2 se túnel, lateral ×2 se túnel). */
   elevationPages: ElevationPageSvgs;
   /** Vista 3D isométrica (wireframe) alinhada ao layout V2. */
   view3dSvg: string;
@@ -220,21 +220,30 @@ export async function renderPdfV2(
     heightPx: number;
   } | null;
   let elevLateralRaster: { buffer: Buffer; widthPx: number; heightPx: number };
+  let elevLateralTunRaster: {
+    buffer: Buffer;
+    widthPx: number;
+    heightPx: number;
+  } | null;
   let view3dRaster: { buffer: Buffer; widthPx: number; heightPx: number };
   try {
     const tunSvg = input.elevationPages.frontWithTunnel;
+    const latTunSvg = input.elevationPages.lateralWithTunnel;
     const rasterAll = await Promise.all([
       svgRasterToPng(input.floorPlanSvg, pxW, pxH),
       svgRasterToPng(input.elevationPages.frontWithoutTunnel, elW, elH),
       svgRasterToPng(input.elevationPages.lateral, elW, elH),
       svgRasterToPng(input.view3dSvg, pxW, pxH),
       ...(tunSvg ? [svgRasterToPng(tunSvg, elW, elH)] : []),
+      ...(latTunSvg ? [svgRasterToPng(latTunSvg, elW, elH)] : []),
     ]);
-    floorRaster = rasterAll[0]!;
-    elevFrontStdRaster = rasterAll[1]!;
-    elevLateralRaster = rasterAll[2]!;
-    view3dRaster = rasterAll[3]!;
-    elevFrontTunRaster = tunSvg ? rasterAll[4] : null;
+    let i = 0;
+    floorRaster = rasterAll[i++]!;
+    elevFrontStdRaster = rasterAll[i++]!;
+    elevLateralRaster = rasterAll[i++]!;
+    view3dRaster = rasterAll[i++]!;
+    elevFrontTunRaster = tunSvg ? rasterAll[i++]! : null;
+    elevLateralTunRaster = latTunSvg ? rasterAll[i++]! : null;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     throw new Error(`Falha ao rasterizar SVG V2 para PDF: ${msg}`);
@@ -482,13 +491,13 @@ export async function renderPdfV2(
 
   doc.addPage();
   doc.y = doc.page.margins.top + 6;
-  drawCentered('Vista lateral', {
+  drawCentered('Vista lateral — sem túnel', {
     size: 12,
     font: 'Helvetica-Bold',
     color: COL_INK,
     moveDown: 0.18,
   });
-  drawCentered('Profundidade de faixa e treliçagem esquemática', {
+  drawCentered('Profundidade de faixa e treliçagem (perfil único)', {
     size: 8.5,
     color: COL_MUTED,
     moveDown: 0.28,
@@ -496,6 +505,31 @@ export async function renderPdfV2(
   horizontalRule(doc.y + 3, 0.1, COL_RULE);
   doc.moveDown(0.38);
   embedFullWidthDrawing(elevLateralRaster);
+
+  doc.addPage();
+  doc.y = doc.page.margins.top + 6;
+  drawCentered('Vista lateral — com túnel', {
+    size: 12,
+    font: 'Helvetica-Bold',
+    color: COL_INK,
+    moveDown: 0.18,
+  });
+  if (elevLateralTunRaster) {
+    drawCentered('Abertura inferior e níveis ativos alinhados ao módulo túnel', {
+      size: 8.5,
+      color: COL_MUTED,
+      moveDown: 0.28,
+    });
+    horizontalRule(doc.y + 3, 0.1, COL_RULE);
+    doc.moveDown(0.38);
+    embedFullWidthDrawing(elevLateralTunRaster);
+  } else {
+    drawCentered('Não aplicável neste projeto (sem módulo túnel).', {
+      size: 10,
+      color: COL_MUTED,
+      moveDown: 0.85,
+    });
+  }
 
   doc.addPage();
   doc.y = doc.page.margins.top + 6;

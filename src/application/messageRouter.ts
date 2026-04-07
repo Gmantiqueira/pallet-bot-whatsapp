@@ -232,6 +232,16 @@ export const routeIncoming = async (
             elevPagesV2.lateral,
             'utf8'
           );
+          if (elevPagesV2.lateralWithTunnel) {
+            fs.writeFileSync(
+              path.join(
+                storageDir,
+                `elevacao-lateral-tunel-v2-${phone}-${ts}.svg`
+              ),
+              elevPagesV2.lateralWithTunnel,
+              'utf8'
+            );
+          }
           fs.writeFileSync(
             path.join(storageDir, `vista-3d-v2-${phone}-${ts}.svg`),
             view3dSvgV2,

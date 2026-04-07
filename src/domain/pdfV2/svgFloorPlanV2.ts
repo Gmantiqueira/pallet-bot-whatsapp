@@ -29,15 +29,16 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
     <line x1="0" y1="0" x2="0" y2="6" stroke="#94a3b8" stroke-width="0.55" opacity="0.35"/>
   </pattern>`);
   parts.push(`<style>
-    .fp-title { font: 700 17px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: ${COL_INK}; letter-spacing: 0.06em; }
-    .fp-sub { font: 500 11px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #4b5563; }
-    .fp-leg { font: 600 9px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #475569; letter-spacing: 0.12em; }
-    .fp-dim { font: 600 9px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: ${COL_DIM}; }
+    .fp-title { font: 700 20px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: ${COL_INK}; letter-spacing: 0.05em; }
+    .fp-sub { font: 500 12.5px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #4b5563; }
+    .fp-leg { font: 600 10px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #475569; letter-spacing: 0.1em; }
+    .fp-dim { font: 600 10px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: ${COL_DIM}; }
   </style>`);
   parts.push('</defs>');
   parts.push(`<rect width="${w}" height="${h}" fill="${COL_BG}"/>`);
+  const fpPad = 20;
   parts.push(
-    `<rect x="36" y="36" width="${w - 72}" height="${h - 72}" fill="none" stroke="${COL_FRAME}" stroke-width="0.5"/>`
+    `<rect x="${fpPad}" y="${fpPad}" width="${w - 2 * fpPad}" height="${h - 2 * fpPad}" fill="none" stroke="${COL_FRAME}" stroke-width="0.5"/>`
   );
 
   const o = model.warehouseOutline;

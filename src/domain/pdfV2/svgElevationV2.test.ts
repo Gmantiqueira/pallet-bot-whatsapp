@@ -97,7 +97,11 @@ describe('serializeElevationPagesV2', () => {
     expect(model.frontWithoutTunnel.levels).toBeGreaterThan(model.frontWithTunnel!.levels);
     const pages = serializeElevationPagesV2(model);
     expect(pages.frontWithTunnel).toBeDefined();
+    expect(model.lateralWithTunnel).toBeDefined();
+    expect(pages.lateralWithTunnel).toBeDefined();
     expect(pages.frontWithoutTunnel).not.toContain('Passagem');
     expect(pages.frontWithTunnel!).toContain('Passagem');
+    expect(pages.lateral).not.toContain('Passagem');
+    expect(pages.lateralWithTunnel!).toContain('Passagem');
   });
 });

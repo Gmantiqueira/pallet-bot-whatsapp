@@ -161,6 +161,11 @@ export function validateElevationModelV2(model: ElevationModelV2): void {
       'Elevação com túnel: tunnel=true obrigatório no payload.'
     );
   }
+  if (model.lateralWithTunnel && !model.lateralWithTunnel.tunnel) {
+    throw new ElevationModelValidationError(
+      'Elevação lateral túnel: tunnel=true obrigatório no payload.'
+    );
+  }
   if (tun.levels >= std.levels) {
     throw new ElevationModelValidationError(
       `Elevação túnel: níveis ativos (${tun.levels}) devem ser inferiores ao módulo normal (${std.levels}).`
@@ -249,6 +254,8 @@ export function buildElevationModelV2(
       : undefined;
 
   const lateral: ElevationPanelPayload = { ...frontWithoutTunnel };
+  const lateralWithTunnel =
+    frontWithTunnel != null ? { ...frontWithTunnel } : undefined;
 
   const summaryLines: string[] = [
     `${geometry.totals.levelCount} níveis · ${frontWithoutTunnel.capacityKgPerLevel} kg/palete · vão ${Math.round(geometry.metadata.moduleWidthMm)} mm · prof. posição ${Math.round(geometry.metadata.moduleDepthMm)} mm · faixa ${Math.round(frontWithoutTunnel.bandDepthMm)} mm`,
@@ -269,6 +276,7 @@ export function buildElevationModelV2(
     frontWithoutTunnel,
     frontWithTunnel,
     lateral,
+    lateralWithTunnel,
     summaryLines,
   };
 
