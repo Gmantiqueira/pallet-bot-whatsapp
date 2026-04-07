@@ -37,8 +37,13 @@ export type LayoutSolutionV2 = {
   crossSpanMm: number;
   moduleWidthMm: number;
   moduleDepthMm: number;
-  /** Vão / longarina: passo ponta-a-ponta ao longo da fileira (campo de vão do fluxo, `moduleWidthMm`). */
+  /**
+   * Vão livre de **uma baia** ao longo da fileira (maior dimensão do par nos campos do fluxo).
+   * A elevação frontal usa este valor por baia; não é o comprimento total do módulo em planta.
+   */
   beamAlongModuleMm: number;
+  /** Comprimento total de um módulo ao longo da fileira: 2 baias + montantes + folga entre baias (mm). */
+  moduleLengthAlongBeamMm: number;
   /** Profundidade de posição, transversal ao vão (`moduleDepthMm`); dupla costas = 2× neste eixo + espinha. */
   rackDepthMm: number;
   corridorMm: number;

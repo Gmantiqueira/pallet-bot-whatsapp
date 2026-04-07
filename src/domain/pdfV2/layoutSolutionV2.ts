@@ -4,6 +4,7 @@ import {
   type ProjectAnswersV2,
 } from './answerMapping';
 import { tunnelActiveStorageLevelsFromGlobal } from './elevationLevelGeometryV2';
+import { moduleLengthAlongBeamMm as computeModuleLengthAlongBeamMm } from './rackModuleSpec';
 import type {
   CirculationZone,
   LayoutOrientationV2,
@@ -322,7 +323,7 @@ function evaluateVariant(
   crossSpanMm: number,
   beamSpanMm: number,
   rackDepthMm: number,
-  beamAlongModuleMm: number,
+  moduleLengthAlongBeamMm: number,
   corridorMm: number,
   levels: number,
   hasTunnel: boolean,
@@ -336,7 +337,7 @@ function evaluateVariant(
     hasTunnel,
     tunnelPosition
   );
-  const along = countModulesAlongBeamSpan(beamSpanMm, beamAlongModuleMm);
+  const along = countModulesAlongBeamSpan(beamSpanMm, moduleLengthAlongBeamMm);
   const depthFactor = depthMode === 'double' ? 2 : 1;
   const cells = rows * along;
   const positions = cells * depthFactor * levels;
@@ -348,7 +349,7 @@ function chooseDepthModeFromStrategy(
   crossSpanMm: number,
   beamSpanMm: number,
   rackDepthMm: number,
-  beamAlongModuleMm: number,
+  moduleLengthAlongBeamMm: number,
   corridorMm: number,
   levels: number,
   hasTunnel: boolean,
@@ -362,7 +363,7 @@ function chooseDepthModeFromStrategy(
     crossSpanMm,
     beamSpanMm,
     rackDepthMm,
-    beamAlongModuleMm,
+    moduleLengthAlongBeamMm,
     corridorMm,
     levels,
     hasTunnel,
@@ -373,7 +374,7 @@ function chooseDepthModeFromStrategy(
     crossSpanMm,
     beamSpanMm,
     rackDepthMm,
-    beamAlongModuleMm,
+    moduleLengthAlongBeamMm,
     corridorMm,
     levels,
     hasTunnel,
@@ -453,18 +454,18 @@ function shouldReserveCrossPassageWithoutTunnel(
   hasTunnel: boolean,
   rowBandCount: number,
   beamSpan: number,
-  beamAlongModuleMm: number,
+  moduleLengthAlongBeamMm: number,
   tunnelPos: 'INICIO' | 'MEIO' | 'FIM' | undefined,
   corridorMm: number
 ): boolean {
   if (hasTunnel) return false;
   if (rowBandCount < 2) return false;
-  if (beamAlongModuleMm <= 0) return false;
+  if (moduleLengthAlongBeamMm <= 0) return false;
   const pos = tunnelPos ?? 'MEIO';
   const { t0, t1 } = tunnelSpanAlongBeam(beamSpan, corridorMm, pos);
   const gapW = t1 - t0;
   if (gapW <= EPS) return false;
-  const minRun = beamAlongModuleMm;
+  const minRun = moduleLengthAlongBeamMm;
   const left = t0;
   const right = beamSpan - t1;
   if (pos === 'MEIO') {
@@ -517,7 +518,7 @@ function buildModuleSegmentsForRow(
   beamSegs: Segment1DKind[],
   crossSeg: { c0: number; c1: number },
   orientation: LayoutOrientationV2,
-  beamAlongModuleMm: number,
+  moduleLengthAlongBeamMm: number,
   halfOpt: boolean,
   beamSpan: number,
   tunnel: { t0: number; t1: number } | null,
@@ -549,7 +550,7 @@ function buildModuleSegmentsForRow(
     const allowHalfEnd = canHaveHalfAtBeamEnd(bs.b, beamSpan, tunnel, rowBandCount);
     const { full, half, rejectedHalf: rh } = fillSegmentModules(
       len,
-      beamAlongModuleMm,
+      moduleLengthAlongBeamMm,
       halfOpt,
       allowHalfEnd
     );
@@ -559,14 +560,14 @@ function buildModuleSegmentsForRow(
       let cursor = bs.a;
       for (let i = 0; i < nFull; i++) {
         const a = cursor;
-        const b = cursor + beamAlongModuleMm;
+        const b = cursor + moduleLengthAlongBeamMm;
         segments.push(rectFor(orientation, rowId, idx++, a, b, crossSeg, 'full', 'normal'));
         cursor = b;
         moduleEquiv += 1;
       }
       if (hasHalf) {
         const a = cursor;
-        const b = cursor + beamAlongModuleMm / 2;
+        const b = cursor + moduleLengthAlongBeamMm / 2;
         segments.push(rectFor(orientation, rowId, idx++, a, b, crossSeg, 'half', 'normal'));
         moduleEquiv += 0.5;
       }
@@ -580,7 +581,7 @@ function buildModuleSegmentsForRow(
 
 /**
  * Retângulo de módulo em planta (mm).
- * `a→b` = sempre ao longo do eixo do vão / longarina (repetição ponta com ponta = beamAlongModuleMm).
+ * `a→b` = sempre ao longo do eixo do vão (repetição ponta a ponta = um módulo retangular completo).
  * `crossSeg` = faixa no eixo transversal (profundidade de posição; dupla costas = dois módulos + espinha).
  */
 function rectFor(
@@ -642,14 +643,15 @@ export function buildLayoutSolutionV2(answers: BuildLayoutSolutionV2Input): Layo
   } = answers;
 
   /**
-   * Pé de módulo na planta: crescimento da fileira segue sempre a maior dimensão do par (vão × prof.)
-   * (“ponta com ponta” ao longo desse eixo); a menor fica na profundidade da posição (transversal).
-   * Isto alinha planta/3D quando o utilizador troca rótulos nos campos — o rectângulo nunca fica “lado com lado”.
+   * Maior dimensão do par (campos do fluxo) = vão livre de **uma baia** ao longo da fileira.
+   * Menor = profundidade de posição (transversal). Um **módulo** em planta = 2 baias + estrutura
+   * (`moduleLengthAlongBeamMm`), repetido ponta a ponta.
    */
   const w = Math.max(0, moduleWidthMm);
   const d = Math.max(0, moduleDepthMm);
-  const beamAlongModuleMm = Math.max(w, d);
+  const bayClearSpanAlongBeamMm = Math.max(w, d);
   const rackDepthMm = Math.min(w, d);
+  const moduleLengthAlongBeamMm = computeModuleLengthAlongBeamMm(bayClearSpanAlongBeamMm);
 
   const orientation = resolveOrientation(answers);
 
@@ -663,7 +665,7 @@ export function buildLayoutSolutionV2(answers: BuildLayoutSolutionV2Input): Layo
     crossSpan,
     beamSpan,
     rackDepthMm,
-    beamAlongModuleMm,
+    moduleLengthAlongBeamMm,
     corridorMm,
     levels,
     hasTunnel,
@@ -693,7 +695,7 @@ export function buildLayoutSolutionV2(answers: BuildLayoutSolutionV2Input): Layo
     hasTunnel,
     rowBandCount,
     beamSpan,
-    beamAlongModuleMm,
+    moduleLengthAlongBeamMm,
     tunnelPos,
     corridorMm
   );
@@ -777,7 +779,7 @@ export function buildLayoutSolutionV2(answers: BuildLayoutSolutionV2Input): Layo
       segsForRow,
       crossSeg,
       orientation,
-      beamAlongModuleMm,
+      moduleLengthAlongBeamMm,
       halfModuleOptimization,
       beamSpan,
       tunnelForHalf,
@@ -807,7 +809,8 @@ export function buildLayoutSolutionV2(answers: BuildLayoutSolutionV2Input): Layo
     crossSpanMm: crossSpan,
     moduleWidthMm,
     moduleDepthMm,
-    beamAlongModuleMm,
+    beamAlongModuleMm: bayClearSpanAlongBeamMm,
+    moduleLengthAlongBeamMm,
     rackDepthMm,
     corridorMm,
     rows,

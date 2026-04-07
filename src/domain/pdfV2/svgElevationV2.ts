@@ -1,11 +1,8 @@
 import type { ElevationModelV2, ElevationPanelPayload } from './types';
+import { uprightWidthsMmForFrontBayCount } from './rackModuleSpec';
 
 const FV_FOLGA_MM = 75;
 const FV_INTER_BAY_MM = FV_FOLGA_MM * 2;
-/** Largura de montante padrão (mm) — documentação tipo 519-R01. */
-const UPRIGHT_DEFAULT_MM = 75;
-/** Montantes de zona de túnel (1.º pórtico) — reforço visual. */
-const UPRIGHT_TUNNEL_MM = 100;
 /** Um módulo frontal = duas baias lado a lado (3 montantes), como desenho técnico tipo 2× vão. */
 const FV_FRONT_BAY_COUNT = 2;
 /**
@@ -115,14 +112,6 @@ function extensionToDim(
   return `<line x1="${xFrom}" y1="${y}" x2="${xTo}" y2="${y}" stroke="${stroke}" stroke-width="0.28" stroke-dasharray="2.5 2" opacity="0.65"/>`;
 }
 
-function uprightWidthsMm(nMod: number, tunnel: boolean): number[] {
-  const w: number[] = [];
-  for (let i = 0; i <= nMod; i++) {
-    w.push(tunnel && i <= 1 ? UPRIGHT_TUNNEL_MM : UPRIGHT_DEFAULT_MM);
-  }
-  return w;
-}
-
 /** Bloco de texto multilinha (SVG). */
 function textLines(
   x: number,
@@ -220,8 +209,8 @@ function buildBeamGeometry(
   const uprightH = Math.max(1, data.uprightHeightMm);
   const beamL = Math.max(1, data.beamLengthMm);
   const bayCount = Math.max(1, Math.min(4, Math.floor(nMod)));
-  /** Montantes padrão: o túnel altera níveis e abertura vertical, não a largura do vão entre faces. */
-  const widthsMm = uprightWidthsMm(bayCount, false);
+  /** Montantes: túnel não altera a largura total da face de armazenagem (mesmo módulo, 2 baias). */
+  const widthsMm = uprightWidthsMmForFrontBayCount(bayCount, false);
   const gapTotalMm = FV_INTER_BAY_MM;
   const sumUprightsMm = widthsMm.reduce((a, b) => a + b, 0);
   const totalRackMm =
@@ -641,7 +630,8 @@ function drawLateral(
   const hideHeader = opts?.hideHeader === true;
   const rackMaxW = Math.min(pw - 48, Math.max(120, pw * 0.54));
   const rackMaxH = ph - Math.round(72 / ls);
-  const g = buildBeamGeometry(data, rackMaxW * 0.98, rackMaxH, ox, oy, pw, ph);
+  /** Um perfil de profundidade (uma baia visível); níveis vêm do mesmo payload. */
+  const g = buildBeamGeometry(data, rackMaxW * 0.98, rackMaxH, ox, oy, pw, ph, 1);
 
   const { storageTiers, uprightH, beamH, uprightWidthsPx } = g;
   const nBeamAxes = beamH.length;

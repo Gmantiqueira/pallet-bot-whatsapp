@@ -1,5 +1,6 @@
 import { buildProjectAnswersV2 } from './answerMapping';
 import { buildLayoutSolutionV2 } from './layoutSolutionV2';
+import { moduleLengthAlongBeamMm } from './rackModuleSpec';
 import type { ProjectAnswersV2 } from './answerMapping';
 
 const base = (): ProjectAnswersV2 => ({
@@ -130,7 +131,8 @@ describe('buildLayoutSolutionV2', () => {
   it('7: meio módulo aceito (com túnel adjacente / extremos)', () => {
     const a = {
       ...base(),
-      lengthMm: 40_000,
+      /** Comprimento maior para, após o vão central, sobrar remanescente entre metade e um módulo completo (passo real ≈ 5,8 m). */
+      lengthMm: 60_000,
       halfModuleOptimization: true,
       hasTunnel: true,
       tunnelPosition: 'MEIO' as const,
@@ -218,6 +220,7 @@ describe('buildLayoutSolutionV2', () => {
     expect(v2).not.toBeNull();
     const s = buildLayoutSolutionV2(v2!);
     expect(s.beamAlongModuleMm).toBe(2700);
+    expect(s.moduleLengthAlongBeamMm).toBe(moduleLengthAlongBeamMm(2700));
     expect(s.rackDepthMm).toBe(1100);
   });
 
@@ -231,15 +234,17 @@ describe('buildLayoutSolutionV2', () => {
     const s = buildLayoutSolutionV2(a);
     expect(s.orientation).toBe('along_length');
     expect(s.beamAlongModuleMm).toBe(2700);
+    expect(s.moduleLengthAlongBeamMm).toBe(moduleLengthAlongBeamMm(2700));
     expect(s.rackDepthMm).toBe(1100);
     const full = s.rows[0]?.modules.find(m => m.type === 'full' && m.variant !== 'tunnel');
     expect(full).toBeDefined();
     if (!full) return;
     const dx = Math.abs(full.x1 - full.x0);
     const dy = Math.abs(full.y1 - full.y0);
-    expect(dx).toBe(2700);
+    const modLen = moduleLengthAlongBeamMm(2700);
+    expect(dx).toBe(modLen);
     expect(dy).toBe(1100);
-    expect(Math.max(dx, dy)).toBe(2700);
+    expect(Math.max(dx, dy)).toBe(modLen);
     expect(Math.min(dx, dy)).toBe(1100);
   });
 });

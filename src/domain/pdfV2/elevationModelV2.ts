@@ -1,5 +1,6 @@
 import { computeBeamElevations } from './elevationLevelGeometryV2';
 import type { ElevationModelV2, ElevationPanelPayload } from './types';
+import { MODULE_PALLET_BAYS_PER_LEVEL } from './rackModuleSpec';
 import {
   findTunnelModuleGeometry,
   representativeModuleForElevation,
@@ -26,20 +27,6 @@ function bandDepthMmFromGeometry(geometry: LayoutGeometry): number {
     : 2 * d + SPINE_BACK_TO_BACK_MM;
 }
 
-/**
- * Elevação frontal = face de maior extensão em planta (vão típico); a lateral usa a menor (prof. de posição).
- */
-function frontLoadingFaceAndPositionDepthMm(mod: RackModule): {
-  loadingFaceSpanMm: number;
-  positionDepthMm: number;
-} {
-  const a = mod.beamSpanMm;
-  const b = mod.moduleDepthAxisMm;
-  return a >= b
-    ? { loadingFaceSpanMm: a, positionDepthMm: b }
-    : { loadingFaceSpanMm: b, positionDepthMm: a };
-}
-
 function clearHeightFromAnswers(
   answers: Record<string, unknown>
 ): number | undefined {
@@ -63,9 +50,9 @@ function panelFromRackModule(
   opts: { tunnelVisual: boolean }
 ): ElevationPanelPayload {
   const geom = mod.beamGeometry;
-  const { loadingFaceSpanMm, positionDepthMm } = frontLoadingFaceAndPositionDepthMm(mod);
-  const beamLengthMm = loadingFaceSpanMm;
-  const moduleDepthMm = positionDepthMm;
+  /** Front elevation: per-bay clear span (two bays drawn via frontal renderer). */
+  const beamLengthMm = mod.bayClearSpanAlongBeamMm;
+  const moduleDepthMm = mod.moduleDepthAxisMm;
   const bandDepthMm = bandDepthMmFromGeometry(geometry);
   const cap = typeof answers.capacityKg === 'number' ? answers.capacityKg : 0;
   const firstLevelOnGround =
@@ -129,9 +116,8 @@ function buildFrontWithoutTunnelPayload(
       ? (answers.levelSpacingsMm as number[])
       : undefined,
   });
-  const { loadingFaceSpanMm, positionDepthMm } = frontLoadingFaceAndPositionDepthMm(rep);
-  const beamLengthMm = loadingFaceSpanMm;
-  const moduleDepthMm = positionDepthMm;
+  const beamLengthMm = rep.bayClearSpanAlongBeamMm;
+  const moduleDepthMm = rep.moduleDepthAxisMm;
   const bandDepthMm = bandDepthMmFromGeometry(geometry);
   const cap = typeof answers.capacityKg === 'number' ? answers.capacityKg : 0;
 
@@ -202,23 +188,27 @@ export function validateElevationModelV2(model: ElevationModelV2): void {
 
 const ELEV_AXIS_TOL_MM = 2.5;
 
-/** Garante que frontal usa o vão real do módulo e a lateral a profundidade real (eixos da planta). */
+/** Garante que frontal usa o vão por baia (2 baias desenhadas na face) e profundidade = eixo transversal na planta. */
 export function validateElevationAxesAgainstGeometry(
   model: ElevationModelV2,
   geometry: LayoutGeometry
 ): void {
   const rep = representativeModuleForElevation(geometry);
   const front = model.frontWithoutTunnel;
-  const { loadingFaceSpanMm, positionDepthMm } = frontLoadingFaceAndPositionDepthMm(rep);
-
-  if (Math.abs(front.beamLengthMm - loadingFaceSpanMm) > ELEV_AXIS_TOL_MM) {
+  if (rep.baysPerLevel !== MODULE_PALLET_BAYS_PER_LEVEL) {
     throw new ElevationModelValidationError(
-      `Elevação frontal: vão da face de carga (${front.beamLengthMm} mm) não alinha com o módulo (esperado maior lado ${loadingFaceSpanMm} mm).`
+      `Elevação: módulo de referência deve ter ${MODULE_PALLET_BAYS_PER_LEVEL} baias por nível na face frontal.`
     );
   }
-  if (Math.abs(front.moduleDepthMm - positionDepthMm) > ELEV_AXIS_TOL_MM) {
+
+  if (Math.abs(front.beamLengthMm - rep.bayClearSpanAlongBeamMm) > ELEV_AXIS_TOL_MM) {
     throw new ElevationModelValidationError(
-      `Elevação: profundidade de posição (${front.moduleDepthMm} mm) não alinha (esperado menor lado ${positionDepthMm} mm).`
+      `Elevação frontal: vão por baia (${front.beamLengthMm} mm) não alinha com o layout (esperado ${rep.bayClearSpanAlongBeamMm} mm).`
+    );
+  }
+  if (Math.abs(front.moduleDepthMm - rep.moduleDepthAxisMm) > ELEV_AXIS_TOL_MM) {
+    throw new ElevationModelValidationError(
+      `Elevação: profundidade de posição (${front.moduleDepthMm} mm) não alinha com a planta (${rep.moduleDepthAxisMm} mm).`
     );
   }
 
@@ -241,10 +231,9 @@ export function validateElevationAxesAgainstGeometry(
         'Elevação túnel: módulo túnel ausente na geometria.'
       );
     }
-    const { loadingFaceSpanMm } = frontLoadingFaceAndPositionDepthMm(tunMod);
-    if (Math.abs(tun.beamLengthMm - loadingFaceSpanMm) > ELEV_AXIS_TOL_MM) {
+    if (Math.abs(tun.beamLengthMm - tunMod.bayClearSpanAlongBeamMm) > ELEV_AXIS_TOL_MM) {
       throw new ElevationModelValidationError(
-        `Elevação túnel: vão da face (${tun.beamLengthMm} mm) não alinha com módulo túnel (esperado ${loadingFaceSpanMm} mm).`
+        `Elevação túnel: vão por baia (${tun.beamLengthMm} mm) não alinha com módulo túnel (esperado ${tunMod.bayClearSpanAlongBeamMm} mm).`
       );
     }
   }
@@ -272,7 +261,7 @@ export function buildElevationModelV2(
     frontWithTunnel != null ? { ...frontWithTunnel } : undefined;
 
   const summaryLines: string[] = [
-    `${geometry.totals.levelCount} níveis · ${frontWithoutTunnel.capacityKgPerLevel} kg/palete · vão ${Math.round(geometry.metadata.moduleWidthMm)} mm · prof. posição ${Math.round(geometry.metadata.moduleDepthMm)} mm · faixa ${Math.round(frontWithoutTunnel.bandDepthMm)} mm`,
+    `${geometry.totals.levelCount} níveis · ${frontWithoutTunnel.capacityKgPerLevel} kg/palete · vão/baia ${Math.round(geometry.metadata.beamAlongModuleMm)} mm · módulo ao longo da fileira ~${Math.round(geometry.metadata.moduleLengthAlongBeamMm)} mm · prof. posição ${Math.round(geometry.metadata.moduleDepthMm)} mm · faixa ${Math.round(frontWithoutTunnel.bandDepthMm)} mm`,
     `Módulos ${geometry.totals.moduleCount.toFixed(1)} (equiv.) · posições ${geometry.totals.positionCount} · ${geometry.metadata.rackDepthMode === 'double' ? 'dupla costas' : 'simples'} · planta: fileiras ponta com ponta (vão automático)`,
   ];
   if (

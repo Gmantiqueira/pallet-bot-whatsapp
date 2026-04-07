@@ -10,6 +10,10 @@ import {
   tunnelActiveStorageLevelsFromGlobal,
   type BeamElevationResult,
 } from './elevationLevelGeometryV2';
+import {
+  MODULE_PALLET_BAYS_PER_LEVEL,
+  moduleLengthAlongBeamMm as computeModuleLengthAlongBeamMm,
+} from './rackModuleSpec';
 import type {
   CirculationZone,
   LayoutOrientationV2,
@@ -62,6 +66,12 @@ export type RackModule = {
   heightMm: number;
   uprightThicknessMm: number;
   beamSpanMm: number;
+  /** Official module: 2 pallet bays per level on the front face. */
+  baysPerLevel: number;
+  /** Clear span of one bay along the beam (mm) — project “vão” input. */
+  bayClearSpanAlongBeamMm: number;
+  /** Full module length along the row (mm); equals footprint extent along beam for full modules. */
+  moduleLengthAlongBeamMm: number;
   segmentType: ModuleSegmentType;
   globalLevels: number;
   activeStorageLevels: number;
@@ -112,6 +122,8 @@ export type LayoutGeometryMetadata = {
   corridorMm: number;
   beamSpanMm: number;
   crossSpanMm: number;
+  /** Same as {@link LayoutSolutionV2.moduleLengthAlongBeamMm} — full module step along the row. */
+  moduleLengthAlongBeamMm: number;
 };
 
 export type LayoutGeometry = {
@@ -285,6 +297,9 @@ function rackModuleFromSegment(
   const tunnelClearance =
     type === 'tunnel' && m.tunnelClearanceMm != null ? m.tunnelClearanceMm : undefined;
 
+  const bayClear = solution.beamAlongModuleMm;
+  const moduleLenAlong = widthMm;
+
   return {
     id: m.id,
     rowId: row.id,
@@ -298,6 +313,9 @@ function rackModuleFromSegment(
     heightMm: H,
     uprightThicknessMm,
     beamSpanMm: widthMm,
+    baysPerLevel: MODULE_PALLET_BAYS_PER_LEVEL,
+    bayClearSpanAlongBeamMm: bayClear,
+    moduleLengthAlongBeamMm: moduleLenAlong,
     segmentType: m.type,
     globalLevels: levels,
     activeStorageLevels,
@@ -401,6 +419,7 @@ export function buildLayoutGeometry(
       corridorMm: solution.corridorMm,
       beamSpanMm: solution.beamSpanMm,
       crossSpanMm: solution.crossSpanMm,
+      moduleLengthAlongBeamMm: solution.moduleLengthAlongBeamMm,
     },
   };
 }
@@ -453,13 +472,14 @@ function validateRowModuleChaining(row: RackRow, ori: LayoutOrientationV2): void
  */
 function validateModulesSpanLengthAxis(
   row: RackRow,
-  beamAlongMm: number,
+  moduleLengthAlongBeamMm: number,
   rackDepthMm: number
 ): void {
   for (const m of row.modules) {
     if (m.type === 'tunnel') continue;
 
-    const expected = m.segmentType === 'half' ? beamAlongMm / 2 : beamAlongMm;
+    const expected =
+      m.segmentType === 'half' ? moduleLengthAlongBeamMm / 2 : moduleLengthAlongBeamMm;
     const tol = 2.5;
     const along = m.moduleLengthAxisMm;
 
@@ -480,12 +500,50 @@ function validateModulesSpanLengthAxis(
   }
 }
 
+/** Invariants: rectangular module = 2 bays on front; plan long axis = row direction. */
+function validateRackModuleBayAndPlanSemantics(m: RackModule, meta: LayoutGeometryMetadata): void {
+  if (m.baysPerLevel !== MODULE_PALLET_BAYS_PER_LEVEL) {
+    throw new LayoutGeometryValidationError(
+      `Módulo ${m.id}: esperado ${MODULE_PALLET_BAYS_PER_LEVEL} baias por nível na face frontal.`
+    );
+  }
+  if (m.type === 'tunnel') {
+    return;
+  }
+  if (Math.abs(m.bayClearSpanAlongBeamMm - meta.beamAlongModuleMm) > 1) {
+    throw new LayoutGeometryValidationError(
+      `Módulo ${m.id}: vão por baia incoerente com os metadados do layout.`
+    );
+  }
+  const expectedAlong =
+    m.segmentType === 'half'
+      ? computeModuleLengthAlongBeamMm(m.bayClearSpanAlongBeamMm) / 2
+      : computeModuleLengthAlongBeamMm(m.bayClearSpanAlongBeamMm);
+  if (Math.abs(m.moduleLengthAlongBeamMm - expectedAlong) > 2.5) {
+    throw new LayoutGeometryValidationError(
+      `Módulo ${m.id}: comprimento ao longo da fileira (${Math.round(m.moduleLengthAlongBeamMm)} mm) ` +
+        `não corresponde a um módulo de ${MODULE_PALLET_BAYS_PER_LEVEL} baias (~${Math.round(expectedAlong)} mm).`
+    );
+  }
+  if (m.moduleLengthAxisMm + 1.5 < m.moduleDepthAxisMm) {
+    throw new LayoutGeometryValidationError(
+      `Módulo ${m.id}: em planta, o lado alongado deve seguir a fileira (profundidade não pode exceder o comprimento do módulo).`
+    );
+  }
+}
+
 export function validateLayoutGeometry(geo: LayoutGeometry): void {
   const md = geo.metadata.rackDepthMm;
-  const { beamAlongModuleMm, rackDepthMm } = geo.metadata;
+  const { beamAlongModuleMm, rackDepthMm, moduleLengthAlongBeamMm } = geo.metadata;
   if (beamAlongModuleMm <= EPS || rackDepthMm <= EPS) {
     throw new LayoutGeometryValidationError(
       'Layout: vão e profundidade de posição devem ser positivos.'
+    );
+  }
+  const expectedStep = computeModuleLengthAlongBeamMm(beamAlongModuleMm);
+  if (Math.abs(moduleLengthAlongBeamMm - expectedStep) > 1.5) {
+    throw new LayoutGeometryValidationError(
+      'Layout: moduleLengthAlongBeamMm não corresponde ao vão por baia e à regra de 2 baias por módulo.'
     );
   }
   const rowIds = new Set<string>();
@@ -511,12 +569,14 @@ export function validateLayoutGeometry(geo: LayoutGeometry): void {
 
     const ori = row.layoutOrientation;
     validateRowModuleChaining(row, ori);
-    validateModulesSpanLengthAxis(row, beamAlongModuleMm, rackDepthMm);
+    validateModulesSpanLengthAxis(row, moduleLengthAlongBeamMm, rackDepthMm);
 
     for (const m of row.modules) {
       if (m.rowId !== row.id) {
         throw new LayoutGeometryValidationError(`Módulo ${m.id} com rowId inválido.`);
       }
+
+      validateRackModuleBayAndPlanSemantics(m, geo.metadata);
 
       if (m.type === 'tunnel') {
         if (!m.openBelow) {

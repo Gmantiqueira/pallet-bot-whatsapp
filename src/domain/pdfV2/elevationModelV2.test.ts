@@ -36,10 +36,9 @@ describe('buildElevationModelV2 axis mapping', () => {
     const model = buildElevationModelV2(session, geo);
     const rep = geo.rows[0]!.modules.find(m => m.type === 'normal')!;
 
-    const expLong = Math.max(rep.beamSpanMm, rep.moduleDepthAxisMm);
-    const expShort = Math.min(rep.beamSpanMm, rep.moduleDepthAxisMm);
-    expect(model.frontWithoutTunnel.beamLengthMm).toBeCloseTo(expLong, 0);
-    expect(model.frontWithoutTunnel.moduleDepthMm).toBeCloseTo(expShort, 0);
+    expect(model.frontWithoutTunnel.beamLengthMm).toBeCloseTo(rep.bayClearSpanAlongBeamMm, 0);
+    expect(model.frontWithoutTunnel.moduleDepthMm).toBeCloseTo(rep.moduleDepthAxisMm, 0);
+    expect(rep.beamSpanMm).toBeGreaterThan(model.frontWithoutTunnel.beamLengthMm);
     expect(model.frontWithoutTunnel.beamLengthMm).not.toBe(model.frontWithoutTunnel.moduleDepthMm);
     validateElevationAxesAgainstGeometry(model, geo);
   });

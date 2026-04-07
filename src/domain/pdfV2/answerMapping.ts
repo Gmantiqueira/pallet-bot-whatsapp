@@ -2,6 +2,7 @@ import {
   DEFAULT_MODULE_DEPTH_MM,
   DEFAULT_MODULE_WIDTH_MM,
 } from '../projectEngines';
+import { moduleLengthAlongBeamMm } from './rackModuleSpec';
 import type {
   LayoutOrientationV2,
   LineStrategyCode,
@@ -85,7 +86,8 @@ export type ProjectAnswersV2 = {
 
 /**
  * Melhor aproveitamento com viés para along_length.
- * Usa a mesma convenção que {@link buildLayoutSolutionV2}: maior dimensão = passo na fileira; menor = profundidade.
+ * Usa a mesma convenção que {@link buildLayoutSolutionV2}: maior dimensão = vão por baia;
+ * o passo na fileira é o comprimento do módulo (2 baias + estrutura).
  */
 export function pickBetterOrientationBySimpleCount(
   lengthMm: number,
@@ -95,13 +97,14 @@ export function pickBetterOrientationBySimpleCount(
   moduleWidthMm: number
 ): LayoutOrientationV2 {
   const rackDepthMm = Math.min(moduleWidthMm, moduleDepthMm);
-  const beamAlongMm = Math.max(moduleWidthMm, moduleDepthMm);
+  const bayClearAlongMm = Math.max(moduleWidthMm, moduleDepthMm);
+  const moduleStepAlongMm = moduleLengthAlongBeamMm(bayClearAlongMm);
   const alongL = maxModulesSingleDepth(
     lengthMm,
     widthMm,
     corridorMm,
     rackDepthMm,
-    beamAlongMm,
+    moduleStepAlongMm,
     'along_length'
   );
   const alongW = maxModulesSingleDepth(
@@ -109,7 +112,7 @@ export function pickBetterOrientationBySimpleCount(
     widthMm,
     corridorMm,
     rackDepthMm,
-    beamAlongMm,
+    moduleStepAlongMm,
     'along_width'
   );
   if (alongW <= alongL) {
@@ -125,13 +128,13 @@ function maxModulesSingleDepth(
   widthMm: number,
   corridorMm: number,
   rackDepthMm: number,
-  beamAlongMm: number,
+  moduleLengthAlongBeamMm: number,
   orientation: LayoutOrientationV2
 ): number {
   const beamSpan = orientation === 'along_length' ? lengthMm : widthMm;
   const cross = orientation === 'along_length' ? widthMm : lengthMm;
   const rows = rowBandsSingleDepth(cross, rackDepthMm, corridorMm);
-  const along = Math.floor(beamSpan / beamAlongMm);
+  const along = Math.floor(beamSpan / moduleLengthAlongBeamMm);
   return rows * along;
 }
 
