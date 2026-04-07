@@ -35,7 +35,9 @@ describe('serializeElevationPagesV2', () => {
     const svg = pages.frontWithoutTunnel;
     expect(svg).toContain('PISO');
     expect(svg).toContain('H total');
-    expect(svg).toMatch(/Vão\s+[\d.\s]+mm/);
+    expect(svg).toMatch(/Face de armazenagem/);
+    expect(svg).toMatch(/vão\s+[\d.\s]+mm/i);
+    expect(svg).toMatch(/Carga referência/);
   });
 
   it('vista lateral dupla costas menciona espinha e profundidade de faixa', () => {
