@@ -69,6 +69,7 @@ function panelFromRackModule(
     beamLengthMm,
     moduleDepthMm,
     bandDepthMm,
+    lateralProfileDepthMm: geometry.metadata.rackDepthMm,
     rackDepthMode: geometry.metadata.rackDepthMode,
     corridorMm: geometry.metadata.corridorMm,
     capacityKgPerLevel: cap,
@@ -127,6 +128,7 @@ function buildFrontWithoutTunnelPayload(
     beamLengthMm,
     moduleDepthMm,
     bandDepthMm,
+    lateralProfileDepthMm: geometry.metadata.rackDepthMm,
     rackDepthMode: geometry.metadata.rackDepthMode,
     corridorMm: geometry.metadata.corridorMm,
     capacityKgPerLevel: cap,
@@ -219,7 +221,19 @@ export function validateElevationAxesAgainstGeometry(
       : 2 * md + SPINE_BACK_TO_BACK_MM;
   if (Math.abs(front.bandDepthMm - expectedBand) > ELEV_AXIS_TOL_MM) {
     throw new ElevationModelValidationError(
-      `Elevação lateral: largura de faixa (${front.bandDepthMm} mm) incoerente com prof. módulo (esperado ~${expectedBand} mm).`
+      `Elevação: profundidade de faixa na planta (${front.bandDepthMm} mm) incoerente (esperado ~${expectedBand} mm).`
+    );
+  }
+
+  const rackSingle = geometry.metadata.rackDepthMm;
+  if (Math.abs(front.lateralProfileDepthMm - rackSingle) > ELEV_AXIS_TOL_MM) {
+    throw new ElevationModelValidationError(
+      `Elevação lateral: perfil de uma costa (${front.lateralProfileDepthMm} mm) deve ser rackDepthMm (${rackSingle} mm).`
+    );
+  }
+  if (Math.abs(model.lateral.lateralProfileDepthMm - rackSingle) > ELEV_AXIS_TOL_MM) {
+    throw new ElevationModelValidationError(
+      `Payload lateral: lateralProfileDepthMm deve ser ${rackSingle} mm.`
     );
   }
 

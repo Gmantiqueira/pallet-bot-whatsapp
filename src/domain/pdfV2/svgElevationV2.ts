@@ -34,7 +34,6 @@ const FV_BEAM_HIGHLIGHT = '#fed7aa';
 const DIM_MAJOR = '#0f172a';
 const DIM_MINOR = '#64748b';
 const COL_BRACE_STROKE = '#475569';
-const COL_SPINE = '#94a3b8';
 
 function escapeXml(text: string): string {
   return text
@@ -636,8 +635,8 @@ function drawLateral(
   const { storageTiers, uprightH, beamH, uprightWidthsPx } = g;
   const nBeamAxes = beamH.length;
 
-  const bandMm = Math.max(1, data.bandDepthMm);
-  const modMm = Math.max(1, data.moduleDepthMm);
+  /** Uma costa em profundidade — nunca a faixa dupla inteira (evita perfil largo com duas baias). */
+  const sliceMm = Math.max(1, data.lateralProfileDepthMm);
   const isDouble = data.rackDepthMode === 'double';
 
   const dimReservePx = 54;
@@ -646,10 +645,10 @@ function drawLateral(
     Math.max(118, pw * 0.52)
   );
   const rackH = ph - Math.round((hideHeader ? 44 : 72) / ls);
-  const sx = rackW / bandMm;
+  const sx = rackW / sliceMm;
   const sy = rackH / uprightH;
   const s = Math.min(sx, sy);
-  const dw = bandMm * s;
+  const dw = sliceMm * s;
   const dh = uprightH * s;
   const x0 = ox + (pw - dw) / 2;
   const headerPad = hideHeader ? 18 : 36;
@@ -675,8 +674,8 @@ function drawLateral(
     parts.push(
       `<text x="${ox + pw / 2}" y="${oy + 34 * ls}" text-anchor="middle" font-size="${9 * ls}px" fill="#64748b">${escapeXml(
         isDouble
-          ? `Dupla costas · faixa ${formatMmPtBr(Math.round(bandMm))} · ${formatMmPtBr(Math.round(modMm))}/lado + espinha`
-          : `Prof. posição ${formatMmPtBr(Math.round(modMm))}`
+          ? `Perfil 1 costa ${formatMmPtBr(Math.round(sliceMm))} · dupla costas (2 filas + espinha) em planta`
+          : `Prof. posição ${formatMmPtBr(Math.round(sliceMm))}`
       )}</text>`
     );
   }
@@ -740,16 +739,6 @@ function drawLateral(
     );
   }
 
-  if (isDouble) {
-    const xSp = x0 + dw / 2;
-    parts.push(
-      `<line x1="${xSp}" y1="${y0}" x2="${xSp}" y2="${floorTopLat}" stroke="${COL_SPINE}" stroke-width="1.35" stroke-dasharray="5 3" opacity="0.85"/>`
-    );
-    parts.push(
-      `<text x="${xSp}" y="${y0 + dh / 2}" text-anchor="middle" font-size="${7.8 * ls}px" fill="#475569" transform="rotate(-90 ${xSp} ${y0 + dh / 2})">ESPINHA</text>`
-    );
-  }
-
   for (let j = 0; j < storageTiers; j++) {
     const yLo = beamYLocal(j);
     const yHi = beamYLocal(j + 1);
@@ -761,7 +750,7 @@ function drawLateral(
   );
   parts.push(
     `<text x="${x0 + dw / 2}" y="${floorTopLat + 40 * ls}" text-anchor="middle" font-size="${10 * ls}px" fill="#334155">${escapeXml(
-      `Profundidade faixa ${formatMmPtBr(Math.round(bandMm))}`
+      `Prof. posição (lateral) ${formatMmPtBr(Math.round(sliceMm))}`
     )}</text>`
   );
 
@@ -881,7 +870,7 @@ export function serializeElevationPagesV2(
     latInner,
     w,
     hL,
-    'Profundidade de faixa alinhada ao modelo em planta'
+    'Lateral = perfil de uma costa; dupla costas completa apenas em planta'
   );
 
   let lateralWithTunnel: string | null = null;
@@ -898,7 +887,7 @@ export function serializeElevationPagesV2(
       latTunInner,
       w,
       hL,
-      'Variante túnel — abertura inferior e níveis ativos alinhados ao módulo túnel'
+      'Lateral = perfil de uma costa · túnel — abertura inferior e níveis ativos'
     );
   }
 

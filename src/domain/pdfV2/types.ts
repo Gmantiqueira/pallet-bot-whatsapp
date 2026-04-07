@@ -170,6 +170,11 @@ export type ElevationPanelPayload = {
   moduleDepthMm: number;
   /** Profundidade total da faixa em planta (simples = módulo; dupla costas = 2×módulo + espinha). */
   bandDepthMm: number;
+  /**
+   * Profundidade representada na **vista lateral**: sempre **uma** costa ({@link LayoutGeometryMetadata.rackDepthMm}),
+   * nunca a faixa dupla completa — evita perfil largo com duas baias em profundidade.
+   */
+  lateralProfileDepthMm: number;
   rackDepthMode: RackDepthModeV2;
   /** Corredor principal (mm) — contexto operacional no PDF. */
   corridorMm: number;

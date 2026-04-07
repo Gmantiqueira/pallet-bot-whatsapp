@@ -132,4 +132,19 @@ describe('build3DModelV2 + projeção isométrica', () => {
     const b1 = m1.lines.filter(l => l.kind === 'beam').length;
     expect(b6).toBeGreaterThan(b1);
   });
+
+  it('6: dupla costas — mais estrutura 3D que fileira simples (dois blocos costas com costas por módulo)', () => {
+    const aDouble = { ...base(), lineStrategy: 'APENAS_DUPLOS' as const };
+    const aSingle = { ...base(), lineStrategy: 'APENAS_SIMPLES' as const };
+    expect(buildLayoutSolutionV2(aDouble).rackDepthMode).toBe('double');
+    expect(buildLayoutSolutionV2(aSingle).rackDepthMode).toBe('single');
+    const mD = build3DModelV2(geomFromAnswers(aDouble));
+    const mS = build3DModelV2(geomFromAnswers(aSingle));
+    const uD = mD.lines.filter(l => l.kind === 'upright').length;
+    const uS = mS.lines.filter(l => l.kind === 'upright').length;
+    const bD = mD.lines.filter(l => l.kind === 'beam').length;
+    const bS = mS.lines.filter(l => l.kind === 'beam').length;
+    expect(uD).toBeGreaterThan(uS);
+    expect(bD).toBeGreaterThan(bS);
+  });
 });

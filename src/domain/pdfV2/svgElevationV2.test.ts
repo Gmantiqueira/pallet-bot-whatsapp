@@ -44,7 +44,7 @@ describe('serializeElevationPagesV2', () => {
     expect(orangeBeams.length).toBe(a.levels * 2);
   });
 
-  it('vista lateral dupla costas menciona espinha e profundidade de faixa', () => {
+  it('vista lateral dupla costas: perfil estreito de uma costa (não faixa completa nem espinha)', () => {
     const a: ProjectAnswersV2 = {
       lengthMm: 12_000,
       widthMm: 10_000,
@@ -67,8 +67,10 @@ describe('serializeElevationPagesV2', () => {
     validateLayoutGeometry(geo);
     const model = buildElevationModelV2(session, geo);
     const svg = serializeElevationPagesV2(model).lateral;
-    expect(svg).toContain('ESPINHA');
-    expect(svg).toContain('Profundidade faixa');
+    expect(svg).not.toContain('ESPINHA');
+    // Página PDF omite cabeçalho; cota horizontal = prof. uma costa (1000 mm), não faixa 2×+espinha.
+    expect(svg).toContain('Prof. posição (lateral)');
+    expect(svg).toMatch(/1\.000 mm/);
   });
 
   it('com túnel: duas elevações frontais (sem túnel vs túnel) e rótulo de passagem', () => {
