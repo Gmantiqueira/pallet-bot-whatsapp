@@ -393,19 +393,20 @@ function resolveOrientation(answers: ProjectAnswersV2): LayoutOrientationV2 {
 }
 
 /** Determina se o extremo ao longo do vão pode receber meio módulo (circulação adjacente). */
+/** Túnel ou passagem transversal vazia (para regras de meio módulo junto ao vão). */
 function canHaveHalfAtBeamEnd(
   endCoord: number,
   beamSpan: number,
-  tunnel: { t0: number; t1: number } | null,
+  beamPassage: { t0: number; t1: number } | null,
   rowBandCount: number
 ): boolean {
   if (rowBandCount >= 2) return true;
-  if (tunnel) {
-    const nearTunnelEdge =
-      Math.abs(endCoord - tunnel.t0) <= 2 || Math.abs(endCoord - tunnel.t1) <= 2;
-    if (nearTunnelEdge) return true;
+  if (beamPassage) {
+    const nearPassage =
+      Math.abs(endCoord - beamPassage.t0) <= 2 || Math.abs(endCoord - beamPassage.t1) <= 2;
+    if (nearPassage) return true;
   }
-  if (!tunnel) {
+  if (!beamPassage) {
     if (endCoord <= EPS || endCoord >= beamSpan - EPS) return false;
   }
   return true;
@@ -426,25 +427,73 @@ function tunnelSpanAlongBeam(
   return { t0: Math.max(0, c - half), t1: Math.min(beamSpan, c + half) };
 }
 
-type BeamSegmentKind = 'normal' | 'tunnel';
+type BeamSegmentKind = 'normal' | 'tunnel' | 'crossGap';
 
 type Segment1DKind = Segment1D & { kind: BeamSegmentKind };
 
-/** Parte o vão ao longo da longarina: inclui segmento de módulo túnel (não é “vazio”). */
-function splitBeamSegmentsWithTunnel(
+function buildThreeBeamSegs(
   beamSpan: number,
-  hasTunnel: boolean,
-  tunnelPos: 'INICIO' | 'MEIO' | 'FIM' | undefined,
-  corridorMm: number
+  t0: number,
+  t1: number,
+  middle: 'tunnel' | 'crossGap'
 ): Segment1DKind[] {
-  if (!hasTunnel || !tunnelPos) return [{ a: 0, b: beamSpan, kind: 'normal' }];
-  const { t0, t1 } = tunnelSpanAlongBeam(beamSpan, corridorMm, tunnelPos);
   const segs: Segment1DKind[] = [];
   if (t0 > EPS) segs.push({ a: 0, b: t0, kind: 'normal' });
-  if (t1 - t0 > EPS) segs.push({ a: t0, b: t1, kind: 'tunnel' });
+  if (t1 - t0 > EPS) segs.push({ a: t0, b: t1, kind: middle });
   if (beamSpan - t1 > EPS) segs.push({ a: t1, b: beamSpan, kind: 'normal' });
   if (segs.length === 0) segs.push({ a: 0, b: beamSpan, kind: 'normal' });
   return segs;
+}
+
+/**
+ * Vão livre transversal (mesma geometria que a faixa de túnel: `tunnelSpanAlongBeam` / `tunnelWidthMm`),
+ * mas sem módulo túnel — só deixa de colocar armazenagem na largura do corredor.
+ */
+function shouldReserveCrossPassageWithoutTunnel(
+  hasTunnel: boolean,
+  rowBandCount: number,
+  beamSpan: number,
+  beamAlongModuleMm: number,
+  tunnelPos: 'INICIO' | 'MEIO' | 'FIM' | undefined,
+  corridorMm: number
+): boolean {
+  if (hasTunnel) return false;
+  if (rowBandCount < 2) return false;
+  if (beamAlongModuleMm <= 0) return false;
+  const pos = tunnelPos ?? 'MEIO';
+  const { t0, t1 } = tunnelSpanAlongBeam(beamSpan, corridorMm, pos);
+  const gapW = t1 - t0;
+  if (gapW <= EPS) return false;
+  const minRun = beamAlongModuleMm;
+  const left = t0;
+  const right = beamSpan - t1;
+  if (pos === 'MEIO') {
+    return left + EPS >= minRun && right + EPS >= minRun;
+  }
+  if (pos === 'INICIO') {
+    return right + EPS >= minRun;
+  }
+  return left + EPS >= minRun;
+}
+
+/** Parte o vão: segmentos normais, túnel (módulo específico) ou vão transversal vazio (sem túnel). */
+function splitBeamIntoModuleSegments(
+  beamSpan: number,
+  hasTunnel: boolean,
+  tunnelPos: 'INICIO' | 'MEIO' | 'FIM' | undefined,
+  corridorMm: number,
+  reserveCrossPassageNoTunnel: boolean
+): Segment1DKind[] {
+  const pos = tunnelPos ?? 'MEIO';
+  if (hasTunnel && tunnelPos) {
+    const { t0, t1 } = tunnelSpanAlongBeam(beamSpan, corridorMm, tunnelPos);
+    return buildThreeBeamSegs(beamSpan, t0, t1, 'tunnel');
+  }
+  if (reserveCrossPassageNoTunnel) {
+    const { t0, t1 } = tunnelSpanAlongBeam(beamSpan, corridorMm, pos);
+    return buildThreeBeamSegs(beamSpan, t0, t1, 'crossGap');
+  }
+  return [{ a: 0, b: beamSpan, kind: 'normal' }];
 }
 
 function fillSegmentModules(
@@ -490,6 +539,10 @@ function buildModuleSegmentsForRow(
         rectForTunnelModule(orientation, rowId, idx++, bs.a, bs.b, crossSeg, corridorMm, globalLevels)
       );
       moduleEquiv += 1;
+      continue;
+    }
+
+    if (bs.kind === 'crossGap') {
       continue;
     }
 
@@ -634,21 +687,67 @@ export function buildLayoutSolutionV2(answers: BuildLayoutSolutionV2Input): Layo
 
   const { rowBands, corridors: corridorsFromFill } = fillWarehouseCross(ctx);
 
+  const rowBandCount = rowBands.length;
+
+  const reserveCrossPassageNoTunnel = shouldReserveCrossPassageWithoutTunnel(
+    hasTunnel,
+    rowBandCount,
+    beamSpan,
+    beamAlongModuleMm,
+    tunnelPos,
+    corridorMm
+  );
+
+  const crossPassageSpec = reserveCrossPassageNoTunnel
+    ? tunnelSpanAlongBeam(beamSpan, corridorMm, tunnelPos ?? 'MEIO')
+    : null;
+
   const tunnelSpec =
     hasTunnel && tunnelPos
       ? tunnelSpanAlongBeam(beamSpan, corridorMm, tunnelPos)
       : null;
 
-  const beamSegs = splitBeamSegmentsWithTunnel(beamSpan, hasTunnel, tunnelPos, corridorMm);
+  const beamSegs = splitBeamIntoModuleSegments(
+    beamSpan,
+    hasTunnel,
+    tunnelPos,
+    corridorMm,
+    reserveCrossPassageNoTunnel
+  );
 
   const corridors: CirculationZone[] = [...corridorsFromFill];
   const tunnels: TunnelZone[] = [];
   const rows: RackRowSolution[] = [];
 
+  if (crossPassageSpec && rowBands.length > 0) {
+    const c0 = Math.min(...rowBands.map(r => r.c0));
+    const c1 = Math.max(...rowBands.map(r => r.c1));
+    const { t0, t1 } = crossPassageSpec;
+    if (orientation === 'along_length') {
+      corridors.push({
+        id: 'cross-passage',
+        kind: 'corridor',
+        x0: t0,
+        x1: t1,
+        y0: c0,
+        y1: c1,
+        label: 'Passagem transversal',
+      });
+    } else {
+      corridors.push({
+        id: 'cross-passage',
+        kind: 'corridor',
+        x0: c0,
+        x1: c1,
+        y0: t0,
+        y1: t1,
+        label: 'Passagem transversal',
+      });
+    }
+  }
+
   let totalModEquiv = 0;
   let anyRejectedHalf = false;
-
-  const rowBandCount = rowBands.length;
 
   for (const rb of rowBands) {
     const c0 = rb.c0;
@@ -659,15 +758,20 @@ export function buildLayoutSolutionV2(answers: BuildLayoutSolutionV2Input): Layo
       rowKind === 'single' ? 'single' : 'double'
     );
 
-    const segsForRow =
-      hasTunnel && appliesTunnelToThisRow
-        ? beamSegs
-        : [{ a: 0, b: beamSpan, kind: 'normal' as const }];
+    const useBeamSplit =
+      (hasTunnel && appliesTunnelToThisRow) || reserveCrossPassageNoTunnel;
+    const segsForRow = useBeamSplit
+      ? beamSegs
+      : [{ a: 0, b: beamSpan, kind: 'normal' as const }];
 
     const crossSeg = { c0, c1 };
     const rowId = rb.id;
     const tunnelForHalf =
-      hasTunnel && appliesTunnelToThisRow ? tunnelSpec : null;
+      hasTunnel && appliesTunnelToThisRow
+        ? tunnelSpec
+        : reserveCrossPassageNoTunnel
+          ? crossPassageSpec
+          : null;
     const { segments, moduleEquiv, rejectedHalf } = buildModuleSegmentsForRow(
       rowId,
       segsForRow,

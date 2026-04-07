@@ -48,6 +48,42 @@ describe('buildLayoutSolutionV2', () => {
     expect(s.corridors.length).toBeGreaterThanOrEqual(1);
   });
 
+  it('3b: sem túnel — passagem transversal vazia (largura tipo corredor) na mesma lógica de posição do túnel', () => {
+    const a = {
+      ...base(),
+      lengthMm: 30_000,
+      widthMm: 30_000,
+      corridorMm: 3000,
+      moduleDepthMm: 2700,
+      moduleWidthMm: 1100,
+      tunnelPosition: 'MEIO' as const,
+      lineStrategy: 'MELHOR_LAYOUT' as const,
+      hasTunnel: false,
+    };
+    const s = buildLayoutSolutionV2(a);
+    expect(s.metadata.hasTunnel).toBe(false);
+    expect(s.rows.length).toBeGreaterThanOrEqual(2);
+    expect(s.corridors.some(c => c.label === 'Passagem transversal')).toBe(true);
+
+    const maxGapAlongBeam = (): number => {
+      const row = s.rows[0]!;
+      const intervals = row.modules
+        .map(m => {
+          if (s.orientation === 'along_length') {
+            return [Math.min(m.x0, m.x1), Math.max(m.x0, m.x1)] as const;
+          }
+          return [Math.min(m.y0, m.y1), Math.max(m.y0, m.y1)] as const;
+        })
+        .sort((u, v) => u[0] - v[0]);
+      let g = 0;
+      for (let i = 1; i < intervals.length; i++) {
+        g = Math.max(g, intervals[i]![0] - intervals[i - 1]![1]);
+      }
+      return g;
+    };
+    expect(maxGapAlongBeam()).toBeGreaterThan(500);
+  });
+
   it('4: túnel no início', () => {
     const a = {
       ...base(),
