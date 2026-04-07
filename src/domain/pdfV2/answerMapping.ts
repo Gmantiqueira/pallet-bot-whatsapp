@@ -84,9 +84,8 @@ export type ProjectAnswersV2 = {
 };
 
 /**
- * Melhor aproveitamento com viés para along_length:
- * Usa vão = `moduleWidthMm` e profundidade = `moduleDepthMm` (sem max/min).
- * Só adota `along_width` quando calcula claramente mais células que o along_length.
+ * Melhor aproveitamento com viés para along_length.
+ * Usa a mesma convenção que {@link buildLayoutSolutionV2}: maior dimensão = passo na fileira; menor = profundidade.
  */
 export function pickBetterOrientationBySimpleCount(
   lengthMm: number,
@@ -95,8 +94,8 @@ export function pickBetterOrientationBySimpleCount(
   moduleDepthMm: number,
   moduleWidthMm: number
 ): LayoutOrientationV2 {
-  const rackDepthMm = moduleDepthMm;
-  const beamAlongMm = moduleWidthMm;
+  const rackDepthMm = Math.min(moduleWidthMm, moduleDepthMm);
+  const beamAlongMm = Math.max(moduleWidthMm, moduleDepthMm);
   const alongL = maxModulesSingleDepth(
     lengthMm,
     widthMm,

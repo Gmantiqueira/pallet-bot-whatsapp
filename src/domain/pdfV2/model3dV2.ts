@@ -52,9 +52,12 @@ export function build3DModelV2(geometry: LayoutGeometry): Rack3DModel {
 
       const isTunnel = mod.type === 'tunnel';
       const clearanceMm = mod.tunnelClearanceHeightMm ?? 0;
-      const beamZs = mod.beamGeometry.beamElevationsMm.filter(
+      const beamZsAll = mod.beamGeometry.beamElevationsMm.filter(
         z => z >= EPS && z <= mod.heightMm + EPS
       );
+      /** Última elevação = limite estrutural; não fechar quadrilátero de longarina (alinha com elevação frontal). */
+      const beamZs =
+        beamZsAll.length >= 2 ? beamZsAll.slice(0, -1) : beamZsAll;
 
       const corners: [number, number][] = [
         [x0, y0],

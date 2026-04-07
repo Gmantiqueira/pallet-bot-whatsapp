@@ -38,8 +38,9 @@ describe('serializeElevationPagesV2', () => {
     expect(svg).toMatch(/Face de armazenagem/);
     expect(svg).toMatch(/vão\s+[\d.\s]+mm/i);
     expect(svg).toMatch(/Carga referência/);
-    // Tampo superior: traço estrutural, não longarina laranja de nível
-    expect(svg).toContain('#e2e8f0');
+    // Último eixo estrutural não é desenhado como longarina: exactamente `levels` faixas laranja
+    const orangeBeams = svg.match(/fill="#fb923c"/g) ?? [];
+    expect(orangeBeams.length).toBe(a.levels);
   });
 
   it('vista lateral dupla costas menciona espinha e profundidade de faixa', () => {

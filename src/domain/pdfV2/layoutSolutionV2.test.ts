@@ -183,7 +183,7 @@ describe('buildLayoutSolutionV2', () => {
     expect(s.rackDepthMm).toBe(1100);
   });
 
-  it('13: vão < prof. em mm — pegada along_length tem extensão X = vão e Y = prof. (ponta com ponta no X)', () => {
+  it('13: vão < prof. em mm — maior dimensão ao longo da fileira (ponta com ponta no X, prof. transversal)', () => {
     const a = {
       ...base(),
       moduleWidthMm: 1100,
@@ -192,15 +192,15 @@ describe('buildLayoutSolutionV2', () => {
     };
     const s = buildLayoutSolutionV2(a);
     expect(s.orientation).toBe('along_length');
-    expect(s.beamAlongModuleMm).toBe(1100);
-    expect(s.rackDepthMm).toBe(2700);
+    expect(s.beamAlongModuleMm).toBe(2700);
+    expect(s.rackDepthMm).toBe(1100);
     const full = s.rows[0]?.modules.find(m => m.type === 'full' && m.variant !== 'tunnel');
     expect(full).toBeDefined();
     if (!full) return;
     const dx = Math.abs(full.x1 - full.x0);
     const dy = Math.abs(full.y1 - full.y0);
-    expect(dx).toBe(1100);
-    expect(dy).toBe(2700);
+    expect(dx).toBe(2700);
+    expect(dy).toBe(1100);
     expect(Math.max(dx, dy)).toBe(2700);
     expect(Math.min(dx, dy)).toBe(1100);
   });

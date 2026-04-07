@@ -511,12 +511,14 @@ export function buildLayoutSolutionV2(answers: BuildLayoutSolutionV2Input): Layo
   } = answers;
 
   /**
-   * Vão / longarina (passo ponta-a-ponta ao longo da fileira) = campo de vão (`moduleWidthMm`), nunca max(dim).
-   * Profundidade de posição (transversal à fileira) = `moduleDepthMm`. Se usássemos max/min, quando prof. > vão
-   * os rectângulos ficavam trocados (crescimento “lado com lado”).
+   * Pé de módulo na planta: crescimento da fileira segue sempre a maior dimensão do par (vão × prof.)
+   * (“ponta com ponta” ao longo desse eixo); a menor fica na profundidade da posição (transversal).
+   * Isto alinha planta/3D quando o utilizador troca rótulos nos campos — o rectângulo nunca fica “lado com lado”.
    */
-  const beamAlongModuleMm = moduleWidthMm;
-  const rackDepthMm = moduleDepthMm;
+  const w = Math.max(0, moduleWidthMm);
+  const d = Math.max(0, moduleDepthMm);
+  const beamAlongModuleMm = Math.max(w, d);
+  const rackDepthMm = Math.min(w, d);
 
   const orientation = resolveOrientation(answers);
 
