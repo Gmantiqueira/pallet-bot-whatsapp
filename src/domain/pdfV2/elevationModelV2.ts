@@ -18,14 +18,17 @@ export class ElevationModelValidationError extends Error {
   }
 }
 
+/** Profundidade de faixa em elevação: usa profundidade de posição semântica (moduleDepthMm), não min(width,depth). */
 function bandDepthMmFromGeometry(geometry: LayoutGeometry): number {
-  const d = geometry.metadata.rackDepthMm;
+  const d = geometry.metadata.moduleDepthMm;
   return geometry.metadata.rackDepthMode === 'single'
     ? d
     : 2 * d + SPINE_BACK_TO_BACK_MM;
 }
 
-function clearHeightFromAnswers(answers: Record<string, unknown>): number | undefined {
+function clearHeightFromAnswers(
+  answers: Record<string, unknown>
+): number | undefined {
   if (typeof answers.clearHeightMm === 'number') {
     return answers.clearHeightMm;
   }
@@ -46,12 +49,16 @@ function panelFromRackModule(
   opts: { tunnelVisual: boolean }
 ): ElevationPanelPayload {
   const geom = mod.beamGeometry;
-  const beamLengthMm = geometry.metadata.beamAlongModuleMm;
-  const moduleDepthMm = geometry.metadata.rackDepthMm;
+  /** Horizontal da elevação frontal = vão / comprimento ao longo das longarinas (eixo do módulo na planta). */
+  const beamLengthMm = mod.beamSpanMm;
+  /** Profundidade de posição (face estreita em planta). */
+  const moduleDepthMm = mod.moduleDepthAxisMm;
   const bandDepthMm = bandDepthMmFromGeometry(geometry);
   const cap = typeof answers.capacityKg === 'number' ? answers.capacityKg : 0;
   const firstLevelOnGround =
-    typeof answers.firstLevelOnGround === 'boolean' ? answers.firstLevelOnGround : true;
+    typeof answers.firstLevelOnGround === 'boolean'
+      ? answers.firstLevelOnGround
+      : true;
 
   const isTunnel = mod.type === 'tunnel';
   const levels = isTunnel ? mod.activeStorageLevels : mod.globalLevels;
@@ -93,19 +100,24 @@ function buildFrontWithoutTunnelPayload(
 
   const levels = typeof answers.levels === 'number' ? answers.levels : 1;
   const firstLevelOnGround =
-    typeof answers.firstLevelOnGround === 'boolean' ? answers.firstLevelOnGround : true;
+    typeof answers.firstLevelOnGround === 'boolean'
+      ? answers.firstLevelOnGround
+      : true;
   const geom = computeBeamElevations({
     uprightHeightMm: rep.heightMm,
     levels,
     firstLevelOnGround,
     equalLevelSpacing: answers.equalLevelSpacing === true,
-    levelSpacingMm: typeof answers.levelSpacingMm === 'number' ? answers.levelSpacingMm : undefined,
+    levelSpacingMm:
+      typeof answers.levelSpacingMm === 'number'
+        ? answers.levelSpacingMm
+        : undefined,
     levelSpacingsMm: Array.isArray(answers.levelSpacingsMm)
       ? (answers.levelSpacingsMm as number[])
       : undefined,
   });
-  const beamLengthMm = geometry.metadata.beamAlongModuleMm;
-  const moduleDepthMm = geometry.metadata.rackDepthMm;
+  const beamLengthMm = rep.beamSpanMm;
+  const moduleDepthMm = rep.moduleDepthAxisMm;
   const bandDepthMm = bandDepthMmFromGeometry(geometry);
   const cap = typeof answers.capacityKg === 'number' ? answers.capacityKg : 0;
 
@@ -145,7 +157,9 @@ export function validateElevationModelV2(model: ElevationModelV2): void {
   }
 
   if (!tun.tunnel) {
-    throw new ElevationModelValidationError('Elevação com túnel: tunnel=true obrigatório no payload.');
+    throw new ElevationModelValidationError(
+      'Elevação com túnel: tunnel=true obrigatório no payload.'
+    );
   }
   if (tun.levels >= std.levels) {
     throw new ElevationModelValidationError(
@@ -154,12 +168,64 @@ export function validateElevationModelV2(model: ElevationModelV2): void {
   }
   const c = tun.tunnelClearanceMm;
   if (c == null || c <= 0) {
-    throw new ElevationModelValidationError('Elevação túnel: tunnelClearanceMm > 0 obrigatório.');
+    throw new ElevationModelValidationError(
+      'Elevação túnel: tunnelClearanceMm > 0 obrigatório.'
+    );
   }
   for (const y of tun.beamElevationsMm) {
     if (typeof y !== 'number' || y <= c + 0.5) {
       throw new ElevationModelValidationError(
         'Elevação túnel: eixos de longarina não podem interceptar a zona de passagem (pé livre).'
+      );
+    }
+  }
+}
+
+const ELEV_AXIS_TOL_MM = 2.5;
+
+/** Garante que frontal usa o vão real do módulo e a lateral a profundidade real (eixos da planta). */
+export function validateElevationAxesAgainstGeometry(
+  model: ElevationModelV2,
+  geometry: LayoutGeometry
+): void {
+  const rep = representativeModuleForElevation(geometry);
+  const front = model.frontWithoutTunnel;
+
+  if (Math.abs(front.beamLengthMm - rep.beamSpanMm) > ELEV_AXIS_TOL_MM) {
+    throw new ElevationModelValidationError(
+      `Elevação frontal: vão horizontal (${front.beamLengthMm} mm) não alinha com o módulo (${rep.beamSpanMm} mm).`
+    );
+  }
+  if (
+    Math.abs(front.moduleDepthMm - rep.moduleDepthAxisMm) > ELEV_AXIS_TOL_MM
+  ) {
+    throw new ElevationModelValidationError(
+      `Elevação: profundidade de posição (${front.moduleDepthMm} mm) não alinha com o módulo (${rep.moduleDepthAxisMm} mm).`
+    );
+  }
+
+  const md = geometry.metadata.moduleDepthMm;
+  const expectedBand =
+    geometry.metadata.rackDepthMode === 'single'
+      ? md
+      : 2 * md + SPINE_BACK_TO_BACK_MM;
+  if (Math.abs(front.bandDepthMm - expectedBand) > ELEV_AXIS_TOL_MM) {
+    throw new ElevationModelValidationError(
+      `Elevação lateral: largura de faixa (${front.bandDepthMm} mm) incoerente com prof. módulo (esperado ~${expectedBand} mm).`
+    );
+  }
+
+  if (model.frontWithTunnel) {
+    const tun = model.frontWithTunnel;
+    const tunMod = findTunnelModuleGeometry(geometry);
+    if (!tunMod) {
+      throw new ElevationModelValidationError(
+        'Elevação túnel: módulo túnel ausente na geometria.'
+      );
+    }
+    if (Math.abs(tun.beamLengthMm - tunMod.beamSpanMm) > ELEV_AXIS_TOL_MM) {
+      throw new ElevationModelValidationError(
+        `Elevação túnel: vão (${tun.beamLengthMm} mm) não alinha com módulo túnel (${tunMod.beamSpanMm} mm).`
       );
     }
   }
@@ -177,16 +243,21 @@ export function buildElevationModelV2(
   const tunnelMod = findTunnelModuleGeometry(geometry);
   const frontWithTunnel =
     geometry.metadata.hasTunnel && tunnelMod
-      ? panelFromRackModule(answers, geometry, tunnelMod, { tunnelVisual: true })
+      ? panelFromRackModule(answers, geometry, tunnelMod, {
+          tunnelVisual: true,
+        })
       : undefined;
 
   const lateral: ElevationPanelPayload = { ...frontWithoutTunnel };
 
   const summaryLines: string[] = [
-    `${geometry.totals.levelCount} níveis · ${frontWithoutTunnel.capacityKgPerLevel} kg/palete · vão ${Math.round(geometry.metadata.beamAlongModuleMm)} mm · prof. posição ${Math.round(geometry.metadata.rackDepthMm)} mm · faixa ${Math.round(frontWithoutTunnel.bandDepthMm)} mm`,
+    `${geometry.totals.levelCount} níveis · ${frontWithoutTunnel.capacityKgPerLevel} kg/palete · vão ${Math.round(geometry.metadata.moduleWidthMm)} mm · prof. posição ${Math.round(geometry.metadata.moduleDepthMm)} mm · faixa ${Math.round(frontWithoutTunnel.bandDepthMm)} mm`,
     `Módulos ${geometry.totals.moduleCount.toFixed(1)} (equiv.) · posições ${geometry.totals.positionCount} · ${geometry.metadata.rackDepthMode === 'double' ? 'dupla costas' : 'simples'} · planta: eixo vão ${geometry.beamSpanDirection.toUpperCase()}`,
   ];
-  if (geometry.metadata.hasTunnel && tunnelMod?.tunnelClearanceHeightMm != null) {
+  if (
+    geometry.metadata.hasTunnel &&
+    tunnelMod?.tunnelClearanceHeightMm != null
+  ) {
     summaryLines.push(
       `Variante túnel no projeto: pé livre ${Math.round(tunnelMod.tunnelClearanceHeightMm)} mm — elevação ao lado: menos níveis ativos acima do vão (sem redistribuir o total para a zona superior).`
     );
@@ -202,5 +273,6 @@ export function buildElevationModelV2(
   };
 
   validateElevationModelV2(model);
+  validateElevationAxesAgainstGeometry(model, geometry);
   return model;
 }

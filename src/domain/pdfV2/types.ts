@@ -106,7 +106,14 @@ export type FloorPlanModelV2 = {
   viewBox: { w: number; h: number };
   warehouseOutline: { x: number; y: number; w: number; h: number };
   /** Faixa da fileira (estrutura) por baixo dos módulos. */
-  rowBandRects: { id: string; x: number; y: number; w: number; h: number; kind: RackDepthModeV2 }[];
+  rowBandRects: {
+    id: string;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    kind: RackDepthModeV2;
+  }[];
   structureRects: {
     id: string;
     x: number;
@@ -116,7 +123,15 @@ export type FloorPlanModelV2 = {
     kind: RackDepthModeV2;
     variant?: ModuleVariantV2;
   }[];
-  circulationRects: { id: string; x: number; y: number; w: number; h: number; kind: CirculationKind; label?: string }[];
+  circulationRects: {
+    id: string;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    kind: CirculationKind;
+    label?: string;
+  }[];
   dimensionLines: FloorPlanDimension[];
   labels: FloorPlanLabel[];
 };
@@ -144,8 +159,12 @@ export type FloorPlanLabel = {
 export type ElevationPanelPayload = {
   levels: number;
   uprightHeightMm: number;
+  /**
+   * Vão no plano da elevação **frontal**: extensão ao longo das longarinas (face de armazenagem).
+   * Igual ao eixo comprimento do módulo na planta (`beamSpanMm` na geometria).
+   */
   beamLengthMm: number;
-  /** Profundidade do módulo (palete), mm — alinhado ao layout. */
+  /** Profundidade de posição (mm), eixo da elevação **lateral** — transversal ao vão. */
   moduleDepthMm: number;
   /** Profundidade total da faixa em planta (simples = módulo; dupla costas = 2×módulo + espinha). */
   bandDepthMm: number;
