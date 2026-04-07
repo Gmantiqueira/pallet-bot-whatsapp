@@ -4,14 +4,23 @@ import * as path from 'path';
 import type { Session } from '../../domain/session';
 import type { LayoutResult } from '../../domain/layoutEngine';
 import { buildLayoutSolutionV2 } from '../../domain/pdfV2/layoutSolutionV2';
-import { buildLayoutGeometry, validateLayoutGeometry } from '../../domain/pdfV2/layoutGeometryV2';
+import {
+  buildLayoutGeometry,
+  validateLayoutGeometry,
+} from '../../domain/pdfV2/layoutGeometryV2';
 import { buildFloorPlanModelV2 } from '../../domain/pdfV2/floorPlanModelV2';
 import { serializeFloorPlanSvgV2 } from '../../domain/pdfV2/svgFloorPlanV2';
 import { buildElevationModelV2 } from '../../domain/pdfV2/elevationModelV2';
-import { serializeElevationSvgV2 } from '../../domain/pdfV2/svgElevationV2';
+import {
+  serializeElevationPagesV2,
+  type ElevationPageSvgs,
+} from '../../domain/pdfV2/svgElevationV2';
 import { buildProjectAnswersV2 } from '../../domain/pdfV2/answerMapping';
 import { build3DModelV2 } from '../../domain/pdfV2/model3dV2';
-import { projectToIsometric, render3DViewV2 } from '../../domain/pdfV2/view3dV2';
+import {
+  projectToIsometric,
+  render3DViewV2,
+} from '../../domain/pdfV2/view3dV2';
 import {
   fitRasterInBox,
   svgRasterToPng,
@@ -44,6 +53,15 @@ function drawingRasterPixelSize(): { pxW: number; pxH: number } {
   return {
     pxW: ptToPx(usableW),
     pxH: ptToPx(Math.max(80, imgBoxH)),
+  };
+}
+
+/** Raster mais denso para páginas só com elevação (um desenho por folha). */
+function elevationDrawingRasterPixelSize(): { pxW: number; pxH: number } {
+  const base = drawingRasterPixelSize();
+  return {
+    pxW: Math.round(base.pxW * 1.1),
+    pxH: Math.round(base.pxH * 1.28),
   };
 }
 
@@ -116,10 +134,14 @@ function drawKeyValueRow(
   const hVal = doc.heightOfString(value, { width: valW });
   const rowH = Math.max(hLabel, hVal, 13);
 
-  doc.font('Helvetica-Bold').fontSize(9).fillColor(COL_MUTED).text(label, x, y, {
-    width: labelW - 4,
-    lineGap: 1,
-  });
+  doc
+    .font('Helvetica-Bold')
+    .fontSize(9)
+    .fillColor(COL_MUTED)
+    .text(label, x, y, {
+      width: labelW - 4,
+      lineGap: 1,
+    });
   doc.font('Helvetica').fontSize(10).fillColor(COL_INK).text(value, valX, y, {
     width: valW,
     lineGap: 1,
@@ -164,7 +186,8 @@ export type GenerateProjectPdfV2Input = {
   project: Record<string, unknown>;
   layout: LayoutResult;
   floorPlanSvg: string;
-  elevationSvg: string;
+  /** Uma folha SVG por tipo de elevação (sem túnel, com túnel ou null, lateral). */
+  elevationPages: ElevationPageSvgs;
   /** Vista 3D isométrica (wireframe) alinhada ao layout V2. */
   view3dSvg: string;
 };
@@ -187,16 +210,31 @@ export async function renderPdfV2(
   const filePath = path.join(storagePath, filename);
 
   const { pxW, pxH } = drawingRasterPixelSize();
+  const { pxW: elW, pxH: elH } = elevationDrawingRasterPixelSize();
 
   let floorRaster: { buffer: Buffer; widthPx: number; heightPx: number };
-  let elevRaster: { buffer: Buffer; widthPx: number; heightPx: number };
+  let elevFrontStdRaster: { buffer: Buffer; widthPx: number; heightPx: number };
+  let elevFrontTunRaster: {
+    buffer: Buffer;
+    widthPx: number;
+    heightPx: number;
+  } | null;
+  let elevLateralRaster: { buffer: Buffer; widthPx: number; heightPx: number };
   let view3dRaster: { buffer: Buffer; widthPx: number; heightPx: number };
   try {
-    [floorRaster, elevRaster, view3dRaster] = await Promise.all([
+    const tunSvg = input.elevationPages.frontWithTunnel;
+    const rasterAll = await Promise.all([
       svgRasterToPng(input.floorPlanSvg, pxW, pxH),
-      svgRasterToPng(input.elevationSvg, pxW, pxH),
+      svgRasterToPng(input.elevationPages.frontWithoutTunnel, elW, elH),
+      svgRasterToPng(input.elevationPages.lateral, elW, elH),
       svgRasterToPng(input.view3dSvg, pxW, pxH),
+      ...(tunSvg ? [svgRasterToPng(tunSvg, elW, elH)] : []),
     ]);
+    floorRaster = rasterAll[0]!;
+    elevFrontStdRaster = rasterAll[1]!;
+    elevLateralRaster = rasterAll[2]!;
+    view3dRaster = rasterAll[3]!;
+    elevFrontTunRaster = tunSvg ? rasterAll[4] : null;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     throw new Error(`Falha ao rasterizar SVG V2 para PDF: ${msg}`);
@@ -215,7 +253,8 @@ export async function renderPdfV2(
   const writeDone = attachPdfFileStream(doc, filePath);
 
   const left = doc.page.margins.left;
-  const usableW = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+  const usableW =
+    doc.page.width - doc.page.margins.left - doc.page.margins.right;
   const pageBottom = doc.page.height - doc.page.margins.bottom;
   const imgBottomPad = 20;
 
@@ -250,21 +289,23 @@ export async function renderPdfV2(
   const horizontalRule = (y: number, inset = 0.08, color = COL_RULE): void => {
     const x0 = left + usableW * inset;
     const x1 = left + usableW * (1 - inset);
-    doc
-      .strokeColor(color)
-      .lineWidth(0.75)
-      .moveTo(x0, y)
-      .lineTo(x1, y)
-      .stroke();
+    doc.strokeColor(color).lineWidth(0.75).moveTo(x0, y).lineTo(x1, y).stroke();
   };
 
-  const embedFullWidthDrawing = (
-    raster: { buffer: Buffer; widthPx: number; heightPx: number }
-  ): void => {
+  const embedFullWidthDrawing = (raster: {
+    buffer: Buffer;
+    widthPx: number;
+    heightPx: number;
+  }): void => {
     doc.moveDown(0.12);
     const yImg = doc.y + 6;
     const availH = pageBottom - yImg - imgBottomPad;
-    const { dw, dh } = fitRasterInBox(raster.widthPx, raster.heightPx, usableW, availH);
+    const { dw, dh } = fitRasterInBox(
+      raster.widthPx,
+      raster.heightPx,
+      usableW,
+      availH
+    );
     const ix = left + (usableW - dw) / 2;
     doc.image(raster.buffer, ix, yImg, { width: dw, height: dh });
   };
@@ -305,9 +346,33 @@ export async function renderPdfV2(
   doc.moveDown(0.55);
 
   let rowY = doc.y;
-  rowY = drawKeyValueRow(doc, left, rowY, usableW, 'Cliente', coverCliente(input.project), labelColW);
-  rowY = drawKeyValueRow(doc, left, rowY, usableW, 'Projeto', coverProjeto(input.project), labelColW);
-  rowY = drawKeyValueRow(doc, left, rowY, usableW, 'Data', coverDataEmissao(input.project), labelColW);
+  rowY = drawKeyValueRow(
+    doc,
+    left,
+    rowY,
+    usableW,
+    'Cliente',
+    coverCliente(input.project),
+    labelColW
+  );
+  rowY = drawKeyValueRow(
+    doc,
+    left,
+    rowY,
+    usableW,
+    'Projeto',
+    coverProjeto(input.project),
+    labelColW
+  );
+  rowY = drawKeyValueRow(
+    doc,
+    left,
+    rowY,
+    usableW,
+    'Data',
+    coverDataEmissao(input.project),
+    labelColW
+  );
   doc.y = rowY;
   doc.moveDown(0.45);
   horizontalRule(doc.y, 0.1, COL_RULE);
@@ -316,7 +381,12 @@ export async function renderPdfV2(
   const techRows = technicalSummaryRows(input.project, input.layout);
   const boxTop = doc.y;
   const boxPad = 8;
-  const innerH = measureTechnicalSummaryHeight(doc, usableW, labelColW, techRows);
+  const innerH = measureTechnicalSummaryHeight(
+    doc,
+    usableW,
+    labelColW,
+    techRows
+  );
   const boxH = innerH + boxPad * 2;
 
   doc
@@ -339,7 +409,15 @@ export async function renderPdfV2(
     .text('RESUMO TÉCNICO', left, rowY, { width: usableW });
   rowY = doc.y + 6;
   for (const row of techRows) {
-    rowY = drawKeyValueRow(doc, left, rowY, usableW, row.label, row.value, labelColW);
+    rowY = drawKeyValueRow(
+      doc,
+      left,
+      rowY,
+      usableW,
+      row.label,
+      row.value,
+      labelColW
+    );
   }
   doc.y = boxTop + boxH + 14;
 
@@ -362,20 +440,62 @@ export async function renderPdfV2(
 
   doc.addPage();
   doc.y = doc.page.margins.top + 6;
-  drawCentered('ELEVAÇÕES (V2)', {
+  drawCentered('Elevação frontal — sem túnel', {
     size: 12,
     font: 'Helvetica-Bold',
     color: COL_INK,
     moveDown: 0.18,
   });
-  drawCentered('Vista frontal e lateral', {
+  drawCentered('Módulo de armazenagem normal (referência)', {
     size: 8.5,
     color: COL_MUTED,
     moveDown: 0.28,
   });
   horizontalRule(doc.y + 3, 0.1, COL_RULE);
   doc.moveDown(0.38);
-  embedFullWidthDrawing(elevRaster);
+  embedFullWidthDrawing(elevFrontStdRaster);
+
+  doc.addPage();
+  doc.y = doc.page.margins.top + 6;
+  drawCentered('Elevação frontal — com túnel', {
+    size: 12,
+    font: 'Helvetica-Bold',
+    color: COL_INK,
+    moveDown: 0.18,
+  });
+  if (elevFrontTunRaster) {
+    drawCentered('Mesmo modelo estrutural; vão de passagem na zona inferior', {
+      size: 8.5,
+      color: COL_MUTED,
+      moveDown: 0.28,
+    });
+    horizontalRule(doc.y + 3, 0.1, COL_RULE);
+    doc.moveDown(0.38);
+    embedFullWidthDrawing(elevFrontTunRaster);
+  } else {
+    drawCentered('Não aplicável neste projeto (sem módulo túnel).', {
+      size: 10,
+      color: COL_MUTED,
+      moveDown: 0.85,
+    });
+  }
+
+  doc.addPage();
+  doc.y = doc.page.margins.top + 6;
+  drawCentered('Vista lateral', {
+    size: 12,
+    font: 'Helvetica-Bold',
+    color: COL_INK,
+    moveDown: 0.18,
+  });
+  drawCentered('Profundidade de faixa e treliçagem esquemática', {
+    size: 8.5,
+    color: COL_MUTED,
+    moveDown: 0.28,
+  });
+  horizontalRule(doc.y + 3, 0.1, COL_RULE);
+  doc.moveDown(0.38);
+  embedFullWidthDrawing(elevLateralRaster);
 
   doc.addPage();
   doc.y = doc.page.margins.top + 6;
@@ -431,7 +551,7 @@ export async function generatePdfV2FromSession(
   const floorModel = buildFloorPlanModelV2(layoutGeometry);
   const floorPlanSvg = serializeFloorPlanSvgV2(floorModel);
   const elevationModel = buildElevationModelV2(answers, layoutGeometry);
-  const elevationSvg = serializeElevationSvgV2(elevationModel);
+  const elevationPages = serializeElevationPagesV2(elevationModel);
   const rack3d = build3DModelV2(layoutGeometry);
   const projected3d = projectToIsometric(rack3d);
   const view3dSvg = render3DViewV2(projected3d);
@@ -441,7 +561,7 @@ export async function generatePdfV2FromSession(
       project: answers,
       layout,
       floorPlanSvg,
-      elevationSvg,
+      elevationPages,
       view3dSvg,
     },
     options

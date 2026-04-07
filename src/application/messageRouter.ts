@@ -26,11 +26,19 @@ import { loadEnv } from '../config/env';
 import { resolveStoragePath } from '../config/storagePath';
 import { buildProjectAnswersV2 } from '../domain/pdfV2/answerMapping';
 import { buildLayoutSolutionV2 } from '../domain/pdfV2/layoutSolutionV2';
-import { buildLayoutGeometry, validateLayoutGeometry } from '../domain/pdfV2/layoutGeometryV2';
+import {
+  buildLayoutGeometry,
+  validateLayoutGeometry,
+  type LayoutGeometry,
+} from '../domain/pdfV2/layoutGeometryV2';
 import { buildFloorPlanModelV2 } from '../domain/pdfV2/floorPlanModelV2';
 import { serializeFloorPlanSvgV2 } from '../domain/pdfV2/svgFloorPlanV2';
 import { buildElevationModelV2 } from '../domain/pdfV2/elevationModelV2';
-import { serializeElevationSvgV2 } from '../domain/pdfV2/svgElevationV2';
+import {
+  serializeElevationPagesV2,
+  type ElevationPageSvgs,
+} from '../domain/pdfV2/svgElevationV2';
+import type { ElevationModelV2 } from '../domain/pdfV2/types';
 import { build3DModelV2 } from '../domain/pdfV2/model3dV2';
 import { projectToIsometric, render3DViewV2 } from '../domain/pdfV2/view3dV2';
 
@@ -166,13 +174,14 @@ export const routeIncoming = async (
         const v2a = buildProjectAnswersV2(ans);
         if (v2a) {
           const sol = buildLayoutSolutionV2(v2a);
-          const geo = buildLayoutGeometry(sol, ans);
+          const geo: LayoutGeometry = buildLayoutGeometry(sol, ans);
           validateLayoutGeometry(geo);
           const floorSvgV2 = serializeFloorPlanSvgV2(
             buildFloorPlanModelV2(geo)
           );
-          const elevModelV2 = buildElevationModelV2(ans, geo);
-          const elevSvgV2 = serializeElevationSvgV2(elevModelV2);
+          const elevModelV2: ElevationModelV2 = buildElevationModelV2(ans, geo);
+          const elevPagesV2: ElevationPageSvgs =
+            serializeElevationPagesV2(elevModelV2);
           const view3dSvgV2 = render3DViewV2(
             projectToIsometric(build3DModelV2(geo))
           );
@@ -182,8 +191,20 @@ export const routeIncoming = async (
             'utf8'
           );
           fs.writeFileSync(
-            path.join(storageDir, `elevacao-v2-${phone}-${ts}.svg`),
-            elevSvgV2,
+            path.join(storageDir, `elevacao-sem-tunel-v2-${phone}-${ts}.svg`),
+            elevPagesV2.frontWithoutTunnel,
+            'utf8'
+          );
+          if (elevPagesV2.frontWithTunnel) {
+            fs.writeFileSync(
+              path.join(storageDir, `elevacao-com-tunel-v2-${phone}-${ts}.svg`),
+              elevPagesV2.frontWithTunnel,
+              'utf8'
+            );
+          }
+          fs.writeFileSync(
+            path.join(storageDir, `elevacao-lateral-v2-${phone}-${ts}.svg`),
+            elevPagesV2.lateral,
             'utf8'
           );
           fs.writeFileSync(

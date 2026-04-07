@@ -39,7 +39,12 @@ function formatMmPtBr(mm: number): string {
   return `${Math.round(mm).toLocaleString('pt-BR')} mm`;
 }
 
-function dimensionLineHArrows(x1: number, y: number, x2: number, stroke: string): string {
+function dimensionLineHArrows(
+  x1: number,
+  y: number,
+  x2: number,
+  stroke: string
+): string {
   const inset = 4.5;
   const xa = x1 + inset;
   const xb = x2 - inset;
@@ -52,7 +57,12 @@ function dimensionLineHArrows(x1: number, y: number, x2: number, stroke: string)
   ].join('');
 }
 
-function dimensionLineVArrows(x: number, y1: number, y2: number, stroke: string): string {
+function dimensionLineVArrows(
+  x: number,
+  y1: number,
+  y2: number,
+  stroke: string
+): string {
   const yt = Math.min(y1, y2);
   const yb = Math.max(y1, y2);
   const inset = 4.5;
@@ -84,7 +94,12 @@ function verticalDimWithTicks(
   ].join('');
 }
 
-function extensionToDim(xFrom: number, xTo: number, y: number, stroke: string): string {
+function extensionToDim(
+  xFrom: number,
+  xTo: number,
+  y: number,
+  stroke: string
+): string {
   return `<line x1="${xFrom}" y1="${y}" x2="${xTo}" y2="${y}" stroke="${stroke}" stroke-width="0.28" stroke-dasharray="2.5 2" opacity="0.65"/>`;
 }
 
@@ -123,7 +138,8 @@ function drawMinimalVerticalDims(
   floorTop: number,
   ry: number,
   uprightH: number,
-  meanGapMm: number
+  meanGapMm: number,
+  labelScale: number = 1
 ): string {
   const xDim = rackRight + 10;
   const tickL = rackRight + 2;
@@ -131,16 +147,23 @@ function drawMinimalVerticalDims(
   const parts: string[] = [];
   parts.push(extensionToDim(rackRight, xDim - 2, floorTop, DIM_MAJOR));
   parts.push(extensionToDim(rackRight, xDim - 2, ry, DIM_MAJOR));
-  parts.push(verticalDimWithTicks(xDim, ry, floorTop, tickL, tickR, DIM_MAJOR, 0.55));
   parts.push(
-    textLines(xDim + 6, (ry + floorTop) / 2 - 9, ['H total', formatMmPtBr(Math.round(uprightH))], {
-      fontSize: 8.25,
-      fill: DIM_MAJOR,
-      fontWeight: '600',
-    })
+    verticalDimWithTicks(xDim, ry, floorTop, tickL, tickR, DIM_MAJOR, 0.55)
   );
   parts.push(
-    `<text x="${xDim + 6}" y="${floorTop + 16}" font-size="6.75px" fill="${DIM_MINOR}">Eixo médio ≈ ${escapeXml(formatMmPtBr(Math.round(meanGapMm)))}</text>`
+    textLines(
+      xDim + 6,
+      (ry + floorTop) / 2 - 9 * labelScale,
+      ['H total', formatMmPtBr(Math.round(uprightH))],
+      {
+        fontSize: 8.25 * labelScale,
+        fill: DIM_MAJOR,
+        fontWeight: '600',
+      }
+    )
+  );
+  parts.push(
+    `<text x="${xDim + 6}" y="${floorTop + 16 * labelScale}" font-size="${6.75 * labelScale}px" fill="${DIM_MINOR}">Eixo médio ≈ ${escapeXml(formatMmPtBr(Math.round(meanGapMm)))}</text>`
   );
   return parts.join('');
 }
@@ -183,7 +206,8 @@ function buildBeamGeometry(
   const widthsMm = uprightWidthsMm(bayCount, tunnel);
   const gapTotalMm = FV_INTER_BAY_MM;
   const sumUprightsMm = widthsMm.reduce((a, b) => a + b, 0);
-  const totalRackMm = sumUprightsMm + bayCount * beamL + (bayCount - 1) * gapTotalMm;
+  const totalRackMm =
+    sumUprightsMm + bayCount * beamL + (bayCount - 1) * gapTotalMm;
 
   const minInnerHPx = Math.max(19, ph / (levels + 2)) * levels * 1.03;
 
@@ -198,7 +222,9 @@ function buildBeamGeometry(
   let { uprightWidthsPx, beamPx, gapPx, innerH } = applyScale(scale);
 
   let totalW =
-    uprightWidthsPx.reduce((a, b) => a + b, 0) + bayCount * beamPx + (bayCount - 1) * gapPx;
+    uprightWidthsPx.reduce((a, b) => a + b, 0) +
+    bayCount * beamPx +
+    (bayCount - 1) * gapPx;
   if (totalW > rackMaxW) {
     scale *= rackMaxW / totalW;
     ({ uprightWidthsPx, beamPx, gapPx, innerH } = applyScale(scale));
@@ -209,7 +235,9 @@ function buildBeamGeometry(
     scale *= minInnerHPx / innerH;
     ({ uprightWidthsPx, beamPx, gapPx, innerH } = applyScale(scale));
     totalW =
-      uprightWidthsPx.reduce((a, b) => a + b, 0) + bayCount * beamPx + (bayCount - 1) * gapPx;
+      uprightWidthsPx.reduce((a, b) => a + b, 0) +
+      bayCount * beamPx +
+      (bayCount - 1) * gapPx;
     if (totalW > rackMaxW) {
       scale *= rackMaxW / totalW;
       ({ uprightWidthsPx, beamPx, gapPx, innerH } = applyScale(scale));
@@ -228,7 +256,7 @@ function buildBeamGeometry(
 
   const axisGapsMm: number[] = [];
   for (let i = 0; i < levels; i++) {
-    axisGapsMm.push(beamH[i + 1]! - beamH[i]!);
+    axisGapsMm.push(beamH[i + 1] - beamH[i]);
   }
 
   const ry = oy + 44;
@@ -264,11 +292,13 @@ function drawFrontRack(
   ph: number,
   data: ElevationPanelPayload,
   sectionTitle: string,
-  subtitle?: string
+  subtitle?: string,
+  options?: { labelScale?: number }
 ): string {
+  const ls = options?.labelScale ?? 1;
   const nMod = FV_FRONT_BAY_COUNT;
   const rackMaxW = Math.max(140, pw - 52 - 78);
-  const rackMaxH = ph - 120;
+  const rackMaxH = ph - Math.round(120 / ls);
   const g = buildBeamGeometry(data, rackMaxW, rackMaxH, ox, oy, pw, ph);
   const {
     levels,
@@ -296,13 +326,13 @@ function drawFrontRack(
   for (let i = 0; i <= nMod; i++) {
     uprightXs.push(xCursor);
     if (i < nMod) {
-      xCursor += uprightWidthsPx[i]!;
+      xCursor += uprightWidthsPx[i];
       bays.push({ left: xCursor, right: xCursor + beamPx });
       xCursor += beamPx + gapPx;
     }
   }
 
-  const refBay = bays[Math.min(1, bays.length - 1)]!;
+  const refBay = bays[Math.min(1, bays.length - 1)];
   const spanLeft = refBay.left;
   const spanRight = refBay.right;
   const dimTopY = ry - 20;
@@ -318,15 +348,16 @@ function drawFrontRack(
     `<line x1="${rx - floorPad}" y1="${floorTop}" x2="${rx + totalW + floorPad}" y2="${floorTop}" stroke="${COL_FLOOR}" stroke-width="2.2"/>`
   );
   parts.push(
-    `<text x="${rx + totalW / 2}" y="${floorTop + 7.5}" text-anchor="middle" font-size="7.5px" font-weight="700" fill="${COL_FLOOR}">PISO</text>`
+    `<text x="${rx + totalW / 2}" y="${floorTop + 7.5 * ls}" text-anchor="middle" font-size="${7.5 * ls}px" font-weight="700" fill="${COL_FLOOR}">PISO</text>`
   );
 
-  const showTunnelOpening = data.tunnel === true && typeof data.tunnelClearanceMm === 'number';
-  const yPassTop = showTunnelOpening ? beamYsPx[0]! - beamTh * 1.15 : floorTop;
+  const showTunnelOpening =
+    data.tunnel === true && typeof data.tunnelClearanceMm === 'number';
+  const yPassTop = showTunnelOpening ? beamYsPx[0] - beamTh * 1.15 : floorTop;
 
   for (let fi = 0; fi < uprightXs.length; fi++) {
-    const ux = uprightXs[fi]!;
-    const uw = uprightWidthsPx[fi]!;
+    const ux = uprightXs[fi];
+    const uw = uprightWidthsPx[fi];
     if (showTunnelOpening && yPassTop < floorTop - 2.5 && yPassTop > ry + 4) {
       const hTop = Math.max(0, yPassTop - ry);
       if (hTop > 0.5) {
@@ -359,24 +390,24 @@ function drawFrontRack(
       `<rect x="${spanLeft}" y="${yPassTop}" width="${Math.max(0, spanRight - spanLeft)}" height="${floorTop - yPassTop}" fill="#e2e8f0" fill-opacity="0.35" stroke="#64748b" stroke-width="0.75" stroke-dasharray="5 4"/>`
     );
     parts.push(
-      `<line x1="${uprightXs[0]!}" y1="${yPassTop}" x2="${uprightXs[nMod]! + uprightWidthsPx[nMod]!}" y2="${yPassTop}" stroke="${FV_UPRIGHT_STROKE}" stroke-width="1.6" stroke-dasharray="3 2" opacity="0.85"/>`
+      `<line x1="${uprightXs[0]}" y1="${yPassTop}" x2="${uprightXs[nMod] + uprightWidthsPx[nMod]}" y2="${yPassTop}" stroke="${FV_UPRIGHT_STROKE}" stroke-width="1.6" stroke-dasharray="3 2" opacity="0.85"/>`
     );
     parts.push(
-      `<text x="${(spanLeft + spanRight) / 2}" y="${(yPassTop + floorTop) / 2 + 3.5}" text-anchor="middle" font-size="8px" font-weight="600" fill="#475569">Passagem</text>`
+      `<text x="${(spanLeft + spanRight) / 2}" y="${(yPassTop + floorTop) / 2 + 3.5 * ls}" text-anchor="middle" font-size="${8 * ls}px" font-weight="600" fill="#475569">Passagem</text>`
     );
   }
 
-  const lastUx = uprightXs[nMod]!;
-  const lastUw = uprightWidthsPx[nMod]!;
+  const lastUx = uprightXs[nMod];
+  const lastUw = uprightWidthsPx[nMod];
   const topY = ry;
   parts.push(
-    `<line x1="${uprightXs[0]!}" y1="${topY}" x2="${lastUx + lastUw}" y2="${topY}" stroke="${FV_UPRIGHT_STROKE}" stroke-width="1.8" stroke-linecap="square"/>`
+    `<line x1="${uprightXs[0]}" y1="${topY}" x2="${lastUx + lastUw}" y2="${topY}" stroke="${FV_UPRIGHT_STROKE}" stroke-width="1.8" stroke-linecap="square"/>`
   );
 
   for (let bi = 0; bi < bays.length; bi++) {
-    const bay = bays[bi]!;
+    const bay = bays[bi];
     for (let j = 0; j <= levels; j++) {
-      const yy = beamYsPx[j]!;
+      const yy = beamYsPx[j];
       const bh = Math.max(beamTh, 2);
       parts.push(
         `<rect x="${bay.left}" y="${yy - bh / 2}" width="${bay.right - bay.left}" height="${bh}" rx="0.8" fill="${FV_BEAM_FILL}" stroke="${FV_BEAM_STROKE}" stroke-width="0.85"/>`
@@ -389,26 +420,35 @@ function drawFrontRack(
 
   parts.push(dimensionLineHArrows(spanLeft, dimTopY, spanRight, DIM_MINOR));
   parts.push(
-    `<text x="${ox + pw / 2}" y="${dimTopY - 6}" text-anchor="middle" font-size="7.5px" font-weight="600" fill="${DIM_MAJOR}">Vão ${escapeXml(formatMmPtBr(Math.round(beamL)))}</text>`
-  );
-
-  parts.push(dimensionLineHArrows(rx, rackBottom + 26, rx + totalW, DIM_MINOR));
-  parts.push(
-    `<text x="${rx + totalW / 2}" y="${rackBottom + 40}" text-anchor="middle" font-size="7.25px" fill="#334155">Largura total ${escapeXml(formatMmPtBr(Math.round(totalWidthMm)))}</text>`
+    `<text x="${ox + pw / 2}" y="${dimTopY - 6 * ls}" text-anchor="middle" font-size="${7.5 * ls}px" font-weight="600" fill="${DIM_MAJOR}">Vão ${escapeXml(formatMmPtBr(Math.round(beamL)))}</text>`
   );
 
   parts.push(
-    drawMinimalVerticalDims(rx + totalW, floorTop, ry, uprightH, data.meanGapMm)
+    dimensionLineHArrows(rx, rackBottom + 26 * ls, rx + totalW, DIM_MINOR)
+  );
+  parts.push(
+    `<text x="${rx + totalW / 2}" y="${rackBottom + 40 * ls}" text-anchor="middle" font-size="${7.25 * ls}px" fill="#334155">Largura total ${escapeXml(formatMmPtBr(Math.round(totalWidthMm)))}</text>`
+  );
+
+  parts.push(
+    drawMinimalVerticalDims(
+      rx + totalW,
+      floorTop,
+      ry,
+      uprightH,
+      data.meanGapMm,
+      ls
+    )
   );
 
   if (sectionTitle) {
     parts.push(
-      `<text x="${ox + pw / 2}" y="${oy + 14}" text-anchor="middle" font-weight="700" font-size="12px" fill="#0f172a">${escapeXml(sectionTitle)}</text>`
+      `<text x="${ox + pw / 2}" y="${oy + 14 * ls}" text-anchor="middle" font-weight="700" font-size="${12 * ls}px" fill="#0f172a">${escapeXml(sectionTitle)}</text>`
     );
   }
   if (subtitle) {
     parts.push(
-      `<text x="${ox + pw / 2}" y="${oy + 28}" text-anchor="middle" font-size="7.25px" fill="#64748b">${escapeXml(subtitle)}</text>`
+      `<text x="${ox + pw / 2}" y="${oy + 28 * ls}" text-anchor="middle" font-size="${7.25 * ls}px" fill="#64748b">${escapeXml(subtitle)}</text>`
     );
   }
 
@@ -434,10 +474,13 @@ function drawLateral(
   oy: number,
   pw: number,
   ph: number,
-  data: ElevationPanelPayload
+  data: ElevationPanelPayload,
+  opts?: { labelScale?: number; hideHeader?: boolean }
 ): string {
+  const ls = opts?.labelScale ?? 1;
+  const hideHeader = opts?.hideHeader === true;
   const rackMaxW = pw - 88;
-  const rackMaxH = ph - 100;
+  const rackMaxH = ph - Math.round(100 / ls);
   const g = buildBeamGeometry(data, rackMaxW * 1.4, rackMaxH, ox, oy, pw, ph);
 
   const { levels, uprightH, beamH, uprightWidthsPx } = g;
@@ -448,29 +491,32 @@ function drawLateral(
 
   const dimReservePx = 72;
   const rackW = Math.max(130, pw - 72 - dimReservePx);
-  const rackH = ph - 88;
+  const rackH = ph - Math.round((hideHeader ? 56 : 88) / ls);
   const sx = rackW / bandMm;
   const sy = rackH / uprightH;
   const s = Math.min(sx, sy);
   const dw = bandMm * s;
   const dh = uprightH * s;
   const x0 = ox + (pw - dw) / 2;
-  const y0 = oy + 42 + (rackH - dh) / 2;
+  const headerPad = hideHeader ? 24 : 42;
+  const y0 = oy + headerPad + (rackH - dh) / 2;
 
   const scaleY = dh / uprightH;
-  const beamYLocal = (j: number) => y0 + dh - (beamH[j]! / uprightH) * dh;
+  const beamYLocal = (j: number) => y0 + dh - (beamH[j] / uprightH) * dh;
 
   const parts: string[] = [];
-  parts.push(
-    `<text x="${ox + pw / 2}" y="${oy + 14}" text-anchor="middle" font-weight="700" font-size="12px" fill="#0f172a">Vista lateral</text>`
-  );
-  parts.push(
-    `<text x="${ox + pw / 2}" y="${oy + 28}" text-anchor="middle" font-size="7px" fill="#64748b">${escapeXml(
-      isDouble
-        ? `Dupla costas · ${formatMmPtBr(Math.round(modMm))} + espinha`
-        : `Prof. posição ${formatMmPtBr(Math.round(modMm))}`
-    )}</text>`
-  );
+  if (!hideHeader) {
+    parts.push(
+      `<text x="${ox + pw / 2}" y="${oy + 14 * ls}" text-anchor="middle" font-weight="700" font-size="${12 * ls}px" fill="#0f172a">Vista lateral</text>`
+    );
+    parts.push(
+      `<text x="${ox + pw / 2}" y="${oy + 28 * ls}" text-anchor="middle" font-size="${7 * ls}px" fill="#64748b">${escapeXml(
+        isDouble
+          ? `Dupla costas · ${formatMmPtBr(Math.round(modMm))} + espinha`
+          : `Prof. posição ${formatMmPtBr(Math.round(modMm))}`
+      )}</text>`
+    );
+  }
 
   const floorTopLat = y0 + dh;
   parts.push(
@@ -480,11 +526,11 @@ function drawLateral(
     `<line x1="${x0 - 6}" y1="${floorTopLat}" x2="${x0 + dw + 6}" y2="${floorTopLat}" stroke="${COL_FLOOR}" stroke-width="2"/>`
   );
   parts.push(
-    `<text x="${x0 + dw / 2}" y="${floorTopLat + 7}" text-anchor="middle" font-size="7px" font-weight="700" fill="${COL_FLOOR}">PISO</text>`
+    `<text x="${x0 + dw / 2}" y="${floorTopLat + 7 * ls}" text-anchor="middle" font-size="${7 * ls}px" font-weight="700" fill="${COL_FLOOR}">PISO</text>`
   );
 
   if (!isDouble) {
-    const uSide = Math.max(5, uprightWidthsPx[0]! * 0.42);
+    const uSide = Math.max(5, uprightWidthsPx[0] * 0.42);
     for (let j = 0; j <= levels; j++) {
       const yy = beamYLocal(j);
       const bh = Math.max(2, 2.2 * scaleY);
@@ -501,7 +547,9 @@ function drawLateral(
     for (let j = 0; j < levels; j++) {
       const yLo = beamYLocal(j);
       const yHi = beamYLocal(j + 1);
-      parts.push(braceBetween(x0 + uSide, x0 + dw - uSide, yLo, yHi, j % 2 === 0));
+      parts.push(
+        braceBetween(x0 + uSide, x0 + dw - uSide, yLo, yHi, j % 2 === 0)
+      );
     }
   } else {
     const wSp = SPINE_MM * s;
@@ -509,7 +557,7 @@ function drawLateral(
     const xL = x0;
     const xSp = x0 + wMod;
     const xR = x0 + wMod + wSp;
-    const uSide = Math.max(5, uprightWidthsPx[0]! * 0.38);
+    const uSide = Math.max(5, uprightWidthsPx[0] * 0.38);
 
     for (let j = 0; j <= levels; j++) {
       const yy = beamYLocal(j);
@@ -529,7 +577,7 @@ function drawLateral(
       `<rect x="${xSp}" y="${y0}" width="${wSp}" height="${dh}" fill="${COL_SPINE}" fill-opacity="0.22" stroke="${COL_SPINE}" stroke-width="0.8" stroke-dasharray="4 3"/>`
     );
     parts.push(
-      `<text x="${xSp + wSp / 2}" y="${y0 + dh / 2}" text-anchor="middle" font-size="6.5px" fill="#475569" transform="rotate(-90 ${xSp + wSp / 2} ${y0 + dh / 2})">ESPINHA</text>`
+      `<text x="${xSp + wSp / 2}" y="${y0 + dh / 2}" text-anchor="middle" font-size="${6.5 * ls}px" fill="#475569" transform="rotate(-90 ${xSp + wSp / 2} ${y0 + dh / 2})">ESPINHA</text>`
     );
     parts.push(
       `<rect x="${xR}" y="${y0}" width="${uSide}" height="${dh}" fill="${FV_UPRIGHT_FILL}" stroke="${FV_UPRIGHT_STROKE}" stroke-width="1.05"/>`
@@ -549,9 +597,11 @@ function drawLateral(
     braceCell(xR + uSide, xR + wMod - uSide, 1);
   }
 
-  parts.push(dimensionLineHArrows(x0, floorTopLat + 18, x0 + dw, DIM_MINOR));
   parts.push(
-    `<text x="${x0 + dw / 2}" y="${floorTopLat + 34}" text-anchor="middle" font-size="8px" fill="#334155">${escapeXml(
+    dimensionLineHArrows(x0, floorTopLat + 18 * ls, x0 + dw, DIM_MINOR)
+  );
+  parts.push(
+    `<text x="${x0 + dw / 2}" y="${floorTopLat + 34 * ls}" text-anchor="middle" font-size="${8 * ls}px" fill="#334155">${escapeXml(
       `Profundidade faixa ${formatMmPtBr(Math.round(bandMm))}`
     )}</text>`
   );
@@ -560,9 +610,133 @@ function drawLateral(
   for (let j = 0; j <= levels; j++) {
     beamYsLat.push(beamYLocal(j));
   }
-  parts.push(drawMinimalVerticalDims(x0 + dw, floorTopLat, y0, uprightH, data.meanGapMm));
+  parts.push(
+    drawMinimalVerticalDims(
+      x0 + dw,
+      floorTopLat,
+      y0,
+      uprightH,
+      data.meanGapMm,
+      ls
+    )
+  );
 
   return parts.join('');
+}
+
+/** Escala de cotas / legendas em páginas PDF dedicadas (uma elevação por folha). */
+const ELEV_PAGE_LABEL_SCALE = 1.28;
+const ELEV_PAGE_W = 1100;
+const ELEV_PAGE_H_FRONT = 1040;
+const ELEV_PAGE_H_LATERAL = 1000;
+
+export type ElevationPageSvgs = {
+  frontWithoutTunnel: string;
+  frontWithTunnel: string | null;
+  lateral: string;
+};
+
+function wrapElevationDrawingPage(
+  inner: string,
+  width: number,
+  height: number,
+  footerLine: string
+): string {
+  const fsFoot = Math.round(9 * ELEV_PAGE_LABEL_SCALE * 10) / 10;
+  const parts: string[] = [];
+  parts.push(
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">`
+  );
+  parts.push(`<rect width="${width}" height="${height}" fill="${COL_BG}"/>`);
+  parts.push(
+    `<rect x="28" y="28" width="${width - 56}" height="${height - 56}" fill="none" stroke="${COL_FRAME}" stroke-width="0.45"/>`
+  );
+  parts.push(inner);
+  parts.push(
+    `<text x="${width / 2}" y="${height - 32}" text-anchor="middle" font-size="${fsFoot}px" fill="#64748b">${escapeXml(footerLine)}</text>`
+  );
+  parts.push('</svg>');
+  return parts.join('');
+}
+
+/**
+ * Uma folha SVG por elevação (sem túnel, com túnel se existir, lateral).
+ * Títulos conceito-a-conceito ficam no PDF; aqui só desenho + nota mínima.
+ */
+export function serializeElevationPagesV2(
+  model: ElevationModelV2
+): ElevationPageSvgs {
+  const w = ELEV_PAGE_W;
+  const hF = ELEV_PAGE_H_FRONT;
+  const hL = ELEV_PAGE_H_LATERAL;
+  const ls = ELEV_PAGE_LABEL_SCALE;
+  const padX = 40;
+  const padTop = 36;
+  const innerW = w - padX * 2;
+  const innerHFront = hF - padTop - 92;
+  const innerHLat = hL - padTop - 88;
+
+  const std = model.frontWithoutTunnel;
+  const subStandard =
+    std.rackDepthMode === 'double'
+      ? 'Dupla costas · armazenagem sem vão de passagem'
+      : undefined;
+  const frontStdInner = drawFrontRack(
+    padX,
+    padTop,
+    innerW,
+    innerHFront,
+    std,
+    '',
+    subStandard,
+    {
+      labelScale: ls,
+    }
+  );
+  const frontWithoutTunnel = wrapElevationDrawingPage(
+    frontStdInner,
+    w,
+    hF,
+    'Cotas em mm · mesmo modelo geométrico que o módulo com túnel (quando aplicável)'
+  );
+
+  let frontWithTunnel: string | null = null;
+  if (model.frontWithTunnel) {
+    const tun = model.frontWithTunnel;
+    const tunSub =
+      tun.rackDepthMode === 'double'
+        ? 'Dupla costas · vão inferior e menos níveis ativos'
+        : 'Vão inferior · menos níveis ativos';
+    const inner = drawFrontRack(
+      padX,
+      padTop,
+      innerW,
+      innerHFront,
+      tun,
+      '',
+      tunSub,
+      { labelScale: ls }
+    );
+    frontWithTunnel = wrapElevationDrawingPage(
+      inner,
+      w,
+      hF,
+      'Cotas em mm · passagem entre longarinas da zona túnel'
+    );
+  }
+
+  const latInner = drawLateral(padX, padTop, innerW, innerHLat, model.lateral, {
+    labelScale: ls,
+    hideHeader: true,
+  });
+  const lateral = wrapElevationDrawingPage(
+    latInner,
+    w,
+    hL,
+    'Profundidade de faixa alinhada ao modelo em planta'
+  );
+
+  return { frontWithoutTunnel, frontWithTunnel, lateral };
 }
 
 /**
@@ -585,18 +759,53 @@ export function serializeElevationSvgV2(model: ElevationModelV2): string {
   let y = 36;
   const std = model.frontWithoutTunnel;
   const subStandard =
-    std.rackDepthMode === 'double' ? 'Dupla costas · armazenagem normal (sem vão de passagem)' : undefined;
+    std.rackDepthMode === 'double'
+      ? 'Dupla costas · armazenagem normal (sem vão de passagem)'
+      : undefined;
 
   if (model.frontWithTunnel) {
     const panelW = (w - 72 - colGap) / 2;
     const tun = model.frontWithTunnel;
-    const tunTitle = tun.rackDepthMode === 'double' ? 'Elevação dupla com túnel' : 'Elevação com túnel';
+    const tunTitle =
+      tun.rackDepthMode === 'double'
+        ? 'Elevação dupla com túnel'
+        : 'Elevação com túnel';
     const tunSub =
       'Vão inferior explícito · menos níveis ativos acima (mesma altura de montante, sem comprimir o total na zona superior)';
-    parts.push(drawFrontRack(36, y, panelW, bandH, std, 'Elevação sem túnel', subStandard));
-    parts.push(drawFrontRack(36 + panelW + colGap, y, panelW, bandH, tun, tunTitle, tunSub));
+    parts.push(
+      drawFrontRack(
+        36,
+        y,
+        panelW,
+        bandH,
+        std,
+        'Elevação sem túnel',
+        subStandard
+      )
+    );
+    parts.push(
+      drawFrontRack(
+        36 + panelW + colGap,
+        y,
+        panelW,
+        bandH,
+        tun,
+        tunTitle,
+        tunSub
+      )
+    );
   } else {
-    parts.push(drawFrontRack(36, y, w - 72, bandH, std, 'Elevação sem túnel', subStandard));
+    parts.push(
+      drawFrontRack(
+        36,
+        y,
+        w - 72,
+        bandH,
+        std,
+        'Elevação sem túnel',
+        subStandard
+      )
+    );
   }
 
   const gap = 32;
