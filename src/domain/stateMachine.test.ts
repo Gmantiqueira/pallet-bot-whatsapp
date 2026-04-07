@@ -80,6 +80,26 @@ describe('State Machine', () => {
     });
   });
 
+  describe('START state', () => {
+    it('should go to MENU on any text without validating content', () => {
+      const session = createSession('START', { lengthMm: 9999 }, ['WAIT_LENGTH']);
+      const result = transition(session, { type: 'TEXT', value: '1' });
+
+      expect(result.session.state).toBe('MENU');
+      expect(result.session.answers).toEqual({});
+      expect(result.session.stack).toEqual([]);
+      expect(result.effects).toContainEqual({ type: 'SEND' });
+    });
+
+    it('should go to MENU on any button id', () => {
+      const session = createSession('START');
+      const result = transition(session, { type: 'BUTTON', value: '1' });
+
+      expect(result.session.state).toBe('MENU');
+      expect(result.effects).toContainEqual({ type: 'SEND' });
+    });
+  });
+
   describe('Flow: measures typed path to SUMMARY_CONFIRM', () => {
     it('should complete full flow from MENU to SUMMARY_CONFIRM', () => {
       let session = createSession('MENU');

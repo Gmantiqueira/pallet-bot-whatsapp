@@ -81,7 +81,8 @@ describe('MessageBuilder', () => {
       const session = createSession('START');
       const messages = buildMessages(session);
 
-      expect(messages[0].text).toContain('novo');
+      expect(messages[0].text).toContain('Olá!');
+      expect(messages[0].text).toMatch(/qualquer coisa|iniciar/i);
     });
 
     it('should build WAIT_PLANT_IMAGE message', () => {

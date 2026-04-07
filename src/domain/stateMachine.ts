@@ -136,9 +136,18 @@ export const transition = (session: Session, input: Input): TransitionResult => 
   }
 
   switch (newSession.state) {
-    case 'START':
+    case 'START': {
+      newSession = {
+        ...newSession,
+        state: 'MENU',
+        answers: {},
+        stack: [],
+        editStopBefore: undefined,
+        updatedAt: Date.now(),
+      };
       effects.push({ type: 'SEND' });
       return { session: newSession, effects };
+    }
 
     case 'MENU':
       if (input.type === 'BUTTON') {

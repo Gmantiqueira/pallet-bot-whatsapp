@@ -90,7 +90,7 @@ const buildStateMessage = (session: Session): OutgoingMessage | null => {
     case 'START':
       return {
         to: session.phone,
-        text: 'Olá! Para começar, digite *novo*',
+        text: 'Olá! 👋\nDigite qualquer coisa para iniciar.',
       };
 
     case 'MENU':
