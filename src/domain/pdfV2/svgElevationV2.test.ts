@@ -105,7 +105,8 @@ describe('serializeElevationPagesV2', () => {
     expect(pages.frontWithoutTunnel).not.toContain('TÚNEL');
     expect(pages.frontWithTunnel!).toContain('TÚNEL');
     expect(pages.frontWithTunnel!).toContain('Vão túnel');
-    expect(pages.lateral).not.toContain('TÚNEL / PASSAGEM');
-    expect(pages.lateralWithTunnel!).toContain('TÚNEL / PASSAGEM');
+    expect(pages.lateral).not.toContain('PASSAGEM');
+    expect(pages.lateralWithTunnel!).toContain('PASSAGEM');
+    expect(pages.lateralWithTunnel!).toContain('TÚNEL');
   });
 });

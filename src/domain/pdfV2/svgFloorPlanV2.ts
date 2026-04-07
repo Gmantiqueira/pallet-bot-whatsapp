@@ -106,7 +106,7 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
     );
     if (isTunnel) {
       parts.push(
-        `<text x="${s.x + s.w / 2}" y="${s.y + s.h * 0.96}" text-anchor="middle" class="fp-leg" fill="#92400e" font-size="15px">Módulo túnel</text>`
+        `<text x="${s.x + s.w / 2}" y="${s.y + s.h * 0.96}" text-anchor="middle" class="fp-leg" fill="#92400e" font-size="15px">túnel</text>`
       );
     }
   }
@@ -118,7 +118,11 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
     const midX = (d.x1 + d.x2) / 2;
     const midY = (d.y1 + d.y2) / 2;
     const isVert = Math.abs(d.x2 - d.x1) < 1;
-    if (isVert) {
+    if (d.textMode === 'corridor-inline') {
+      parts.push(
+        `<text transform="translate(${midX},${midY}) rotate(-90)" text-anchor="middle" dominant-baseline="middle" class="fp-dim">${escapeXml(d.text)}</text>`
+      );
+    } else if (isVert) {
       const ox = d.offset ?? -14;
       parts.push(
         `<text transform="translate(${d.x1 + ox},${midY}) rotate(-90)" text-anchor="middle" class="fp-dim">${escapeXml(d.text)}</text>`

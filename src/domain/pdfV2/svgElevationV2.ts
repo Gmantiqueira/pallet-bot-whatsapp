@@ -1,8 +1,9 @@
 import type { ElevationModelV2, ElevationPanelPayload } from './types';
-import { uprightWidthsMmForFrontBayCount } from './rackModuleSpec';
+import {
+  INTER_BAY_GAP_WITHIN_MODULE_MM,
+  uprightWidthsMmForFrontBayCount,
+} from './rackModuleSpec';
 
-const FV_FOLGA_MM = 75;
-const FV_INTER_BAY_MM = FV_FOLGA_MM * 2;
 /** Um módulo frontal = duas baias lado a lado (3 montantes), como desenho técnico tipo 2× vão. */
 const FV_FRONT_BAY_COUNT = 2;
 /**
@@ -313,13 +314,14 @@ function drawVerticalDimChain(
     const mmVal = mmSegs[k];
     if (mmVal === undefined) continue;
     const mmRounded = Math.round(mmVal);
+    if (Math.abs(yT - yB) < 0.5) continue;
     parts.push(
       textLines(
         xDim + 4.5,
         midY - 8 * ls,
         [segLabel(k), formatMmPtBr(mmRounded)],
         {
-          fontSize: 8.2 * ls,
+          fontSize: 9 * ls,
           fill: DIM_MINOR,
           fontWeight: '500',
         }
@@ -354,6 +356,8 @@ type BeamGeometry = {
   axisGapsMm: number[];
   /** Largura total em mm (faces externas). */
   totalWidthMm: number;
+  /** Larguras nominais dos montantes (mm), esq.→dir., para cotas. */
+  uprightWidthsMm: number[];
 };
 
 function buildBeamGeometry(
@@ -370,9 +374,12 @@ function buildBeamGeometry(
   const uprightH = Math.max(1, data.uprightHeightMm);
   const beamL = Math.max(1, data.beamLengthMm);
   const bayCount = Math.max(1, Math.min(4, Math.floor(nMod)));
-  /** Montantes: túnel não altera a largura total da face de armazenagem (mesmo módulo, 2 baias). */
-  const widthsMm = uprightWidthsMmForFrontBayCount(bayCount, false);
-  const gapTotalMm = FV_INTER_BAY_MM;
+  /** Módulo túnel: montantes 100/100/75 mm (pórtico); resto 75 mm. */
+  const widthsMm = uprightWidthsMmForFrontBayCount(
+    bayCount,
+    data.tunnel === true
+  );
+  const gapTotalMm = INTER_BAY_GAP_WITHIN_MODULE_MM;
   const sumUprightsMm = widthsMm.reduce((a, b) => a + b, 0);
   const totalRackMm =
     sumUprightsMm + bayCount * beamL + (bayCount - 1) * gapTotalMm;
@@ -454,6 +461,7 @@ function buildBeamGeometry(
     gapPx,
     axisGapsMm,
     totalWidthMm: totalRackMm,
+    uprightWidthsMm: widthsMm,
   };
 }
 
@@ -539,7 +547,32 @@ function drawFrontStorageTiers(
  */
 function frontRackBelowFloorReservePx(labelScale: number): number {
   const ls = labelScale;
-  return Math.round(26 * ls + 44 * ls + 22);
+  return Math.round(26 * ls + 44 * ls + 22 + 30 * ls);
+}
+
+/** Cotas horizontais das larguras de cada montante (mm nominais). */
+function drawUprightWidthDims(
+  uprightXs: number[],
+  uprightWidthsPx: number[],
+  widthsMm: number[],
+  yLine: number,
+  labelScale: number
+): string {
+  const ls = labelScale;
+  const parts: string[] = [];
+  const fs = 7.2 * ls;
+  for (let i = 0; i < widthsMm.length; i++) {
+    const x0 = uprightXs[i]!;
+    const wpx = uprightWidthsPx[i]!;
+    const mm = widthsMm[i]!;
+    parts.push(dimensionLineHArrows(x0, yLine, x0 + wpx, DIM_MINOR));
+    parts.push(
+      `<text x="${x0 + wpx / 2}" y="${yLine + 11 * ls}" text-anchor="middle" font-size="${fs}px" fill="${DIM_MINOR}">${escapeXml(
+        formatMmPtBr(mm)
+      )}</text>`
+    );
+  }
+  return parts.join('');
 }
 
 /** Vista frontal: estrutura, longarinas, piso, cotas e carga (kg) centrada acima de cada nível. */
@@ -559,7 +592,7 @@ function drawFrontRack(
   const tunnelExtraSeg =
     data.tunnel === true && typeof data.tunnelClearanceMm === 'number' ? 1 : 0;
   const estSegCount = levelsEst + 2 + tunnelExtraSeg;
-  const dimChainRightPx = Math.min(210, 95 + 11 * ls * (estSegCount + 1));
+  const dimChainRightPx = Math.min(260, 110 + 11 * ls * (estSegCount + 1));
   const rackMaxW = Math.max(210, pw - 20 - 40 - dimChainRightPx);
   const rackMaxH = Math.max(
     120,
@@ -580,6 +613,7 @@ function drawFrontRack(
     totalWidthMm,
     beamH,
     axisGapsMm,
+    uprightWidthsMm,
   } = g;
   const beamPx = beamWithFrontVis;
   const totalW =
@@ -593,16 +627,22 @@ function drawFrontRack(
   const levDraw = innerH / Math.max(1, storageTiers);
   const beamTh = Math.max(2.35, Math.min(5.8, levDraw * 0.24));
 
-  const bays: BaySpan[] = [];
   const uprightXs: number[] = [];
   let xCursor = rx;
   for (let i = 0; i <= nMod; i++) {
     uprightXs.push(xCursor);
     if (i < nMod) {
       xCursor += uprightWidthsPx[i]!;
-      bays.push({ left: xCursor, right: xCursor + beamPx });
       xCursor += beamPx + gapPx;
     }
+  }
+
+  const bays: BaySpan[] = [];
+  for (let i = 0; i < nMod; i++) {
+    bays.push({
+      left: uprightXs[i]! + uprightWidthsPx[i]!,
+      right: uprightXs[i + 1]!,
+    });
   }
 
   const faceSpanLeft = bays[0]!.left;
@@ -650,19 +690,45 @@ function drawFrontRack(
   if (showTunnelOpening && yPassTop < floorTop - 2.5) {
     const tx0 = faceSpanLeft;
     const tx1 = faceSpanRight;
+    const tw = Math.max(0, tx1 - tx0);
+    const yMid = (yPassTop + floorTop) / 2;
     parts.push(
-      `<rect x="${tx0}" y="${yPassTop}" width="${Math.max(0, tx1 - tx0)}" height="${floorTop - yPassTop}" fill="#fef3c7" fill-opacity="0.42" stroke="#b45309" stroke-width="0.55" opacity="0.95"/>`
+      `<rect x="${tx0}" y="${yPassTop}" width="${tw}" height="${floorTop - yPassTop}" fill="#fef3c7" fill-opacity="0.42" stroke="#b45309" stroke-width="0.55" opacity="0.95"/>`
     );
     parts.push(
       `<line x1="${tx0}" y1="${yPassTop}" x2="${tx1}" y2="${yPassTop}" stroke="#b45309" stroke-width="1.05" opacity="0.9"/>`
     );
     parts.push(
       textLines(
-        (tx0 + tx1) / 2,
-        (yPassTop + floorTop) / 2 - 4 * ls,
-        ['TÚNEL / PASSAGEM'],
+        tx0 + tw * 0.25,
+        yMid - 2 * ls,
+        ['PASSAGEM'],
         {
-          fontSize: 10 * ls,
+          fontSize: 9.25 * ls,
+          fill: '#b45309',
+          fontWeight: '700',
+        }
+      )
+    );
+    parts.push(
+      textLines(
+        tx0 + tw * 0.75,
+        yMid - 2 * ls,
+        ['PASSAGEM'],
+        {
+          fontSize: 9.25 * ls,
+          fill: '#b45309',
+          fontWeight: '700',
+        }
+      )
+    );
+    parts.push(
+      textLines(
+        tx0 + tw / 2,
+        yPassTop + Math.max(10, (floorTop - yPassTop) * 0.14),
+        ['TÚNEL'],
+        {
+          fontSize: 9.5 * ls,
           fill: '#b45309',
           fontWeight: '700',
         }
@@ -757,6 +823,16 @@ function drawFrontRack(
   );
   parts.push(
     `<text x="${rx + totalW / 2}" y="${rackBottom + 44 * ls}" text-anchor="middle" font-size="${9 * ls}px" fill="#334155">Largura total ${escapeXml(formatMmPtBr(Math.round(totalWidthMm)))}</text>`
+  );
+
+  parts.push(
+    drawUprightWidthDims(
+      uprightXs,
+      uprightWidthsPx,
+      uprightWidthsMm,
+      rackBottom + 58 * ls,
+      ls
+    )
   );
 
   parts.push(
@@ -890,19 +966,35 @@ function drawLateral(
   );
 
   if (showTunnelOpening && yPassTop < floorTopLat - 2.5) {
+    const tw = Math.max(0, bayRight - bayLeft);
+    const yMid = (yPassTop + floorTopLat) / 2;
     parts.push(
-      `<rect x="${bayLeft}" y="${yPassTop}" width="${Math.max(0, bayRight - bayLeft)}" height="${floorTopLat - yPassTop}" fill="#fef3c7" fill-opacity="0.42" stroke="#b45309" stroke-width="0.55" opacity="0.95"/>`
+      `<rect x="${bayLeft}" y="${yPassTop}" width="${tw}" height="${floorTopLat - yPassTop}" fill="#fef3c7" fill-opacity="0.42" stroke="#b45309" stroke-width="0.55" opacity="0.95"/>`
     );
     parts.push(
       `<line x1="${bayLeft}" y1="${yPassTop}" x2="${bayRight}" y2="${yPassTop}" stroke="#b45309" stroke-width="1.05" opacity="0.9"/>`
     );
     parts.push(
+      textLines(bayLeft + tw * 0.25, yMid - 2 * ls, ['PASSAGEM'], {
+        fontSize: 9 * ls,
+        fill: '#b45309',
+        fontWeight: '700',
+      })
+    );
+    parts.push(
+      textLines(bayLeft + tw * 0.75, yMid - 2 * ls, ['PASSAGEM'], {
+        fontSize: 9 * ls,
+        fill: '#b45309',
+        fontWeight: '700',
+      })
+    );
+    parts.push(
       textLines(
-        (bayLeft + bayRight) / 2,
-        (yPassTop + floorTopLat) / 2 - 3 * ls,
-        ['TÚNEL / PASSAGEM'],
+        bayLeft + tw / 2,
+        yPassTop + Math.max(8, (floorTopLat - yPassTop) * 0.14),
+        ['TÚNEL'],
         {
-          fontSize: 9.5 * ls,
+          fontSize: 9.25 * ls,
           fill: '#b45309',
           fontWeight: '700',
         }
@@ -966,7 +1058,7 @@ function drawLateral(
 
 /** Escala de cotas / legendas em páginas PDF dedicadas (uma elevação por folha). */
 const ELEV_PAGE_LABEL_SCALE = 1.45;
-const ELEV_PAGE_W = 1100;
+const ELEV_PAGE_W = 1260;
 const ELEV_PAGE_H_FRONT = 1040;
 const ELEV_PAGE_H_LATERAL = 1000;
 

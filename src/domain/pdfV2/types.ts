@@ -147,6 +147,10 @@ export type FloorPlanDimension = {
   text: string;
   /** Offset normal à cota (px). */
   offset?: number;
+  /**
+   * `corridor-inline`: cota dentro do corredor, texto no eixo do corredor (mais legível que cota acima).
+   */
+  textMode?: 'default' | 'corridor-inline';
 };
 
 export type FloorPlanLabel = {

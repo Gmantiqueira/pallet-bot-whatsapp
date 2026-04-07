@@ -127,7 +127,7 @@ export function buildFloorPlanModelV2(geometry: LayoutGeometry): FloorPlanModelV
     y1: dimY,
     x2: bx + boxW,
     y2: dimY,
-    text: `Compr. = ${formatMm(L)}`,
+    text: `Comprimento galpão: ${formatMm(L)}`,
   });
   const dimX = bx - 44;
   dimensionLines.push({
@@ -136,21 +136,46 @@ export function buildFloorPlanModelV2(geometry: LayoutGeometry): FloorPlanModelV
     y1: by,
     x2: dimX,
     y2: by + boxH,
-    text: `Comp. = ${formatMm(W)}`,
+    text: `Largura galpão: ${formatMm(W)}`,
     offset: -28,
   });
 
   if (geometry.circulationZones.length > 0) {
     const c0 = geometry.circulationZones[0];
-    const yMin = Math.min(c0.y0, c0.y1);
-    dimensionLines.push({
-      id: 'dim-corridor',
-      x1: toX(Math.min(c0.x0, c0.x1)),
-      y1: toY(yMin) - 6,
-      x2: toX(Math.max(c0.x0, c0.x1)),
-      y2: toY(yMin) - 6,
-      text: formatMm(geometry.metadata.corridorMm),
-    });
+    const x0m = Math.min(c0.x0, c0.x1);
+    const x1m = Math.max(c0.x0, c0.x1);
+    const y0m = Math.min(c0.y0, c0.y1);
+    const y1m = Math.max(c0.y0, c0.y1);
+    const cx1 = toX(x0m);
+    const cx2 = toX(x1m);
+    const cy1 = toY(y0m);
+    const cy2 = toY(y1m);
+    const cw = Math.abs(cx2 - cx1);
+    const ch = Math.abs(cy2 - cy1);
+    const midX = (cx1 + cx2) / 2;
+    const midY = (cy1 + cy2) / 2;
+    const corText = `Corredor: ${formatMm(geometry.metadata.corridorMm)}`;
+    if (cw < ch) {
+      dimensionLines.push({
+        id: 'dim-corridor',
+        x1: cx1,
+        y1: midY,
+        x2: cx2,
+        y2: midY,
+        text: corText,
+        textMode: 'corridor-inline',
+      });
+    } else {
+      dimensionLines.push({
+        id: 'dim-corridor',
+        x1: midX,
+        y1: cy1,
+        x2: midX,
+        y2: cy2,
+        text: corText,
+        textMode: 'corridor-inline',
+      });
+    }
   }
 
   const labels: FloorPlanLabel[] = [
