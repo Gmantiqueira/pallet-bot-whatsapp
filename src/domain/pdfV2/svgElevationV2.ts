@@ -12,7 +12,9 @@ const FV_FRONT_BAY_COUNT = 1;
  * Vista frontal: montantes mais estreitos em px do que a escala mm, redistribuindo largura para o vão
  * (face de armazenagem dominada pelas longarinas, não pórtico estreito).
  */
-const FV_FRONT_UPRIGHT_SLIM = 0.52;
+const FV_FRONT_UPRIGHT_SLIM = 0.46;
+/** Marcadores discretos ao longo do vão (posições de carga na longarina). */
+const FV_ALONG_BEAM_DIVISIONS = 3;
 /** Armazenagem entre longarinas: preenchimento técnico suave (posição de palete). */
 const FV_PALLET_TIER_FILL = '#fff7ed';
 const FV_PALLET_TIER_STROKE = '#fdba74';
@@ -342,6 +344,15 @@ function drawFrontStorageTiers(
     parts.push(
       `<line x1="${mx}" y1="${t + 1.5}" x2="${mx}" y2="${b - 1.5}" stroke="${FV_PALLET_TIER_STROKE}" stroke-width="0.28" opacity="0.28" stroke-dasharray="2 3"/>`
     );
+    const bw = xr - xl;
+    if (bw > 28) {
+      for (let k = 1; k <= FV_ALONG_BEAM_DIVISIONS; k++) {
+        const xDiv = xl + (k / (FV_ALONG_BEAM_DIVISIONS + 1)) * bw;
+        parts.push(
+          `<line x1="${xDiv}" y1="${t + 2.5}" x2="${xDiv}" y2="${b - 2.5}" stroke="${FV_PALLET_TIER_STROKE}" stroke-width="0.22" opacity="0.22"/>`
+        );
+      }
+    }
   }
   return parts.join('');
 }
@@ -562,7 +573,7 @@ function drawLateral(
 ): string {
   const ls = opts?.labelScale ?? 1;
   const hideHeader = opts?.hideHeader === true;
-  const rackMaxW = Math.min(pw - 88, Math.max(96, pw * 0.4));
+  const rackMaxW = Math.min(pw - 88, Math.max(92, pw * 0.36));
   const rackMaxH = ph - Math.round(100 / ls);
   const g = buildBeamGeometry(data, rackMaxW * 0.95, rackMaxH, ox, oy, pw, ph);
 
@@ -574,8 +585,8 @@ function drawLateral(
 
   const dimReservePx = 72;
   const rackW = Math.min(
-    Math.max(118, pw - 72 - dimReservePx),
-    Math.max(108, pw * 0.41)
+    Math.max(112, pw - 72 - dimReservePx),
+    Math.max(100, pw * 0.36)
   );
   const rackH = ph - Math.round((hideHeader ? 56 : 88) / ls);
   const sx = rackW / bandMm;
@@ -840,7 +851,7 @@ export function serializeElevationSvgV2(model: ElevationModelV2): string {
     `<rect x="28" y="28" width="${w - 56}" height="${h - 56}" fill="none" stroke="${COL_FRAME}" stroke-width="0.5"/>`
   );
 
-  const bandH = 430;
+  const bandH = 492;
   const colGap = 28;
   let y = 36;
   const std = model.frontWithoutTunnel;
