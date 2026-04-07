@@ -34,11 +34,11 @@ export type LayoutSolutionV2 = {
   moduleWidthMm: number;
   moduleDepthMm: number;
   /**
-   * Vão ao longo das longarinas (repetição ponta a ponta): max(vão, profundidade declarada).
-   * Garante retângulos alongados no sentido da fileira.
+   * Eixo de fileira / comprimento do módulo em planta — lado mais longo do retângulo (ponta com ponta).
+   * Sempre max(declarações de dimensão); não usar o lado curto como passo entre módulos.
    */
   beamAlongModuleMm: number;
-  /** Profundidade de posição (transversal ao vão): min(vão, profundidade). */
+  /** Profundidade de posição (transversal ao vão): lado mais curto; dupla costas duplica neste eixo + espinha. */
   rackDepthMm: number;
   corridorMm: number;
   rows: RackRowSolution[];

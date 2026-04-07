@@ -24,14 +24,21 @@ export function buildProjectAnswersV2(
     return null;
   }
 
+  /**
+   * Duas dimensões ortogonais da pegada em planta (valores do fluxo podem trocar nomes).
+   * Layout V2 tira o eixo “comprimento do módulo na fileira” com max(·) em buildLayoutSolutionV2.
+   */
   const moduleDepthMm =
     typeof answers.moduleDepthMm === 'number'
       ? answers.moduleDepthMm
       : DEFAULT_MODULE_DEPTH_MM;
-  const moduleWidthMm =
-    typeof answers.beamLengthMm === 'number'
-      ? answers.beamLengthMm
-      : DEFAULT_MODULE_WIDTH_MM;
+  const fromBeam =
+    typeof answers.beamLengthMm === 'number' ? (answers.beamLengthMm as number) : undefined;
+  const fromWidthField =
+    typeof (answers as Record<string, unknown>).moduleWidthMm === 'number'
+      ? ((answers as Record<string, unknown>).moduleWidthMm as number)
+      : undefined;
+  const moduleWidthMm = fromBeam ?? fromWidthField ?? DEFAULT_MODULE_WIDTH_MM;
 
   const lineStrategy = (answers.lineStrategy as LineStrategyCode | undefined) ?? 'MELHOR_LAYOUT';
   const tunnelPosition = answers.tunnelPosition as TunnelPositionCode | undefined;

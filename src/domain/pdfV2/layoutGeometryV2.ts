@@ -433,6 +433,43 @@ function validateRowModuleChaining(row: RackRow, ori: LayoutOrientationV2): void
    * Não exigimos aqui contacto estrito entre pares ordenados (restos de vão / segmentos). */
 }
 
+/**
+ * Garante que a dimensão da pegada ao longo do vão é o passo ponta-a-ponta (lado longo do módulo),
+ * e não o eixo de profundidade de posição (lado curto) — evita fileiras “lado com lado”.
+ */
+function validateModulesSpanLengthAxis(
+  row: RackRow,
+  beamAlongMm: number,
+  rackDepthMm: number
+): void {
+  if (beamAlongMm <= rackDepthMm + EPS) {
+    return;
+  }
+
+  for (const m of row.modules) {
+    if (m.type === 'tunnel') continue;
+
+    const expected = m.segmentType === 'half' ? beamAlongMm / 2 : beamAlongMm;
+    const tol = 2.5;
+    const along = m.moduleLengthAxisMm;
+
+    if (Math.abs(along - expected) <= tol) {
+      continue;
+    }
+
+    if (Math.abs(along - rackDepthMm) <= tol) {
+      throw new LayoutGeometryValidationError(
+        'Invalid row growth: modules are side-by-side instead of end-to-end'
+      );
+    }
+
+    throw new LayoutGeometryValidationError(
+      `Fileira ${row.id}: módulo ${m.id} — dimensão ao longo do vão (${Math.round(along)} mm) ` +
+        `não corresponde ao passo ponta-a-ponta (${Math.round(expected)} mm).`
+    );
+  }
+}
+
 export function validateLayoutGeometry(geo: LayoutGeometry): void {
   const md = geo.metadata.rackDepthMm;
   const { beamAlongModuleMm, rackDepthMm } = geo.metadata;
@@ -464,6 +501,7 @@ export function validateLayoutGeometry(geo: LayoutGeometry): void {
 
     const ori = row.layoutOrientation;
     validateRowModuleChaining(row, ori);
+    validateModulesSpanLengthAxis(row, beamAlongModuleMm, rackDepthMm);
 
     for (const m of row.modules) {
       if (m.rowId !== row.id) {

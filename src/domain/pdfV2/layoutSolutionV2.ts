@@ -227,9 +227,10 @@ function countRowsAcrossZones(
   return total;
 }
 
-function modulesAlongBeam(beamSpanMm: number, moduleWidthMm: number): number {
-  if (moduleWidthMm <= 0) return 0;
-  return Math.floor(beamSpanMm / moduleWidthMm);
+/** Quantos módulos cabem no vão ao longo do eixo de fileira (passo = lado longo da pegada). */
+function countModulesAlongBeamSpan(beamSpanMm: number, moduleLengthAxisMm: number): number {
+  if (moduleLengthAxisMm <= 0) return 0;
+  return Math.floor(beamSpanMm / moduleLengthAxisMm);
 }
 
 type VariantEval = {
@@ -258,7 +259,7 @@ function evaluateVariant(
     hasTunnel,
     tunnelPosition
   );
-  const along = modulesAlongBeam(beamSpanMm, beamAlongModuleMm);
+  const along = countModulesAlongBeamSpan(beamSpanMm, beamAlongModuleMm);
   const depthFactor = depthMode === 'double' ? 2 : 1;
   const cells = rows * along;
   const positions = cells * depthFactor * levels;
@@ -377,14 +378,15 @@ function splitBeamSegmentsWithTunnel(
 
 function fillSegmentModules(
   len: number,
-  moduleWidthMm: number,
+  moduleLengthAxisMm: number,
   halfOpt: boolean,
   allowHalfEnd: boolean
 ): { full: number; half: boolean; rejectedHalf: boolean } {
-  if (moduleWidthMm <= 0) return { full: 0, half: false, rejectedHalf: false };
-  const nFull = Math.floor(len / moduleWidthMm);
-  const rem = len - nFull * moduleWidthMm;
-  const wantHalf = halfOpt && rem + EPS >= moduleWidthMm / 2 && rem < moduleWidthMm;
+  if (moduleLengthAxisMm <= 0) return { full: 0, half: false, rejectedHalf: false };
+  const nFull = Math.floor(len / moduleLengthAxisMm);
+  const rem = len - nFull * moduleLengthAxisMm;
+  const wantHalf =
+    halfOpt && rem + EPS >= moduleLengthAxisMm / 2 && rem < moduleLengthAxisMm;
   if (!wantHalf) return { full: nFull, half: false, rejectedHalf: false };
   if (allowHalfEnd) return { full: nFull, half: true, rejectedHalf: false };
   return { full: nFull, half: false, rejectedHalf: true };
@@ -452,6 +454,11 @@ function buildModuleSegmentsForRow(
   return { segments, moduleEquiv, rejectedHalf };
 }
 
+/**
+ * Retângulo de módulo em planta (mm).
+ * `a→b` = sempre ao longo do eixo do vão / longarina (repetição ponta com ponta = beamAlongModuleMm).
+ * `crossSeg` = faixa no eixo transversal (profundidade de posição; dupla costas = dois módulos + espinha).
+ */
 function rectFor(
   orientation: LayoutOrientationV2,
   rowId: string,
@@ -510,8 +517,12 @@ export function buildLayoutSolutionV2(answers: BuildLayoutSolutionV2Input): Layo
     firstLevelOnGround,
   } = answers;
 
-  const beamAlongModuleMm = Math.max(moduleWidthMm, moduleDepthMm);
-  const rackDepthMm = Math.min(moduleWidthMm, moduleDepthMm);
+  /** Lado mais longo da pegada: único eixo onde os módulos se encadeiam ponta com ponta. */
+  const moduleLengthAxisMm = Math.max(moduleWidthMm, moduleDepthMm);
+  /** Lado mais curto (profundidade de posição): dupla costas empilha dois neste eixo + espinha. */
+  const moduleDepthAxisMm = Math.min(moduleWidthMm, moduleDepthMm);
+  const beamAlongModuleMm = moduleLengthAxisMm;
+  const rackDepthMm = moduleDepthAxisMm;
 
   const orientation = resolveOrientation(answers);
 

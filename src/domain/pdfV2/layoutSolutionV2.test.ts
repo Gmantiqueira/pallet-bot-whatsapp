@@ -1,3 +1,4 @@
+import { buildProjectAnswersV2 } from './answerMapping';
 import { buildLayoutSolutionV2 } from './layoutSolutionV2';
 import type { ProjectAnswersV2 } from './answerMapping';
 
@@ -163,5 +164,28 @@ describe('buildLayoutSolutionV2', () => {
     };
     const s = buildLayoutSolutionV2(a);
     expect(s.orientation).toBe('along_length');
+  });
+
+  it('12: usa moduleWidthMm quando beamLengthMm ausente (eixo longo não pode cair no curto)', () => {
+    const session: Record<string, unknown> = {
+      lengthMm: 12_000,
+      widthMm: 10_000,
+      corridorMm: 3000,
+      levels: 4,
+      capacityKg: 1200,
+      moduleDepthMm: 1100,
+      moduleWidthMm: 2700,
+      lineStrategy: 'APENAS_SIMPLES',
+      hasTunnel: false,
+      halfModuleOptimization: false,
+      firstLevelOnGround: true,
+      heightMode: 'DIRECT',
+      heightMm: 8000,
+    };
+    const v2 = buildProjectAnswersV2(session);
+    expect(v2).not.toBeNull();
+    const s = buildLayoutSolutionV2(v2!);
+    expect(s.beamAlongModuleMm).toBe(2700);
+    expect(s.rackDepthMm).toBe(1100);
   });
 });
