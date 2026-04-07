@@ -39,16 +39,7 @@ Content-Type: application/json
   "buttonReply": "2"
 }
 
-### 5. Menu - Choose option 3 (Galpão fictício)
-POST {{baseUrl}}/webhook
-Content-Type: application/json
-
-{
-  "from": "5511999999999",
-  "buttonReply": "3"
-}
-
-### 6. WAIT_PLANT_IMAGE - Send image
+### 5. WAIT_PLANT_IMAGE - Send image
 POST {{baseUrl}}/webhook
 Content-Type: application/json
 
@@ -60,7 +51,7 @@ Content-Type: application/json
   }
 }
 
-### 7. WAIT_LENGTH - Enter length
+### 6. WAIT_LENGTH - Enter length
 POST {{baseUrl}}/webhook
 Content-Type: application/json
 
@@ -69,7 +60,7 @@ Content-Type: application/json
   "text": "12000"
 }
 
-### 8. WAIT_WIDTH - Enter width
+### 7. WAIT_WIDTH - Enter width
 POST {{baseUrl}}/webhook
 Content-Type: application/json
 
@@ -78,7 +69,7 @@ Content-Type: application/json
   "text": "10000"
 }
 
-### 9. WAIT_CORRIDOR - Enter corridor width
+### 8. WAIT_CORRIDOR - Enter corridor width
 POST {{baseUrl}}/webhook
 Content-Type: application/json
 
@@ -87,7 +78,7 @@ Content-Type: application/json
   "text": "3000"
 }
 
-### 10. WAIT_CAPACITY - Enter capacity
+### 9. WAIT_CAPACITY - Enter capacity
 POST {{baseUrl}}/webhook
 Content-Type: application/json
 
@@ -96,7 +87,7 @@ Content-Type: application/json
   "text": "2000"
 }
 
-### 11. CHOOSE_HEIGHT_MODE - Choose DIRECT
+### 10. CHOOSE_HEIGHT_MODE - Choose DIRECT
 POST {{baseUrl}}/webhook
 Content-Type: application/json
 
@@ -105,7 +96,7 @@ Content-Type: application/json
   "buttonReply": "DIRECT"
 }
 
-### 12. CHOOSE_HEIGHT_MODE - Choose CALC
+### 11. CHOOSE_HEIGHT_MODE - Choose CALC
 POST {{baseUrl}}/webhook
 Content-Type: application/json
 
@@ -114,7 +105,7 @@ Content-Type: application/json
   "buttonReply": "CALC"
 }
 
-### 13. WAIT_HEIGHT_DIRECT - Enter height
+### 12. WAIT_HEIGHT_DIRECT - Enter height
 POST {{baseUrl}}/webhook
 Content-Type: application/json
 
@@ -123,7 +114,7 @@ Content-Type: application/json
   "text": "5000"
 }
 
-### 14. WAIT_LOAD_HEIGHT - Enter load height
+### 13. WAIT_LOAD_HEIGHT - Enter load height
 POST {{baseUrl}}/webhook
 Content-Type: application/json
 
@@ -132,7 +123,7 @@ Content-Type: application/json
   "text": "1500"
 }
 
-### 15. WAIT_LEVELS - Enter levels
+### 14. WAIT_LEVELS - Enter levels
 POST {{baseUrl}}/webhook
 Content-Type: application/json
 
@@ -141,7 +132,7 @@ Content-Type: application/json
   "text": "5"
 }
 
-### 16. WAIT_EXTRAS_GUARD_RAIL - Choose guard rail
+### 15. WAIT_EXTRAS_GUARD_RAIL - Choose guard rail
 POST {{baseUrl}}/webhook
 Content-Type: application/json
 
@@ -150,7 +141,7 @@ Content-Type: application/json
   "buttonReply": "ambos"
 }
 
-### 17. SUMMARY_CONFIRM - Generate document
+### 16. SUMMARY_CONFIRM - Generate document
 POST {{baseUrl}}/webhook
 Content-Type: application/json
 
@@ -159,7 +150,7 @@ Content-Type: application/json
   "buttonReply": "GERAR"
 }
 
-### 18. Global command - voltar
+### 17. Global command - voltar
 POST {{baseUrl}}/webhook
 Content-Type: application/json
 
@@ -168,7 +159,7 @@ Content-Type: application/json
   "text": "voltar"
 }
 
-### 19. Global command - cancelar
+### 18. Global command - cancelar
 POST {{baseUrl}}/webhook
 Content-Type: application/json
 
@@ -177,7 +168,7 @@ Content-Type: application/json
   "text": "cancelar"
 }
 
-### 20. Global command - status
+### 19. Global command - status
 POST {{baseUrl}}/webhook
 Content-Type: application/json
 
@@ -186,7 +177,7 @@ Content-Type: application/json
   "text": "status"
 }
 
-### 21. Validation error - Invalid length (too small)
+### 20. Validation error - Invalid length (too small)
 POST {{baseUrl}}/webhook
 Content-Type: application/json
 
@@ -195,7 +186,7 @@ Content-Type: application/json
   "text": "400"
 }
 
-### 22. Validation error - Invalid length (too large)
+### 21. Validation error - Invalid length (too large)
 POST {{baseUrl}}/webhook
 Content-Type: application/json
 
@@ -204,7 +195,7 @@ Content-Type: application/json
   "text": "250000"
 }
 
-### 23. Validation error - Invalid corridor
+### 22. Validation error - Invalid corridor
 POST {{baseUrl}}/webhook
 Content-Type: application/json
 
@@ -213,7 +204,7 @@ Content-Type: application/json
   "text": "500"
 }
 
-### 24. Validation error - Invalid capacity
+### 23. Validation error - Invalid capacity
 POST {{baseUrl}}/webhook
 Content-Type: application/json
 
@@ -222,7 +213,7 @@ Content-Type: application/json
   "text": "50"
 }
 
-### 25. Validation error - Invalid levels
+### 24. Validation error - Invalid levels
 POST {{baseUrl}}/webhook
 Content-Type: application/json
 

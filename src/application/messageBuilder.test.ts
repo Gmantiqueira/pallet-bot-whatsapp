@@ -23,11 +23,9 @@ describe('MessageBuilder', () => {
       expect(messages[0].text).toContain('NOVO PROJETO');
       expect(messages[0].text).toContain('1️⃣ Planta real');
       expect(messages[0].text).toContain('2️⃣ Medidas digitadas');
-      expect(messages[0].text).toContain('3️⃣ Galpão fictício');
-      expect(messages[0].buttons).toHaveLength(3);
+      expect(messages[0].buttons).toHaveLength(2);
       expect(messages[0].buttons?.[0]).toEqual({ id: '1', label: 'PLANTA' });
       expect(messages[0].buttons?.[1]).toEqual({ id: '2', label: 'MEDIDAS' });
-      expect(messages[0].buttons?.[2]).toEqual({ id: '3', label: 'FICTICIO' });
     });
   });
 

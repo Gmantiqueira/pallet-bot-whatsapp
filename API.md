@@ -75,11 +75,10 @@ Content-Type: application/json
   "messages": [
     {
       "to": "5511999999999",
-      "text": "NOVO PROJETO\n\nComo deseja iniciar?\n\n1️⃣ Planta real\n2️⃣ Medidas digitadas\n3️⃣ Galpão fictício",
+      "text": "NOVO PROJETO\n\nComo deseja iniciar?\n\n1️⃣ Planta real\n2️⃣ Medidas digitadas",
       "buttons": [
         { "id": "1", "label": "PLANTA" },
-        { "id": "2", "label": "MEDIDAS" },
-        { "id": "3", "label": "FICTICIO" }
+        { "id": "2", "label": "MEDIDAS" }
       ]
     }
   ]
@@ -363,7 +362,6 @@ Mostra resumo parcial sem alterar o estado atual.
 **Botões:**
 - `1` - Planta real
 - `2` - Medidas digitadas
-- `3` - Galpão fictício
 
 ### CHOOSE_HEIGHT_MODE
 

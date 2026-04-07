@@ -96,11 +96,10 @@ const buildStateMessage = (session: Session): OutgoingMessage | null => {
     case 'MENU':
       return {
         to: session.phone,
-        text: 'NOVO PROJETO\n\nComo deseja iniciar?\n\n1️⃣ Planta real\n2️⃣ Medidas digitadas\n3️⃣ Galpão fictício',
+        text: 'NOVO PROJETO\n\nComo deseja iniciar?\n\n1️⃣ Planta real\n2️⃣ Medidas digitadas',
         buttons: [
           { id: '1', label: 'PLANTA' },
           { id: '2', label: 'MEDIDAS' },
-          { id: '3', label: 'FICTICIO' },
         ],
       };
 
@@ -373,7 +372,6 @@ const projectTypeLabel = (v: unknown): string => {
   const m: Record<string, string> = {
     PLANTA_REAL: 'Planta real',
     MEDIDAS_DIGITADAS: 'Medidas digitadas',
-    GALPAO_FICTICIO: 'Galpão fictício',
   };
   return typeof v === 'string' ? (m[v] ?? v) : '—';
 };

@@ -160,9 +160,6 @@ export const transition = (session: Session, input: Input): TransitionResult => 
         } else if (choice === '2') {
           projectType = 'MEDIDAS_DIGITADAS';
           nextState = 'WAIT_LENGTH';
-        } else if (choice === '3') {
-          projectType = 'GALPAO_FICTICIO';
-          nextState = 'WAIT_LENGTH';
         } else {
           return { session: newSession, effects };
         }

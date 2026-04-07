@@ -56,13 +56,11 @@ Como deseja iniciar?
 
 1️⃣ Planta real
 2️⃣ Medidas digitadas
-3️⃣ Galpão fictício
 ```
 
 **Botões:**
 - `1` (PLANTA) → `WAIT_PLANT_IMAGE`
 - `2` (MEDIDAS) → `WAIT_LENGTH`
-- `3` (FICTICIO) → `WAIT_LENGTH`
 
 ### 3. Fluxo: Planta Real
 
@@ -77,7 +75,7 @@ Como deseja iniciar?
   - Define valores mock: `lengthMm: 12000`, `widthMm: 10000`
   - Envia mensagem: "✅ IMAGEM ANALISADA!\nComprimento: X mm\nLargura: Y mm\nPorta: não detectada"
 
-### 4. Fluxo: Medidas Digitadas / Galpão Fictício
+### 4. Fluxo: Medidas Digitadas
 
 #### 4.1. Comprimento (WAIT_LENGTH)
 
