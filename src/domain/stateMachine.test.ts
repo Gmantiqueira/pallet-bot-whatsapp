@@ -100,6 +100,36 @@ describe('State Machine', () => {
     });
   });
 
+  describe('Soft restart from late states', () => {
+    it('DONE + TEXT goes to MENU with clean answers', () => {
+      const session = createSession('DONE', {
+        pdfFilename: 'projeto.pdf',
+        lengthMm: 1000,
+      });
+      const result = transition(session, { type: 'TEXT', value: 'oi' });
+
+      expect(result.session.state).toBe('MENU');
+      expect(result.session.answers).toEqual({});
+      expect(result.effects).toContainEqual({ type: 'SEND' });
+    });
+
+    it('FINAL_CONFIRM + TEXT goes to MENU', () => {
+      const session = createSession('FINAL_CONFIRM', { lengthMm: 1000 });
+      const result = transition(session, { type: 'TEXT', value: 'ola' });
+
+      expect(result.session.state).toBe('MENU');
+      expect(result.session.answers).toEqual({});
+    });
+
+    it('SUMMARY_CONFIRM + TEXT goes to MENU', () => {
+      const session = createSession('SUMMARY_CONFIRM', { levels: 4 });
+      const result = transition(session, { type: 'TEXT', value: 'recomecar' });
+
+      expect(result.session.state).toBe('MENU');
+      expect(result.session.answers).toEqual({});
+    });
+  });
+
   describe('Flow: measures typed path to SUMMARY_CONFIRM', () => {
     it('should complete full flow from MENU to SUMMARY_CONFIRM', () => {
       let session = createSession('MENU');

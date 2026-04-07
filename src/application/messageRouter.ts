@@ -64,7 +64,32 @@ const isGlobalCommand = (text: string): boolean => {
   return GLOBAL_COMMANDS.includes(normalized);
 };
 
-const convertToInput = (incoming: IncomingPayload): Input | null => {
+const convertToInput = (incoming: IncomingPayload, session: Session): Input | null => {
+  const trimmedText = incoming.text?.trim() ?? '';
+
+  if (session.state === 'START') {
+    if (trimmedText && isGlobalCommand(trimmedText)) {
+      return {
+        type: 'GLOBAL',
+        command: trimmedText.toLowerCase() as
+          | 'novo'
+          | 'voltar'
+          | 'cancelar'
+          | 'status',
+      };
+    }
+    if (trimmedText) {
+      return { type: 'TEXT', value: trimmedText };
+    }
+    if (incoming.media?.type === 'image') {
+      return { type: 'MEDIA_IMAGE', id: incoming.media.id };
+    }
+    if (incoming.buttonReply) {
+      return { type: 'TEXT', value: incoming.buttonReply };
+    }
+    return null;
+  }
+
   // Check for global command in text
   if (incoming.text && isGlobalCommand(incoming.text)) {
     return {
@@ -109,7 +134,7 @@ export const routeIncoming = async (
   incoming: IncomingPayload,
   sessionRepository: SessionRepository
 ): Promise<RouterResult> => {
-  const input = convertToInput(incoming);
+  const input = convertToInput(incoming, session);
 
   // If no valid input, return current state message
   if (!input) {

@@ -75,6 +75,18 @@ function finishEditSection(session: Session, fullAnswers: Record<string, unknown
 }
 
 /** Avança ou conclui edição por secção (editStopBefore). */
+/** Nova conversa operacional: menu limpo (evita ficar preso a sessão antiga em estados finais). */
+function transitionToCleanMenu(session: Session): Session {
+  return {
+    ...session,
+    state: 'MENU',
+    answers: {},
+    stack: [],
+    editStopBefore: undefined,
+    updatedAt: Date.now(),
+  };
+}
+
 function goNext(
   session: Session,
   patch: Record<string, unknown>,
@@ -137,14 +149,7 @@ export const transition = (session: Session, input: Input): TransitionResult => 
 
   switch (newSession.state) {
     case 'START': {
-      newSession = {
-        ...newSession,
-        state: 'MENU',
-        answers: {},
-        stack: [],
-        editStopBefore: undefined,
-        updatedAt: Date.now(),
-      };
+      newSession = transitionToCleanMenu(newSession);
       effects.push({ type: 'SEND' });
       return { session: newSession, effects };
     }
@@ -543,6 +548,11 @@ export const transition = (session: Session, input: Input): TransitionResult => 
       return { session: newSession, effects };
 
     case 'SUMMARY_CONFIRM':
+      if (input.type === 'TEXT' || input.type === 'MEDIA_IMAGE') {
+        newSession = transitionToCleanMenu(newSession);
+        effects.push({ type: 'SEND' });
+        return { session: newSession, effects };
+      }
       if (input.type === 'BUTTON' && input.value === 'CONTINUAR') {
         newSession = {
           ...newSession,
@@ -556,6 +566,11 @@ export const transition = (session: Session, input: Input): TransitionResult => 
       return { session: newSession, effects };
 
     case 'ASK_GENERATE_3D':
+      if (input.type === 'TEXT' || input.type === 'MEDIA_IMAGE') {
+        newSession = transitionToCleanMenu(newSession);
+        effects.push({ type: 'SEND' });
+        return { session: newSession, effects };
+      }
       if (input.type === 'BUTTON') {
         if (
           input.value === 'SIM_3D' ||
@@ -575,6 +590,11 @@ export const transition = (session: Session, input: Input): TransitionResult => 
       return { session: newSession, effects };
 
     case 'FINAL_CONFIRM':
+      if (input.type === 'TEXT' || input.type === 'MEDIA_IMAGE') {
+        newSession = transitionToCleanMenu(newSession);
+        effects.push({ type: 'SEND' });
+        return { session: newSession, effects };
+      }
       if (input.type === 'BUTTON' && input.value === 'GERAR') {
         newSession = {
           ...newSession,
@@ -654,6 +674,8 @@ export const transition = (session: Session, input: Input): TransitionResult => 
       return { session: newSession, effects };
 
     case 'DONE':
+      newSession = transitionToCleanMenu(newSession);
+      effects.push({ type: 'SEND' });
       return { session: newSession, effects };
 
     default:

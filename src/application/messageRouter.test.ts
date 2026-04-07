@@ -66,6 +66,36 @@ describe('MessageRouter', () => {
       expect(result.session.state).toBe('WAIT_LENGTH');
     });
 
+    it('START: prefers text over stale buttonReply (no jump to late flow)', async () => {
+      const session = createSession('START');
+      const incoming: IncomingPayload = {
+        from: '5511999999999',
+        text: 'ola',
+        buttonReply: 'GERAR',
+      };
+
+      const result = await routeIncoming(session, incoming, repository);
+
+      expect(result.session.state).toBe('MENU');
+      expect(result.session.answers).toEqual({});
+    });
+
+    it('FINAL_CONFIRM: free text restarts to MENU', async () => {
+      const session = createSession('FINAL_CONFIRM', {
+        layout: {},
+        lengthMm: 12000,
+      });
+      const incoming: IncomingPayload = {
+        from: '5511999999999',
+        text: 'comecar de novo',
+      };
+
+      const result = await routeIncoming(session, incoming, repository);
+
+      expect(result.session.state).toBe('MENU');
+      expect(result.session.answers).toEqual({});
+    });
+
     it('should convert media image to MEDIA_IMAGE input', async () => {
       const session = createSession('WAIT_PLANT_IMAGE');
       const incoming: IncomingPayload = {
