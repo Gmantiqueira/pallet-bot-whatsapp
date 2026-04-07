@@ -10,7 +10,7 @@ const answersToSession = (a: ProjectAnswersV2): Record<string, unknown> => ({
 });
 
 describe('serializeElevationPagesV2', () => {
-  it('página sem túnel: piso, H total e cotas (frontal limpa, sem texto por nível sobre o desenho)', () => {
+  it('página sem túnel: piso, H total, cotas e carga (kg) por nível acima das longarinas', () => {
     const a: ProjectAnswersV2 = {
       lengthMm: 12_000,
       widthMm: 10_000,
@@ -37,7 +37,7 @@ describe('serializeElevationPagesV2', () => {
     expect(svg).toContain('H total');
     expect(svg).toMatch(/Face de armazenagem/);
     expect(svg).toMatch(/vão\s+[\d.\s]+mm/i);
-    expect(svg).toMatch(/Carga referência/);
+    expect(svg).toContain('1200kg');
     // Último eixo estrutural não é desenhado como longarina: exactamente `levels` faixas laranja
     const orangeBeams = svg.match(/fill="#fb923c"/g) ?? [];
     expect(orangeBeams.length).toBe(a.levels);

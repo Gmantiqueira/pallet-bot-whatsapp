@@ -369,7 +369,7 @@ function drawFrontStorageTiers(
   return parts.join('');
 }
 
-/** Vista frontal: estrutura, longarinas, piso, cotas essenciais (sem texto por nível sobre o desenho). */
+/** Vista frontal: estrutura, longarinas, piso, cotas e carga (kg) centrada acima de cada nível. */
 function drawFrontRack(
   ox: number,
   oy: number,
@@ -517,6 +517,25 @@ function drawFrontRack(
     }
   }
 
+  if (typeof data.capacityKgPerLevel === 'number' && data.capacityKgPerLevel > 0) {
+    const capText = `${Math.round(data.capacityKgPerLevel)}kg`;
+    const capFs = 14.5 * ls;
+    for (let bi = 0; bi < bays.length; bi++) {
+      const bay = bays[bi]!;
+      for (let j = 0; j < nStorageBeams; j++) {
+        const yy = beamYsPx[j]!;
+        const bh = Math.max(beamTh, 2.2);
+        const cx = (bay.left + bay.right) / 2;
+        const ty = yy - bh / 2 - 4.5 * ls;
+        parts.push(
+          `<text x="${cx}" y="${ty}" text-anchor="middle" font-size="${capFs}px" font-weight="700" fill="#111827" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif">${escapeXml(
+            capText
+          )}</text>`
+        );
+      }
+    }
+  }
+
   parts.push(
     `<line x1="${uprightXs[0]}" y1="${topY}" x2="${lastUx + lastUw}" y2="${topY}" stroke="#475569" stroke-width="1.05" stroke-linecap="square" opacity="0.75"/>`
   );
@@ -552,12 +571,6 @@ function drawFrontRack(
   if (subtitle) {
     parts.push(
       `<text x="${ox + pw / 2}" y="${oy + 34 * ls}" text-anchor="middle" font-size="${9 * ls}px" fill="#64748b">${escapeXml(subtitle)}</text>`
-    );
-  }
-  if (typeof data.capacityKgPerLevel === 'number' && data.capacityKgPerLevel > 0) {
-    const capLineY = subtitle || sectionTitle ? oy + 50 * ls : oy + 26 * ls;
-    parts.push(
-      `<text x="${ox + pw / 2}" y="${capLineY}" text-anchor="middle" font-size="${8.5 * ls}px" fill="#64748b" font-style="italic">Carga referência: ${escapeXml(String(data.capacityKgPerLevel))} kg/nível</text>`
     );
   }
 
@@ -792,10 +805,6 @@ export function serializeElevationPagesV2(
   const innerHLat = hL - padTop - 80;
 
   const std = model.frontWithoutTunnel;
-  const subStandard =
-    std.rackDepthMode === 'double'
-      ? 'Dupla costas · armazenagem sem vão de passagem'
-      : undefined;
   const frontStdInner = drawFrontRack(
     padX,
     padTop,
@@ -803,7 +812,7 @@ export function serializeElevationPagesV2(
     innerHFront,
     std,
     '',
-    subStandard,
+    undefined,
     {
       labelScale: ls,
     }
@@ -818,10 +827,6 @@ export function serializeElevationPagesV2(
   let frontWithTunnel: string | null = null;
   if (model.frontWithTunnel) {
     const tun = model.frontWithTunnel;
-    const tunSub =
-      tun.rackDepthMode === 'double'
-        ? 'Dupla costas · vão inferior e menos níveis ativos'
-        : 'Vão inferior · menos níveis ativos';
     const inner = drawFrontRack(
       padX,
       padTop,
@@ -829,7 +834,7 @@ export function serializeElevationPagesV2(
       innerHFront,
       tun,
       '',
-      tunSub,
+      undefined,
       { labelScale: ls }
     );
     frontWithTunnel = wrapElevationDrawingPage(
@@ -891,10 +896,6 @@ export function serializeElevationSvgV2(model: ElevationModelV2): string {
   const colGap = 28;
   let y = 36;
   const std = model.frontWithoutTunnel;
-  const subStandard =
-    std.rackDepthMode === 'double'
-      ? 'Dupla costas · armazenagem normal (sem vão de passagem)'
-      : undefined;
 
   if (model.frontWithTunnel) {
     const panelW = (w - 72 - colGap) / 2;
@@ -903,8 +904,6 @@ export function serializeElevationSvgV2(model: ElevationModelV2): string {
       tun.rackDepthMode === 'double'
         ? 'Elevação dupla com túnel'
         : 'Elevação com túnel';
-    const tunSub =
-      'Vão inferior explícito · menos níveis ativos acima (mesma altura de montante, sem comprimir o total na zona superior)';
     parts.push(
       drawFrontRack(
         36,
@@ -913,7 +912,7 @@ export function serializeElevationSvgV2(model: ElevationModelV2): string {
         bandH,
         std,
         'Elevação sem túnel',
-        subStandard
+        undefined
       )
     );
     parts.push(
@@ -924,7 +923,7 @@ export function serializeElevationSvgV2(model: ElevationModelV2): string {
         bandH,
         tun,
         tunTitle,
-        tunSub
+        undefined
       )
     );
   } else {
@@ -936,7 +935,7 @@ export function serializeElevationSvgV2(model: ElevationModelV2): string {
         bandH,
         std,
         'Elevação sem túnel',
-        subStandard
+        undefined
       )
     );
   }
