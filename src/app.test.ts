@@ -78,14 +78,20 @@ describe('App Smoke Test', () => {
     expect(response.statusCode).toBe(401);
   });
 
-  it('GET /files/:name should serve PDF from storage', async () => {
+  it('GET /files/:name should serve PDF from storage with Bearer when secret is set', async () => {
     const dir = resolveStoragePath();
     fs.mkdirSync(dir, { recursive: true });
     const name = `smoke-${Date.now()}.pdf`;
     const filePath = path.join(dir, name);
     fs.writeFileSync(filePath, Buffer.from('%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF'));
 
-    const res = await app.inject({ method: 'GET', url: `/files/${name}` });
+    const res = await app.inject({
+      method: 'GET',
+      url: `/files/${name}`,
+      headers: {
+        authorization: `Bearer ${TEST_WEBHOOK_SECRET}`,
+      },
+    });
 
     expect(res.statusCode).toBe(200);
     expect(String(res.headers['content-type'] || '')).toContain('pdf');
@@ -96,10 +102,26 @@ describe('App Smoke Test', () => {
     fs.unlinkSync(filePath);
   });
 
+  it('GET /files/:name should return 401 without Authorization when secret is set', async () => {
+    const dir = resolveStoragePath();
+    fs.mkdirSync(dir, { recursive: true });
+    const name = `locked-${Date.now()}.pdf`;
+    const filePath = path.join(dir, name);
+    fs.writeFileSync(filePath, Buffer.from('%PDF-1.4\n%%EOF'));
+
+    const res = await app.inject({ method: 'GET', url: `/files/${name}` });
+
+    expect(res.statusCode).toBe(401);
+    fs.unlinkSync(filePath);
+  });
+
   it('GET /files/:name should reject suspicious filename segments', async () => {
     const res = await app.inject({
       method: 'GET',
       url: '/files/prefix..suffix.pdf',
+      headers: {
+        authorization: `Bearer ${TEST_WEBHOOK_SECRET}`,
+      },
     });
     expect(res.statusCode).toBe(400);
   });

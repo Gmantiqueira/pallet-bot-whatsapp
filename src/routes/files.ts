@@ -1,15 +1,34 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import * as fs from 'fs';
 import * as path from 'path';
+import { loadEnv } from '../config/env';
 import { resolveStoragePath } from '../config/storagePath';
+import { verifyBearerToken } from '../infra/http/bearerAuth';
 
 interface FilesParams {
   name: string;
 }
 
+/**
+ * Download opcional do storage para debug / browser local.
+ * Não faz parte da entrega do PDF (integrador usa {@link GeneratedPdfArtifact.absolutePath}).
+ * Com WEBHOOK_SECRET definido (incl. produção), exige o mesmo Bearer que /webhook.
+ */
 export const filesRoutes = async (fastify: FastifyInstance): Promise<void> => {
-  fastify.get(
+  const { WEBHOOK_SECRET } = loadEnv();
+
+  fastify.get<{ Params: FilesParams }>(
     '/files/:name',
+    {
+      preHandler: async (request: FastifyRequest, reply: FastifyReply) => {
+        if (!WEBHOOK_SECRET) {
+          return;
+        }
+        if (!verifyBearerToken(request.headers.authorization, WEBHOOK_SECRET)) {
+          return reply.code(401).send({ error: 'Unauthorized' });
+        }
+      },
+    },
     async (request: FastifyRequest<{ Params: FilesParams }>, reply: FastifyReply) => {
       const { name } = request.params;
 

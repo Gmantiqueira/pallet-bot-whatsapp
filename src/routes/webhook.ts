@@ -1,33 +1,10 @@
-import { timingSafeEqual } from 'crypto';
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { loadEnv } from '../config/env';
+import { verifyBearerToken } from '../infra/http/bearerAuth';
 import { OutgoingMessage } from '../types/messages';
 import { SqliteSessionRepository } from '../infra/repositories/sqliteSessionRepository';
 import { routeIncoming, IncomingPayload } from '../application/messageRouter';
 import type { GeneratedPdfArtifact } from '../types/generatedPdf';
-
-const BEARER_PREFIX = 'Bearer ';
-
-/** Constant-time comparison; does not log the secret or client token. */
-function verifyWebhookBearer(
-  authorizationHeader: string | undefined,
-  secret: string
-): boolean {
-  if (!authorizationHeader?.startsWith(BEARER_PREFIX)) {
-    return false;
-  }
-  const token = authorizationHeader.slice(BEARER_PREFIX.length).trim();
-  const a = Buffer.from(token, 'utf8');
-  const b = Buffer.from(secret, 'utf8');
-  if (a.length !== b.length) {
-    return false;
-  }
-  try {
-    return timingSafeEqual(a, b);
-  } catch {
-    return false;
-  }
-}
 
 interface IncomingWebhookPayload {
   from: string;
@@ -58,7 +35,7 @@ export const webhookRoutes = async (fastify: FastifyInstance): Promise<void> => 
         if (!WEBHOOK_SECRET) {
           return;
         }
-        if (!verifyWebhookBearer(request.headers.authorization, WEBHOOK_SECRET)) {
+        if (!verifyBearerToken(request.headers.authorization, WEBHOOK_SECRET)) {
           return reply.code(401).send({ error: 'Unauthorized' });
         }
       },

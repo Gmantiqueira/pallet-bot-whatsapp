@@ -4,7 +4,9 @@ export interface EnvConfig {
   NODE_ENV: string;
   DB_PATH: string;
   /**
-   * When set (non-empty), POST /webhook requires Authorization: Bearer <WEBHOOK_SECRET>.
+   * When set (non-empty):
+   * - POST /webhook requires Authorization: Bearer <WEBHOOK_SECRET>
+   * - GET /files/:name requires the same (debug/local download; not used for PDF delivery)
    * Required when NODE_ENV is production.
    */
   WEBHOOK_SECRET?: string;
