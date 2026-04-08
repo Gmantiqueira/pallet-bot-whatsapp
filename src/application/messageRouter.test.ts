@@ -2,10 +2,12 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { PDFDocument } from 'pdf-lib';
 import { routeIncoming, IncomingPayload } from './messageRouter';
+import { GENERATING_DOC_WAIT_TEXT } from './messageBuilder';
 import { Session } from '../domain/session';
 import { SessionRepository } from '../domain/sessionRepository';
 import { finalizeSummaryAnswers } from '../domain/projectEngines';
 import { PdfService } from '../infra/pdf/pdfService';
+import type { GenerateProjectPdfResult } from '../infra/pdf/pdfService';
 
 const createSession = (state: string, answers: Record<string, unknown> = {}): Session => {
   return {
@@ -233,6 +235,10 @@ describe('MessageRouter', () => {
       expect(docMsg).toBeDefined();
       expect(docMsg?.document?.filename).toMatch(/^projeto-\d+\.pdf$/);
       expect(docMsg?.document?.url).toMatch(/^\/files\/projeto-\d+\.pdf$/);
+      expect(typeof result.session.answers.pdfFilename).toBe('string');
+      expect((result.session.answers.pdfFilename as string).length).toBeGreaterThan(
+        0
+      );
       expect(typeof result.session.answers.pdfPath).toBe('string');
       expect(fs.existsSync(result.session.answers.pdfPath as string)).toBe(true);
 
@@ -350,6 +356,119 @@ describe('MessageRouter', () => {
         )
       ).toBe(true);
       expect(result.outgoingMessages.some((m) => m.document)).toBe(false);
+    });
+  });
+
+  describe('GENERATING_DOC concurrency', () => {
+    const storageDir = path.join(process.cwd(), 'storage');
+
+    afterEach(() => {
+      jest.restoreAllMocks();
+      if (!fs.existsSync(storageDir)) {
+        return;
+      }
+      for (const f of fs.readdirSync(storageDir)) {
+        if (f.startsWith('projeto-concurrent-')) {
+          try {
+            fs.unlinkSync(path.join(storageDir, f));
+          } catch {
+            /* ignore */
+          }
+        }
+      }
+    });
+
+    it('persists GENERATING_DOC before PDF await so second GERAR only waits', async () => {
+      let resolvePdf!: (v: GenerateProjectPdfResult) => void;
+      const pdfPromise = new Promise<GenerateProjectPdfResult>(res => {
+        resolvePdf = res;
+      });
+      const spy = jest
+        .spyOn(PdfService.prototype, 'generatePdf')
+        .mockImplementation(() => pdfPromise);
+
+      const session = createSession(
+        'FINAL_CONFIRM',
+        finalizeSummaryAnswers({
+          lengthMm: 12000,
+          widthMm: 10000,
+          corridorMm: 3000,
+          moduleDepthMm: 2700,
+          beamLengthMm: 1100,
+          capacityKg: 2000,
+          heightMode: 'DIRECT',
+          heightMm: 5000,
+          levels: 4,
+          guardRailSimple: false,
+          guardRailDouble: false,
+        })
+      );
+      const gerar: IncomingPayload = {
+        from: '5511999999999',
+        buttonReply: 'GERAR',
+      };
+
+      const p1 = routeIncoming(session, gerar, repository);
+
+      const mid = repository.get('5511999999999');
+      expect(mid?.state).toBe('GENERATING_DOC');
+
+      const r2 = await routeIncoming(mid!, gerar, repository);
+      expect(r2.session.state).toBe('GENERATING_DOC');
+      expect(r2.outgoingMessages).toHaveLength(1);
+      expect(r2.outgoingMessages[0].text).toBe(GENERATING_DOC_WAIT_TEXT);
+      expect(spy).toHaveBeenCalledTimes(1);
+
+      fs.mkdirSync(storageDir, { recursive: true });
+      const filename = `projeto-concurrent-${Date.now()}.pdf`;
+      const filePath = path.join(storageDir, filename);
+      fs.writeFileSync(filePath, Buffer.from('%PDF-1.4\n%%EOF'));
+
+      resolvePdf({
+        filename,
+        path: filePath,
+        url: `/files/${filename}`,
+      });
+
+      const r1 = await p1;
+      expect(r1.session.state).toBe('DONE');
+      expect(r1.session.answers.pdfFilename).toBe(filename);
+      expect(r1.outgoingMessages.some(m => m.type === 'document')).toBe(true);
+
+      spy.mockRestore();
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    });
+
+    it('any message while GENERATING_DOC returns wait without calling transition persistence', async () => {
+      const busy = createSession(
+        'GENERATING_DOC',
+        finalizeSummaryAnswers({
+          lengthMm: 12000,
+          widthMm: 10000,
+          corridorMm: 3000,
+          moduleDepthMm: 2700,
+          beamLengthMm: 1100,
+          capacityKg: 2000,
+          heightMode: 'DIRECT',
+          heightMm: 5000,
+          levels: 4,
+          guardRailSimple: false,
+          guardRailDouble: false,
+        })
+      );
+      repository.upsert(busy);
+
+      const r = await routeIncoming(
+        busy,
+        { from: '5511999999999', text: 'hello' },
+        repository
+      );
+
+      expect(r.session.state).toBe('GENERATING_DOC');
+      expect(r.session.answers).toEqual(busy.answers);
+      expect(r.outgoingMessages[0].text).toBe(GENERATING_DOC_WAIT_TEXT);
     });
   });
 

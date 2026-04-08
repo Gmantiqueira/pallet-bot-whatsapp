@@ -16,7 +16,11 @@ import {
 } from '../domain/drawingEngine';
 import { generateIsometricView } from '../domain/isometricDrawingEngine';
 import { OutgoingMessage } from '../types/messages';
-import { buildMessages, MessageContext } from './messageBuilder';
+import {
+  buildMessages,
+  GENERATING_DOC_WAIT_TEXT,
+  MessageContext,
+} from './messageBuilder';
 import {
   FRONT_VIEW_PLACEHOLDER_SVG,
   ISOMETRIC_PLACEHOLDER_SVG,
@@ -134,6 +138,19 @@ export const routeIncoming = async (
   incoming: IncomingPayload,
   sessionRepository: SessionRepository
 ): Promise<RouterResult> => {
+  if (session.state === 'GENERATING_DOC') {
+    return {
+      session,
+      outgoingMessages: [
+        {
+          to: session.phone,
+          type: 'text',
+          text: GENERATING_DOC_WAIT_TEXT,
+        },
+      ],
+    };
+  }
+
   const input = convertToInput(incoming, session);
 
   // If no valid input, return current state message
@@ -183,6 +200,11 @@ export const routeIncoming = async (
       ...updatedSession,
       answers: finalizeSummaryAnswers({ ...updatedSession.answers }),
     };
+
+    sessionRepository.upsert({
+      ...genSession,
+      updatedAt: Date.now(),
+    });
 
     try {
       const ts = Date.now();
@@ -290,13 +312,17 @@ export const routeIncoming = async (
       delete nextAnswers.pdfUrl;
       delete nextAnswers.pdfPath;
 
+      const fn = pdfResult.filename?.trim() ?? '';
+      if (!fn) {
+        throw new Error('PDF sem filename');
+      }
       updatedSession = {
         ...genSession,
         state: 'DONE',
         updatedAt: Date.now(),
         answers: {
           ...nextAnswers,
-          pdfFilename: pdfResult.filename,
+          pdfFilename: fn,
           pdfUrl: pdfResult.url,
           pdfPath: pdfResult.path,
         },

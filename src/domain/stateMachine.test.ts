@@ -341,6 +341,33 @@ describe('State Machine', () => {
     });
   });
 
+  describe('GENERATING_DOC busy', () => {
+    it('should keep GENERATING_DOC and emit no effects on further input', () => {
+      const session = createSession(
+        'GENERATING_DOC',
+        finalizeSummaryAnswers({
+          lengthMm: 12000,
+          widthMm: 10000,
+          corridorMm: 3000,
+          moduleDepthMm: 2700,
+          beamLengthMm: 1100,
+          capacityKg: 2000,
+          heightMode: 'DIRECT',
+          heightMm: 5000,
+          levels: 4,
+          guardRailSimple: false,
+          guardRailDouble: false,
+        }),
+        ['MENU', 'FINAL_CONFIRM']
+      );
+
+      const result = transition(session, { type: 'BUTTON', value: 'GERAR' });
+
+      expect(result.session.state).toBe('GENERATING_DOC');
+      expect(result.effects).toEqual([]);
+    });
+  });
+
   describe('GENERATE_PDF effect', () => {
     it('should generate GENERATE_PDF effect when confirming on FINAL_CONFIRM', () => {
       const session = createSession(

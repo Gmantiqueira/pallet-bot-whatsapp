@@ -189,5 +189,13 @@ describe('MessageBuilder', () => {
       expect(messages[1].document?.filename).toBe('projeto-from-session.pdf');
       expect(messages[1].document?.url).toBe('/files/projeto-from-session.pdf');
     });
+
+    it('DONE without pdfFilename should not fabricate document link', () => {
+      const session = createSession('DONE', {});
+      const messages = buildMessages(session, {});
+
+      expect(messages.some(m => m.type === 'document')).toBe(false);
+      expect(messages[0].text).toContain('Gerar projeto');
+    });
   });
 });

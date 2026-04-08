@@ -648,13 +648,8 @@ export const transition = (session: Session, input: Input): TransitionResult => 
       return { session: newSession, effects };
 
     case 'GENERATING_DOC':
-      newSession = {
-        ...newSession,
-        state: 'DONE',
-        updatedAt: Date.now(),
-      };
-      effects.push({ type: 'SEND' });
-      return { session: newSession, effects };
+      /* PDF é concluído apenas em messageRouter; input extra não avança para DONE. */
+      return { session: newSession, effects: [] };
 
     case 'DONE':
       newSession = transitionToCleanMenu(newSession);

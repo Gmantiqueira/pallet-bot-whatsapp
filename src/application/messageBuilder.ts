@@ -1,6 +1,10 @@
 import { Session } from '../domain/session';
 import { OutgoingMessage } from '../types/messages';
 import { State } from '../domain/stateMachine';
+
+/** Mensagem enquanto a geração do PDF está em curso (router + estado). */
+export const GENERATING_DOC_WAIT_TEXT =
+  'A gerar o documento, aguarde...';
 import type { BudgetResult } from '../domain/budgetEngine';
 import type { StructureResult } from '../domain/structureEngine';
 
@@ -55,8 +59,16 @@ export const buildMessages = (
     const fromCtx = ctx.pdfFilename?.trim() ?? '';
     const filename =
       (fromSession.length > 0 ? fromSession : null) ??
-      (fromCtx.length > 0 ? fromCtx : null) ??
-      `projeto-${session.phone}.pdf`;
+      (fromCtx.length > 0 ? fromCtx : null);
+    if (!filename) {
+      messages.push({
+        to: session.phone,
+        type: 'text',
+        text:
+          'Não foi possível localizar o ficheiro do projeto. Toque em *Gerar projeto* novamente ou envie *novo* para recomeçar.',
+      });
+      return messages;
+    }
     const publicUrl = `/files/${filename}`;
 
     messages.push({
@@ -307,7 +319,7 @@ const buildStateMessage = (session: Session): OutgoingMessage | null => {
     case 'GENERATING_DOC':
       return {
         to: session.phone,
-        text: '⏳ A gerar documento...',
+        text: GENERATING_DOC_WAIT_TEXT,
       };
 
     default:
