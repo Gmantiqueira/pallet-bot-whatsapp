@@ -6,6 +6,8 @@ import * as os from 'os';
 import { closeDb } from './infra/db/sqlite';
 import { resolveStoragePath } from './config/storagePath';
 
+const TEST_WEBHOOK_SECRET = 'test-webhook-secret';
+
 describe('App Smoke Test', () => {
   let app: FastifyInstance;
   let testDbPath: string;
@@ -14,6 +16,7 @@ describe('App Smoke Test', () => {
     // Create temporary database file
     testDbPath = path.join(os.tmpdir(), `test-app-${Date.now()}.db`);
     process.env.DB_PATH = testDbPath;
+    process.env.WEBHOOK_SECRET = TEST_WEBHOOK_SECRET;
     app = await createApp();
   });
 
@@ -25,12 +28,16 @@ describe('App Smoke Test', () => {
       fs.unlinkSync(testDbPath);
     }
     delete process.env.DB_PATH;
+    delete process.env.WEBHOOK_SECRET;
   });
 
-  it('should respond 200 to POST /webhook', async () => {
+  it('should respond 200 to POST /webhook with valid Bearer token', async () => {
     const response = await app.inject({
       method: 'POST',
       url: '/webhook',
+      headers: {
+        authorization: `Bearer ${TEST_WEBHOOK_SECRET}`,
+      },
       payload: {
         from: '5511999999999',
       },
@@ -40,6 +47,35 @@ describe('App Smoke Test', () => {
     const body = JSON.parse(response.body);
     expect(body).toHaveProperty('messages');
     expect(Array.isArray(body.messages)).toBe(true);
+  });
+
+  it('should respond 401 to POST /webhook without Authorization', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/webhook',
+      payload: {
+        from: '5511999999999',
+      },
+    });
+
+    expect(response.statusCode).toBe(401);
+    const body = JSON.parse(response.body);
+    expect(body).toMatchObject({ error: 'Unauthorized' });
+  });
+
+  it('should respond 401 to POST /webhook with wrong Bearer token', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/webhook',
+      headers: {
+        authorization: 'Bearer wrong-token',
+      },
+      payload: {
+        from: '5511999999999',
+      },
+    });
+
+    expect(response.statusCode).toBe(401);
   });
 
   it('GET /files/:name should serve PDF from storage', async () => {

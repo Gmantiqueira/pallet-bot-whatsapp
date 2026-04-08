@@ -184,6 +184,8 @@
   </div>
 
   <script>
+    /* Must match WEBHOOK_SECRET when starting the server (e.g. WEBHOOK_SECRET=dev-webhook-secret npm run dev). */
+    const WEBHOOK_SECRET = 'dev-webhook-secret';
     const PHONE = '5511999999999';
     const API_URL = window.location.origin;
 
@@ -279,6 +281,7 @@
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            Authorization: `Bearer ${WEBHOOK_SECRET}`,
           },
           body: JSON.stringify(payload),
         });
@@ -321,6 +324,7 @@
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            Authorization: `Bearer ${WEBHOOK_SECRET}`,
           },
           body: JSON.stringify(payload),
         });
