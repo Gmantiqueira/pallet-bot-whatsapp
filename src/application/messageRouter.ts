@@ -26,7 +26,7 @@ import {
   ISOMETRIC_PLACEHOLDER_SVG,
   PdfService,
 } from '../infra/pdf/pdfService';
-import { loadEnv } from '../config/env';
+import type { GeneratedPdfArtifact } from '../types/generatedPdf';
 import { resolveStoragePath } from '../config/storagePath';
 import { buildProjectAnswersV2 } from '../domain/pdfV2/answerMapping';
 import { buildLayoutSolutionV2 } from '../domain/pdfV2/layoutSolutionV2';
@@ -59,6 +59,12 @@ export interface IncomingPayload {
 export interface RouterResult {
   session: Session;
   outgoingMessages: OutgoingMessage[];
+  /**
+   * Preenchido neste pedido quando o PDF acabou de ser gerado com sucesso.
+   * O integrador WhatsApp usa estes metadados para anexar o ficheiro (`absolutePath`);
+   * não representa URL pública nem “entrega” ao utilizador final.
+   */
+  generatedPdf?: GeneratedPdfArtifact;
 }
 
 const GLOBAL_COMMANDS = ['novo', 'voltar', 'cancelar', 'status'];
@@ -148,6 +154,7 @@ export const routeIncoming = async (
           text: GENERATING_DOC_WAIT_TEXT,
         },
       ],
+      generatedPdf: undefined,
     };
   }
 
@@ -156,13 +163,13 @@ export const routeIncoming = async (
   // If no valid input, return current state message
   if (!input) {
     const messages = buildMessages(session);
-    return { session, outgoingMessages: messages };
+    return { session, outgoingMessages: messages, generatedPdf: undefined };
   }
 
   // Handle status command specially
   if (input.type === 'GLOBAL' && input.command === 'status') {
     const messages = buildMessages(session, { statusOnly: true });
-    return { session, outgoingMessages: messages };
+    return { session, outgoingMessages: messages, generatedPdf: undefined };
   }
 
   // Store previous state for image analysis detection
@@ -176,7 +183,7 @@ export const routeIncoming = async (
     const messages = buildMessages(session, {
       lastError: transitionResult.error,
     });
-    return { session, outgoingMessages: messages };
+    return { session, outgoingMessages: messages, generatedPdf: undefined };
   }
 
   // Update session from transition result
@@ -188,9 +195,9 @@ export const routeIncoming = async (
   );
 
   let deliveryError: string | undefined;
+  let generatedPdf: GeneratedPdfArtifact | undefined;
 
   if (hasGeneratePdfEffect && updatedSession.state === 'GENERATING_DOC') {
-    const env = loadEnv();
     const storageDir = resolveStoragePath();
     if (!fs.existsSync(storageDir)) {
       fs.mkdirSync(storageDir, { recursive: true });
@@ -304,18 +311,18 @@ export const routeIncoming = async (
         );
       }
 
-      const pdfService = new PdfService(storageDir, env.PORT);
+      const pdfService = new PdfService(storageDir);
       const pdfResult = await pdfService.generatePdf(genSession);
 
       const nextAnswers = { ...genSession.answers };
       delete nextAnswers.pdfFilename;
-      delete nextAnswers.pdfUrl;
       delete nextAnswers.pdfPath;
 
       const fn = pdfResult.filename?.trim() ?? '';
       if (!fn) {
         throw new Error('PDF sem filename');
       }
+      generatedPdf = pdfResult;
       updatedSession = {
         ...genSession,
         state: 'DONE',
@@ -323,14 +330,12 @@ export const routeIncoming = async (
         answers: {
           ...nextAnswers,
           pdfFilename: fn,
-          pdfUrl: pdfResult.url,
-          pdfPath: pdfResult.path,
+          pdfPath: pdfResult.absolutePath,
         },
       };
     } catch {
       const cleanAnswers = { ...genSession.answers };
       delete cleanAnswers.pdfFilename;
-      delete cleanAnswers.pdfUrl;
       delete cleanAnswers.pdfPath;
       updatedSession = {
         ...genSession,
@@ -375,5 +380,6 @@ export const routeIncoming = async (
   return {
     session: updatedSession,
     outgoingMessages: messages,
+    generatedPdf,
   };
 };

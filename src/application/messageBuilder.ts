@@ -1,12 +1,12 @@
 import { Session } from '../domain/session';
 import { OutgoingMessage } from '../types/messages';
 import { State } from '../domain/stateMachine';
+import type { BudgetResult } from '../domain/budgetEngine';
+import type { StructureResult } from '../domain/structureEngine';
 
 /** Mensagem enquanto a geração do PDF está em curso (router + estado). */
 export const GENERATING_DOC_WAIT_TEXT =
   'A gerar o documento, aguarde...';
-import type { BudgetResult } from '../domain/budgetEngine';
-import type { StructureResult } from '../domain/structureEngine';
 
 export interface MessageContext {
   lastError?: string;
@@ -69,20 +69,16 @@ export const buildMessages = (
       });
       return messages;
     }
-    const publicUrl = `/files/${filename}`;
 
+    /**
+     * Texto para o utilizador: sem anexo nem URL pública neste core.
+     * O integrador interno recebe `generatedPdf` na resposta HTTP do webhook e envia o PDF pelo WhatsApp.
+     */
     messages.push({
       to: session.phone,
       type: 'text',
-      text: 'Projeto gerado com sucesso. Segue o layout do galpão.',
-    });
-    messages.push({
-      to: session.phone,
-      type: 'document',
-      document: {
-        filename,
-        url: publicUrl,
-      },
+      text:
+        'Projeto gerado com sucesso. O PDF foi gravado; o envio pelo WhatsApp é tratado pelo integrador interno.',
     });
     return messages;
   }

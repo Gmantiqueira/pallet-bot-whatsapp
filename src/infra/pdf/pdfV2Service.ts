@@ -27,6 +27,7 @@ import {
   technicalSummaryRows,
   type GenerateProjectPdfResult,
 } from './pdfService';
+import { buildPdfArtifactAfterWrite } from './pdfArtifact';
 import { resolveStoragePath } from '../../config/storagePath';
 
 const MARGIN_PT = 56;
@@ -199,7 +200,7 @@ export type GenerateProjectPdfV2Input = {
  */
 export async function renderPdfV2(
   input: GenerateProjectPdfV2Input,
-  options: { storagePath: string; port: number }
+  options: { storagePath: string }
 ): Promise<GenerateProjectPdfResult> {
   const storagePath = path.resolve(options.storagePath);
   if (!fs.existsSync(storagePath)) {
@@ -564,13 +565,7 @@ export async function renderPdfV2(
   if (!fs.existsSync(filePath)) {
     throw new Error('PDF V2 não foi criado no disco');
   }
-  const st = fs.statSync(filePath);
-  if (!st.isFile() || st.size === 0) {
-    throw new Error('PDF V2 inválido ou vazio');
-  }
-
-  const url = `http://localhost:${options.port}/files/${filename}`;
-  return { filename, path: filePath, url };
+  return buildPdfArtifactAfterWrite(filePath, storagePath);
 }
 
 /**
@@ -578,7 +573,7 @@ export async function renderPdfV2(
  */
 export async function generatePdfV2FromSession(
   session: Session,
-  options: { storagePath: string; port: number }
+  options: { storagePath: string }
 ): Promise<GenerateProjectPdfResult> {
   const answers = session.answers;
   const layout = answers.layout as LayoutResult | undefined;
@@ -614,11 +609,9 @@ export async function generatePdfV2FromSession(
 
 export class PdfV2Service {
   private storagePath: string;
-  private port: number;
 
-  constructor(storagePath: string = resolveStoragePath(), port: number = 3000) {
+  constructor(storagePath: string = resolveStoragePath()) {
     this.storagePath = path.resolve(storagePath);
-    this.port = port;
     if (!fs.existsSync(this.storagePath)) {
       fs.mkdirSync(this.storagePath, { recursive: true });
     }
@@ -627,7 +620,6 @@ export class PdfV2Service {
   generateFromSession(session: Session): Promise<GenerateProjectPdfResult> {
     return generatePdfV2FromSession(session, {
       storagePath: this.storagePath,
-      port: this.port,
     });
   }
 }

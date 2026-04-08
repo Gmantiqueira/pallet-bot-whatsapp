@@ -16,6 +16,8 @@ import {
 } from '../../domain/projectEngines';
 import { generateIsometricView } from '../../domain/isometricDrawingEngine';
 import { resolveStoragePath } from '../../config/storagePath';
+import type { GeneratedPdfArtifact } from '../../types/generatedPdf';
+import { buildPdfArtifactAfterWrite } from './pdfArtifact';
 
 const MARGIN_PT = 56;
 const COL_INK = '#0f172a';
@@ -35,11 +37,8 @@ export type GenerateProjectPdfInput = {
   isometricSvg: string;
 };
 
-export type GenerateProjectPdfResult = {
-  filename: string;
-  path: string;
-  url: string;
-};
+/** @alias Resultado único V1/V2 — metadados internos, sem URL pública. */
+export type GenerateProjectPdfResult = GeneratedPdfArtifact;
 
 /** SVG mínimo quando não há dados para elevação frontal. */
 export const FRONT_VIEW_PLACEHOLDER_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 132"><rect width="480" height="132" fill="#ffffff"/><rect x="28" y="28" width="424" height="76" fill="none" stroke="#d4d4d4" stroke-width="0.75"/><text x="240" y="74" text-anchor="middle" font-size="12.5" font-weight="500" fill="#6b7280" font-family="Helvetica Neue,Helvetica,Arial,sans-serif">Vista técnica indisponível</text></svg>`;
@@ -293,7 +292,7 @@ function drawingRasterPixelSize(): { pxW: number; pxH: number } {
  */
 export async function generateProjectPdf(
   input: GenerateProjectPdfInput,
-  options: { storagePath: string; port: number }
+  options: { storagePath: string }
 ): Promise<GenerateProjectPdfResult> {
   const storagePath = path.resolve(options.storagePath);
   if (!fs.existsSync(storagePath)) {
@@ -565,22 +564,14 @@ export async function generateProjectPdf(
   if (!fs.existsSync(filePath)) {
     throw new Error('PDF não foi criado no disco');
   }
-  const st = fs.statSync(filePath);
-  if (!st.isFile() || st.size === 0) {
-    throw new Error('PDF inválido ou vazio');
-  }
-
-  const url = `http://localhost:${options.port}/files/${filename}`;
-  return { filename, path: filePath, url };
+  return buildPdfArtifactAfterWrite(filePath, storagePath);
 }
 
 export class PdfService {
   private storagePath: string;
-  private port: number;
 
-  constructor(storagePath: string = resolveStoragePath(), port: number = 3000) {
+  constructor(storagePath: string = resolveStoragePath()) {
     this.storagePath = path.resolve(storagePath);
-    this.port = port;
 
     if (!fs.existsSync(this.storagePath)) {
       fs.mkdirSync(this.storagePath, { recursive: true });
@@ -592,7 +583,6 @@ export class PdfService {
   ): Promise<GenerateProjectPdfResult> {
     return generateProjectPdf(input, {
       storagePath: this.storagePath,
-      port: this.port,
     });
   }
 
@@ -605,7 +595,6 @@ export class PdfService {
       const { generatePdfV2FromSession } = await import('./pdfV2Service');
       return generatePdfV2FromSession(session, {
         storagePath: this.storagePath,
-        port: this.port,
       });
     }
     const answers = session.answers;

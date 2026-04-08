@@ -228,19 +228,26 @@ describe('MessageRouter', () => {
       expect(result.session.state).toBe('DONE');
       expect(result.session.answers.generate3d).toBe(true);
       const textMsg = result.outgoingMessages.find((m) => m.type === 'text');
-      expect(textMsg?.text).toBe(
-        'Projeto gerado com sucesso. Segue o layout do galpão.'
-      );
-      const docMsg = result.outgoingMessages.find((m) => m.type === 'document');
-      expect(docMsg).toBeDefined();
-      expect(docMsg?.document?.filename).toMatch(/^projeto-\d+\.pdf$/);
-      expect(docMsg?.document?.url).toMatch(/^\/files\/projeto-\d+\.pdf$/);
+      expect(textMsg?.text).toContain('Projeto gerado com sucesso');
+      expect(textMsg?.text).toContain('integrador interno');
+      expect(
+        result.outgoingMessages.some((m) => m.type === 'document')
+      ).toBe(false);
       expect(typeof result.session.answers.pdfFilename).toBe('string');
       expect((result.session.answers.pdfFilename as string).length).toBeGreaterThan(
         0
       );
       expect(typeof result.session.answers.pdfPath).toBe('string');
       expect(fs.existsSync(result.session.answers.pdfPath as string)).toBe(true);
+      expect(result.generatedPdf).toBeDefined();
+      expect(result.generatedPdf?.mimeType).toBe('application/pdf');
+      expect(result.generatedPdf?.absolutePath).toBe(
+        result.session.answers.pdfPath
+      );
+      expect(result.generatedPdf?.sizeBytes).toBeGreaterThan(0);
+      expect(result.generatedPdf?.filename).toBe(
+        result.session.answers.pdfFilename
+      );
 
       const names = fs.existsSync(storageDir)
         ? fs.readdirSync(storageDir).filter((f) => f.includes('5511999999999'))
@@ -256,7 +263,7 @@ describe('MessageRouter', () => {
       ).toBe(true);
       expect(
         fs.existsSync(
-          path.join(storageDir, docMsg?.document?.filename as string)
+          path.join(storageDir, result.session.answers.pdfFilename as string)
         )
       ).toBe(true);
     });
@@ -292,9 +299,8 @@ describe('MessageRouter', () => {
       expect(textMsg?.text).toContain('Projeto gerado com sucesso');
       expect(
         result.outgoingMessages.some((m) => m.type === 'document')
-      ).toBe(true);
-      const doc = result.outgoingMessages.find((m) => m.type === 'document');
-      expect(doc?.document?.url).toMatch(/^\/files\//);
+      ).toBe(false);
+      expect(result.generatedPdf?.absolutePath).toBeTruthy();
 
       const pdfPath = result.session.answers.pdfPath as string;
       expect(fs.existsSync(pdfPath)).toBe(true);
@@ -424,16 +430,20 @@ describe('MessageRouter', () => {
       const filePath = path.join(storageDir, filename);
       fs.writeFileSync(filePath, Buffer.from('%PDF-1.4\n%%EOF'));
 
+      const st = fs.statSync(filePath);
       resolvePdf({
         filename,
-        path: filePath,
-        url: `/files/${filename}`,
+        absolutePath: filePath,
+        mimeType: 'application/pdf',
+        sizeBytes: st.size,
+        storageRelativePath: filename,
       });
 
       const r1 = await p1;
       expect(r1.session.state).toBe('DONE');
       expect(r1.session.answers.pdfFilename).toBe(filename);
-      expect(r1.outgoingMessages.some(m => m.type === 'document')).toBe(true);
+      expect(r1.outgoingMessages.some(m => m.type === 'document')).toBe(false);
+      expect(r1.generatedPdf?.absolutePath).toBe(filePath);
 
       spy.mockRestore();
       if (fs.existsSync(filePath)) {

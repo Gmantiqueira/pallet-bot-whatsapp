@@ -71,16 +71,19 @@ describe('generateProjectPdf', () => {
         frontViewSvg,
         isometricSvg,
       },
-      { storagePath: testStoragePath, port: 3000 }
+      { storagePath: testStoragePath }
     );
 
     expect(result.filename).toMatch(/^projeto-\d+\.pdf$/);
-    expect(result.path).toBe(path.join(testStoragePath, result.filename));
-    expect(fs.existsSync(result.path)).toBe(true);
-    expect(fs.statSync(result.path).size).toBeGreaterThan(100);
-    expect(result.url).toBe(`http://localhost:3000/files/${result.filename}`);
+    expect(result.absolutePath).toBe(
+      path.join(testStoragePath, result.filename)
+    );
+    expect(fs.existsSync(result.absolutePath)).toBe(true);
+    expect(result.mimeType).toBe('application/pdf');
+    expect(result.sizeBytes).toBeGreaterThan(100);
+    expect(result.storageRelativePath).toBe(result.filename);
 
-    const bytes = fs.readFileSync(result.path);
+    const bytes = fs.readFileSync(result.absolutePath);
     const pdfDoc = await PDFDocument.load(bytes);
     expect(pdfDoc.getPageCount()).toBe(4);
 
@@ -89,7 +92,7 @@ describe('generateProjectPdf', () => {
     expect(imageMarkers.length).toBeGreaterThanOrEqual(3);
   });
 
-  it('deve gravar PDF no storage com filename, path e url corretos', async () => {
+  it('deve gravar PDF no storage com metadados internos coerentes', async () => {
     const answers = finalizeSummaryAnswers({
       lengthMm: 12000,
       widthMm: 10000,
@@ -118,15 +121,17 @@ describe('generateProjectPdf', () => {
           buildIsometricInputFromAnswers(answers, layout)!
         ),
       },
-      { storagePath: testStoragePath, port: 8080 }
+      { storagePath: testStoragePath }
     );
 
     expect(result.filename).toMatch(/^projeto-\d+\.pdf$/);
-    expect(result.path).toBe(path.join(testStoragePath, result.filename));
-    expect(path.dirname(result.path)).toBe(testStoragePath);
-    expect(fs.existsSync(result.path)).toBe(true);
-    expect(fs.statSync(result.path).size).toBeGreaterThan(2000);
-    expect(result.url).toBe(`http://localhost:8080/files/${result.filename}`);
+    expect(result.absolutePath).toBe(
+      path.join(testStoragePath, result.filename)
+    );
+    expect(path.dirname(result.absolutePath)).toBe(testStoragePath);
+    expect(fs.existsSync(result.absolutePath)).toBe(true);
+    expect(result.sizeBytes).toBeGreaterThan(2000);
+    expect(result.mimeType).toBe('application/pdf');
   });
 
   it('PDF deve incluir vista 3D isométrica na 4ª página', async () => {
@@ -159,10 +164,10 @@ describe('generateProjectPdf', () => {
         ),
         isometricSvg,
       },
-      { storagePath: testStoragePath, port: 3000 }
+      { storagePath: testStoragePath }
     );
 
-    const pdfDoc = await PDFDocument.load(fs.readFileSync(result.path));
+    const pdfDoc = await PDFDocument.load(fs.readFileSync(result.absolutePath));
     expect(pdfDoc.getPageCount()).toBe(4);
   });
 
@@ -185,7 +190,7 @@ describe('PdfService', () => {
 
   beforeEach(() => {
     testStoragePath = path.join(os.tmpdir(), `pdf-test-${Date.now()}`);
-    pdfService = new PdfService(testStoragePath, 3000);
+    pdfService = new PdfService(testStoragePath);
   });
 
   afterEach(() => {
@@ -219,10 +224,9 @@ describe('PdfService', () => {
     const result = await pdfService.generatePdf(session);
 
     expect(result.filename).toMatch(/^projeto-\d+\.pdf$/);
-    expect(fs.existsSync(result.path)).toBe(true);
-    expect(fs.statSync(result.path).size).toBeGreaterThan(0);
-    expect(result.url).toContain('http://localhost:3000/files/');
-    expect(result.url).toContain(result.filename);
+    expect(fs.existsSync(result.absolutePath)).toBe(true);
+    expect(result.sizeBytes).toBeGreaterThan(0);
+    expect(result.mimeType).toBe('application/pdf');
   });
 
   it('generatePdf deve aceitar fluxo CALC', async () => {
@@ -245,13 +249,13 @@ describe('PdfService', () => {
 
     const result = await pdfService.generatePdf(session);
 
-    expect(fs.existsSync(result.path)).toBe(true);
-    expect(fs.statSync(result.path).size).toBeGreaterThan(100);
+    expect(fs.existsSync(result.absolutePath)).toBe(true);
+    expect(result.sizeBytes).toBeGreaterThan(100);
   });
 
   it('should create storage directory if it does not exist', () => {
     const newStoragePath = path.join(os.tmpdir(), `pdf-new-${Date.now()}`);
-    new PdfService(newStoragePath, 3000);
+    new PdfService(newStoragePath);
 
     expect(fs.existsSync(newStoragePath)).toBe(true);
 

@@ -295,6 +295,15 @@
         }
 
         renderWebhookMessages(data.messages);
+        if (data.generatedPdf && data.generatedPdf.absolutePath) {
+          addMessage(
+            '[Integrador] PDF: ' +
+              data.generatedPdf.filename +
+              ' — ' +
+              data.generatedPdf.absolutePath,
+            false
+          );
+        }
       } catch (error) {
         console.error('Error:', error);
         addMessage('❌ Erro ao enviar mensagem', false);
@@ -333,6 +342,15 @@
         addMessage('📷 [Imagem enviada]', true);
 
         renderWebhookMessages(data.messages);
+        if (data.generatedPdf && data.generatedPdf.absolutePath) {
+          addMessage(
+            '[Integrador] PDF: ' +
+              data.generatedPdf.filename +
+              ' — ' +
+              data.generatedPdf.absolutePath,
+            false
+          );
+        }
       } catch (error) {
         console.error('Error:', error);
         addMessage('❌ Erro ao enviar imagem', false);

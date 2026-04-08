@@ -14,7 +14,7 @@ export interface OutgoingMessage {
   }>;
   document?: {
     filename: string;
-    /** Caminho público, ex.: `/files/projeto-123.pdf` */
-    url: string;
+    /** Opcional; este core não assume URL pública. Gateway pode preencher após anexar media. */
+    url?: string;
   };
 }

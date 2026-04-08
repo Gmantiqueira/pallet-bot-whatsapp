@@ -162,22 +162,17 @@ describe('MessageBuilder', () => {
       expect(messages[0].buttons?.[0].id).toBe('CONTINUAR');
     });
 
-    it('should build DONE as text + document with /files URL', () => {
+    it('should build DONE as text only (integrador envia PDF)', () => {
       const session = createSession('DONE');
       const messages = buildMessages(session, {
         pdfFilename: 'projeto-1730000000000.pdf',
       });
 
-      expect(messages).toHaveLength(2);
+      expect(messages).toHaveLength(1);
       expect(messages[0].type).toBe('text');
-      expect(messages[0].text).toBe(
-        'Projeto gerado com sucesso. Segue o layout do galpão.'
-      );
-      expect(messages[1].type).toBe('document');
-      expect(messages[1].document?.filename).toBe('projeto-1730000000000.pdf');
-      expect(messages[1].document?.url).toBe(
-        '/files/projeto-1730000000000.pdf'
-      );
+      expect(messages[0].text).toContain('Projeto gerado com sucesso');
+      expect(messages[0].text).toContain('integrador interno');
+      expect(messages.some(m => m.type === 'document')).toBe(false);
     });
 
     it('should use pdfFilename from session answers when ctx omits it', () => {
@@ -186,8 +181,9 @@ describe('MessageBuilder', () => {
       });
       const messages = buildMessages(session, {});
 
-      expect(messages[1].document?.filename).toBe('projeto-from-session.pdf');
-      expect(messages[1].document?.url).toBe('/files/projeto-from-session.pdf');
+      expect(messages).toHaveLength(1);
+      expect(messages[0].text).toContain('integrador interno');
+      expect(messages.some(m => m.type === 'document')).toBe(false);
     });
 
     it('DONE without pdfFilename should not fabricate document link', () => {

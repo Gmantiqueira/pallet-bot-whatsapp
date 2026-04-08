@@ -4,6 +4,7 @@ import { loadEnv } from '../config/env';
 import { OutgoingMessage } from '../types/messages';
 import { SqliteSessionRepository } from '../infra/repositories/sqliteSessionRepository';
 import { routeIncoming, IncomingPayload } from '../application/messageRouter';
+import type { GeneratedPdfArtifact } from '../types/generatedPdf';
 
 const BEARER_PREFIX = 'Bearer ';
 
@@ -40,6 +41,8 @@ interface IncomingWebhookPayload {
 
 interface WebhookResponse {
   messages: OutgoingMessage[];
+  /** Metadados do PDF quando gerado neste pedido — para o integrador anexar ao WhatsApp. */
+  generatedPdf?: GeneratedPdfArtifact;
 }
 
 const START_STATE = 'START';
@@ -79,10 +82,13 @@ export const webhookRoutes = async (fastify: FastifyInstance): Promise<void> => 
         sessionRepository.upsert(session);
       }
 
-      // Route incoming message
+      // Core devolve mensagens ao utilizador; o integrador junta `generatedPdf` ao pipeline de envio.
       const result = await routeIncoming(session, incoming, sessionRepository);
 
-      return reply.code(200).send({ messages: result.outgoingMessages });
+      return reply.code(200).send({
+        messages: result.outgoingMessages,
+        ...(result.generatedPdf ? { generatedPdf: result.generatedPdf } : {}),
+      });
     }
   );
 };
