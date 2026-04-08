@@ -48,7 +48,8 @@ export const ISOMETRIC_PLACEHOLDER_SVG = `<svg xmlns="http://www.w3.org/2000/svg
 /** @deprecated Use GenerateProjectPdfResult */
 export type PdfResult = GenerateProjectPdfResult;
 
-function formatMm(n: number): string {
+/** Formatação pt-BR para cotas no PDF (V1 e resumo V2). */
+export function formatMm(n: number): string {
   return `${n.toLocaleString('pt-BR')} mm`;
 }
 
@@ -153,7 +154,8 @@ function coverDataEmissao(project: Record<string, unknown>): string {
   });
 }
 
-function formatPeDireitoAltura(project: Record<string, unknown>): string {
+/** Pé-direito a partir das respostas da sessão (não depende do layout). */
+export function formatPeDireitoAltura(project: Record<string, unknown>): string {
   if (typeof project.heightMm === 'number') {
     return formatMm(project.heightMm);
   }

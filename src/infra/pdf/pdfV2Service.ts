@@ -2,7 +2,7 @@ import PDFDocument from 'pdfkit';
 import * as fs from 'fs';
 import * as path from 'path';
 import type { Session } from '../../domain/session';
-import type { LayoutResult } from '../../domain/layoutEngine';
+import type { LayoutGeometry } from '../../domain/pdfV2/layoutGeometryV2';
 import { buildLayoutSolutionV2 } from '../../domain/pdfV2/layoutSolutionV2';
 import {
   buildLayoutGeometry,
@@ -24,9 +24,9 @@ import {
 import {
   fitRasterInBox,
   svgRasterToPng,
-  technicalSummaryRows,
   type GenerateProjectPdfResult,
 } from './pdfService';
+import { technicalSummaryRowsFromLayoutGeometry } from './pdfV2TechnicalSummary';
 import { buildPdfArtifactAfterWrite } from './pdfArtifact';
 import { resolveStoragePath } from '../../config/storagePath';
 
@@ -186,7 +186,8 @@ function attachPdfFileStream(
 export type GenerateProjectPdfV2Input = {
   /** `hasTunnel === true` inclui folhas de elevação com túnel; caso contrário omite-as. */
   project: Record<string, unknown>;
-  layout: LayoutResult;
+  /** Fonte única para o resumo técnico (alinhado à planta/elevações V2). */
+  layoutGeometry: LayoutGeometry;
   floorPlanSvg: string;
   /** Folhas SVG de elevação (frontal ×2 se túnel, lateral ×2 se túnel). */
   elevationPages: ElevationPageSvgs;
@@ -394,7 +395,10 @@ export async function renderPdfV2(
   horizontalRule(doc.y, 0.1, COL_RULE);
   doc.moveDown(0.55);
 
-  const techRows = technicalSummaryRows(input.project, input.layout);
+  const techRows = technicalSummaryRowsFromLayoutGeometry(
+    input.project,
+    input.layoutGeometry
+  );
   const boxTop = doc.y;
   const boxPad = 8;
   const innerH = measureTechnicalSummaryHeight(
@@ -576,10 +580,6 @@ export async function generatePdfV2FromSession(
   options: { storagePath: string }
 ): Promise<GenerateProjectPdfResult> {
   const answers = session.answers;
-  const layout = answers.layout as LayoutResult | undefined;
-  if (!layout) {
-    throw new Error('Layout ausente: não é possível gerar o PDF V2');
-  }
   const v2answers = buildProjectAnswersV2(answers);
   if (!v2answers) {
     throw new Error('Respostas incompletas para PDF V2');
@@ -598,7 +598,7 @@ export async function generatePdfV2FromSession(
   return renderPdfV2(
     {
       project: answers,
-      layout,
+      layoutGeometry,
       floorPlanSvg,
       elevationPages,
       view3dSvg,
