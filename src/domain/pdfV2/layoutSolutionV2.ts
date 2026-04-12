@@ -4,7 +4,12 @@ import {
   type ProjectAnswersV2,
 } from './answerMapping';
 import { tunnelActiveStorageLevelsFromGlobal } from './elevationLevelGeometryV2';
-import { moduleLengthAlongBeamMm as computeModuleLengthAlongBeamMm } from './rackModuleSpec';
+import {
+  maxFullModulesInBeamRun,
+  moduleFootprintAlongBeamInRunMm,
+  moduleLengthAlongBeamMm as computeModuleLengthAlongBeamMm,
+  totalBeamRunLengthForModuleCount,
+} from './rackModuleSpec';
 import type {
   CirculationZone,
   LayoutOrientationV2,
@@ -324,13 +329,12 @@ function countRowsAcrossZones(
   return total;
 }
 
-/** Quantos módulos cabem no vão ao longo do eixo de fileira (passo = lado longo da pegada). */
+/** Quantos módulos completos cabem no vão ao longo da fileira (montantes partilhados entre vizinhos). */
 function countModulesAlongBeamSpan(
   beamSpanMm: number,
-  moduleLengthAxisMm: number
+  bayClearSpanMm: number
 ): number {
-  if (moduleLengthAxisMm <= 0) return 0;
-  return Math.floor(beamSpanMm / moduleLengthAxisMm);
+  return maxFullModulesInBeamRun(beamSpanMm, bayClearSpanMm);
 }
 
 type VariantEval = {
@@ -345,7 +349,7 @@ function evaluateVariant(
   crossSpanMm: number,
   beamSpanMm: number,
   rackDepthMm: number,
-  moduleLengthAlongBeamMm: number,
+  bayClearSpanMm: number,
   corridorMm: number,
   levels: number,
   hasTunnel: boolean,
@@ -359,7 +363,7 @@ function evaluateVariant(
     hasTunnel,
     tunnelPosition
   );
-  const along = countModulesAlongBeamSpan(beamSpanMm, moduleLengthAlongBeamMm);
+  const along = countModulesAlongBeamSpan(beamSpanMm, bayClearSpanMm);
   const depthFactor = depthMode === 'double' ? 2 : 1;
   const cells = rows * along;
   const positions = cells * depthFactor * levels;
@@ -371,7 +375,7 @@ function chooseDepthModeFromStrategy(
   crossSpanMm: number,
   beamSpanMm: number,
   rackDepthMm: number,
-  moduleLengthAlongBeamMm: number,
+  bayClearSpanMm: number,
   corridorMm: number,
   levels: number,
   hasTunnel: boolean,
@@ -385,7 +389,7 @@ function chooseDepthModeFromStrategy(
     crossSpanMm,
     beamSpanMm,
     rackDepthMm,
-    moduleLengthAlongBeamMm,
+    bayClearSpanMm,
     corridorMm,
     levels,
     hasTunnel,
@@ -396,7 +400,7 @@ function chooseDepthModeFromStrategy(
     crossSpanMm,
     beamSpanMm,
     rackDepthMm,
-    moduleLengthAlongBeamMm,
+    bayClearSpanMm,
     corridorMm,
     levels,
     hasTunnel,
@@ -522,16 +526,18 @@ function splitBeamIntoModuleSegments(
 
 function fillSegmentModules(
   len: number,
-  moduleLengthAxisMm: number,
+  bayClearSpanMm: number,
   halfOpt: boolean,
   allowHalfEnd: boolean
 ): { full: number; half: boolean; rejectedHalf: boolean } {
-  if (moduleLengthAxisMm <= 0)
+  const firstLen = computeModuleLengthAlongBeamMm(bayClearSpanMm);
+  if (firstLen <= 0)
     return { full: 0, half: false, rejectedHalf: false };
-  const nFull = Math.floor(len / moduleLengthAxisMm);
-  const rem = len - nFull * moduleLengthAxisMm;
+  const nFull = maxFullModulesInBeamRun(len, bayClearSpanMm);
+  const used = totalBeamRunLengthForModuleCount(nFull, bayClearSpanMm);
+  const rem = len - used;
   const wantHalf =
-    halfOpt && rem + EPS >= moduleLengthAxisMm / 2 && rem < moduleLengthAxisMm;
+    halfOpt && rem + EPS >= firstLen / 2 && rem < firstLen;
   if (!wantHalf) return { full: nFull, half: false, rejectedHalf: false };
   if (allowHalfEnd) return { full: nFull, half: true, rejectedHalf: false };
   return { full: nFull, half: false, rejectedHalf: true };
@@ -542,7 +548,7 @@ function buildModuleSegmentsForRow(
   beamSegs: Segment1DKind[],
   crossSeg: { c0: number; c1: number },
   orientation: LayoutOrientationV2,
-  moduleLengthAlongBeamMm: number,
+  bayClearSpanMm: number,
   halfOpt: boolean,
   beamSpan: number,
   tunnel: { t0: number; t1: number } | null,
@@ -590,23 +596,26 @@ function buildModuleSegmentsForRow(
       full,
       half,
       rejectedHalf: rh,
-    } = fillSegmentModules(len, moduleLengthAlongBeamMm, halfOpt, allowHalfEnd);
+    } = fillSegmentModules(len, bayClearSpanMm, halfOpt, allowHalfEnd);
     if (rh) rejectedHalf = true;
 
     const placeRects = (nFull: number, hasHalf: boolean) => {
       let cursor = bs.a;
+      let runIdx = 0;
       for (let i = 0; i < nFull; i++) {
+        const span = moduleFootprintAlongBeamInRunMm(runIdx, bayClearSpanMm);
         const a = cursor;
-        const b = cursor + moduleLengthAlongBeamMm;
+        const b = cursor + span;
         segments.push(
           rectFor(orientation, rowId, idx++, a, b, crossSeg, 'full', 'normal')
         );
         cursor = b;
+        runIdx += 1;
         moduleEquiv += 1;
       }
       if (hasHalf) {
         const a = cursor;
-        const b = cursor + moduleLengthAlongBeamMm / 2;
+        const b = cursor + computeModuleLengthAlongBeamMm(bayClearSpanMm) / 2;
         segments.push(
           rectFor(orientation, rowId, idx++, a, b, crossSeg, 'half', 'normal')
         );
@@ -689,7 +698,8 @@ export function buildLayoutSolutionV2(
    * Semântica fixa (não usar max/min entre os dois — isso invertia vão vs profundidade):
    * - `moduleWidthMm` = vão livre de **uma baia** ao longo das longarinas (entrada `beamLengthMm` / `moduleWidthMm`).
    * - `moduleDepthMm` = profundidade de posição, eixo transversal ao vão.
-   * Um **módulo** em planta = 2 baias + estrutura (`moduleLengthAlongBeamMm`), repetido ponta a ponta.
+   * Comprimento nominal de **uma** face de módulo: `moduleLengthAlongBeamMm` (2 baias + montantes + folga entre baias).
+   * Numa fileira contínua, módulos consecutivos partilham um montante — ver `maxFullModulesInBeamRun` / `moduleFootprintAlongBeamInRunMm`.
    */
   const bayClearSpanAlongBeamMm = Math.max(0, moduleWidthMm);
   const rackDepthMm = Math.max(0, moduleDepthMm);
@@ -709,7 +719,7 @@ export function buildLayoutSolutionV2(
     crossSpan,
     beamSpan,
     rackDepthMm,
-    moduleLengthAlongBeamMm,
+    bayClearSpanAlongBeamMm,
     corridorMm,
     levels,
     hasTunnel,
@@ -823,7 +833,7 @@ export function buildLayoutSolutionV2(
       segsForRow,
       crossSeg,
       orientation,
-      moduleLengthAlongBeamMm,
+      bayClearSpanAlongBeamMm,
       halfModuleOptimization,
       beamSpan,
       tunnelForHalf,

@@ -12,6 +12,8 @@ import {
 } from './elevationLevelGeometryV2';
 import {
   MODULE_PALLET_BAYS_PER_LEVEL,
+  beamRunPitchPerModuleMm,
+  moduleFootprintAlongBeamInRunMm,
   moduleLengthAlongBeamMm as computeModuleLengthAlongBeamMm,
 } from './rackModuleSpec';
 import type {
@@ -461,6 +463,12 @@ function beamStartCoord(m: RackModule, ori: LayoutOrientationV2): number {
     : Math.min(m.footprint.y0, m.footprint.y1);
 }
 
+function beamEndCoord(m: RackModule, ori: LayoutOrientationV2): number {
+  return ori === 'along_length'
+    ? Math.max(m.footprint.x0, m.footprint.x1)
+    : Math.max(m.footprint.y0, m.footprint.y1);
+}
+
 /** Garante mesma profundidade transversal ao longo da fileira (mesma banda). */
 function validateRowModuleChaining(
   row: RackRow,
@@ -500,37 +508,56 @@ function validateRowModuleChaining(
 }
 
 /**
- * Garante que a dimensão da pegada ao longo do vão é o passo ponta-a-ponta (vão declarado),
- * e não a profundidade de posição — evita fileiras “lado com lado”.
+ * Garante pegadas ao longo do vão: 1.º módulo = face completa; seguintes = passo com montante partilhado;
+ * meio módulo = metade da face isolada. Evita confundir com profundidade de faixa.
  */
 function validateModulesSpanLengthAxis(
   row: RackRow,
-  moduleLengthAlongBeamMm: number,
-  rackDepthMm: number
+  nominalModuleLengthAlongBeamMm: number,
+  rackDepthMm: number,
+  beamAlongModuleMm: number,
+  ori: LayoutOrientationV2
 ): void {
-  for (const m of row.modules) {
-    if (m.type === 'tunnel') continue;
-
-    const expected =
-      m.segmentType === 'half'
-        ? moduleLengthAlongBeamMm / 2
-        : moduleLengthAlongBeamMm;
-    const tol = 2.5;
+  const tol = 2.5;
+  const mods = [...row.modules]
+    .filter(m => m.type !== 'tunnel')
+    .sort((a, b) => beamStartCoord(a, ori) - beamStartCoord(b, ori));
+  let runIdx = 0;
+  let prevEnd: number | null = null;
+  for (const m of mods) {
+    const start = beamStartCoord(m, ori);
+    if (
+      prevEnd != null &&
+      start - prevEnd > 1.5
+    ) {
+      runIdx = 0;
+    }
     const along = m.moduleLengthAxisMm;
-
+    if (m.segmentType === 'half') {
+      const expected = nominalModuleLengthAlongBeamMm / 2;
+      if (Math.abs(along - expected) <= tol) {
+        prevEnd = beamEndCoord(m, ori);
+        continue;
+      }
+      throw new LayoutGeometryValidationError(
+        `Fileira ${row.id}: meio módulo ${m.id} — largura ao longo do vão (${Math.round(along)} mm) ` +
+          `não corresponde a metade do módulo nominal (~${Math.round(expected)} mm).`
+      );
+    }
+    const expected = moduleFootprintAlongBeamInRunMm(runIdx, beamAlongModuleMm);
     if (Math.abs(along - expected) <= tol) {
+      runIdx += 1;
+      prevEnd = beamEndCoord(m, ori);
       continue;
     }
-
     if (Math.abs(along - rackDepthMm) <= tol) {
       throw new LayoutGeometryValidationError(
         'Invalid row growth: modules are side-by-side instead of end-to-end'
       );
     }
-
     throw new LayoutGeometryValidationError(
       `Fileira ${row.id}: módulo ${m.id} — dimensão ao longo do vão (${Math.round(along)} mm) ` +
-        `não corresponde ao passo ponta-a-ponta (${Math.round(expected)} mm).`
+        `não corresponde ao primeiro módulo ou ao passo com montante partilhado (~${Math.round(expected)} mm).`
     );
   }
 }
@@ -553,14 +580,26 @@ function validateRackModuleBayAndPlanSemantics(
       `Módulo ${m.id}: vão por baia incoerente com os metadados do layout.`
     );
   }
-  const expectedAlong =
-    m.segmentType === 'half'
-      ? computeModuleLengthAlongBeamMm(m.bayClearSpanAlongBeamMm) / 2
-      : computeModuleLengthAlongBeamMm(m.bayClearSpanAlongBeamMm);
-  if (Math.abs(m.moduleLengthAlongBeamMm - expectedAlong) > 2.5) {
+  const bay = m.bayClearSpanAlongBeamMm;
+  const standalone = computeModuleLengthAlongBeamMm(bay);
+  const pitch = beamRunPitchPerModuleMm(bay);
+  if (m.segmentType === 'half') {
+    if (Math.abs(m.moduleLengthAlongBeamMm - standalone / 2) > 2.5) {
+      throw new LayoutGeometryValidationError(
+        `Módulo ${m.id}: meio módulo ao longo da fileira (${Math.round(m.moduleLengthAlongBeamMm)} mm) ` +
+          `não corresponde a metade do módulo de ${MODULE_PALLET_BAYS_PER_LEVEL} baias (~${Math.round(standalone / 2)} mm).`
+      );
+    }
+    return;
+  }
+  const w = m.moduleLengthAlongBeamMm;
+  if (
+    Math.abs(w - standalone) > 2.5 &&
+    Math.abs(w - pitch) > 2.5
+  ) {
     throw new LayoutGeometryValidationError(
-      `Módulo ${m.id}: comprimento ao longo da fileira (${Math.round(m.moduleLengthAlongBeamMm)} mm) ` +
-        `não corresponde a um módulo de ${MODULE_PALLET_BAYS_PER_LEVEL} baias (~${Math.round(expectedAlong)} mm).`
+      `Módulo ${m.id}: comprimento ao longo da fileira (${Math.round(w)} mm) ` +
+        `não corresponde à face completa (~${Math.round(standalone)} mm) nem ao passo entre módulos (~${Math.round(pitch)} mm).`
     );
   }
   /* Profundidade de posição pode ser maior que o passo ao longo do vão (ex.: vão 1100 mm, prof. 2700 mm). */
@@ -604,7 +643,13 @@ export function validateLayoutGeometry(geo: LayoutGeometry): void {
 
     const ori = row.layoutOrientation;
     validateRowModuleChaining(row, ori);
-    validateModulesSpanLengthAxis(row, moduleLengthAlongBeamMm, rackDepthMm);
+    validateModulesSpanLengthAxis(
+      row,
+      moduleLengthAlongBeamMm,
+      rackDepthMm,
+      beamAlongModuleMm,
+      row.layoutOrientation
+    );
 
     for (const m of row.modules) {
       if (m.rowId !== row.id) {

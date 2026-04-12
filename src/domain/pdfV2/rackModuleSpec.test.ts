@@ -1,7 +1,9 @@
 import {
   INTER_BAY_GAP_WITHIN_MODULE_MM,
   MODULE_PALLET_BAYS_PER_LEVEL,
+  maxFullModulesInBeamRun,
   moduleLengthAlongBeamMm,
+  totalBeamRunLengthForModuleCount,
   uprightWidthsMmForFrontBayCount,
 } from './rackModuleSpec';
 
@@ -20,5 +22,21 @@ describe('rackModuleSpec', () => {
   it('front upright count is bays + 1', () => {
     expect(uprightWidthsMmForFrontBayCount(2, false)).toHaveLength(3);
     expect(uprightWidthsMmForFrontBayCount(1, false)).toHaveLength(2);
+  });
+
+  it('fileira contínua: n módulos ocupam menos que n× módulo isolado (montante partilhado)', () => {
+    const bay = 1100;
+    const one = moduleLengthAlongBeamMm(bay);
+    const twoRun = totalBeamRunLengthForModuleCount(2, bay);
+    expect(twoRun).toBeLessThan(2 * one);
+    expect(twoRun).toBe(one + (2 * bay + INTER_BAY_GAP_WITHIN_MODULE_MM + 150));
+  });
+
+  it('maxFullModulesInBeamRun pode exceder floor(comprimento / módulo isolado)', () => {
+    const bay = 1100;
+    const one = moduleLengthAlongBeamMm(bay);
+    const len = 5100;
+    expect(Math.floor(len / one)).toBe(1);
+    expect(maxFullModulesInBeamRun(len, bay)).toBe(2);
   });
 });

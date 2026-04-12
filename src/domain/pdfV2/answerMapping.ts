@@ -2,7 +2,7 @@ import {
   DEFAULT_MODULE_DEPTH_MM,
   DEFAULT_MODULE_WIDTH_MM,
 } from '../projectEngines';
-import { moduleLengthAlongBeamMm } from './rackModuleSpec';
+import { maxFullModulesInBeamRun } from './rackModuleSpec';
 import type {
   LayoutOrientationV2,
   LineStrategyCode,
@@ -114,13 +114,12 @@ export function pickBetterOrientationBySimpleCount(
 ): LayoutOrientationV2 {
   const rackDepthMm = Math.max(0, moduleDepthMm);
   const bayClearAlongMm = Math.max(0, moduleWidthMm);
-  const moduleStepAlongMm = moduleLengthAlongBeamMm(bayClearAlongMm);
   const alongL = maxModulesSingleDepth(
     lengthMm,
     widthMm,
     corridorMm,
     rackDepthMm,
-    moduleStepAlongMm,
+    bayClearAlongMm,
     'along_length'
   );
   const alongW = maxModulesSingleDepth(
@@ -128,7 +127,7 @@ export function pickBetterOrientationBySimpleCount(
     widthMm,
     corridorMm,
     rackDepthMm,
-    moduleStepAlongMm,
+    bayClearAlongMm,
     'along_width'
   );
   if (alongW <= alongL) {
@@ -144,13 +143,13 @@ function maxModulesSingleDepth(
   widthMm: number,
   corridorMm: number,
   rackDepthMm: number,
-  moduleLengthAlongBeamMm: number,
+  bayClearSpanMm: number,
   orientation: LayoutOrientationV2
 ): number {
   const beamSpan = orientation === 'along_length' ? lengthMm : widthMm;
   const cross = orientation === 'along_length' ? widthMm : lengthMm;
   const rows = rowBandsSingleDepth(cross, rackDepthMm, corridorMm);
-  const along = Math.floor(beamSpan / moduleLengthAlongBeamMm);
+  const along = maxFullModulesInBeamRun(beamSpan, bayClearSpanMm);
   return rows * along;
 }
 
