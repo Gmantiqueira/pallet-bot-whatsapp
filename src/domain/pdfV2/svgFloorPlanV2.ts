@@ -20,9 +20,9 @@ const COL_ROW_SINGLE = '#eef2f7';
 const COL_ROW_DOUBLE = '#e2edf8';
 /** Nível 2 — módulo: preenchimento médio; contorno perimetral forte (unidade estrutural). */
 const COL_MOD_FILL = '#f1f5f9';
-/** Contorno do módulo: mais escuro e espesso que a subdivisão interna (baias). */
-const COL_MOD_STROKE = '#94a3b8';
-const COL_MOD_STROKE_W = 1.52;
+/** Contorno do módulo: hierarquia acima da subdivisão interna (baias) e da grelha. */
+const COL_MOD_STROKE = '#64748b';
+const COL_MOD_STROKE_W = 1.74;
 const COL_MOD_TUNNEL_FILL = '#fffbeb';
 const COL_MOD_TUNNEL_STROKE = '#b45309';
 /**
@@ -46,7 +46,7 @@ const COL_DIM = '#111827';
 const COL_INK = '#111827';
 /** Contorno da **faixa da linha** (unidade contínua), desenhado por cima dos módulos. */
 const COL_ROW_ENVELOPE_STROKE = '#334155';
-const ROW_ENVELOPE_SW = 2.65;
+const ROW_ENVELOPE_SW = 2.92;
 
 const SEM_ORDER: Record<FloorPlanCirculationSemantic, number> = {
   residual: 0,
@@ -84,10 +84,10 @@ function sortCirculation(
   );
 }
 
-/** Divisão interna 2 baias: traço bem mais leve que o perímetro do módulo (só leitura de vão). */
+/** Divisão interna 2 baias: traço terciário — não compete com o contorno do módulo. */
 function moduleBayHintLine(s: FloorPlanModelV2['structureRects'][0]): string {
-  const thin = 0.2;
-  const op = 0.28;
+  const thin = 0.14;
+  const op = 0.17;
   if (s.w >= s.h) {
     const mx = s.x + s.w / 2;
     return `<line x1="${mx}" y1="${s.y}" x2="${mx}" y2="${s.y + s.h}" stroke="${ELEV_PALLET_TIER_STROKE}" stroke-width="${thin}" opacity="${op}"/>`;
