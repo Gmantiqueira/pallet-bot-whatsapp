@@ -4,6 +4,14 @@ import type {
 } from './types';
 import { escapeXml } from './floorPlanModelV2';
 
+/**
+ * Ligação visual com a elevação (`svgElevationV2`): mesma família cromática das faixas entre longarinas
+ * e do contorno das longarinas — só acentos (sem preencher módulos).
+ * Valores espelham `FV_PALLET_TIER_STROKE` e `FV_BEAM_EDGE` em `svgElevationV2.ts`.
+ */
+const ELEV_PALLET_TIER_STROKE = '#fdba74';
+const ELEV_BEAM_EDGE = '#9a3412';
+
 const COL_BG = '#ffffff';
 const COL_FRAME = '#e2e8f0';
 /** Perímetro do galpão: discreto mas legível. */
@@ -36,8 +44,6 @@ const COL_TUNNEL_STROKE = '#b45309';
  */
 const COL_RESIDUAL_FILL = '#fafafa';
 const COL_RESIDUAL_STROKE = '#e5e7eb';
-/** Nível 4 — subdivisão interna (baias): mais leve que o contorno do módulo. */
-const COL_BAY_HINT = '#e2e8f0';
 const COL_DIM = '#111827';
 const COL_INK = '#111827';
 /** Contorno da **faixa da linha** (unidade contínua), desenhado por cima dos módulos. */
@@ -80,16 +86,16 @@ function sortCirculation(
   );
 }
 
-/** Nível 4 — divisão interna (baias), mais leve que o contorno do módulo. */
+/** Divisão interna 2 baias: traço fino na cor dos níveis da elevação (acento, não preenchimento). */
 function moduleBayHintLine(s: FloorPlanModelV2['structureRects'][0]): string {
-  const thin = 0.28;
-  const op = 0.2;
+  const thin = 0.32;
+  const op = 0.48;
   if (s.w >= s.h) {
     const mx = s.x + s.w / 2;
-    return `<line x1="${mx}" y1="${s.y}" x2="${mx}" y2="${s.y + s.h}" stroke="${COL_BAY_HINT}" stroke-width="${thin}" opacity="${op}"/>`;
+    return `<line x1="${mx}" y1="${s.y}" x2="${mx}" y2="${s.y + s.h}" stroke="${ELEV_PALLET_TIER_STROKE}" stroke-width="${thin}" opacity="${op}"/>`;
   }
   const my = s.y + s.h / 2;
-  return `<line x1="${s.x}" y1="${my}" x2="${s.x + s.w}" y2="${my}" stroke="${COL_BAY_HINT}" stroke-width="${thin}" opacity="${op}"/>`;
+  return `<line x1="${s.x}" y1="${my}" x2="${s.x + s.w}" y2="${my}" stroke="${ELEV_PALLET_TIER_STROKE}" stroke-width="${thin}" opacity="${op}"/>`;
 }
 
 function orientationArrowSvg(
@@ -130,7 +136,7 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
   parts.push(`<style>
     .fp-title { font: 700 40px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: ${COL_INK}; letter-spacing: 0.05em; }
     .fp-sub { font: 500 25px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #4b5563; }
-    .fp-row-title { font: 700 17px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #0f172a; stroke: #ffffff; stroke-width: 3.5px; paint-order: stroke fill; stroke-linejoin: round; }
+    .fp-row-title { font: 700 17px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: ${ELEV_BEAM_EDGE}; stroke: #ffffff; stroke-width: 3.5px; paint-order: stroke fill; stroke-linejoin: round; }
     .fp-row-sub { font: 500 13px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #334155; stroke: #ffffff; stroke-width: 3px; paint-order: stroke fill; stroke-linejoin: round; }
     .fp-circ-op { font: 800 14px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #0f172a; stroke: #ffffff; stroke-width: 3.5px; paint-order: stroke fill; stroke-linejoin: round; }
     .fp-circ { font: 600 12px "Helvetica Neue", Helvetica, Arial, sans-serif; }
