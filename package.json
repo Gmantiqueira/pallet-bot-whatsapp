@@ -16,7 +16,8 @@
     "format": "prettier --write \"src/**/*.ts\"",
     "format:check": "prettier --check \"src/**/*.ts\"",
     "type-check": "tsc --noEmit",
-    "pdf:test": "tsx scripts/generate-test-pdfs.ts"
+    "pdf:test": "tsx scripts/generate-test-pdfs.ts",
+    "pdf:test:audit": "LAYOUT_AUDIT_LOG=1 tsx scripts/generate-test-pdfs.ts"
   },
   "keywords": [
     "whatsapp",
