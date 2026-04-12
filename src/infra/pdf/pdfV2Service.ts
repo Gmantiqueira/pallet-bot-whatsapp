@@ -28,7 +28,6 @@ import {
 } from './pdfService';
 import { technicalSummaryRowsFromLayoutGeometry } from './pdfV2TechnicalSummary';
 import { buildPdfArtifactAfterWrite } from './pdfArtifact';
-import { resolveStoragePath } from '../../config/storagePath';
 
 const MARGIN_PT = 56;
 const COL_INK = '#0f172a';
@@ -209,7 +208,7 @@ export async function renderPdfV2(
   }
 
   const timestamp = Date.now();
-  const filename = `projeto-v2-${timestamp}.pdf`;
+  const filename = `projeto-${timestamp}.pdf`;
   const filePath = path.join(storagePath, filename);
 
   const { pxW, pxH } = drawingRasterPixelSize();
@@ -250,7 +249,7 @@ export async function renderPdfV2(
     elevLateralTunRaster = latTunSvg ? rasterAll[i++]! : null;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    throw new Error(`Falha ao rasterizar SVG V2 para PDF: ${msg}`);
+    throw new Error(`Falha ao rasterizar SVG para PDF: ${msg}`);
   }
 
   const doc = new PDFDocument({
@@ -353,7 +352,7 @@ export async function renderPdfV2(
     .font('Helvetica')
     .fontSize(9)
     .fillColor(COL_MUTED)
-    .text('Documento técnico (pipeline V2)', left, doc.y, {
+    .text('Documento técnico', left, doc.y, {
       width: usableW,
       align: 'center',
     });
@@ -443,7 +442,7 @@ export async function renderPdfV2(
 
   doc.addPage();
   doc.y = doc.page.margins.top + 6;
-  drawCentered('PLANTA DO GALPÃO (V2)', {
+  drawCentered('PLANTA DO GALPÃO', {
     size: 12,
     font: 'Helvetica-Bold',
     color: COL_INK,
@@ -567,7 +566,7 @@ export async function renderPdfV2(
   await writeDone;
 
   if (!fs.existsSync(filePath)) {
-    throw new Error('PDF V2 não foi criado no disco');
+    throw new Error('PDF não foi criado no disco');
   }
   return buildPdfArtifactAfterWrite(filePath, storagePath);
 }
@@ -582,7 +581,7 @@ export async function generatePdfV2FromSession(
   const answers = session.answers;
   const v2answers = buildProjectAnswersV2(answers);
   if (!v2answers) {
-    throw new Error('Respostas incompletas para PDF V2');
+    throw new Error('Respostas incompletas para gerar o PDF');
   }
   const layoutSolution = buildLayoutSolutionV2(v2answers);
   const layoutGeometry = buildLayoutGeometry(layoutSolution, answers);
@@ -605,21 +604,4 @@ export async function generatePdfV2FromSession(
     },
     options
   );
-}
-
-export class PdfV2Service {
-  private storagePath: string;
-
-  constructor(storagePath: string = resolveStoragePath()) {
-    this.storagePath = path.resolve(storagePath);
-    if (!fs.existsSync(this.storagePath)) {
-      fs.mkdirSync(this.storagePath, { recursive: true });
-    }
-  }
-
-  generateFromSession(session: Session): Promise<GenerateProjectPdfResult> {
-    return generatePdfV2FromSession(session, {
-      storagePath: this.storagePath,
-    });
-  }
 }

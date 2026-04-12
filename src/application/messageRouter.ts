@@ -4,28 +4,16 @@ import { Session } from '../domain/session';
 import { SessionRepository } from '../domain/sessionRepository';
 import { Input, transition, State } from '../domain/stateMachine';
 import {
-  buildFrontViewInputFromAnswers,
-  buildIsometricInputFromAnswers,
   computeProjectEngines,
   finalizeSummaryAnswers,
 } from '../domain/projectEngines';
-import {
-  generateFloorPlanSvg,
-  generateFrontViewSvg,
-  resolveFloorPlanWarehouse,
-} from '../domain/drawingEngine';
-import { generateIsometricView } from '../domain/isometricDrawingEngine';
 import { OutgoingMessage } from '../types/messages';
 import {
   buildMessages,
   GENERATING_DOC_WAIT_TEXT,
   MessageContext,
 } from './messageBuilder';
-import {
-  FRONT_VIEW_PLACEHOLDER_SVG,
-  ISOMETRIC_PLACEHOLDER_SVG,
-  PdfService,
-} from '../infra/pdf/pdfService';
+import { PdfService } from '../infra/pdf/pdfService';
 import type { GeneratedPdfArtifact } from '../types/generatedPdf';
 import { resolveStoragePath } from '../config/storagePath';
 import { buildProjectAnswersV2 } from '../domain/pdfV2/answerMapping';
@@ -74,7 +62,10 @@ const isGlobalCommand = (text: string): boolean => {
   return GLOBAL_COMMANDS.includes(normalized);
 };
 
-const convertToInput = (incoming: IncomingPayload, session: Session): Input | null => {
+const convertToInput = (
+  incoming: IncomingPayload,
+  session: Session
+): Input | null => {
   const trimmedText = incoming.text?.trim() ?? '';
 
   if (session.state === 'START') {
@@ -218,95 +209,54 @@ export const routeIncoming = async (
       const phone = genSession.phone;
       const ans = genSession.answers;
 
-      const engines = computeProjectEngines(ans);
-      if (!engines) {
+      if (!computeProjectEngines(ans)) {
         throw new Error('Layout ausente');
       }
-      const { layout } = engines;
 
-      if (process.env.PDF_PIPELINE === 'v2') {
-        const v2a = buildProjectAnswersV2(ans);
-        if (v2a) {
-          const sol = buildLayoutSolutionV2(v2a);
-          const geo: LayoutGeometry = buildLayoutGeometry(sol, ans);
-          validateLayoutGeometry(geo);
-          const floorSvgV2 = serializeFloorPlanSvgV2(
-            buildFloorPlanModelV2(geo)
-          );
-          const elevModelV2: ElevationModelV2 = buildElevationModelV2(ans, geo);
-          const elevPagesV2: ElevationPageSvgs =
-            serializeElevationPagesV2(elevModelV2);
-          const view3dSvgV2 = render3DViewV2(
-            projectToIsometric(build3DModelV2(geo))
-          );
-          fs.writeFileSync(
-            path.join(storageDir, `planta-v2-${phone}-${ts}.svg`),
-            floorSvgV2,
-            'utf8'
-          );
-          fs.writeFileSync(
-            path.join(storageDir, `elevacao-sem-tunel-v2-${phone}-${ts}.svg`),
-            elevPagesV2.frontWithoutTunnel,
-            'utf8'
-          );
-          if (elevPagesV2.frontWithTunnel) {
-            fs.writeFileSync(
-              path.join(storageDir, `elevacao-com-tunel-v2-${phone}-${ts}.svg`),
-              elevPagesV2.frontWithTunnel,
-              'utf8'
-            );
-          }
-          fs.writeFileSync(
-            path.join(storageDir, `elevacao-lateral-v2-${phone}-${ts}.svg`),
-            elevPagesV2.lateral,
-            'utf8'
-          );
-          if (elevPagesV2.lateralWithTunnel) {
-            fs.writeFileSync(
-              path.join(
-                storageDir,
-                `elevacao-lateral-tunel-v2-${phone}-${ts}.svg`
-              ),
-              elevPagesV2.lateralWithTunnel,
-              'utf8'
-            );
-          }
-          fs.writeFileSync(
-            path.join(storageDir, `vista-3d-v2-${phone}-${ts}.svg`),
-            view3dSvgV2,
-            'utf8'
-          );
-        }
-      } else {
-        const floorSvg = generateFloorPlanSvg(
-          layout,
-          resolveFloorPlanWarehouse(layout, ans)
+      const v2a = buildProjectAnswersV2(ans);
+      if (v2a) {
+        const sol = buildLayoutSolutionV2(v2a);
+        const geo: LayoutGeometry = buildLayoutGeometry(sol, ans);
+        validateLayoutGeometry(geo);
+        const floorSvg = serializeFloorPlanSvgV2(buildFloorPlanModelV2(geo));
+        const elevModel: ElevationModelV2 = buildElevationModelV2(ans, geo);
+        const elevPages: ElevationPageSvgs =
+          serializeElevationPagesV2(elevModel);
+        const view3dSvg = render3DViewV2(
+          projectToIsometric(build3DModelV2(geo))
         );
         fs.writeFileSync(
           path.join(storageDir, `planta-${phone}-${ts}.svg`),
           floorSvg,
           'utf8'
         );
-
-        const fv = buildFrontViewInputFromAnswers(ans);
-        const frontSvg = fv
-          ? generateFrontViewSvg(fv)
-          : FRONT_VIEW_PLACEHOLDER_SVG;
-        if (fv) {
+        fs.writeFileSync(
+          path.join(storageDir, `elevacao-sem-tunel-${phone}-${ts}.svg`),
+          elevPages.frontWithoutTunnel,
+          'utf8'
+        );
+        if (elevPages.frontWithTunnel) {
           fs.writeFileSync(
-            path.join(storageDir, `vista-frontal-${phone}-${ts}.svg`),
-            frontSvg,
+            path.join(storageDir, `elevacao-com-tunel-${phone}-${ts}.svg`),
+            elevPages.frontWithTunnel,
             'utf8'
           );
         }
-
-        const isoIn = buildIsometricInputFromAnswers(ans, layout);
-        const isometricSvg = isoIn
-          ? generateIsometricView(isoIn)
-          : ISOMETRIC_PLACEHOLDER_SVG;
         fs.writeFileSync(
-          path.join(storageDir, `vista-isometrica-${phone}-${ts}.svg`),
-          isometricSvg,
+          path.join(storageDir, `elevacao-lateral-${phone}-${ts}.svg`),
+          elevPages.lateral,
+          'utf8'
+        );
+        if (elevPages.lateralWithTunnel) {
+          fs.writeFileSync(
+            path.join(storageDir, `elevacao-lateral-tunel-${phone}-${ts}.svg`),
+            elevPages.lateralWithTunnel,
+            'utf8'
+          );
+        }
+        fs.writeFileSync(
+          path.join(storageDir, `vista-3d-${phone}-${ts}.svg`),
+          view3dSvg,
           'utf8'
         );
       }

@@ -5,8 +5,6 @@ import {
   type LayoutResult,
 } from './layoutEngine';
 import { selectStructure, type StructureResult } from './structureEngine';
-import type { FrontViewInput } from './drawingEngine';
-import type { IsometricViewInput } from './isometricDrawingEngine';
 
 /** Profundidade de módulo padrão (mm) se não for informada. */
 export const DEFAULT_MODULE_DEPTH_MM = 2700;
@@ -113,67 +111,5 @@ export function finalizeSummaryAnswers(
         : true,
     mixedModules:
       typeof answers.mixedModules === 'boolean' ? answers.mixedModules : false,
-  };
-}
-
-/** Dados para vista frontal técnica a partir das respostas da sessão (PDF, SVG, etc.). */
-export function buildFrontViewInputFromAnswers(
-  answers: Record<string, unknown>
-): FrontViewInput | null {
-  if (typeof answers.levels !== 'number' || answers.levels < 1) {
-    return null;
-  }
-  const totalH = uprightHeightMmFromAnswers(answers);
-  if (totalH === null) {
-    return null;
-  }
-  const cap = typeof answers.capacityKg === 'number' ? answers.capacityKg : 0;
-  const depthMm =
-    typeof answers.moduleDepthMm === 'number'
-      ? answers.moduleDepthMm
-      : DEFAULT_MODULE_DEPTH_MM;
-  const beamLengthMm =
-    typeof answers.beamLengthMm === 'number'
-      ? answers.beamLengthMm
-      : DEFAULT_BEAM_LENGTH_MM;
-  const base = {
-    levels: answers.levels,
-    uprightHeightMm: totalH,
-    beamLengthMm,
-    depthMm,
-    capacityKgPerLevel: cap,
-  };
-  const hasTunnel = answers.hasTunnel === true;
-  return hasTunnel ? { ...base, tunnel: true as const } : base;
-}
-
-/** Dados para vista isométrica 3D a partir do layout e das respostas. */
-export function buildIsometricInputFromAnswers(
-  answers: Record<string, unknown>,
-  layout: LayoutResult
-): IsometricViewInput | null {
-  if (typeof answers.levels !== 'number' || answers.levels < 1) {
-    return null;
-  }
-  const uprightHeightMm = uprightHeightMmFromAnswers(answers);
-  if (uprightHeightMm === null) {
-    return null;
-  }
-  const moduleWidthMm =
-    typeof answers.beamLengthMm === 'number'
-      ? answers.beamLengthMm
-      : DEFAULT_BEAM_LENGTH_MM;
-  const moduleDepthMm =
-    typeof answers.moduleDepthMm === 'number'
-      ? answers.moduleDepthMm
-      : DEFAULT_MODULE_DEPTH_MM;
-
-  return {
-    rows: layout.rows,
-    modulesPerRow: layout.modulesPerRow,
-    levels: answers.levels,
-    moduleWidthMm,
-    moduleDepthMm,
-    uprightHeightMm,
   };
 }

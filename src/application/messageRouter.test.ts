@@ -179,6 +179,8 @@ describe('MessageRouter', () => {
   });
 
   describe('PDF generation on GERAR', () => {
+    jest.setTimeout(30_000);
+
     const storageDir = path.join(process.cwd(), 'storage');
 
     afterEach(() => {
@@ -256,10 +258,12 @@ describe('MessageRouter', () => {
         true
       );
       expect(
-        names.some((f) => f.startsWith('vista-frontal-') && f.endsWith('.svg'))
+        names.some(
+          (f) => f.startsWith('elevacao-sem-tunel-') && f.endsWith('.svg')
+        )
       ).toBe(true);
       expect(
-        names.some((f) => f.startsWith('vista-isometrica-') && f.endsWith('.svg'))
+        names.some((f) => f.startsWith('vista-3d-') && f.endsWith('.svg'))
       ).toBe(true);
       expect(
         fs.existsSync(
@@ -268,7 +272,7 @@ describe('MessageRouter', () => {
       ).toBe(true);
     });
 
-    it('integração: fluxo GERAR inclui SVG isométrico no PDF (4 páginas)', async () => {
+    it('integração: fluxo GERAR inclui vista 3D no PDF (várias páginas)', async () => {
       const session = createSession(
         'FINAL_CONFIRM',
         finalizeSummaryAnswers({
@@ -307,26 +311,26 @@ describe('MessageRouter', () => {
       expect(fs.statSync(pdfPath).size).toBeGreaterThan(500);
 
       const pdfDoc = await PDFDocument.load(fs.readFileSync(pdfPath));
-      expect(pdfDoc.getPageCount()).toBe(4);
+      expect(pdfDoc.getPageCount()).toBeGreaterThanOrEqual(5);
 
       const names = fs.existsSync(storageDir)
         ? fs.readdirSync(storageDir).filter((f) => f.includes('5511999999999'))
         : [];
-      const isoName = names.find(
-        (f) => f.startsWith('vista-isometrica-') && f.endsWith('.svg')
+      const view3dName = names.find(
+        (f) => f.startsWith('vista-3d-') && f.endsWith('.svg')
       );
-      expect(isoName).toBeDefined();
-      const isoSvg = fs.readFileSync(
-        path.join(storageDir, isoName as string),
+      expect(view3dName).toBeDefined();
+      const view3dSvg = fs.readFileSync(
+        path.join(storageDir, view3dName as string),
         'utf8'
       );
-      expect(isoSvg).toMatch(/<svg[\s>]/i);
-      expect(isoSvg.length).toBeGreaterThan(80);
+      expect(view3dSvg).toMatch(/<svg[\s>]/i);
+      expect(view3dSvg.length).toBeGreaterThan(80);
     });
 
     it('should return to SUMMARY_CONFIRM with friendly message when delivery fails', async () => {
       const pdfSpy = jest
-        .spyOn(PdfService.prototype, 'generateProjectPdf')
+        .spyOn(PdfService.prototype, 'generatePdf')
         .mockRejectedValue(new Error('pdf fail'));
 
       const session = createSession(
