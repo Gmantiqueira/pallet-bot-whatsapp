@@ -1,4 +1,6 @@
 import { Session } from '../domain/session';
+import { buildProjectAnswersV2 } from '../domain/pdfV2/answerMapping';
+import { buildLayoutSolutionV2 } from '../domain/pdfV2/layoutSolutionV2';
 import { HEIGHT_DEFINITION_WAREHOUSE_CLEAR } from '../domain/warehouseHeightDerive';
 import { OutgoingMessage } from '../types/messages';
 import { State } from '../domain/stateMachine';
@@ -427,7 +429,16 @@ const buildSummary = (session: Session): string => {
   if (a.lineStrategy) {
     lines.push(`Linhas: ${lineLabel(a.lineStrategy)}`);
   }
-  if (a.hasTunnel === true) {
+  /** Com MELHOR_LAYOUT o PDF segue o túnel da solução otimizada, não só o pedido inicial. */
+  let tunnelForSummary: boolean | undefined =
+    typeof a.hasTunnel === 'boolean' ? a.hasTunnel : undefined;
+  if (a.lineStrategy === 'MELHOR_LAYOUT') {
+    const v2 = buildProjectAnswersV2(a);
+    if (v2) {
+      tunnelForSummary = buildLayoutSolutionV2(v2).metadata.hasTunnel;
+    }
+  }
+  if (tunnelForSummary === true) {
     lines.push('Túnel para empilhador: Sim');
     if (a.tunnelPosition) {
       lines.push(`  • Posição: ${posLabel(a.tunnelPosition)}`);
@@ -435,7 +446,7 @@ const buildSummary = (session: Session): string => {
     if (a.tunnelAppliesTo) {
       lines.push(`  • Aplica-se a: ${tunnelAppliesLabel(a.tunnelAppliesTo)}`);
     }
-  } else if (a.hasTunnel === false) {
+  } else if (tunnelForSummary === false) {
     lines.push('Túnel para empilhador: Não');
   }
 

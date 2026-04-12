@@ -602,7 +602,11 @@ export async function generatePdfV2FromSession(
 
   return renderPdfV2(
     {
-      project: answers,
+      project: {
+        ...answers,
+        /** Alinha com a solução otimizada (ex.: MELHOR_LAYOUT pode preferir sem túnel). */
+        hasTunnel: layoutGeometry.metadata.hasTunnel,
+      },
       layoutGeometry,
       floorPlanSvg,
       elevationPages,

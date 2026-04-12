@@ -10,7 +10,6 @@ import type {
   CirculationZone,
   LayoutOrientationV2,
   LayoutSolutionV2,
-  LineStrategyCode,
   ModuleSegment,
   ModuleVariantV2,
   RackDepthModeV2,
@@ -23,60 +22,86 @@ const EPS = 0.5;
 
 export type BuildLayoutSolutionV2Input = ProjectAnswersV2;
 
-/** Candidatos (orientação × profundidade de faixa) avaliados com a mesma geometria que o PDF. */
+/**
+ * Candidatos (orientação × profundidade × presença de túnel) avaliados com a mesma geometria que o PDF.
+ */
 type LayoutCandidate = {
   orientation: LayoutOrientationV2;
   depthMode: RackDepthModeV2;
+  /** Para MELHOR_LAYOUT pode divergir do pedido do utilizador — escolha por capacidade. */
+  hasTunnel: boolean;
 };
 
 /**
- * Enumera combinações válidas para `lineStrategy`: até 4 para MELHOR_LAYOUT (2×2), 2 para APENAS_*.
+ * Enumera combinações para `lineStrategy`:
+ * - APENAS_*: 2 (orientação) × modo de profundidade fixo, túnel = respostas.
+ * - MELHOR_LAYOUT: 2×2 orientação/profundidade × **2** variantes de túnel (sem / com) = **8** candidatos.
  */
-function layoutOrientationDepthCandidates(
-  strategy: LineStrategyCode
+function layoutSearchCandidates(
+  answers: BuildLayoutSolutionV2Input
 ): LayoutCandidate[] {
+  const strategy = answers.lineStrategy;
   const orientations: LayoutOrientationV2[] = [
     'along_length',
     'along_width',
   ];
+  const tunnelFromAnswers = answers.hasTunnel === true;
+
   if (strategy === 'APENAS_SIMPLES') {
     return orientations.map(orientation => ({
       orientation,
       depthMode: 'single' as const,
+      hasTunnel: tunnelFromAnswers,
     }));
   }
   if (strategy === 'APENAS_DUPLOS') {
     return orientations.map(orientation => ({
       orientation,
       depthMode: 'double' as const,
+      hasTunnel: tunnelFromAnswers,
     }));
   }
+
   const out: LayoutCandidate[] = [];
   for (const orientation of orientations) {
     for (const depthMode of ['single', 'double'] as const) {
-      out.push({ orientation, depthMode });
+      for (const hasTunnel of [false, true] as const) {
+        out.push({ orientation, depthMode, hasTunnel });
+      }
     }
   }
   return out;
 }
 
-/** Prioridade lexicográfica: 1) posições 2) módulos-equivalente 3) along_length em empate. */
+/**
+ * Prioridade lexicográfica:
+ * 1) posições
+ * 2) módulos-equivalente
+ * 3) mais fileiras (melhor distribuição espacial em empate de capacidade)
+ * 4) orientação along_length (desempate determinístico)
+ */
 function layoutSolutionScoreTuple(
   s: LayoutSolutionV2
-): readonly [number, number, number] {
+): readonly [number, number, number, number] {
   return [
     s.totals.positions,
     s.totals.modules,
+    s.rows.length,
     s.orientation === 'along_length' ? 1 : 0,
   ];
 }
 
 function scoreTupleCompare(
-  a: readonly [number, number, number],
-  b: readonly [number, number, number]
+  a: readonly number[],
+  b: readonly number[]
 ): number {
-  for (let i = 0; i < a.length; i++) {
-    if (a[i] !== b[i]) return (a[i] ?? 0) - (b[i] ?? 0);
+  const n = Math.max(a.length, b.length);
+  for (let i = 0; i < n; i++) {
+    const av = a[i] ?? 0;
+    const bv = b[i] ?? 0;
+    if (av !== bv) {
+      return av - bv;
+    }
   }
   return 0;
 }
@@ -727,22 +752,25 @@ function buildLayoutSolutionV2Core(
 }
 
 /**
- * Escolhe a melhor combinação **orientação × profundidade de faixa** por capacidade real
- * (posições, depois módulos-equivalente, depois empate determinístico).
+ * Escolhe a melhor combinação por capacidade real (posições → módulos → fileiras → orientação).
  *
- * `MELHOR_LAYOUT` avalia as 4 combinações com a mesma geometria completa que o PDF (túnel, passagem
- * transversal, meio módulo, etc.), não um proxy analítico.
+ * `MELHOR_LAYOUT` avalia **8** variantes (4 orientação/profundidade × túnel sim/não) com a mesma
+ * geometria que o PDF; não para na primeira solução válida nem favorece estética antes de capacidade.
  */
 export function buildLayoutSolutionV2(
   answers: BuildLayoutSolutionV2Input
 ): LayoutSolutionV2 {
-  const candidates = layoutOrientationDepthCandidates(answers.lineStrategy);
+  const candidates = layoutSearchCandidates(answers);
   let best: LayoutSolutionV2 | null = null;
-  let bestScore: readonly [number, number, number] | null = null;
+  let bestScore: readonly number[] | null = null;
 
   for (const cand of candidates) {
+    const merged: BuildLayoutSolutionV2Input = {
+      ...answers,
+      hasTunnel: cand.hasTunnel,
+    };
     const sol = buildLayoutSolutionV2Core(
-      answers,
+      merged,
       cand.orientation,
       cand.depthMode
     );

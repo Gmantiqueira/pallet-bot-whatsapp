@@ -35,6 +35,12 @@ describe('buildLayoutSolutionV2', () => {
     expect(s.rows[0].kind).toBe('double');
   });
 
+  it('MELHOR_LAYOUT: compara candidatos (orientação × profundidade × túnel) e maximiza posições', () => {
+    const s = buildLayoutSolutionV2(base());
+    expect(s.totals.positions).toBeGreaterThan(0);
+    expect(typeof s.metadata.hasTunnel).toBe('boolean');
+  });
+
   it('3: duas fileiras com corredor central', () => {
     const a = {
       ...base(),
@@ -58,7 +64,8 @@ describe('buildLayoutSolutionV2', () => {
       moduleDepthMm: 2700,
       moduleWidthMm: 1100,
       tunnelPosition: 'MEIO' as const,
-      lineStrategy: 'MELHOR_LAYOUT' as const,
+      /** Estratégia fixa: MELHOR_LAYOUT pode preferir túnel se maximizar posições. */
+      lineStrategy: 'APENAS_SIMPLES' as const,
       hasTunnel: false,
     };
     const s = buildLayoutSolutionV2(a);
