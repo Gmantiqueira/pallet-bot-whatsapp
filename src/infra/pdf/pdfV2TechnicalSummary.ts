@@ -1,4 +1,5 @@
 import type { LayoutGeometry } from '../../domain/pdfV2/layoutGeometryV2';
+import { formatModuleCountForDocumentPt } from '../../domain/pdfV2/formatModuleCountDisplay';
 import { formatMm, formatPeDireitoAltura } from './pdfService';
 
 /**
@@ -11,10 +12,7 @@ export function technicalSummaryRowsFromLayoutGeometry(
 ): { label: string; value: string }[] {
   const { totals, metadata, warehouseLengthMm, warehouseWidthMm } = geometry;
 
-  const mc = totals.moduleCount;
-  const modulos = Number.isInteger(mc)
-    ? String(mc)
-    : String(Math.round(mc * 10) / 10).replace(/\.0$/, '');
+  const modulos = formatModuleCountForDocumentPt(totals.moduleCount);
 
   return [
     { label: 'Comprimento', value: formatMm(warehouseLengthMm) },

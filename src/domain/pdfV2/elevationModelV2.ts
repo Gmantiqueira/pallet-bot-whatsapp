@@ -1,4 +1,5 @@
 import { computeBeamElevations } from './elevationLevelGeometryV2';
+import { formatModuleCountForDocumentPt } from './formatModuleCountDisplay';
 import type { ElevationModelV2, ElevationPanelPayload } from './types';
 import { MODULE_PALLET_BAYS_PER_LEVEL } from './rackModuleSpec';
 import {
@@ -306,7 +307,7 @@ export function buildElevationModelV2(
 
   const summaryLines: string[] = [
     `${geometry.totals.levelCount} níveis · ${frontWithoutTunnel.capacityKgPerLevel} kg/palete · vão/baia ${Math.round(geometry.metadata.beamAlongModuleMm)} mm · módulo ao longo da fileira ~${Math.round(geometry.metadata.moduleLengthAlongBeamMm)} mm · prof. posição ${Math.round(geometry.metadata.moduleDepthMm)} mm · faixa ${Math.round(frontWithoutTunnel.bandDepthMm)} mm`,
-    `Módulos ${geometry.totals.moduleCount.toFixed(1)} (equiv.) · posições ${geometry.totals.positionCount} · ${geometry.metadata.rackDepthMode === 'double' ? 'dupla costas' : 'simples'} · planta: fileiras ponta com ponta (vão automático)`,
+    `${formatModuleCountForDocumentPt(geometry.totals.moduleCount)} (equiv.) · posições ${geometry.totals.positionCount} · ${geometry.metadata.rackDepthMode === 'double' ? 'dupla costas' : 'simples'} · planta: fileiras ponta com ponta (vão automático)`,
   ];
   if (
     geometry.metadata.hasTunnel &&

@@ -2,6 +2,7 @@ import type { LayoutResult } from '../../domain/layoutEngine';
 import { buildLayoutSolutionV2 } from '../../domain/pdfV2/layoutSolutionV2';
 import { buildLayoutGeometry } from '../../domain/pdfV2/layoutGeometryV2';
 import type { ProjectAnswersV2 } from '../../domain/pdfV2/answerMapping';
+import { formatModuleCountForDocumentPt } from '../../domain/pdfV2/formatModuleCountDisplay';
 import { technicalSummaryRows } from './pdfService';
 import { technicalSummaryRowsFromLayoutGeometry } from './pdfV2TechnicalSummary';
 
@@ -48,7 +49,9 @@ describe('technicalSummaryRowsFromLayoutGeometry', () => {
       geo
     );
 
-    expect(rowValue(rows, 'Módulos')).toBe(String(geo.totals.moduleCount));
+    expect(rowValue(rows, 'Módulos')).toBe(
+      formatModuleCountForDocumentPt(geo.totals.moduleCount)
+    );
     expect(rowValue(rows, 'Posições estimadas')).toBe(
       String(geo.totals.positionCount)
     );
@@ -110,7 +113,9 @@ describe('technicalSummaryRowsFromLayoutGeometry', () => {
     );
 
     expect(rowValue(legacyRows, 'Módulos')).toBe('999');
-    expect(rowValue(v2Rows, 'Módulos')).toBe(String(geo.totals.moduleCount));
+    expect(rowValue(v2Rows, 'Módulos')).toBe(
+      formatModuleCountForDocumentPt(geo.totals.moduleCount)
+    );
     expect(geo.totals.moduleCount).not.toBe(999);
 
     expect(rowValue(legacyRows, 'Posições estimadas')).toBeDefined();
