@@ -185,9 +185,16 @@ export type FloorPlanDimension = {
   /** Offset normal à cota (px). */
   offset?: number;
   /**
-   * `corridor-inline`: cota dentro do corredor, texto no eixo do corredor (mais legível que cota acima).
+   * `corridor-outside`: linha de cota fora do corredor + extensões (sem sobrepor o rótulo semântico).
+   * `corridor-inline`: legado — evitar em novos desenhos.
    */
-  textMode?: 'default' | 'corridor-inline';
+  textMode?: 'default' | 'corridor-inline' | 'corridor-outside';
+  /** Corredor: do vértice da faixa até à linha de cota. */
+  extensions?: { x1: number; y1: number; x2: number; y2: number }[];
+  /** Posição do texto da cota (centro), quando `corridor-outside`. */
+  textAnchor?: { x: number; y: number };
+  /** Rotação do texto em graus (ex.: -90 para cota vertical). */
+  textRotateDeg?: number;
 };
 
 export type FloorPlanLabel = {

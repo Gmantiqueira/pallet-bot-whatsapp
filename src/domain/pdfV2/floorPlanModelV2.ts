@@ -255,29 +255,53 @@ export function buildFloorPlanModelV2(
     const cy2 = toY(y1m);
     const cw = Math.abs(cx2 - cx1);
     const ch = Math.abs(cy2 - cy1);
-    const midX = (cx1 + cx2) / 2;
-    const midY = (cy1 + cy2) / 2;
     const spanAlongDimensionMm = cw < ch ? spanXm : spanYm;
     const corText = corridorPlanDimensionLabel(c0, spanAlongDimensionMm);
+    const cLeft = Math.min(cx1, cx2);
+    const cRight = Math.max(cx1, cx2);
+    const cTop = Math.min(cy1, cy2);
+    const cBot = Math.max(cy1, cy2);
+    const margin = 18;
+    /** Cota fora da faixa do corredor — evita sobreposição com o rótulo semântico no interior. */
     if (cw < ch) {
+      const canPlaceAbove = cTop > margin + 20;
+      const yDim = canPlaceAbove ? cTop - margin : cBot + margin;
+      const edgeY = canPlaceAbove ? cTop : cBot;
+      const textY = canPlaceAbove ? yDim - 12 : yDim + 18;
       dimensionLines.push({
         id: 'dim-corridor',
-        x1: cx1,
-        y1: midY,
-        x2: cx2,
-        y2: midY,
+        x1: cLeft,
+        y1: yDim,
+        x2: cRight,
+        y2: yDim,
         text: corText,
-        textMode: 'corridor-inline',
+        textMode: 'corridor-outside',
+        extensions: [
+          { x1: cLeft, y1: edgeY, x2: cLeft, y2: yDim },
+          { x1: cRight, y1: edgeY, x2: cRight, y2: yDim },
+        ],
+        textAnchor: { x: (cLeft + cRight) / 2, y: textY },
+        textRotateDeg: 0,
       });
     } else {
+      const canPlaceLeft = cLeft > margin + 24;
+      const xDim = canPlaceLeft ? cLeft - margin : cRight + margin;
+      const edgeX = canPlaceLeft ? cLeft : cRight;
+      const textX = canPlaceLeft ? xDim - 14 : xDim + 14;
       dimensionLines.push({
         id: 'dim-corridor',
-        x1: midX,
-        y1: cy1,
-        x2: midX,
-        y2: cy2,
+        x1: xDim,
+        y1: cTop,
+        x2: xDim,
+        y2: cBot,
         text: corText,
-        textMode: 'corridor-inline',
+        textMode: 'corridor-outside',
+        extensions: [
+          { x1: edgeX, y1: cTop, x2: xDim, y2: cTop },
+          { x1: edgeX, y1: cBot, x2: xDim, y2: cBot },
+        ],
+        textAnchor: { x: textX, y: (cTop + cBot) / 2 },
+        textRotateDeg: -90,
       });
     }
   }

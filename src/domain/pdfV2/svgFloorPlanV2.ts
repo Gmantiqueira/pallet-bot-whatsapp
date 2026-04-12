@@ -271,14 +271,47 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
 
   parts.push(orientationArrowSvg(o, model.beamSpanAlong));
 
+  const dimExtStroke = 0.65;
+  const dimMainStroke = 0.95;
+  const tick = 5.5;
+
   for (const d of model.dimensionLines) {
+    if (d.extensions?.length && d.textMode === 'corridor-outside') {
+      for (const e of d.extensions) {
+        parts.push(
+          `<line x1="${e.x1}" y1="${e.y1}" x2="${e.x2}" y2="${e.y2}" stroke="${COL_DIM}" stroke-width="${dimExtStroke}" opacity="0.88"/>`
+        );
+      }
+    }
     parts.push(
-      `<line x1="${d.x1}" y1="${d.y1}" x2="${d.x2}" y2="${d.y2}" stroke="${COL_DIM}" stroke-width="0.9"/>`
+      `<line x1="${d.x1}" y1="${d.y1}" x2="${d.x2}" y2="${d.y2}" stroke="${COL_DIM}" stroke-width="${dimMainStroke}"/>`
     );
+    if (d.textMode === 'corridor-outside') {
+      const horiz = Math.abs(d.y2 - d.y1) < 0.5;
+      if (horiz) {
+        const y = d.y1;
+        parts.push(
+          `<line x1="${d.x1}" y1="${y - tick}" x2="${d.x1}" y2="${y + tick}" stroke="${COL_DIM}" stroke-width="${dimMainStroke}"/>`,
+          `<line x1="${d.x2}" y1="${y - tick}" x2="${d.x2}" y2="${y + tick}" stroke="${COL_DIM}" stroke-width="${dimMainStroke}"/>`
+        );
+      } else {
+        const x = d.x1;
+        parts.push(
+          `<line x1="${x - tick}" y1="${d.y1}" x2="${x + tick}" y2="${d.y1}" stroke="${COL_DIM}" stroke-width="${dimMainStroke}"/>`,
+          `<line x1="${x - tick}" y1="${d.y2}" x2="${x + tick}" y2="${d.y2}" stroke="${COL_DIM}" stroke-width="${dimMainStroke}"/>`
+        );
+      }
+    }
+
     const midX = (d.x1 + d.x2) / 2;
     const midY = (d.y1 + d.y2) / 2;
     const isVert = Math.abs(d.x2 - d.x1) < 1;
-    if (d.textMode === 'corridor-inline') {
+    if (d.textMode === 'corridor-outside' && d.textAnchor) {
+      const deg = d.textRotateDeg ?? 0;
+      parts.push(
+        `<text transform="translate(${d.textAnchor.x},${d.textAnchor.y}) rotate(${deg})" text-anchor="middle" dominant-baseline="middle" class="fp-dim">${escapeXml(d.text)}</text>`
+      );
+    } else if (d.textMode === 'corridor-inline') {
       parts.push(
         `<text transform="translate(${midX},${midY}) rotate(-90)" text-anchor="middle" dominant-baseline="middle" class="fp-dim">${escapeXml(d.text)}</text>`
       );
