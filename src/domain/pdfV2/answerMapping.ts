@@ -101,9 +101,9 @@ export type ProjectAnswersV2 = {
 };
 
 /**
- * Melhor aproveitamento com viés para along_length.
- * Mesma convenção que {@link buildLayoutSolutionV2}: `moduleWidthMm` = vão por baia;
- * `moduleDepthMm` = profundidade de faixa; o passo na fileira é `moduleLengthAlongBeamMm(vão)`.
+ * Heurística rápida de orientação (proxy analítico, **sem** simular layout completo).
+ * {@link buildLayoutSolutionV2} em `layoutSolutionV2` escolhe por **capacidade real** entre candidatos;
+ * mantém-se esta função para testes ou chamadas externas que não precisem do motor completo.
  */
 export function pickBetterOrientationBySimpleCount(
   lengthMm: number,

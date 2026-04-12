@@ -211,14 +211,14 @@ describe('buildLayoutSolutionV2', () => {
     expect(s.orientation).toBe('along_length');
   });
 
-  it('11: galpão estreito e longo — mais posições com vão ao longo da dimensão maior do piso', () => {
+  it('11: galpão estreito e longo — escolhe orientação com maior número de posições', () => {
     const s = buildLayoutSolutionV2({
       ...base(),
       lengthMm: 6_000,
       widthMm: 50_000,
       lineStrategy: 'APENAS_SIMPLES' as const,
     });
-    expect(s.orientation).toBe('along_length');
+    expect(s.orientation).toBe('along_width');
   });
 
   it('12: moduleWidthMm = vão por baia; moduleDepthMm = profundidade (sem trocar campos por max/min)', () => {

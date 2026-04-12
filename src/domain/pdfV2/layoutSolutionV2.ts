@@ -1,8 +1,4 @@
-import {
-  pickBetterOrientationBySimpleCount,
-  tunnelAppliesToRow,
-  type ProjectAnswersV2,
-} from './answerMapping';
+import { tunnelAppliesToRow, type ProjectAnswersV2 } from './answerMapping';
 import { tunnelActiveStorageLevelsFromGlobal } from './elevationLevelGeometryV2';
 import {
   maxFullModulesInBeamRun,
@@ -26,6 +22,64 @@ const SPINE_BACK_TO_BACK_MM = 100;
 const EPS = 0.5;
 
 export type BuildLayoutSolutionV2Input = ProjectAnswersV2;
+
+/** Candidatos (orientação × profundidade de faixa) avaliados com a mesma geometria que o PDF. */
+type LayoutCandidate = {
+  orientation: LayoutOrientationV2;
+  depthMode: RackDepthModeV2;
+};
+
+/**
+ * Enumera combinações válidas para `lineStrategy`: até 4 para MELHOR_LAYOUT (2×2), 2 para APENAS_*.
+ */
+function layoutOrientationDepthCandidates(
+  strategy: LineStrategyCode
+): LayoutCandidate[] {
+  const orientations: LayoutOrientationV2[] = [
+    'along_length',
+    'along_width',
+  ];
+  if (strategy === 'APENAS_SIMPLES') {
+    return orientations.map(orientation => ({
+      orientation,
+      depthMode: 'single' as const,
+    }));
+  }
+  if (strategy === 'APENAS_DUPLOS') {
+    return orientations.map(orientation => ({
+      orientation,
+      depthMode: 'double' as const,
+    }));
+  }
+  const out: LayoutCandidate[] = [];
+  for (const orientation of orientations) {
+    for (const depthMode of ['single', 'double'] as const) {
+      out.push({ orientation, depthMode });
+    }
+  }
+  return out;
+}
+
+/** Prioridade lexicográfica: 1) posições 2) módulos-equivalente 3) along_length em empate. */
+function layoutSolutionScoreTuple(
+  s: LayoutSolutionV2
+): readonly [number, number, number] {
+  return [
+    s.totals.positions,
+    s.totals.modules,
+    s.orientation === 'along_length' ? 1 : 0,
+  ];
+}
+
+function scoreTupleCompare(
+  a: readonly [number, number, number],
+  b: readonly [number, number, number]
+): number {
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return (a[i] ?? 0) - (b[i] ?? 0);
+  }
+  return 0;
+}
 
 /** Largura do túnel como faixa de circulação (mm) — alinhado ao corredor operacional. */
 function tunnelWidthMm(corridorMm: number): number {
@@ -238,119 +292,6 @@ export function fillWarehouseCross(ctx: FillContext): {
 
 /** Alias semântico: preenche a “largura” útil (eixo transversal ao vão) do galpão. */
 export const fillWarehouseWidth = fillWarehouseCross;
-
-/** Conta fileiras totais para comparação de variantes (mesma lógica que fillWarehouseCross). */
-function countRowsAcrossZones(
-  crossSpan: number,
-  bandDepth: number,
-  corridorMm: number,
-  hasTunnel: boolean,
-  tunnelPos: 'INICIO' | 'MEIO' | 'FIM' | undefined
-): number {
-  const zones = crossZonesForTunnel(
-    crossSpan,
-    hasTunnel,
-    tunnelPos,
-    corridorMm
-  );
-  let total = 0;
-  for (const z of zones) {
-    const zLen = z.z1 - z.z0;
-    const { innerLen } = crossAxisPerimeterReserve(zLen);
-    total += maxRowsInZone(innerLen, bandDepth, corridorMm);
-  }
-  return total;
-}
-
-/** Quantos módulos completos cabem no vão ao longo da fileira (montantes partilhados entre vizinhos). */
-function countModulesAlongBeamSpan(
-  beamSpanMm: number,
-  bayClearSpanMm: number
-): number {
-  return maxFullModulesInBeamRun(beamSpanMm, bayClearSpanMm);
-}
-
-type VariantEval = {
-  depthMode: RackDepthModeV2;
-  rows: number;
-  modulesAlong: number;
-  positions: number;
-};
-
-function evaluateVariant(
-  depthMode: RackDepthModeV2,
-  crossSpanMm: number,
-  beamSpanMm: number,
-  rackDepthMm: number,
-  bayClearSpanMm: number,
-  corridorMm: number,
-  levels: number,
-  hasTunnel: boolean,
-  tunnelPosition: 'INICIO' | 'MEIO' | 'FIM' | undefined
-): VariantEval {
-  const band = bandDepthForMode(depthMode, rackDepthMm);
-  const rows = countRowsAcrossZones(
-    crossSpanMm,
-    band,
-    corridorMm,
-    hasTunnel,
-    tunnelPosition
-  );
-  const along = countModulesAlongBeamSpan(beamSpanMm, bayClearSpanMm);
-  const depthFactor = depthMode === 'double' ? 2 : 1;
-  const cells = rows * along;
-  const positions = cells * depthFactor * levels;
-  return { depthMode, rows, modulesAlong: along, positions };
-}
-
-function chooseDepthModeFromStrategy(
-  strategy: LineStrategyCode,
-  crossSpanMm: number,
-  beamSpanMm: number,
-  rackDepthMm: number,
-  bayClearSpanMm: number,
-  corridorMm: number,
-  levels: number,
-  hasTunnel: boolean,
-  tunnelPosition: 'INICIO' | 'MEIO' | 'FIM' | undefined
-): RackDepthModeV2 {
-  if (strategy === 'APENAS_SIMPLES') return 'single';
-  if (strategy === 'APENAS_DUPLOS') return 'double';
-
-  const s = evaluateVariant(
-    'single',
-    crossSpanMm,
-    beamSpanMm,
-    rackDepthMm,
-    bayClearSpanMm,
-    corridorMm,
-    levels,
-    hasTunnel,
-    tunnelPosition
-  );
-  const d = evaluateVariant(
-    'double',
-    crossSpanMm,
-    beamSpanMm,
-    rackDepthMm,
-    bayClearSpanMm,
-    corridorMm,
-    levels,
-    hasTunnel,
-    tunnelPosition
-  );
-  return d.positions > s.positions ? 'double' : 'single';
-}
-
-function resolveOrientation(answers: ProjectAnswersV2): LayoutOrientationV2 {
-  return pickBetterOrientationBySimpleCount(
-    answers.lengthMm,
-    answers.widthMm,
-    answers.corridorMm,
-    answers.moduleDepthMm,
-    answers.moduleWidthMm
-  );
-}
 
 /** Determina se o extremo ao longo do vão pode receber meio módulo (circulação adjacente). */
 /** Túnel ou passagem transversal vazia (para regras de meio módulo junto ao vão). */
@@ -606,11 +547,13 @@ function rectForTunnelModule(
 }
 
 /**
- * Consolida a solução geométrica (fileiras, corredores, túnel, meio módulo).
- * Não gera SVG nem PDF.
+ * Consolida a solução geométrica para uma orientação e modo de profundidade fixos.
+ * Usado internamente para comparar candidatos.
  */
-export function buildLayoutSolutionV2(
-  answers: BuildLayoutSolutionV2Input
+function buildLayoutSolutionV2Core(
+  answers: BuildLayoutSolutionV2Input,
+  orientation: LayoutOrientationV2,
+  depthMode: RackDepthModeV2
 ): LayoutSolutionV2 {
   const {
     lengthMm,
@@ -640,24 +583,10 @@ export function buildLayoutSolutionV2(
     bayClearSpanAlongBeamMm
   );
 
-  const orientation = resolveOrientation(answers);
-
   const beamSpan = orientation === 'along_length' ? lengthMm : widthMm;
   const crossSpan = orientation === 'along_length' ? widthMm : lengthMm;
 
   const tunnelPos = tunnelPosition as 'INICIO' | 'MEIO' | 'FIM' | undefined;
-
-  const depthMode = chooseDepthModeFromStrategy(
-    lineStrategy,
-    crossSpan,
-    beamSpan,
-    rackDepthMm,
-    bayClearSpanAlongBeamMm,
-    corridorMm,
-    levels,
-    hasTunnel,
-    tunnelPos
-  );
 
   const band = bandDepthForMode(depthMode, rackDepthMm);
 
@@ -818,6 +747,39 @@ export function buildLayoutSolutionV2(
       hasTunnel,
     },
   };
+}
+
+/**
+ * Escolhe a melhor combinação **orientação × profundidade de faixa** por capacidade real
+ * (posições, depois módulos-equivalente, depois empate determinístico).
+ *
+ * `MELHOR_LAYOUT` avalia as 4 combinações com a mesma geometria completa que o PDF (túnel, passagem
+ * transversal, meio módulo, etc.), não um proxy analítico.
+ */
+export function buildLayoutSolutionV2(
+  answers: BuildLayoutSolutionV2Input
+): LayoutSolutionV2 {
+  const candidates = layoutOrientationDepthCandidates(answers.lineStrategy);
+  let best: LayoutSolutionV2 | null = null;
+  let bestScore: readonly [number, number, number] | null = null;
+
+  for (const cand of candidates) {
+    const sol = buildLayoutSolutionV2Core(
+      answers,
+      cand.orientation,
+      cand.depthMode
+    );
+    const sc = layoutSolutionScoreTuple(sol);
+    if (!best || !bestScore || scoreTupleCompare(sc, bestScore) > 0) {
+      best = sol;
+      bestScore = sc;
+    }
+  }
+
+  if (!best) {
+    throw new Error('layoutSolutionV2: nenhum candidato de layout');
+  }
+  return best;
 }
 
 function rowRect(
