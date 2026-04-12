@@ -3,14 +3,12 @@ import type {
   FloorPlanModelV2,
 } from './types';
 import { escapeXml } from './floorPlanModelV2';
+import {
+  ELEV_BEAM_EDGE,
+  ELEV_PALLET_TIER_STROKE,
+} from './elevationVisualTokens';
 
-/**
- * Ligação visual com a elevação (`svgElevationV2`): mesma família cromática das faixas entre longarinas
- * e do contorno das longarinas — só acentos (sem preencher módulos).
- * Valores espelham `FV_PALLET_TIER_STROKE` e `FV_BEAM_EDGE` em `svgElevationV2.ts`.
- */
-const ELEV_PALLET_TIER_STROKE = '#fdba74';
-const ELEV_BEAM_EDGE = '#9a3412';
+/** Ligação visual com a elevação (traços de baia = `ELEV_PALLET_TIER_STROKE`). */
 
 const COL_BG = '#ffffff';
 const COL_FRAME = '#e2e8f0';
@@ -215,15 +213,26 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
     }
   }
 
+  const levelTint = model.moduleLevelTint;
   for (const s of model.structureRects) {
     const isTunnel = s.variant === 'tunnel';
     const fillMod = isTunnel ? COL_MOD_TUNNEL_FILL : COL_MOD_FILL;
     const strokeMod = isTunnel ? COL_MOD_TUNNEL_STROKE : COL_MOD_STROKE;
     const sw = COL_MOD_STROKE_W;
-    parts.push(
-      `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="${fillMod}" stroke="${strokeMod}" stroke-width="${sw}"/>`
-    );
-    if (!isTunnel) {
+    if (isTunnel) {
+      parts.push(
+        `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="${fillMod}" stroke="${strokeMod}" stroke-width="${sw}"/>`
+      );
+    } else {
+      parts.push(
+        `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="${fillMod}" stroke="none"/>`
+      );
+      parts.push(
+        `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="${levelTint.fill}" fill-opacity="${levelTint.opacity}" stroke="none"/>`
+      );
+      parts.push(
+        `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="none" stroke="${strokeMod}" stroke-width="${sw}"/>`
+      );
       parts.push(moduleBayHintLine(s));
     }
   }

@@ -3,6 +3,21 @@ import {
   INTER_BAY_GAP_WITHIN_MODULE_MM,
   uprightWidthsMmForFrontBayCount,
 } from './rackModuleSpec';
+import {
+  ELEV_BEAM_EDGE as FV_BEAM_EDGE,
+  ELEV_BEAM_FILL as FV_BEAM_FILL,
+  ELEV_BEAM_HIGHLIGHT as FV_BEAM_HIGHLIGHT,
+  ELEV_BEAM_STROKE as FV_BEAM_STROKE,
+  ELEV_GROUND_PALLET_FILL as FV_GROUND_PALLET_FILL,
+  ELEV_GROUND_PALLET_OPACITY as FV_GROUND_PALLET_OPACITY,
+  ELEV_GROUND_PALLET_STROKE as FV_GROUND_PALLET_STROKE,
+  ELEV_PALLET_TIER_FILL as FV_PALLET_TIER_FILL,
+  ELEV_PALLET_TIER_OPACITY as FV_PALLET_TIER_OPACITY,
+  ELEV_PALLET_TIER_STROKE as FV_PALLET_TIER_STROKE,
+  ELEV_UPRIGHT_FACE as FV_UPRIGHT_FACE,
+  ELEV_UPRIGHT_FILL as FV_UPRIGHT_FILL,
+  ELEV_UPRIGHT_STROKE as FV_UPRIGHT_STROKE,
+} from './elevationVisualTokens';
 
 /** Um módulo frontal = duas baias lado a lado (3 montantes), como desenho técnico tipo 2× vão. */
 const FV_FRONT_BAY_COUNT = 2;
@@ -14,26 +29,11 @@ const FV_FRONT_UPRIGHT_SLIM = 0.46;
 const FV_FRONT_CENTER_UPRIGHT_SLIM = 0.86;
 /** Marcadores discretos ao longo do vão (posições de carga na longarina). */
 const FV_ALONG_BEAM_DIVISIONS = 3;
-/** Armazenagem entre longarinas: preenchimento técnico suave (posição de palete). */
-const FV_PALLET_TIER_FILL = '#fff7ed';
-const FV_PALLET_TIER_STROKE = '#fdba74';
-const FV_PALLET_TIER_OPACITY = 0.38;
-/** Patamar ao piso (sem longarina) — distinto dos níveis entre longarinas. */
-const FV_GROUND_PALLET_FILL = '#ecfdf5';
-const FV_GROUND_PALLET_STROKE = '#059669';
-const FV_GROUND_PALLET_OPACITY = 0.52;
 
 const COL_BG = '#ffffff';
 const COL_FRAME = '#d4d4d4';
 const COL_FLOOR = '#334155';
 const COL_FLOOR_FILL = '#f1f5f9';
-const FV_UPRIGHT_FILL = '#0f172a';
-const FV_UPRIGHT_STROKE = '#020617';
-const FV_UPRIGHT_FACE = '#1e293b';
-const FV_BEAM_FILL = '#fb923c';
-const FV_BEAM_STROKE = '#c2410c';
-const FV_BEAM_EDGE = '#9a3412';
-const FV_BEAM_HIGHLIGHT = '#fed7aa';
 
 /** Cotas: hierarquia — principal / secundária. */
 const DIM_MAJOR = '#0f172a';

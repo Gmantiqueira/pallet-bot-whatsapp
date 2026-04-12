@@ -155,6 +155,11 @@ export type FloorPlanModelV2 = {
     kind: RackDepthModeV2;
     variant?: ModuleVariantV2;
   }[];
+  /**
+   * Preenchimento extra nos módulos normais: cor da elevação (longarinas / faixas de nível), opacidade 5–10%.
+   * Módulos túnel não usam — mantêm cor própria.
+   */
+  moduleLevelTint: { fill: string; opacity: number };
   circulationRects: {
     id: string;
     x: number;

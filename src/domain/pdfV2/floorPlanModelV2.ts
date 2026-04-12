@@ -6,6 +6,7 @@ import type {
   FloorPlanModelV2,
   RackDepthModeV2,
 } from './types';
+import { ELEV_BEAM_FILL } from './elevationVisualTokens';
 
 /**
  * Canvas SVG da planta.
@@ -36,6 +37,21 @@ function escapeXml(text: string): string {
 
 function formatMm(mm: number): string {
   return `${Math.round(mm).toLocaleString('pt-BR')} mm`;
+}
+
+/**
+ * Tint subtil alinhado aos níveis: mesma cor das longarinas na elevação ({@link ELEV_BEAM_FILL}).
+ * Opacidade 5–10% conforme o número de níveis estruturais.
+ */
+function moduleLevelTintFromMetadata(
+  metadata: LayoutGeometry['metadata']
+): FloorPlanModelV2['moduleLevelTint'] {
+  const n = Math.max(1, metadata.structuralLevels);
+  const opacity = Math.min(0.1, 0.05 + (n - 1) * 0.008);
+  return {
+    fill: ELEV_BEAM_FILL,
+    opacity,
+  };
 }
 
 function rackDepthModeFromRow(row: RackRow): RackDepthModeV2 {
@@ -266,6 +282,8 @@ export function buildFloorPlanModelV2(
     }
   }
 
+  const moduleLevelTint = moduleLevelTintFromMetadata(geometry.metadata);
+
   const labels: FloorPlanLabel[] = [
     {
       id: 'title',
@@ -292,6 +310,7 @@ export function buildFloorPlanModelV2(
     circulationRects,
     dimensionLines,
     labels,
+    moduleLevelTint,
   };
 }
 
