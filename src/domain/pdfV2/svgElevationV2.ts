@@ -176,7 +176,7 @@ function textLines(
 
 /**
  * Cadeia de cotas verticais à direita (um só lado): H total na linha exterior;
- * cotas interiores: com túnel — vão túnel + até 1.º eixo + folgas; sem túnel — piso→1.º eixo + folgas + tampo.
+ * cotas interiores: com túnel — vão túnel + até 1.º eixo + folgas; sem túnel — piso→1.º eixo + folgas + reserva superior até ao topo.
  */
 function drawVerticalDimChain(
   rackRight: number,
@@ -188,7 +188,8 @@ function drawVerticalDimChain(
   uprightH: number,
   labelScale: number,
   tunnelDim?: { clearanceMm: number; yPassTop: number },
-  hasGroundLevel?: boolean
+  hasGroundLevel?: boolean,
+  structuralTopMm?: number
 ): string {
   const ls = labelScale;
   const nB = beamYsPx.length;
@@ -297,13 +298,21 @@ function drawVerticalDimChain(
     if (tunnelSplit) {
       if (idx === 0) return 'Vão túnel';
       if (idx === 1) return 'Até 1.º eixo';
-      if (idx === detailCount - 1) return 'Topo / tampo';
+      if (idx === detailCount - 1) {
+        return typeof structuralTopMm === 'number'
+          ? 'Últ. longarina → topo coluna'
+          : 'Topo / tampo';
+      }
       return `Livre ${idx - 1}–${idx}`;
     }
     if (idx === 0) {
       return hasGroundLevel ? 'Piso → 1.º eixo (sem long.)' : '1.º eixo';
     }
-    if (idx === detailCount - 1) return 'Topo / tampo';
+    if (idx === detailCount - 1) {
+      return typeof structuralTopMm === 'number'
+        ? 'Últ. longarina → topo coluna'
+        : 'Topo / tampo';
+    }
     return `Livre ${idx}–${idx + 1}`;
   };
 
@@ -907,7 +916,8 @@ function drawFrontRack(
       uprightH,
       ls,
       showTunnelOpening ? { clearanceMm: clearanceMm, yPassTop } : undefined,
-      data.hasGroundLevel === true
+      data.hasGroundLevel === true,
+      data.structuralTopMm
     )
   );
 
@@ -1116,7 +1126,8 @@ function drawLateral(
       uprightH,
       ls,
       clearanceLatMm > 0 ? { clearanceMm: clearanceLatMm, yPassTop } : undefined,
-      data.hasGroundLevel === true
+      data.hasGroundLevel === true,
+      data.structuralTopMm
     )
   );
 

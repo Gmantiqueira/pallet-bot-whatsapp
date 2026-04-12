@@ -1,6 +1,6 @@
 /**
  * Cotas verticais entre níveis para elevação V2 e vista 3D.
- * Altura útil = altura de montante menos folgas estruturais mínimas.
+ * Altura útil = altura de montante menos folgas estruturais (inferior + reserva superior fixa).
  */
 
 const EPS = 0.5;
@@ -22,7 +22,17 @@ export function tunnelActiveStorageLevelsFromGlobal(
 export const TUNNEL_FIRST_BEAM_OFFSET_ABOVE_CLEARANCE_MM = 120;
 
 export const DEFAULT_STRUCTURAL_BOTTOM_MM = 80;
-export const DEFAULT_STRUCTURAL_TOP_MM = 80;
+
+/**
+ * Folga fixa (mm) entre a **última longarina** (eixo superior de armazenagem) e o **topo do montante**.
+ * Entra no cálculo real de cotas: o último eixo de nível fica em `alturaTotal − folgaSuperior`;
+ * o espaçamento entre longarinas usa apenas a altura útil abaixo desta reserva.
+ */
+export const RACK_TOP_CLEARANCE_LAST_BEAM_TO_COLUMN_TOP_MM = 216;
+
+/** @deprecated Prefer {@link RACK_TOP_CLEARANCE_LAST_BEAM_TO_COLUMN_TOP_MM} — valor alinhado à folga superior fixa. */
+export const DEFAULT_STRUCTURAL_TOP_MM = RACK_TOP_CLEARANCE_LAST_BEAM_TO_COLUMN_TOP_MM;
+
 export const DEFAULT_FIRST_LEVEL_LIFT_MM = 280;
 
 /**
@@ -88,14 +98,87 @@ function minUsableMm(levels: number): number {
 }
 
 /**
+ * Faixa vertical nominal (mm) entre folga inferior padrão e folga superior fixa (216 mm),
+ * antes de descontar o 1.º eixo (lift / patamar de piso). Útil para estimar quantos níveis
+ * cabem com um espaçamento médio alvo: `floor(envelope / espaçamento)` é conservador.
+ */
+export function rackVerticalWorkEnvelopeMm(uprightHeightMm: number): number {
+  const H0 = Math.max(EPS, uprightHeightMm);
+  return Math.max(
+    0,
+    H0 - DEFAULT_STRUCTURAL_BOTTOM_MM - RACK_TOP_CLEARANCE_LAST_BEAM_TO_COLUMN_TOP_MM
+  );
+}
+
+/**
+ * Resolve folgas inferior/superior: a reserva **superior** tem mínimo
+ * {@link RACK_TOP_CLEARANCE_LAST_BEAM_TO_COLUMN_TOP_MM} sempre que a altura do montante o
+ * permitir (colunas muito baixas usam o máximo possível sem folha negativa).
+ */
+function resolveStructuralMarginsMm(
+  H0: number,
+  levels: number,
+  structuralBottomMm?: number,
+  structuralTopMm?: number
+): { structuralBottom: number; structuralTop: number; usable: number } {
+  const MIN_TOP = RACK_TOP_CLEARANCE_LAST_BEAM_TO_COLUMN_TOP_MM;
+
+  let structuralBottom = clamp(
+    structuralBottomMm ?? DEFAULT_STRUCTURAL_BOTTOM_MM,
+    0,
+    H0 * 0.25
+  );
+
+  const requestedTop = Math.max(
+    MIN_TOP,
+    typeof structuralTopMm === 'number' && structuralTopMm > EPS
+      ? structuralTopMm
+      : MIN_TOP
+  );
+
+  const maxTopPossible = Math.max(EPS, H0 - structuralBottom - 50);
+  let structuralTop = Math.min(requestedTop, maxTopPossible);
+  structuralTop = Math.max(EPS, structuralTop);
+
+  let usable = H0 - structuralBottom - structuralTop;
+
+  if (usable < minUsableMm(levels)) {
+    structuralBottom = clamp(
+      Math.min(structuralBottom, H0 - structuralTop - minUsableMm(levels)),
+      0,
+      H0 * 0.25
+    );
+    usable = H0 - structuralBottom - structuralTop;
+  }
+
+  if (usable < minUsableMm(levels)) {
+    structuralBottom = Math.max(0, H0 - structuralTop - minUsableMm(levels));
+    usable = H0 - structuralBottom - structuralTop;
+  }
+
+  if (usable < EPS) {
+    structuralBottom = 0;
+    usable = H0 - structuralTop;
+  }
+
+  if (usable < EPS) {
+    structuralTop = Math.min(Math.max(MIN_TOP, structuralTop), H0 - EPS);
+    structuralBottom = 0;
+    usable = H0 - structuralTop;
+  }
+
+  return { structuralBottom, structuralTop, usable };
+}
+
+/**
  * Calcula cotas verticais (mm, do piso 0 ao topo útil) das longarinas.
  *
  * Fórmula base (uniforme, sem lista nem espaçamento declarado):
- * - H_work = uprightHeightMm − folgaInferior − folgaSuperior
+ * - H_work = uprightHeightMm − folgaInferior − folgaSuperior (folga superior ≥ 216 mm quando possível)
  * - Com `hasGroundLevel`: beam0 = folgaInferior + altura do patamar de piso (sem longarina nessa faixa).
  * - Sem `hasGroundLevel`: h_lift = 0 se `firstLevelOnGround`; senão min(280 mm, 22% de H_work).
  * - span = topIn − beam0; espaçamento uniforme **entre longarinas**: gap = span / levels (níveis estruturais).
- * - beam[k] = beam0 + k·gap, k = 0…levels, com beam[levels] = topIn
+ * - beam[k] = beam0 + k·gap, k = 0…levels, com beam[levels] = topIn (última longarina abaixo da reserva superior)
  */
 export function computeBeamElevations(
   input: BeamElevationInput
@@ -104,23 +187,12 @@ export function computeBeamElevations(
   const H0 = Math.max(EPS, input.uprightHeightMm);
   const hasGroundLevel = input.hasGroundLevel !== false;
 
-  let structuralBottom =
-    input.structuralBottomMm ?? DEFAULT_STRUCTURAL_BOTTOM_MM;
-  let structuralTop = input.structuralTopMm ?? DEFAULT_STRUCTURAL_TOP_MM;
-  structuralBottom = clamp(structuralBottom, 0, H0 * 0.25);
-  structuralTop = clamp(structuralTop, 0, H0 * 0.25);
-
-  let usable = H0 - structuralBottom - structuralTop;
-  if (usable < minUsableMm(levels)) {
-    structuralBottom = Math.min(structuralBottom, H0 * 0.05);
-    structuralTop = Math.min(structuralTop, H0 * 0.05);
-    usable = H0 - structuralBottom - structuralTop;
-  }
-  if (usable < EPS) {
-    usable = H0 * 0.92;
-    structuralBottom = (H0 - usable) / 2;
-    structuralTop = (H0 - usable) / 2;
-  }
+  const { structuralBottom, structuralTop, usable } = resolveStructuralMarginsMm(
+    H0,
+    levels,
+    input.structuralBottomMm,
+    input.structuralTopMm
+  );
 
   const bottomIn = structuralBottom;
   const topIn = H0 - structuralTop;

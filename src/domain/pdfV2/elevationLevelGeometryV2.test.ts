@@ -2,14 +2,35 @@ import {
   computeBeamElevations,
   computeLevelSpacing,
   computeTunnelRackBeamElevationsAlignedToNormal,
+  rackVerticalWorkEnvelopeMm,
   tunnelActiveStorageLevelsFromGlobal,
   DEFAULT_FIRST_LEVEL_LIFT_MM,
   DEFAULT_STRUCTURAL_BOTTOM_MM,
   DEFAULT_STRUCTURAL_TOP_MM,
+  RACK_TOP_CLEARANCE_LAST_BEAM_TO_COLUMN_TOP_MM,
   TUNNEL_FIRST_BEAM_OFFSET_ABOVE_CLEARANCE_MM,
 } from './elevationLevelGeometryV2';
 
 describe('computeBeamElevations', () => {
+  it('reserva fixa 216 mm: último eixo de longarina a H − 216 mm (coluna típica)', () => {
+    const H = 7200;
+    const r = computeBeamElevations({
+      uprightHeightMm: H,
+      levels: 4,
+      hasGroundLevel: false,
+      firstLevelOnGround: true,
+    });
+    expect(r.structuralTopMm).toBeCloseTo(
+      RACK_TOP_CLEARANCE_LAST_BEAM_TO_COLUMN_TOP_MM,
+      1
+    );
+    const lastBeam = r.beamElevationsMm[r.beamElevationsMm.length - 1];
+    expect(lastBeam).toBeCloseTo(H - r.structuralTopMm, 2);
+    expect(rackVerticalWorkEnvelopeMm(H)).toBe(
+      H - DEFAULT_STRUCTURAL_BOTTOM_MM - RACK_TOP_CLEARANCE_LAST_BEAM_TO_COLUMN_TOP_MM
+    );
+  });
+
   it('5 níveis, 5000 mm, primeiro ao chão: gap = (H_work) / 5', () => {
     const r = computeBeamElevations({
       uprightHeightMm: 5000,
