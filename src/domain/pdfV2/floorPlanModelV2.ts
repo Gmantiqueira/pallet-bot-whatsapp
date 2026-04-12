@@ -8,6 +8,12 @@ import type {
 
 /**
  * Canvas SVG da planta.
+ *
+ * **Mesma convenção que {@link buildLayoutGeometry}:** cada `structureRects` vem de
+ * `RackModule.footprint` (retângulos em mm no referencial do galpão). O eixo **longitudinal da linha**
+ * é o do vão (face frontal do módulo); o eixo **transversal da faixa** é a profundidade de posição.
+ * Não há segunda geometria aqui — só escala e projeção para o viewBox SVG.
+ *
  * - Para L ≈ W, se `innerH` < `innerW`, `scale = innerH/W` fica baixo e o bitmap fica “paisagem”; no PDF
  *   o encaixe limita pela largura e sobra ~metade da página em branco. Por isso `VB_H` é alto o suficiente
  *   para `innerH >= innerW` (escala passa a usar a largura útil) e a razão VB_W/VB_H ≈ 0,72 aproxima a

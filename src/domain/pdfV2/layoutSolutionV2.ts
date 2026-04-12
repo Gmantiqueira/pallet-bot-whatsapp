@@ -630,9 +630,9 @@ function buildModuleSegmentsForRow(
 }
 
 /**
- * Retângulo de módulo em planta (mm).
- * `a→b` = sempre ao longo do eixo do vão (repetição ponta a ponta = um módulo retangular completo).
- * `crossSeg` = faixa no eixo transversal (profundidade de posição; dupla costas = dois módulos + espinha).
+ * Retângulo de módulo em planta (mm), referencial do galpão (x=comprimento, y=largura).
+ * - Eixo **longitudinal da linha** (`a`→`b`): face frontal / vão — comprimento vem de `beamLengthMm` (+ estrutura 2 baias, ver `rackModuleSpec`).
+ * - Eixo **transversal da faixa** (`crossSeg`): profundidade de posição — `moduleDepthMm` (faixa dupla = banda já dilatada em `fillWarehouseCross`).
  */
 function rectFor(
   orientation: LayoutOrientationV2,

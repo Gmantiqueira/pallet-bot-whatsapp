@@ -1,6 +1,14 @@
 /**
  * Modelo geométrico canónico para PDF V2: uma única fonte de verdade para planta,
  * elevações e 3D. Construído a partir de {@link LayoutSolutionV2} + respostas do projeto.
+ *
+ * **Convenção de eixos no plano do galpão (mm):** `x` = comprimento do edifício, `y` = largura.
+ * - **Ao longo da fileira / do vão (longitudinal da linha de armazenagem):** extensão da **face frontal**
+ *   do módulo — deriva do vão por baia (`beamAlongModuleMm` / `beamLengthMm`) e da regra 2 baias + estrutura
+ *   (`moduleFootprintAlongBeamInRunMm`, `rackModuleSpec`).
+ * - **Transversal à fileira (profundidade da faixa):** `moduleDepthMm` (uma costa); faixa dupla costas =
+ *   `2×moduleDepthMm + espinha` no mesmo eixo.
+ * Não confundir com `warehouseWidthMm` / `lengthMm`: esses são dimensões do **galpão**, não do módulo.
  */
 
 import {
@@ -57,22 +65,32 @@ export type RackModule = {
   type: RackModuleType;
   /** Retângulo em coordenadas do galpão (mm), eixo X = comprimento, Y = largura. */
   footprint: { x0: number; y0: number; x1: number; y1: number };
-  /** Extensão ao longo do vão / longarina (mm). */
-  widthMm: number;
-  /** Extensão ao longo da profundidade da estanteria (eixo transversal ao vão) (mm). */
-  depthMm: number;
-  /** Eixo de extensão da fileira (ponta com ponta) — coincide com widthMm. */
+  /**
+   * Extensão da pegada **ao longo do vão** (eixo da linha de armazenagem), em mm.
+   * Deriva do vão por baia (`beamLengthMm` → `bayClearSpanAlongBeamMm`), não de `moduleDepthMm`.
+   */
+  footprintAlongBeamMm: number;
+  /**
+   * Extensão da pegada no eixo **transversal ao vão** (profundidade de faixa), em mm.
+   * Para uma costa = `moduleDepthMm`; retângulos de planta em dupla costas cobrem a faixa completa.
+   */
+  footprintTransversalMm: number;
+  /** Igual a {@link footprintAlongBeamMm} — comprimento da caixa ao longo da fileira (elevação frontal). */
   moduleLengthAxisMm: number;
-  /** Profundidade de posição (transversal ao vão) — coincide com depthMm. */
+  /** Igual a {@link footprintTransversalMm} — profundidade de posição (vista lateral / faixa). */
   moduleDepthAxisMm: number;
   heightMm: number;
   uprightThicknessMm: number;
+  /** Igual a {@link footprintAlongBeamMm} (extensão ao longo das longarinas em planta). */
   beamSpanMm: number;
   /** Official module: 2 pallet bays per level on the front face. */
   baysPerLevel: number;
   /** Clear span of one bay along the beam (mm) — project “vão” input. */
   bayClearSpanAlongBeamMm: number;
-  /** Full module length along the row (mm); equals footprint extent along beam for full modules. */
+  /**
+   * Comprimento nominal da face no sentido do vão (primeiro módulo de um troço; meio-módulo = metade).
+   * A pegada em planta (`footprintAlongBeamMm`) pode ser o passo entre módulos com montante partilhado.
+   */
   moduleLengthAlongBeamMm: number;
   segmentType: ModuleSegmentType;
   globalLevels: number;
@@ -89,7 +107,9 @@ export type RackRow = {
   orientation: RowOrientationPlan;
   originX: number;
   originY: number;
+  /** Extensão da fileira ao longo do **eixo do vão** (mesma direção que `footprintAlongBeamMm` dos módulos). */
   rowLengthMm: number;
+  /** Espessura da faixa no eixo **transversal ao vão** (simples = `moduleDepthMm`; dupla = `2×moduleDepthMm + espinha`). */
   rowDepthMm: number;
   rowType: RackRowType;
   modules: RackModule[];
@@ -117,9 +137,13 @@ export type LayoutGeometryMetadata = {
   firstLevelOnGround: boolean;
   hasTunnel: boolean;
   rackDepthMode: RackDepthModeV2;
+  /** Entrada de projeto: vão por baia (alias histórico do nome do campo; não é “largura” da pegada em planta). */
   moduleWidthMm: number;
+  /** Profundidade de posição (uma costa), eixo transversal ao vão. */
   moduleDepthMm: number;
+  /** Vão livre por baia ao longo das longarinas — igual ao input `beamLengthMm` quando presente. */
   beamAlongModuleMm: number;
+  /** Profundidade de posição usada nas faixas (espelha `moduleDepthMm`). */
   rackDepthMm: number;
   corridorMm: number;
   beamSpanMm: number;
@@ -154,19 +178,21 @@ export class LayoutGeometryValidationError extends Error {
 }
 
 /**
- * Eixo do vão (ponta com ponta) vs profundidade de faixa vêm da orientação **calculada** na solução
- * (não do utilizador). Não usar max(dx,dy): em dupla costas a faixa transversal pode ser mais longa que o vão.
+ * Lê `dx`/`dy` da pegada em planta e devolve extensões **semânticas** (vão vs profundidade de faixa).
+ * - `along_length`: vão paralelo a **X** → longitudinal = `dx`, transversal = `dy`.
+ * - `along_width`: vão paralelo a **Y** → longitudinal = `dy`, transversal = `dx`.
+ * Não usar max(dx,dy): em dupla costas a faixa transversal pode exceder o comprimento ao longo do vão.
  */
-function moduleDims(
+function moduleFootprintAlongBeamAndTransversalMm(
   m: ModuleSegment,
   orientation: LayoutOrientationV2
-): { widthMm: number; depthMm: number } {
+): { alongBeamMm: number; transversalMm: number } {
   const dx = Math.abs(m.x1 - m.x0);
   const dy = Math.abs(m.y1 - m.y0);
   if (orientation === 'along_length') {
-    return { widthMm: dx, depthMm: dy };
+    return { alongBeamMm: dx, transversalMm: dy };
   }
-  return { widthMm: dy, depthMm: dx };
+  return { alongBeamMm: dy, transversalMm: dx };
 }
 
 function clearHeightFromAnswers(
@@ -286,7 +312,10 @@ function rackModuleFromSegment(
       : true;
   const cap = typeof answers.capacityKg === 'number' ? answers.capacityKg : 0;
   const H = uprightHeightMmFromAnswers(answers);
-  const { widthMm, depthMm } = moduleDims(m, solution.orientation);
+  const { alongBeamMm, transversalMm } = moduleFootprintAlongBeamAndTransversalMm(
+    m,
+    solution.orientation
+  );
   const type: RackModuleType = m.variant === 'tunnel' ? 'tunnel' : 'normal';
   const uprightThicknessMm =
     type === 'tunnel'
@@ -327,7 +356,7 @@ function rackModuleFromSegment(
       : undefined;
 
   const bayClear = solution.beamAlongModuleMm;
-  const moduleLenAlong = widthMm;
+  const moduleLenAlong = alongBeamMm;
 
   return {
     id: m.id,
@@ -335,13 +364,13 @@ function rackModuleFromSegment(
     moduleIndexInRow,
     type,
     footprint: { x0: m.x0, y0: m.y0, x1: m.x1, y1: m.y1 },
-    widthMm,
-    depthMm,
-    moduleLengthAxisMm: widthMm,
-    moduleDepthAxisMm: depthMm,
+    footprintAlongBeamMm: alongBeamMm,
+    footprintTransversalMm: transversalMm,
+    moduleLengthAxisMm: alongBeamMm,
+    moduleDepthAxisMm: transversalMm,
     heightMm: H,
     uprightThicknessMm,
-    beamSpanMm: widthMm,
+    beamSpanMm: alongBeamMm,
     baysPerLevel: MODULE_PALLET_BAYS_PER_LEVEL,
     bayClearSpanAlongBeamMm: bayClear,
     moduleLengthAlongBeamMm: moduleLenAlong,
@@ -718,8 +747,8 @@ export function validateLayoutGeometry(geo: LayoutGeometry): void {
       const beamExtent = ori === 'along_length' ? dx : dy;
       const crossExtent = ori === 'along_length' ? dy : dx;
       if (
-        Math.abs(beamExtent - m.widthMm) > 1 ||
-        Math.abs(crossExtent - m.depthMm) > 1
+        Math.abs(beamExtent - m.footprintAlongBeamMm) > 1 ||
+        Math.abs(crossExtent - m.footprintTransversalMm) > 1
       ) {
         throw new LayoutGeometryValidationError(
           `Módulo ${m.id}: vão / profundidade de faixa incoerentes com a pegada.`
