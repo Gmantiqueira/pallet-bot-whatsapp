@@ -199,7 +199,7 @@ export const routeIncoming = async (
       answers: finalizeSummaryAnswers({ ...updatedSession.answers }),
     };
 
-    sessionRepository.upsert({
+    await sessionRepository.upsert({
       ...genSession,
       updatedAt: Date.now(),
     });
@@ -325,7 +325,7 @@ export const routeIncoming = async (
 
   // Persist session
   updatedSession.updatedAt = Date.now();
-  sessionRepository.upsert(updatedSession);
+  await sessionRepository.upsert(updatedSession);
 
   return {
     session: updatedSession,

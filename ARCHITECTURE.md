@@ -86,15 +86,11 @@ O projeto segue uma arquitetura em camadas (layered architecture) com separaçã
 
 #### Estrutura:
 
-- **`db/sqlite.ts`**
-  - Conexão com SQLite
-  - Migrations
-  - Funções: `getDb()`, `migrate()`, `closeDb()`
+- **`repositories/createSessionRepository.ts`**
+  - Escolhe `UpstashSessionRepository` (Redis HTTPS) ou `MemorySessionRepository` (dev)
 
-- **`repositories/sqliteSessionRepository.ts`**
-  - Implementação concreta de `SessionRepository`
-  - Persistência em SQLite
-  - Serialização/deserialização JSON
+- **`repositories/upstashSessionRepository.ts` / `memorySessionRepository.ts`**
+  - Implementações de `SessionRepository` (JSON em Redis ou Map em memória)
 
 - **`pdf/pdfService.ts`**
   - Geração de PDFs usando pdfkit
@@ -156,7 +152,7 @@ routes/webhook.ts
 application/messageRouter.ts
   ├─→ domain/stateMachine.ts (transition)
   ├─→ application/messageBuilder.ts (buildMessages)
-  └─→ infra/repositories/sqliteSessionRepository.ts (persist)
+  └─→ infra/repositories (sessão Redis ou memória)
   ↓
 HTTP 200 { messages: [...] }
 ```

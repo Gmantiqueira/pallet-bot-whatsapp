@@ -2,7 +2,6 @@ export interface EnvConfig {
   PORT: number;
   HOST: string;
   NODE_ENV: string;
-  DB_PATH: string;
   /**
    * When set (non-empty):
    * - POST /webhook requires Authorization: Bearer <WEBHOOK_SECRET>
@@ -29,7 +28,6 @@ export const loadEnv = (): EnvConfig => {
     PORT: Number(process.env.PORT) || 3000,
     HOST: process.env.HOST || '0.0.0.0',
     NODE_ENV,
-    DB_PATH: process.env.DB_PATH || './data/app.db',
     WEBHOOK_SECRET,
   };
 };

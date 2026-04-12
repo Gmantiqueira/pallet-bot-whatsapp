@@ -25,15 +25,15 @@ const createSession = (
 class MockSessionRepository implements SessionRepository {
   private sessions: Map<string, Session> = new Map();
 
-  get(phone: string): Session | null {
-    return this.sessions.get(phone) || null;
+  async get(phone: string): Promise<Session | null> {
+    return this.sessions.get(phone) ?? null;
   }
 
-  upsert(session: Session): void {
+  async upsert(session: Session): Promise<void> {
     this.sessions.set(session.phone, { ...session });
   }
 
-  reset(phone: string): void {
+  async reset(phone: string): Promise<void> {
     this.sessions.delete(phone);
   }
 }
@@ -175,7 +175,7 @@ describe('MessageRouter', () => {
 
       await routeIncoming(session, incoming, repository);
 
-      const persisted = repository.get('5511999999999');
+      const persisted = await repository.get('5511999999999');
       expect(persisted).not.toBeNull();
       expect(persisted?.state).toBe('WAIT_LENGTH');
     });
@@ -425,7 +425,7 @@ describe('MessageRouter', () => {
 
       const p1 = routeIncoming(session, gerar, repository);
 
-      const mid = repository.get('5511999999999');
+      const mid = await repository.get('5511999999999');
       expect(mid?.state).toBe('GENERATING_DOC');
 
       const r2 = await routeIncoming(mid!, gerar, repository);
@@ -477,7 +477,7 @@ describe('MessageRouter', () => {
           guardRailDouble: false,
         })
       );
-      repository.upsert(busy);
+      await repository.upsert(busy);
 
       const r = await routeIncoming(
         busy,

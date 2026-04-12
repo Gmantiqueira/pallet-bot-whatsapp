@@ -2,7 +2,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { loadEnv } from '../config/env';
 import { verifyBearerToken } from '../infra/http/bearerAuth';
 import { OutgoingMessage } from '../types/messages';
-import { SqliteSessionRepository } from '../infra/repositories/sqliteSessionRepository';
+import { createSessionRepository } from '../infra/repositories/createSessionRepository';
 import { routeIncoming, IncomingPayload } from '../application/messageRouter';
 import type { GeneratedPdfArtifact } from '../types/generatedPdf';
 
@@ -27,7 +27,7 @@ const START_STATE = 'START';
 export const webhookRoutes = async (
   fastify: FastifyInstance
 ): Promise<void> => {
-  const sessionRepository = new SqliteSessionRepository();
+  const sessionRepository = createSessionRepository();
   const { WEBHOOK_SECRET } = loadEnv();
 
   fastify.post<{ Body: IncomingWebhookPayload; Reply: WebhookResponse }>(
@@ -49,7 +49,7 @@ export const webhookRoutes = async (
       const incoming: IncomingPayload = request.body;
 
       // Load or create session
-      let session = sessionRepository.get(incoming.from);
+      let session = await sessionRepository.get(incoming.from);
       if (!session) {
         session = {
           phone: incoming.from,
@@ -58,7 +58,7 @@ export const webhookRoutes = async (
           stack: [],
           updatedAt: Date.now(),
         };
-        sessionRepository.upsert(session);
+        await sessionRepository.upsert(session);
       }
 
       // Core devolve mensagens ao utilizador; o integrador junta `generatedPdf` ao pipeline de envio.

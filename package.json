@@ -31,12 +31,10 @@
     "test-exclude": "7.0.2"
   },
   "dependencies": {
+    "@upstash/redis": "^1.36.0",
     "fastify": "^4.24.3",
     "pdfkit": "^0.14.0",
     "sharp": "^0.34.5"
-  },
-  "optionalDependencies": {
-    "better-sqlite3": "^12.9.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",
