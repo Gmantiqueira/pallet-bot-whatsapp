@@ -35,6 +35,24 @@ describe('buildLayoutGeometry + validateLayoutGeometry', () => {
     validateLayoutGeometry(geo);
   });
 
+  it('hasTunnel na geometria = módulo túnel real (pedido sem módulo → Não)', () => {
+    const a: ProjectAnswersV2 = {
+      ...minimal(),
+      lineStrategy: 'APENAS_DUPLOS',
+      hasTunnel: true,
+      tunnelPosition: 'MEIO',
+      /** Só fileiras simples — em dupla costas não há módulo túnel. */
+      tunnelAppliesTo: 'LINHAS_SIMPLES' as const,
+      levels: 5,
+    };
+    const sol = buildLayoutSolutionV2(a);
+    expect(sol.metadata.hasTunnel).toBe(true);
+    const geo = buildLayoutGeometry(sol, a);
+    expect(geo.totals.tunnelCount).toBe(0);
+    expect(geo.metadata.hasTunnel).toBe(false);
+    validateLayoutGeometry(geo);
+  });
+
   it('módulo túnel: openBelow, montantes 100 mm, menos níveis ativos', () => {
     const a: ProjectAnswersV2 = {
       ...minimal(),

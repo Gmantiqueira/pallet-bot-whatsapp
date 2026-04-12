@@ -183,7 +183,7 @@ function attachPdfFileStream(
 }
 
 export type GenerateProjectPdfV2Input = {
-  /** `hasTunnel === true` inclui folhas de elevação com túnel; caso contrário omite-as. */
+  /** Metadados do projeto (capa/cotas); o túnel nas folhas segue `layoutGeometry.metadata.hasTunnel`. */
   project: Record<string, unknown>;
   /** Fonte única para o resumo técnico (alinhado à planta/elevações V2). */
   layoutGeometry: LayoutGeometry;
@@ -213,7 +213,8 @@ export async function renderPdfV2(
 
   const { pxW, pxH } = drawingRasterPixelSize();
   const { pxW: elW, pxH: elH } = elevationDrawingRasterPixelSize();
-  const hasTunnel = input.project.hasTunnel === true;
+  /** Só páginas de elevação “com túnel” quando o layout tem módulo túnel real (alinhado ao resumo técnico). */
+  const hasTunnel = input.layoutGeometry.metadata.hasTunnel === true;
 
   let floorRaster: { buffer: Buffer; widthPx: number; heightPx: number };
   let elevFrontStdRaster: { buffer: Buffer; widthPx: number; heightPx: number };

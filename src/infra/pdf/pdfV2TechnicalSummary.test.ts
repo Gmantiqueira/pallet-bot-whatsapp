@@ -54,12 +54,35 @@ describe('technicalSummaryRowsFromLayoutGeometry', () => {
     );
     expect(rowValue(rows, 'Níveis')).toBe(String(geo.totals.levelCount));
     expect(rowValue(rows, 'Túnel')).toBe('Sim');
+    expect(geo.totals.tunnelCount).toBeGreaterThan(0);
     expect(rowValue(rows, 'Comprimento')).toContain(
       geo.warehouseLengthMm.toLocaleString('pt-BR')
     );
     expect(rowValue(rows, 'Largura')).toContain(
       geo.warehouseWidthMm.toLocaleString('pt-BR')
     );
+  });
+
+  it('Túnel: Não no resumo quando o pedido indica túnel mas o layout não coloca módulo túnel', () => {
+    const a: ProjectAnswersV2 = {
+      ...minimal(),
+      lineStrategy: 'APENAS_DUPLOS',
+      hasTunnel: true,
+      tunnelPosition: 'MEIO',
+      tunnelAppliesTo: 'LINHAS_SIMPLES' as const,
+      levels: 5,
+    };
+    const sol = buildLayoutSolutionV2(a);
+    const geo = buildLayoutGeometry(
+      sol,
+      a as unknown as Record<string, unknown>
+    );
+    const rows = technicalSummaryRowsFromLayoutGeometry(
+      a as unknown as Record<string, unknown>,
+      geo
+    );
+    expect(rowValue(rows, 'Túnel')).toBe('Não');
+    expect(geo.totals.tunnelCount).toBe(0);
   });
 
   it('não segue um layout legado fictício: módulos/posições vêm da geometria V2', () => {

@@ -144,6 +144,10 @@ export type LayoutGeometryMetadata = {
   firstLevelOnGround: boolean;
   structuralLevels: number;
   hasGroundLevel: boolean;
+  /**
+   * `true` apenas se o layout calculado contém pelo menos um módulo túnel real
+   * (`totals.tunnelCount > 0`), não o pedido inicial do utilizador.
+   */
   hasTunnel: boolean;
   rackDepthMode: RackDepthModeV2;
   /** Entrada de projeto: vão por baia (alias histórico do nome do campo; não é “largura” da pegada em planta). */
@@ -460,6 +464,7 @@ export function buildLayoutGeometry(
     (n, r) => n + r.modules.filter(x => x.type === 'tunnel').length,
     0
   );
+  const hasTunnelRealized = tunnelCount > 0;
 
   const orientation = solution.orientation;
   const beamSpanDirection: 'x' | 'y' =
@@ -488,7 +493,7 @@ export function buildLayoutGeometry(
       firstLevelOnGround: solution.metadata.firstLevelOnGround,
       structuralLevels: solution.metadata.structuralLevels,
       hasGroundLevel: solution.metadata.hasGroundLevel,
-      hasTunnel: solution.metadata.hasTunnel,
+      hasTunnel: hasTunnelRealized,
       rackDepthMode: solution.rackDepthMode,
       moduleWidthMm: solution.moduleWidthMm,
       moduleDepthMm: solution.moduleDepthMm,
