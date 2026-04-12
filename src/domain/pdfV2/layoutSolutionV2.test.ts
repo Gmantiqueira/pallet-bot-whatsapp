@@ -1,5 +1,5 @@
 import { buildProjectAnswersV2 } from './answerMapping';
-import { buildLayoutSolutionV2 } from './layoutSolutionV2';
+import { buildLayoutSolutionV2, fillWarehouseCross } from './layoutSolutionV2';
 import { MODULE_PALLET_BAYS_PER_LEVEL, moduleLengthAlongBeamMm } from './rackModuleSpec';
 import type { ProjectAnswersV2 } from './answerMapping';
 
@@ -39,6 +39,48 @@ describe('buildLayoutSolutionV2', () => {
     const s = buildLayoutSolutionV2(base());
     expect(s.totals.positions).toBeGreaterThan(0);
     expect(typeof s.metadata.hasTunnel).toBe('boolean');
+  });
+
+  it('faixa transversal remanescente vira corredor no modelo (uma fileira + espaço útil)', () => {
+    const r = fillWarehouseCross({
+      orientation: 'along_length',
+      lengthMm: 40_000,
+      widthMm: 8000,
+      beamSpan: 40_000,
+      crossSpan: 8000,
+      bandDepth: 2700,
+      corridorMm: 3000,
+      depthMode: 'single',
+      hasTunnel: false,
+      tunnelPosition: undefined,
+    });
+    expect(r.rowBands).toHaveLength(1);
+    const trailing = r.corridors.find(c => c.id.endsWith('cor-trailing'));
+    expect(trailing).toBeDefined();
+    expect(trailing!.label).toContain('faixa transversal');
+    const w =
+      Math.abs(trailing!.y1 - trailing!.y0) < Math.abs(trailing!.x1 - trailing!.x0)
+        ? Math.abs(trailing!.y1 - trailing!.y0)
+        : Math.abs(trailing!.x1 - trailing!.x0);
+    expect(w).toBeGreaterThanOrEqual(3000 - 1);
+  });
+
+  it('faixa transversal estreita fica explícita no modelo (largura < corredor declarado)', () => {
+    const r = fillWarehouseCross({
+      orientation: 'along_length',
+      lengthMm: 40_000,
+      widthMm: 5699,
+      beamSpan: 40_000,
+      crossSpan: 5699,
+      bandDepth: 2700,
+      corridorMm: 3000,
+      depthMode: 'single',
+      hasTunnel: false,
+      tunnelPosition: undefined,
+    });
+    expect(r.rowBands).toHaveLength(1);
+    const trailing = r.corridors.find(c => c.id.endsWith('cor-trailing'));
+    expect(trailing?.label).toContain('inferior ao corredor declarado');
   });
 
   it('posições = módulos (equiv.) × 2 baias × costas × patamares (sem túnel nem meio módulo)', () => {

@@ -281,6 +281,41 @@ function fillCrossZone(
     }
   }
 
+  /**
+   * Remanescente transversal após a última fileira: circulação real (corredor de serviço / parede)
+   * que antes não entrava em `corridors` — só havia retângulos **entre** fileiras.
+   * Modela-se sempre que houver largura útil, para o PDF/planta não “perder” o corredor em layouts compactos.
+   */
+  const usedEnd = y;
+  const remainder = zone.z1 - usedEnd;
+  if (remainder > EPS) {
+    const label =
+      remainder + EPS >= corridorMm
+        ? 'Corredor operacional (faixa transversal)'
+        : 'Faixa transversal residual (largura inferior ao corredor declarado)';
+    if (orientation === 'along_length') {
+      corridors.push({
+        id: `${idPrefix}-cor-trailing`,
+        kind: 'corridor',
+        x0: 0,
+        x1: lengthMm,
+        y0: usedEnd,
+        y1: zone.z1,
+        label,
+      });
+    } else {
+      corridors.push({
+        id: `${idPrefix}-cor-trailing`,
+        kind: 'corridor',
+        x0: usedEnd,
+        x1: zone.z1,
+        y0: 0,
+        y1: widthMm,
+        label,
+      });
+    }
+  }
+
   return { rows, corridors };
 }
 
