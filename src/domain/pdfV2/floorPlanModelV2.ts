@@ -42,6 +42,47 @@ function rackDepthModeFromRow(row: RackRow): RackDepthModeV2 {
   return row.rowType === 'backToBack' ? 'double' : 'single';
 }
 
+/**
+ * Evita cotar `circulationZones[0]` quando é só faixa residual (ex.: uma linha):
+ * o rótulo deve corresponder à geometria cotada.
+ * Preferência: corredor operacional entre fileiras → faixa transversal larga → passagem → primeira zona.
+ */
+function pickCorridorZoneForPlanDimension(
+  zones: LayoutGeometry['circulationZones']
+): LayoutGeometry['circulationZones'][number] | undefined {
+  if (zones.length === 0) return undefined;
+  const betweenRows = zones.find(z => z.label === 'Corredor operacional');
+  if (betweenRows) return betweenRows;
+  const wideTrailing = zones.find(
+    z =>
+      (z.label?.includes('Corredor operacional') ?? false) &&
+      (z.label?.includes('faixa transversal') ?? false)
+  );
+  if (wideTrailing) return wideTrailing;
+  const cross = zones.find(z => z.label?.includes('Passagem transversal'));
+  if (cross) return cross;
+  return zones[0];
+}
+
+/** Texto da cota alinhado à zona cotada e ao comprimento real nesse eixo. */
+function corridorPlanDimensionLabel(
+  zone: LayoutGeometry['circulationZones'][number],
+  spanMm: number
+): string {
+  const fmt = formatMm(spanMm);
+  const t = zone.label ?? '';
+  if (t.includes('residual')) {
+    return `Faixa transversal (residual): ${fmt}`;
+  }
+  if (t.includes('Passagem transversal')) {
+    return `Passagem transversal: ${fmt}`;
+  }
+  if (t.includes('faixa transversal') && t.includes('Corredor')) {
+    return `Corredor (faixa transversal): ${fmt}`;
+  }
+  return `Corredor: ${fmt}`;
+}
+
 function circulationSemanticFromZone(
   kind: 'corridor' | 'tunnel',
   label: string | undefined
@@ -183,12 +224,15 @@ export function buildFloorPlanModelV2(
     offset: -28,
   });
 
-  if (geometry.circulationZones.length > 0) {
-    const c0 = geometry.circulationZones[0];
+  const corridorZone = pickCorridorZoneForPlanDimension(geometry.circulationZones);
+  if (corridorZone) {
+    const c0 = corridorZone;
     const x0m = Math.min(c0.x0, c0.x1);
     const x1m = Math.max(c0.x0, c0.x1);
     const y0m = Math.min(c0.y0, c0.y1);
     const y1m = Math.max(c0.y0, c0.y1);
+    const spanXm = Math.abs(x1m - x0m);
+    const spanYm = Math.abs(y1m - y0m);
     const cx1 = toX(x0m);
     const cx2 = toX(x1m);
     const cy1 = toY(y0m);
@@ -197,7 +241,8 @@ export function buildFloorPlanModelV2(
     const ch = Math.abs(cy2 - cy1);
     const midX = (cx1 + cx2) / 2;
     const midY = (cy1 + cy2) / 2;
-    const corText = `Corredor: ${formatMm(geometry.metadata.corridorMm)}`;
+    const spanAlongDimensionMm = cw < ch ? spanXm : spanYm;
+    const corText = corridorPlanDimensionLabel(c0, spanAlongDimensionMm);
     if (cw < ch) {
       dimensionLines.push({
         id: 'dim-corridor',

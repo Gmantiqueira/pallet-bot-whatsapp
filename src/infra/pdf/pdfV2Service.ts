@@ -98,6 +98,54 @@ function coverProjeto(project: Record<string, unknown>): string {
   ]);
 }
 
+/** Slug seguro para nome de ficheiro a partir de referência / nome do projeto. */
+function referenceSlugForPdfFilename(project: Record<string, unknown>): string | undefined {
+  const preferKeys = [
+    'referencia',
+    'referência',
+    'docCode',
+    'codigoProjeto',
+    'projectReference',
+  ];
+  for (const k of preferKeys) {
+    const v = project[k];
+    if (typeof v === 'string' && v.trim().length >= 2) {
+      return sanitizePdfFilenameSlug(v);
+    }
+  }
+  const name = stringField(
+    project,
+    ['projectName', 'nomeProjeto', 'projetoNome'],
+    ''
+  );
+  if (name && name !== '—') {
+    return sanitizePdfFilenameSlug(name);
+  }
+  return undefined;
+}
+
+function sanitizePdfFilenameSlug(raw: string): string {
+  const s = raw
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-zA-Z0-9._+.-]/g, '')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80);
+  return s.length >= 2 ? s : '';
+}
+
+function buildPdfV2Filename(
+  project: Record<string, unknown>,
+  timestamp: number
+): string {
+  const slug = referenceSlugForPdfFilename(project);
+  if (slug) {
+    return `projeto-${slug}-${timestamp}.pdf`;
+  }
+  return `projeto-${timestamp}.pdf`;
+}
+
 function coverDataEmissao(project: Record<string, unknown>): string {
   const raw = project.pdfDate ?? project.dataEmissao ?? project.documentDate;
   if (typeof raw === 'string' && raw.trim()) {
@@ -208,7 +256,7 @@ export async function renderPdfV2(
   }
 
   const timestamp = Date.now();
-  const filename = `projeto-${timestamp}.pdf`;
+  const filename = buildPdfV2Filename(input.project, timestamp);
   const filePath = path.join(storagePath, filename);
 
   const { pxW, pxH } = drawingRasterPixelSize();
@@ -460,7 +508,7 @@ export async function renderPdfV2(
 
   doc.addPage();
   doc.y = doc.page.margins.top + 6;
-  drawCentered('Elevação frontal — sem túnel', {
+  drawCentered('Vista frontal — sem túnel', {
     size: 12,
     font: 'Helvetica-Bold',
     color: COL_INK,
@@ -478,7 +526,7 @@ export async function renderPdfV2(
   if (hasTunnel) {
     doc.addPage();
     doc.y = doc.page.margins.top + 6;
-    drawCentered('Elevação frontal — com túnel', {
+    drawCentered('Vista frontal — com túnel', {
       size: 12,
       font: 'Helvetica-Bold',
       color: COL_INK,
