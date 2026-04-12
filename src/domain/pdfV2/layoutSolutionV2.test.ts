@@ -1,6 +1,6 @@
 import { buildProjectAnswersV2 } from './answerMapping';
 import { buildLayoutSolutionV2 } from './layoutSolutionV2';
-import { moduleLengthAlongBeamMm } from './rackModuleSpec';
+import { MODULE_PALLET_BAYS_PER_LEVEL, moduleLengthAlongBeamMm } from './rackModuleSpec';
 import type { ProjectAnswersV2 } from './answerMapping';
 
 const base = (): ProjectAnswersV2 => ({
@@ -39,6 +39,26 @@ describe('buildLayoutSolutionV2', () => {
     const s = buildLayoutSolutionV2(base());
     expect(s.totals.positions).toBeGreaterThan(0);
     expect(typeof s.metadata.hasTunnel).toBe('boolean');
+  });
+
+  it('posições = módulos (equiv.) × 2 baias × costas × patamares (sem túnel nem meio módulo)', () => {
+    const a = {
+      ...base(),
+      lineStrategy: 'APENAS_SIMPLES' as const,
+      hasTunnel: false,
+    };
+    const s = buildLayoutSolutionV2(a);
+    const hasGround = a.hasGroundLevel !== false;
+    const tiers = a.levels + (hasGround ? 1 : 0);
+    const depth = s.rackDepthMode === 'double' ? 2 : 1;
+    expect(s.totals.positions).toBe(
+      Math.round(
+        s.totals.modules *
+          MODULE_PALLET_BAYS_PER_LEVEL *
+          depth *
+          tiers
+      )
+    );
   });
 
   it('3: duas fileiras com corredor central', () => {

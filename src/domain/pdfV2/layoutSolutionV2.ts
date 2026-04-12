@@ -2,6 +2,7 @@ import { tunnelAppliesToRow, type ProjectAnswersV2 } from './answerMapping';
 import { tunnelActiveStorageLevelsFromGlobal } from './elevationLevelGeometryV2';
 import {
   maxFullModulesInBeamRun,
+  MODULE_PALLET_BAYS_PER_LEVEL,
   moduleFootprintAlongBeamInRunMm,
   moduleLengthAlongBeamMm as computeModuleLengthAlongBeamMm,
   totalBeamRunLengthForModuleCount,
@@ -19,6 +20,53 @@ import type {
 
 const SPINE_BACK_TO_BACK_MM = 100;
 const EPS = 0.5;
+
+/**
+ * Patamares que contam para **posições de palete** (carga), alinhado a {@link rackModuleFromSegment} /
+ * `buildStorageLevels`: normal/half usam níveis com longarina + patamar de piso (se ativo);
+ * túnel não tem carga no patamar sobre a passagem — só níveis ativos acima do vão.
+ */
+function storageTiersForPositionCount(
+  seg: ModuleSegment,
+  structuralLevels: number,
+  hasGroundLevel: boolean
+): number {
+  if (seg.variant === 'tunnel') {
+    const a =
+      seg.activeStorageLevels ??
+      tunnelActiveStorageLevelsFromGlobal(structuralLevels);
+    return Math.max(0, a);
+  }
+  return structuralLevels + (hasGroundLevel ? 1 : 0);
+}
+
+/**
+ * Posições = Σ ao longo de todas as fileiras e segmentos:
+ * (equiv. ao longo do vão) × {@link MODULE_PALLET_BAYS_PER_LEVEL} × (1 ou 2 costas) × patamares de carga.
+ * Equiv.: 1 = módulo completo (2 baias na face), 0,5 = meio módulo (= 1 baia).
+ */
+function computeTotalPalletPositions(
+  rows: RackRowSolution[],
+  depthMode: RackDepthModeV2,
+  structuralLevels: number,
+  hasGroundLevel: boolean
+): number {
+  const depthFactor = depthMode === 'double' ? 2 : 1;
+  let sum = 0;
+  for (const row of rows) {
+    for (const seg of row.modules) {
+      const alongEquiv = seg.type === 'half' ? 0.5 : 1;
+      const tiers = storageTiersForPositionCount(
+        seg,
+        structuralLevels,
+        hasGroundLevel
+      );
+      sum +=
+        alongEquiv * MODULE_PALLET_BAYS_PER_LEVEL * depthFactor * tiers;
+    }
+  }
+  return Math.round(sum);
+}
 
 export type BuildLayoutSolutionV2Input = ProjectAnswersV2;
 
@@ -712,9 +760,11 @@ function buildLayoutSolutionV2Core(
     });
   }
 
-  const depthFactor = depthMode === 'double' ? 2 : 1;
-  const positions = Math.round(
-    totalModEquiv * depthFactor * storageTierCount
+  const positions = computeTotalPalletPositions(
+    rows,
+    depthMode,
+    structuralLevels,
+    hasGroundLevel
   );
 
   return {
