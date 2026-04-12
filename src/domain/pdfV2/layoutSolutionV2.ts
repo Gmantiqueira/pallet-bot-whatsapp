@@ -533,7 +533,13 @@ function buildLayoutSolutionV2Core(
     tunnelAppliesTo,
     halfModuleOptimization,
     firstLevelOnGround,
+    hasGroundLevel: hasGroundLevelAns,
   } = answers;
+
+  const hasGroundLevel = hasGroundLevelAns !== false;
+  const structuralLevels = levels;
+  const storageTierCount =
+    structuralLevels + (hasGroundLevel ? 1 : 0);
 
   /**
    * Semântica fixa (não usar max/min entre os dois — isso invertia vão vs profundidade):
@@ -682,7 +688,9 @@ function buildLayoutSolutionV2Core(
   }
 
   const depthFactor = depthMode === 'double' ? 2 : 1;
-  const positions = Math.round(totalModEquiv * depthFactor * levels);
+  const positions = Math.round(
+    totalModEquiv * depthFactor * storageTierCount
+  );
 
   return {
     warehouse: { lengthMm, widthMm },
@@ -702,7 +710,7 @@ function buildLayoutSolutionV2Core(
     totals: {
       modules: totalModEquiv,
       positions,
-      levels,
+      levels: storageTierCount,
     },
     metadata: {
       lineStrategy,
@@ -711,6 +719,8 @@ function buildLayoutSolutionV2Core(
         ? 'Meio módulo não aplicado: extremo sem circulação operacional adjacente (túnel/corredor entre fileiras).'
         : undefined,
       firstLevelOnGround,
+      structuralLevels,
+      hasGroundLevel,
       hasTunnel,
     },
   };

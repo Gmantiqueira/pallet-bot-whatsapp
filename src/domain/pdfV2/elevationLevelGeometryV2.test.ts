@@ -14,6 +14,7 @@ describe('computeBeamElevations', () => {
     const r = computeBeamElevations({
       uprightHeightMm: 5000,
       levels: 5,
+      hasGroundLevel: false,
       firstLevelOnGround: true,
     });
     const bottom = DEFAULT_STRUCTURAL_BOTTOM_MM;
@@ -35,6 +36,7 @@ describe('computeBeamElevations', () => {
     const r = computeBeamElevations({
       uprightHeightMm: 5000,
       levels: 5,
+      hasGroundLevel: false,
       firstLevelOnGround: false,
     });
     const bottom = DEFAULT_STRUCTURAL_BOTTOM_MM;
@@ -57,6 +59,7 @@ describe('computeBeamElevations', () => {
     const r = computeBeamElevations({
       uprightHeightMm: 6000,
       levels: 4,
+      hasGroundLevel: false,
       firstLevelOnGround: true,
       levelSpacingsMm: [1500, 1500, 1500],
     });
@@ -77,6 +80,7 @@ describe('computeBeamElevations', () => {
     const r = computeBeamElevations({
       uprightHeightMm: 5000,
       levels: 5,
+      hasGroundLevel: false,
       firstLevelOnGround: true,
     });
     expect(meanGapMm).toBeCloseTo(r.meanGapMm, 4);
@@ -89,6 +93,7 @@ describe('computeBeamElevations', () => {
     const r = computeBeamElevations({
       uprightHeightMm: 4000,
       levels: 3,
+      hasGroundLevel: false,
       firstLevelOnGround: true,
       levelSpacingsMm: [2000, 2000],
     });

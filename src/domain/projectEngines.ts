@@ -111,5 +111,9 @@ export function finalizeSummaryAnswers(
         : true,
     mixedModules:
       typeof answers.mixedModules === 'boolean' ? answers.mixedModules : false,
+    hasGroundLevel:
+      typeof answers.hasGroundLevel === 'boolean'
+        ? answers.hasGroundLevel
+        : true,
   };
 }

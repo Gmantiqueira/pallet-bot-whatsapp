@@ -63,6 +63,10 @@ export type LayoutSolutionV2 = {
     /** Células de vão (face) — meio módulo conta 0,5 quando aplicável. */
     modules: number;
     positions: number;
+    /**
+     * Total de patamares de armazenagem no cálculo de posições (= níveis com longarina
+     * + 1 se `hasGroundLevel`).
+     */
     levels: number;
   };
   metadata: {
@@ -70,6 +74,10 @@ export type LayoutSolutionV2 = {
     optimizeWithHalfModule: boolean;
     halfModuleRejectedReason?: string;
     firstLevelOnGround: boolean;
+    /** Níveis com longarina (entrada do utilizador). */
+    structuralLevels: number;
+    /** Patamar de palete no piso sem longarina. */
+    hasGroundLevel: boolean;
     hasTunnel: boolean;
   };
 };
@@ -172,6 +180,7 @@ export type FloorPlanLabel = {
 
 /** Dados para cada painel de elevação (sem coordenadas — o serializer posiciona). */
 export type ElevationPanelPayload = {
+  /** Níveis com longarina (entrada do utilizador). */
   levels: number;
   uprightHeightMm: number;
   /**
@@ -198,8 +207,15 @@ export type ElevationPanelPayload = {
   /** Pé livre do módulo túnel (mm) — desenho do vão inferior. */
   tunnelClearanceMm?: number;
   firstLevelOnGround: boolean;
+  /** Patamar de carga ao nível do piso (sem longarina nesse patamar). */
+  hasGroundLevel: boolean;
+  /**
+   * Patamares de armazenagem no desenho (= structuralLevels + 1 quando há piso).
+   * Usado para cotas de carga e faixas visuais.
+   */
+  totalStorageTiers: number;
   clearHeightMm?: number;
-  /** Cotas dos eixos das longarinas (mm, do piso), length = levels + 1 — de {@link computeBeamElevations}. */
+  /** Cotas dos eixos das longarinas (mm, do piso), length = structuralLevels + 1 — de {@link computeBeamElevations}. */
   beamElevationsMm: number[];
   structuralBottomMm: number;
   structuralTopMm: number;

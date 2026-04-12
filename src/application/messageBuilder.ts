@@ -411,6 +411,11 @@ const buildSummary = (session: Session): string => {
   if (typeof a.firstLevelOnGround === 'boolean') {
     lines.push(`1.º nível ao chão: ${a.firstLevelOnGround ? 'Sim' : 'Não'}`);
   }
+  if (typeof a.hasGroundLevel === 'boolean') {
+    lines.push(
+      `Patamar de palete no piso (sem longarina): ${a.hasGroundLevel ? 'Sim' : 'Não'}`
+    );
+  }
 
   if (typeof a.capacityKg === 'number') {
     lines.push(`Capacidade por nível: ${a.capacityKg} kg`);

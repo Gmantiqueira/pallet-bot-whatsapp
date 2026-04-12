@@ -41,8 +41,9 @@ describe('serializeElevationPagesV2', () => {
     expect(svg).toMatch(/2 baias/);
     expect(svg).toMatch(/vão/);
     const kgLabels = svg.match(/1200kg/g) ?? [];
-    expect(kgLabels.length).toBe(a.levels * 2);
-    // Duas baias: uma longarina por baia e por nível
+    // Uma etiqueta por baia por patamar de armazenagem (incl. piso sem longarina).
+    expect(kgLabels.length).toBe(layout.totals.levels * 2);
+    // Duas baias: uma longarina por baia e por nível estrutural (sem longarina no piso).
     const orangeBeams = svg.match(/fill="#fb923c"/g) ?? [];
     expect(orangeBeams.length).toBe(a.levels * 2);
   });

@@ -56,6 +56,8 @@ export type StorageLevel = {
   loadPerPalletKg: number;
   loadPerBeamPairKg: number;
   active: boolean;
+  /** `ground` = palete no piso sem longarina nesse patamar; `beam` = entre eixos de longarina. */
+  tierKind?: 'ground' | 'beam';
 };
 
 export type RackModule = {
@@ -93,7 +95,11 @@ export type RackModule = {
    */
   moduleLengthAlongBeamMm: number;
   segmentType: ModuleSegmentType;
+  /** Níveis com longarina (entrada do utilizador). */
   globalLevels: number;
+  hasGroundLevel: boolean;
+  /** Patamares de armazenagem (piso + estruturais). */
+  storageTierCount: number;
   activeStorageLevels: number;
   tunnelClearanceHeightMm?: number;
   openBelow?: boolean;
@@ -135,6 +141,8 @@ export type LayoutGeometryMetadata = {
   optimizeWithHalfModule: boolean;
   halfModuleRejectedReason?: string;
   firstLevelOnGround: boolean;
+  structuralLevels: number;
+  hasGroundLevel: boolean;
   hasTunnel: boolean;
   rackDepthMode: RackDepthModeV2;
   /** Entrada de projeto: vão por baia (alias histórico do nome do campo; não é “largura” da pegada em planta). */
@@ -230,22 +238,41 @@ function buildStorageLevels(
   geom: BeamElevationResult,
   capacityKg: number,
   moduleType: RackModuleType,
-  activeStorageLevels: number
+  activeStorageLevels: number,
+  opts: { hasGroundLevel: boolean }
 ): StorageLevel[] {
   const beams = geom.beamElevationsMm;
-  const nTiers = beams.length - 1;
+  const floorY = geom.structuralBottomMm;
   const out: StorageLevel[] = [];
+  let idx = 0;
+
+  if (opts.hasGroundLevel) {
+    const clearG = Math.max(EPS, beams[0]! - floorY);
+    const activeGround = moduleType === 'tunnel' ? false : true;
+    out.push({
+      index: idx++,
+      beamY: beams[0]!,
+      clearHeightBelow: clearG,
+      loadPerPalletKg: capacityKg,
+      loadPerBeamPairKg: capacityKg * 2,
+      active: activeGround,
+      tierKind: 'ground',
+    });
+  }
+
+  const nTiers = beams.length - 1;
   for (let i = 0; i < nTiers; i++) {
     const beamY = beams[i + 1]!;
     const clearHeightBelow = beams[i + 1]! - beams[i]!;
     const active = moduleType === 'tunnel' ? i < activeStorageLevels : true;
     out.push({
-      index: i,
+      index: idx++,
       beamY,
       clearHeightBelow,
       loadPerPalletKg: capacityKg,
       loadPerBeamPairKg: capacityKg * 2,
       active,
+      tierKind: 'beam',
     });
   }
   return out;
@@ -256,36 +283,16 @@ function beamResultForModule(
   uprightHeightMm: number,
   globalLevels: number,
   firstLevelOnGround: boolean,
+  hasGroundLevel: boolean,
   answers: Record<string, unknown>
 ): BeamElevationResult {
-  if (m.variant === 'tunnel' && m.tunnelClearanceMm != null) {
-    const tunnelLv =
-      m.activeStorageLevels != null
-        ? m.activeStorageLevels
-        : tunnelActiveStorageLevelsFromGlobal(globalLevels);
-    const normal = computeBeamElevations({
-      uprightHeightMm,
-      levels: globalLevels,
-      firstLevelOnGround,
-      equalLevelSpacing: answers.equalLevelSpacing === true,
-      levelSpacingMm:
-        typeof answers.levelSpacingMm === 'number'
-          ? answers.levelSpacingMm
-          : undefined,
-      levelSpacingsMm: Array.isArray(answers.levelSpacingsMm)
-        ? (answers.levelSpacingsMm as number[])
-        : undefined,
-    });
-    return computeTunnelRackBeamElevationsAlignedToNormal({
-      normal,
-      globalLevels,
-      tunnelLevels: tunnelLv,
-      tunnelClearanceMm: m.tunnelClearanceMm,
-    });
-  }
-  return computeBeamElevations({
+  const loadHeightMm =
+    typeof answers.loadHeightMm === 'number' ? answers.loadHeightMm : undefined;
+  const beamOpts = {
     uprightHeightMm,
     levels: globalLevels,
+    hasGroundLevel,
+    loadHeightMm,
     firstLevelOnGround,
     equalLevelSpacing: answers.equalLevelSpacing === true,
     levelSpacingMm:
@@ -295,7 +302,21 @@ function beamResultForModule(
     levelSpacingsMm: Array.isArray(answers.levelSpacingsMm)
       ? (answers.levelSpacingsMm as number[])
       : undefined,
-  });
+  };
+  if (m.variant === 'tunnel' && m.tunnelClearanceMm != null) {
+    const tunnelLv =
+      m.activeStorageLevels != null
+        ? m.activeStorageLevels
+        : tunnelActiveStorageLevelsFromGlobal(globalLevels);
+    const normal = computeBeamElevations(beamOpts);
+    return computeTunnelRackBeamElevationsAlignedToNormal({
+      normal,
+      globalLevels,
+      tunnelLevels: tunnelLv,
+      tunnelClearanceMm: m.tunnelClearanceMm,
+    });
+  }
+  return computeBeamElevations(beamOpts);
 }
 
 function rackModuleFromSegment(
@@ -310,6 +331,12 @@ function rackModuleFromSegment(
     typeof answers.firstLevelOnGround === 'boolean'
       ? answers.firstLevelOnGround
       : true;
+  const hasGroundLevel =
+    typeof answers.hasGroundLevel === 'boolean'
+      ? answers.hasGroundLevel
+      : true;
+  const storageTierCount =
+    levels + (hasGroundLevel ? 1 : 0);
   const cap = typeof answers.capacityKg === 'number' ? answers.capacityKg : 0;
   const H = uprightHeightMmFromAnswers(answers);
   const { alongBeamMm, transversalMm } = moduleFootprintAlongBeamAndTransversalMm(
@@ -333,6 +360,7 @@ function rackModuleFromSegment(
     H,
     levels,
     firstLevelOnGround,
+    hasGroundLevel,
     answers
   );
   const expectedBeamAxes =
@@ -347,7 +375,8 @@ function rackModuleFromSegment(
     beamGeometry,
     cap,
     type,
-    activeStorageLevels
+    activeStorageLevels,
+    { hasGroundLevel }
   );
 
   const tunnelClearance =
@@ -376,6 +405,8 @@ function rackModuleFromSegment(
     moduleLengthAlongBeamMm: moduleLenAlong,
     segmentType: m.type,
     globalLevels: levels,
+    hasGroundLevel,
+    storageTierCount,
     activeStorageLevels,
     tunnelClearanceHeightMm: tunnelClearance,
     openBelow: type === 'tunnel',
@@ -469,6 +500,8 @@ export function buildLayoutGeometry(
       optimizeWithHalfModule: solution.metadata.optimizeWithHalfModule,
       halfModuleRejectedReason: solution.metadata.halfModuleRejectedReason,
       firstLevelOnGround: solution.metadata.firstLevelOnGround,
+      structuralLevels: solution.metadata.structuralLevels,
+      hasGroundLevel: solution.metadata.hasGroundLevel,
       hasTunnel: solution.metadata.hasTunnel,
       rackDepthMode: solution.rackDepthMode,
       moduleWidthMm: solution.moduleWidthMm,

@@ -18,6 +18,10 @@ const FV_ALONG_BEAM_DIVISIONS = 3;
 const FV_PALLET_TIER_FILL = '#fff7ed';
 const FV_PALLET_TIER_STROKE = '#fdba74';
 const FV_PALLET_TIER_OPACITY = 0.38;
+/** Patamar ao piso (sem longarina) — distinto dos níveis entre longarinas. */
+const FV_GROUND_PALLET_FILL = '#ecfdf5';
+const FV_GROUND_PALLET_STROKE = '#059669';
+const FV_GROUND_PALLET_OPACITY = 0.52;
 
 const COL_BG = '#ffffff';
 const COL_FRAME = '#d4d4d4';
@@ -183,7 +187,8 @@ function drawVerticalDimChain(
   axisGapsMm: number[],
   uprightH: number,
   labelScale: number,
-  tunnelDim?: { clearanceMm: number; yPassTop: number }
+  tunnelDim?: { clearanceMm: number; yPassTop: number },
+  hasGroundLevel?: boolean
 ): string {
   const ls = labelScale;
   const nB = beamYsPx.length;
@@ -295,7 +300,9 @@ function drawVerticalDimChain(
       if (idx === detailCount - 1) return 'Topo / tampo';
       return `Livre ${idx - 1}–${idx}`;
     }
-    if (idx === 0) return '1.º eixo';
+    if (idx === 0) {
+      return hasGroundLevel ? 'Piso → 1.º eixo (sem long.)' : '1.º eixo';
+    }
     if (idx === detailCount - 1) return 'Topo / tampo';
     return `Livre ${idx}–${idx + 1}`;
   };
@@ -541,6 +548,35 @@ function drawFrontStorageTiers(
   return parts.join('');
 }
 
+/** Paletes ao nível do piso (acima do piso estrutural, abaixo da 1.ª longarina). */
+function drawGroundPalletBand(
+  bay: BaySpan,
+  yFirstBeamPx: number,
+  yFloorInnerPx: number,
+  yClipTop: number,
+  yClipBottom: number,
+  splitTwoPalletPositions: boolean
+): string {
+  const yTop = Math.min(yFirstBeamPx, yFloorInnerPx);
+  const yBot = Math.max(yFirstBeamPx, yFloorInnerPx);
+  const t = Math.max(yClipTop, yTop);
+  const b = Math.min(yClipBottom, yBot);
+  if (b - t < 3) return '';
+  const insetX = Math.max(2.8, (bay.right - bay.left) * 0.04);
+  const xl = bay.left + insetX;
+  const xr = bay.right - insetX;
+  const parts: string[] = [
+    `<rect x="${xl}" y="${t}" width="${xr - xl}" height="${b - t}" rx="1.4" fill="${FV_GROUND_PALLET_FILL}" stroke="${FV_GROUND_PALLET_STROKE}" stroke-width="0.55" opacity="${FV_GROUND_PALLET_OPACITY}"/>`,
+  ];
+  const mx = (xl + xr) / 2;
+  if (splitTwoPalletPositions) {
+    parts.push(
+      `<line x1="${mx}" y1="${t + 1.2}" x2="${mx}" y2="${b - 1.2}" stroke="#047857" stroke-width="1.05" stroke-linecap="square" opacity="0.88"/>`
+    );
+  }
+  return parts.join('');
+}
+
 /**
  * Espaço sob o piso da estrutura: cota horizontal (`rackBottom + 26·ls`) + texto «Largura total»
  * (`rackBottom + 44·ls`) deve caber em `ph` sem sobrepor a legenda da folha (`wrapElevationDrawingPage`).
@@ -730,6 +766,26 @@ function drawFrontRack(
   const lastUw = uprightWidthsPx[nMod]!;
   const topY = ry;
 
+  const yBeam0 = beamYsPx[0];
+  if (
+    data.hasGroundLevel === true &&
+    typeof yBeam0 === 'number' &&
+    !showTunnelOpening
+  ) {
+    for (let bi = 0; bi < bays.length; bi++) {
+      parts.push(
+        drawGroundPalletBand(
+          bays[bi]!,
+          yBeam0,
+          rackBottom,
+          ry + 1,
+          rackBottom - 1,
+          false
+        )
+      );
+    }
+  }
+
   for (let bi = 0; bi < bays.length; bi++) {
     parts.push(
       drawFrontStorageTiers(
@@ -774,6 +830,22 @@ function drawFrontRack(
   ) {
     const capText = `${Math.round(data.capacityKgPerLevel)}kg`;
     const capFs = 14.5 * ls;
+    if (
+      data.hasGroundLevel === true &&
+      !showTunnelOpening &&
+      typeof beamYsPx[0] === 'number'
+    ) {
+      const ty = (beamYsPx[0]! + rackBottom) / 2 + 3 * ls;
+      for (let bi = 0; bi < bays.length; bi++) {
+        const bay = bays[bi]!;
+        const cx = (bay.left + bay.right) / 2;
+        parts.push(
+          `<text x="${cx}" y="${ty}" text-anchor="middle" font-size="${capFs}px" font-weight="700" fill="#047857" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif">${escapeXml(
+            capText
+          )}</text>`
+        );
+      }
+    }
     for (let bi = 0; bi < bays.length; bi++) {
       const bay = bays[bi]!;
       for (let j = 0; j < nStorageBeams; j++) {
@@ -834,7 +906,8 @@ function drawFrontRack(
       axisGapsMm,
       uprightH,
       ls,
-      showTunnelOpening ? { clearanceMm: clearanceMm, yPassTop } : undefined
+      showTunnelOpening ? { clearanceMm: clearanceMm, yPassTop } : undefined,
+      data.hasGroundLevel === true
     )
   );
 
@@ -1042,7 +1115,8 @@ function drawLateral(
       g.axisGapsMm,
       uprightH,
       ls,
-      clearanceLatMm > 0 ? { clearanceMm: clearanceLatMm, yPassTop } : undefined
+      clearanceLatMm > 0 ? { clearanceMm: clearanceLatMm, yPassTop } : undefined,
+      data.hasGroundLevel === true
     )
   );
 

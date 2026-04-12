@@ -66,6 +66,10 @@ export function buildProjectAnswersV2(
       typeof answers.firstLevelOnGround === 'boolean'
         ? answers.firstLevelOnGround
         : true,
+    hasGroundLevel:
+      typeof answers.hasGroundLevel === 'boolean'
+        ? answers.hasGroundLevel
+        : true,
     heightMode: answers.heightMode === 'CALC' ? 'CALC' : 'DIRECT',
     heightMm:
       typeof answers.heightMm === 'number' ? answers.heightMm : undefined,
@@ -94,6 +98,11 @@ export type ProjectAnswersV2 = {
   tunnelAppliesTo?: TunnelAppliesCode;
   halfModuleOptimization: boolean;
   firstLevelOnGround: boolean;
+  /**
+   * Patamar extra de palete no piso (sem longarina nesse nível). Os `levels` do utilizador
+   * contam só níveis estruturais com longarina. Omisso = ativado em {@link buildProjectAnswersV2}.
+   */
+  hasGroundLevel?: boolean;
   heightMode: 'DIRECT' | 'CALC';
   heightMm?: number;
   loadHeightMm?: number;

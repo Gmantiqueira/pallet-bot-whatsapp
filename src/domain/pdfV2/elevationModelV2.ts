@@ -59,12 +59,20 @@ function panelFromRackModule(
     typeof answers.firstLevelOnGround === 'boolean'
       ? answers.firstLevelOnGround
       : true;
+  const hasGroundLevel =
+    typeof answers.hasGroundLevel === 'boolean'
+      ? answers.hasGroundLevel
+      : true;
 
   const isTunnel = mod.type === 'tunnel';
   const levels = isTunnel ? mod.activeStorageLevels : mod.globalLevels;
 
   return {
     levels,
+    hasGroundLevel: isTunnel ? false : hasGroundLevel,
+    totalStorageTiers: isTunnel
+      ? mod.activeStorageLevels
+      : mod.storageTierCount,
     uprightHeightMm: mod.heightMm,
     beamLengthMm,
     moduleDepthMm,
@@ -104,9 +112,18 @@ function buildFrontWithoutTunnelPayload(
     typeof answers.firstLevelOnGround === 'boolean'
       ? answers.firstLevelOnGround
       : true;
+  const hasGroundLevel =
+    typeof answers.hasGroundLevel === 'boolean'
+      ? answers.hasGroundLevel
+      : true;
   const geom = computeBeamElevations({
     uprightHeightMm: rep.heightMm,
     levels,
+    hasGroundLevel,
+    loadHeightMm:
+      typeof answers.loadHeightMm === 'number'
+        ? answers.loadHeightMm
+        : undefined,
     firstLevelOnGround,
     equalLevelSpacing: answers.equalLevelSpacing === true,
     levelSpacingMm:
@@ -124,6 +141,8 @@ function buildFrontWithoutTunnelPayload(
 
   return {
     levels,
+    hasGroundLevel,
+    totalStorageTiers: levels + (hasGroundLevel ? 1 : 0),
     uprightHeightMm: rep.heightMm,
     beamLengthMm,
     moduleDepthMm,

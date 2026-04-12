@@ -131,7 +131,10 @@ function emitPalletRackPrism(
 export function build3DModelV2(geometry: LayoutGeometry): Rack3DModel {
   const firstMod = geometry.rows[0]?.modules[0];
   const H = Math.max(EPS, firstMod?.heightMm ?? 1);
-  const levels = Math.max(1, firstMod?.globalLevels ?? 1);
+  const levels = Math.max(
+    1,
+    firstMod?.storageTierCount ?? firstMod?.globalLevels ?? 1
+  );
   const lines: Rack3DLine3D[] = [];
   const { warehouseLengthMm: L, warehouseWidthMm: W } = geometry;
 

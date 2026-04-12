@@ -25,12 +25,42 @@ export const DEFAULT_STRUCTURAL_BOTTOM_MM = 80;
 export const DEFAULT_STRUCTURAL_TOP_MM = 80;
 export const DEFAULT_FIRST_LEVEL_LIFT_MM = 280;
 
+/**
+ * Altura reservada para o patamar de palete **no piso** (sem longarina), acima do piso estrutural.
+ * Usa `loadHeightMm` quando existir; caso contrário um valor típico de palete + folga operacional.
+ */
+export const DEFAULT_GROUND_LEVEL_CLEARANCE_MM = 1800;
+
+/** Altura (mm) entre o piso e o 1.º eixo de longarina quando há nível de piso. */
+export function groundLevelReservedHeightMm(input: {
+  hasGroundLevel: boolean;
+  loadHeightMm?: number;
+}): number {
+  if (!input.hasGroundLevel) return 0;
+  const h =
+    typeof input.loadHeightMm === 'number' && input.loadHeightMm > EPS
+      ? input.loadHeightMm
+      : DEFAULT_GROUND_LEVEL_CLEARANCE_MM;
+  return Math.max(120, h);
+}
+
 /** Último recurso quando a altura útil não pode ser inferida (documentado). */
 export const FALLBACK_EQUAL_GAP_PER_LEVEL_MM = 1500;
 
 export type BeamElevationInput = {
   uprightHeightMm: number;
+  /**
+   * Níveis **com longarina** (entrada do utilizador). O espaçamento uniforme aplica-se só entre
+   * estes eixos — não inclui o patamar de piso (ver `hasGroundLevel`).
+   */
   levels: number;
+  /**
+   * Patamar extra de palete no **piso**, sem longarina sob esse nível. Não entra no divisor de
+   * espaçamento entre longarinas — apenas eleva o 1.º eixo.
+   */
+  hasGroundLevel?: boolean;
+  loadHeightMm?: number;
+  /** Se não há `hasGroundLevel`: legacy — 1.º eixo ao piso sem folga de elevação inicial. */
   firstLevelOnGround: boolean;
   equalLevelSpacing?: boolean;
   levelSpacingMm?: number;
@@ -62,9 +92,9 @@ function minUsableMm(levels: number): number {
  *
  * Fórmula base (uniforme, sem lista nem espaçamento declarado):
  * - H_work = uprightHeightMm − folgaInferior − folgaSuperior
- * - h_lift = 0 se primeiro nível ao chão; senão min(280 mm, 22% de H_work)
- * - span = topIn − beam0, com beam0 = folgaInferior + h_lift, topIn = uprightHeightMm − folgaSuperior
- * - espaçamento uniforme entre eixos consecutivos: gap = span / levels
+ * - Com `hasGroundLevel`: beam0 = folgaInferior + altura do patamar de piso (sem longarina nessa faixa).
+ * - Sem `hasGroundLevel`: h_lift = 0 se `firstLevelOnGround`; senão min(280 mm, 22% de H_work).
+ * - span = topIn − beam0; espaçamento uniforme **entre longarinas**: gap = span / levels (níveis estruturais).
  * - beam[k] = beam0 + k·gap, k = 0…levels, com beam[levels] = topIn
  */
 export function computeBeamElevations(
@@ -72,6 +102,7 @@ export function computeBeamElevations(
 ): BeamElevationResult {
   const levels = Math.max(1, Math.floor(input.levels));
   const H0 = Math.max(EPS, input.uprightHeightMm);
+  const hasGroundLevel = input.hasGroundLevel !== false;
 
   let structuralBottom =
     input.structuralBottomMm ?? DEFAULT_STRUCTURAL_BOTTOM_MM;
@@ -94,11 +125,17 @@ export function computeBeamElevations(
   const bottomIn = structuralBottom;
   const topIn = H0 - structuralTop;
 
-  const lift = input.firstLevelOnGround
-    ? 0
-    : Math.min(DEFAULT_FIRST_LEVEL_LIFT_MM, Math.max(EPS, usable * 0.22));
+  const groundH = groundLevelReservedHeightMm({
+    hasGroundLevel,
+    loadHeightMm: input.loadHeightMm,
+  });
 
-  let beam0 = bottomIn + (input.firstLevelOnGround ? 0 : lift);
+  const lift =
+    hasGroundLevel || input.firstLevelOnGround
+      ? 0
+      : Math.min(DEFAULT_FIRST_LEVEL_LIFT_MM, Math.max(EPS, usable * 0.22));
+
+  let beam0 = bottomIn + (hasGroundLevel ? groundH : lift);
   const topBeam = topIn;
   let span = topBeam - beam0;
   if (span < EPS) {
@@ -294,6 +331,7 @@ export function computeLevelSpacing(args: {
   const r = computeBeamElevations({
     uprightHeightMm: args.heightMm,
     levels: args.levels,
+    hasGroundLevel: false,
     firstLevelOnGround: args.firstLevelOnGround,
   });
   const gapsMm: number[] = [];
