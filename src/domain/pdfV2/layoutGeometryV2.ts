@@ -18,6 +18,7 @@ import {
   tunnelActiveStorageLevelsFromGlobal,
   type BeamElevationResult,
 } from './elevationLevelGeometryV2';
+import { resolveUprightHeightMmForProject } from '../projectEngines';
 import {
   MODULE_PALLET_BAYS_PER_LEVEL,
   beamRunPitchPerModuleMm,
@@ -219,21 +220,6 @@ function clearHeightFromAnswers(
   return undefined;
 }
 
-function uprightHeightMmFromAnswers(answers: Record<string, unknown>): number {
-  if (typeof answers.heightMm === 'number') {
-    return answers.heightMm;
-  }
-  if (
-    answers.heightMode === 'CALC' &&
-    typeof answers.loadHeightMm === 'number' &&
-    typeof answers.levels === 'number'
-  ) {
-    return answers.loadHeightMm * answers.levels;
-  }
-  const lv = typeof answers.levels === 'number' ? answers.levels : 1;
-  return lv * 1500;
-}
-
 function buildStorageLevels(
   geom: BeamElevationResult,
   capacityKg: number,
@@ -338,7 +324,7 @@ function rackModuleFromSegment(
   const storageTierCount =
     levels + (hasGroundLevel ? 1 : 0);
   const cap = typeof answers.capacityKg === 'number' ? answers.capacityKg : 0;
-  const H = uprightHeightMmFromAnswers(answers);
+  const H = resolveUprightHeightMmForProject(answers);
   const { alongBeamMm, transversalMm } = moduleFootprintAlongBeamAndTransversalMm(
     m,
     solution.orientation

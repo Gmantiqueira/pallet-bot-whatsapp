@@ -37,7 +37,7 @@ describe('PdfService', () => {
         corridorMm: 3000,
         capacityKg: 2000,
         heightMode: 'DIRECT',
-        heightMm: 5000,
+        heightMm: 5040,
         levels: 4,
         guardRail: 'ambos',
       }),

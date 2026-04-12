@@ -10,6 +10,7 @@ import {
   validateLevels,
   validateMm,
 } from './conversationHelpers';
+import { normalizeUprightHeightMmToColumnStep } from './rackColumnStep';
 
 export type State =
   | 'START'
@@ -476,11 +477,15 @@ export const transition = (
         if (ve) {
           return { session: newSession, effects, error: ve };
         }
-        newSession = goNext(
-          newSession,
-          { heightMm: height, heightMode: 'DIRECT' },
-          'CHOOSE_COLUMN_PROTECTOR'
-        );
+        const heightNorm = normalizeUprightHeightMmToColumnStep(height);
+        const heightPatch: Record<string, unknown> = {
+          heightMm: heightNorm,
+          heightMode: 'DIRECT',
+        };
+        if (heightNorm !== height) {
+          heightPatch.heightMmAdjustedFrom = height;
+        }
+        newSession = goNext(newSession, heightPatch, 'CHOOSE_COLUMN_PROTECTOR');
         effects.push({ type: 'SEND' });
       }
       return { session: newSession, effects, error };

@@ -4,6 +4,7 @@ import {
   type LayoutInput,
   type LayoutResult,
 } from './layoutEngine';
+import { normalizeUprightHeightMmToColumnStep } from './rackColumnStep';
 import { selectStructure, type StructureResult } from './structureEngine';
 
 /** Profundidade de módulo padrão (mm) se não for informada. */
@@ -23,16 +24,33 @@ function uprightHeightMmFromAnswers(
   answers: Record<string, unknown>
 ): number | null {
   if (typeof answers.heightMm === 'number') {
-    return answers.heightMm;
+    return normalizeUprightHeightMmToColumnStep(answers.heightMm);
   }
   if (
     answers.heightMode === 'CALC' &&
     typeof answers.loadHeightMm === 'number' &&
     typeof answers.levels === 'number'
   ) {
-    return answers.loadHeightMm * answers.levels;
+    return normalizeUprightHeightMmToColumnStep(
+      answers.loadHeightMm * answers.levels
+    );
   }
   return null;
+}
+
+/**
+ * Altura de montante (mm) alinhada ao passo de 80 mm.
+ * Usado em geometria PDF quando só existe `levels` (fallback analítico).
+ */
+export function resolveUprightHeightMmForProject(
+  answers: Record<string, unknown>
+): number {
+  const v = uprightHeightMmFromAnswers(answers);
+  if (v !== null) {
+    return v;
+  }
+  const lv = typeof answers.levels === 'number' ? answers.levels : 1;
+  return normalizeUprightHeightMmToColumnStep(lv * 1500);
 }
 
 export function computeProjectEngines(
@@ -88,12 +106,18 @@ export function computeProjectEngines(
 export function finalizeSummaryAnswers(
   answers: Record<string, unknown>
 ): Record<string, unknown> {
-  const engines = computeProjectEngines(answers);
+  const stripped: Record<string, unknown> = { ...answers };
+  delete (stripped as { heightMmAdjustedFrom?: unknown }).heightMmAdjustedFrom;
+  if (typeof stripped.heightMm === 'number') {
+    stripped.heightMm = normalizeUprightHeightMmToColumnStep(stripped.heightMm);
+  }
+
+  const engines = computeProjectEngines(stripped);
   if (!engines) {
-    return answers;
+    return stripped;
   }
   return {
-    ...answers,
+    ...stripped,
     layout: engines.layout,
     structure: engines.structure,
     budget: engines.budget,

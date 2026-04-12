@@ -192,7 +192,8 @@ describe('State Machine', () => {
 
       result = transition(session, { type: 'TEXT', value: '5000' });
       expect(result.session.state).toBe('CHOOSE_COLUMN_PROTECTOR');
-      expect(result.session.answers.heightMm).toBe(5000);
+      expect(result.session.answers.heightMm).toBe(5040);
+      expect(result.session.answers.heightMmAdjustedFrom).toBe(5000);
       session = result.session;
 
       result = transition(session, { type: 'BUTTON', value: 'COL_NAO' });

@@ -27,7 +27,7 @@ describe('serializeElevationPagesV2', () => {
       halfModuleOptimization: false,
       firstLevelOnGround: true,
       heightMode: 'DIRECT',
-      heightMm: 5000,
+      heightMm: 5040,
     };
     const layout = buildLayoutSolutionV2(a);
     const session = answersToSession(a);

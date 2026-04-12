@@ -118,7 +118,7 @@ describe('MessageBuilder', () => {
       const messages = buildMessages(session);
 
       expect(messages[0].text).toContain('Altura útil do sistema');
-      expect(messages[0].text).toContain('5000');
+      expect(messages[0].text).toContain('5040');
     });
 
     it('should build CHOOSE_GUARD_RAIL_SIMPLE message with buttons', () => {
@@ -143,7 +143,7 @@ describe('MessageBuilder', () => {
           beamLengthMm: 1100,
           capacityKg: 2000,
           heightMode: 'DIRECT',
-          heightMm: 5000,
+          heightMm: 5040,
           levels: 4,
           guardRailSimple: true,
           guardRailSimplePosition: 'AMBOS',
@@ -157,7 +157,7 @@ describe('MessageBuilder', () => {
       expect(messages[0].text).toContain('10000');
       expect(messages[0].text).toContain('3000');
       expect(messages[0].text).toContain('2000');
-      expect(messages[0].text).toContain('5000');
+      expect(messages[0].text).toContain('5040');
       expect(messages[0].text).toContain('Altura útil do sistema');
       expect(messages[0].text).toContain('Profundidade da posição');
       expect(messages[0].text).toContain('Níveis por módulo: 4');

@@ -217,18 +217,29 @@ const buildStateMessage = (session: Session): OutgoingMessage | null => {
     case 'WAIT_HEIGHT_DIRECT':
       return {
         to: session.phone,
-        text: 'Altura útil do sistema em mm\n\nExemplo: 5000',
+        text:
+          'Altura útil do sistema em mm (múltiplos de 80 mm — valores intermédios são alinhados automaticamente).\n\nExemplo: 5040',
       };
 
-    case 'CHOOSE_COLUMN_PROTECTOR':
+    case 'CHOOSE_COLUMN_PROTECTOR': {
+      const a = session.answers;
+      const fromRaw = a.heightMmAdjustedFrom;
+      const adjusted =
+        typeof fromRaw === 'number' &&
+        typeof a.heightMm === 'number' &&
+        fromRaw !== a.heightMm;
+      const prefix = adjusted
+        ? `✅ Altura ajustada de ${fromRaw} mm para ${a.heightMm} mm (passo de coluna 80 mm).\n\n`
+        : '';
       return {
         to: session.phone,
-        text: 'Proteção de cantoneiras (protetores de pilar)?',
+        text: `${prefix}Proteção de cantoneiras (protetores de pilar)?`,
         buttons: [
           { id: 'COL_SIM', label: 'Sim' },
           { id: 'COL_NAO', label: 'Não' },
         ],
       };
+    }
 
     case 'CHOOSE_GUARD_RAIL_SIMPLE':
       return {

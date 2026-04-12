@@ -2,6 +2,7 @@ import {
   DEFAULT_MODULE_DEPTH_MM,
   DEFAULT_MODULE_WIDTH_MM,
 } from '../projectEngines';
+import { normalizeUprightHeightMmToColumnStep } from '../rackColumnStep';
 import { maxFullModulesInBeamRun } from './rackModuleSpec';
 import type {
   LayoutOrientationV2,
@@ -72,7 +73,9 @@ export function buildProjectAnswersV2(
         : true,
     heightMode: answers.heightMode === 'CALC' ? 'CALC' : 'DIRECT',
     heightMm:
-      typeof answers.heightMm === 'number' ? answers.heightMm : undefined,
+      typeof answers.heightMm === 'number'
+        ? normalizeUprightHeightMmToColumnStep(answers.heightMm)
+        : undefined,
     loadHeightMm:
       typeof answers.loadHeightMm === 'number'
         ? answers.loadHeightMm
