@@ -173,8 +173,13 @@ describe('State Machine', () => {
       session = result.session;
 
       result = transition(session, { type: 'TEXT', value: '2700' });
-      expect(result.session.state).toBe('WAIT_LEVELS');
+      expect(result.session.state).toBe('CHOOSE_HEIGHT_DEFINITION');
       expect(result.session.answers.beamLengthMm).toBe(DEFAULT_BEAM_LENGTH_MM);
+      session = result.session;
+
+      result = transition(session, { type: 'BUTTON', value: 'HD_ALTURA_MODULO' });
+      expect(result.session.state).toBe('WAIT_LEVELS');
+      expect(result.session.answers.heightDefinitionMode).toBe('module_total');
       session = result.session;
 
       result = transition(session, { type: 'TEXT', value: '4' });

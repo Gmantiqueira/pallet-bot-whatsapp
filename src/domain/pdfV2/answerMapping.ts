@@ -3,6 +3,11 @@ import {
   DEFAULT_MODULE_WIDTH_MM,
 } from '../projectEngines';
 import { normalizeUprightHeightMmToColumnStep } from '../rackColumnStep';
+import {
+  HEIGHT_DEFINITION_MODULE_TOTAL,
+  HEIGHT_DEFINITION_WAREHOUSE_CLEAR,
+  type HeightDefinitionMode,
+} from '../warehouseHeightDerive';
 import { maxFullModulesInBeamRun } from './rackModuleSpec';
 import type {
   LayoutOrientationV2,
@@ -72,9 +77,21 @@ export function buildProjectAnswersV2(
         ? answers.hasGroundLevel
         : true,
     heightMode: answers.heightMode === 'CALC' ? 'CALC' : 'DIRECT',
+    heightDefinitionMode:
+      answers.heightDefinitionMode === HEIGHT_DEFINITION_WAREHOUSE_CLEAR
+        ? HEIGHT_DEFINITION_WAREHOUSE_CLEAR
+        : HEIGHT_DEFINITION_MODULE_TOTAL,
     heightMm:
       typeof answers.heightMm === 'number'
         ? normalizeUprightHeightMmToColumnStep(answers.heightMm)
+        : undefined,
+    warehouseClearHeightMm:
+      typeof answers.warehouseClearHeightMm === 'number'
+        ? answers.warehouseClearHeightMm
+        : undefined,
+    warehouseMinBeamGapMm:
+      typeof answers.warehouseMinBeamGapMm === 'number'
+        ? answers.warehouseMinBeamGapMm
         : undefined,
     loadHeightMm:
       typeof answers.loadHeightMm === 'number'
@@ -106,8 +123,14 @@ export type ProjectAnswersV2 = {
    * contam só níveis estruturais com longarina. Omisso = ativado em {@link buildProjectAnswersV2}.
    */
   hasGroundLevel?: boolean;
+  /** Modo A: altura do módulo; modo B: pé-direito do galpão (níveis derivados). */
+  heightDefinitionMode?: HeightDefinitionMode;
   heightMode: 'DIRECT' | 'CALC';
   heightMm?: number;
+  /** Modo pé-direito: limite superior declarado pelo utilizador (mm). */
+  warehouseClearHeightMm?: number;
+  /** Modo pé-direito: espaçamento mínimo entre eixos de longarina usado no cálculo (mm). */
+  warehouseMinBeamGapMm?: number;
   loadHeightMm?: number;
   clearHeightMm?: number;
 };

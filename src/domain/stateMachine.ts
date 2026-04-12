@@ -8,9 +8,15 @@ import {
   validateCorridor,
   validateKg,
   validateLevels,
+  validateLevelGap,
   validateMm,
 } from './conversationHelpers';
 import { normalizeUprightHeightMmToColumnStep } from './rackColumnStep';
+import {
+  HEIGHT_DEFINITION_MODULE_TOTAL,
+  HEIGHT_DEFINITION_WAREHOUSE_CLEAR,
+  deriveModuleFromWarehouseClearHeight,
+} from './warehouseHeightDerive';
 
 export type State =
   | 'START'
@@ -25,9 +31,12 @@ export type State =
   | 'CHOOSE_TUNNEL_POSITION'
   | 'CHOOSE_TUNNEL_APPLIES'
   | 'WAIT_MODULE_DEPTH'
+  | 'CHOOSE_HEIGHT_DEFINITION'
   | 'WAIT_LEVELS'
+  | 'WAIT_WAREHOUSE_CLEAR_HEIGHT'
   | 'CHOOSE_FIRST_LEVEL_GROUND'
   | 'WAIT_CAPACITY'
+  | 'WAIT_LOAD_HEIGHT_FOR_SPACING'
   | 'WAIT_HEIGHT_DIRECT'
   | 'CHOOSE_COLUMN_PROTECTOR'
   | 'CHOOSE_GUARD_RAIL_SIMPLE'
@@ -398,7 +407,50 @@ export const transition = (
         newSession = goNext(
           newSession,
           { moduleDepthMm: depth, beamLengthMm: DEFAULT_BEAM_LENGTH_MM },
-          'WAIT_LEVELS'
+          'CHOOSE_HEIGHT_DEFINITION'
+        );
+        effects.push({ type: 'SEND' });
+      }
+      return { session: newSession, effects, error };
+
+    case 'CHOOSE_HEIGHT_DEFINITION':
+      if (input.type === 'BUTTON') {
+        if (input.value === 'HD_ALTURA_MODULO') {
+          newSession = goNext(
+            newSession,
+            { heightDefinitionMode: HEIGHT_DEFINITION_MODULE_TOTAL },
+            'WAIT_LEVELS'
+          );
+          effects.push({ type: 'SEND' });
+        } else if (input.value === 'HD_PEDIREITO') {
+          newSession = goNext(
+            newSession,
+            { heightDefinitionMode: HEIGHT_DEFINITION_WAREHOUSE_CLEAR },
+            'WAIT_WAREHOUSE_CLEAR_HEIGHT'
+          );
+          effects.push({ type: 'SEND' });
+        }
+      }
+      return { session: newSession, effects };
+
+    case 'WAIT_WAREHOUSE_CLEAR_HEIGHT':
+      if (input.type === 'TEXT') {
+        const wh = parseNumber(input.value);
+        if (wh === null) {
+          return {
+            session: newSession,
+            effects,
+            error: 'Por favor, digite um número válido em mm',
+          };
+        }
+        const ve = validateMm(wh);
+        if (ve) {
+          return { session: newSession, effects, error: ve };
+        }
+        newSession = goNext(
+          newSession,
+          { warehouseClearHeightMm: wh },
+          'CHOOSE_FIRST_LEVEL_GROUND'
         );
         effects.push({ type: 'SEND' });
       }
@@ -454,10 +506,63 @@ export const transition = (
         if (ve) {
           return { session: newSession, effects, error: ve };
         }
+        const nextAfterCapacity: State =
+          newSession.answers.heightDefinitionMode ===
+          HEIGHT_DEFINITION_WAREHOUSE_CLEAR
+            ? 'WAIT_LOAD_HEIGHT_FOR_SPACING'
+            : 'WAIT_HEIGHT_DIRECT';
         newSession = goNext(
           newSession,
           { capacityKg: capacity, heightMode: 'DIRECT' },
-          'WAIT_HEIGHT_DIRECT'
+          nextAfterCapacity
+        );
+        effects.push({ type: 'SEND' });
+      }
+      return { session: newSession, effects, error };
+
+    case 'WAIT_LOAD_HEIGHT_FOR_SPACING':
+      if (input.type === 'TEXT') {
+        const gap = parseNumber(input.value);
+        if (gap === null) {
+          return {
+            session: newSession,
+            effects,
+            error: 'Por favor, digite um número válido em mm',
+          };
+        }
+        const veGap = validateLevelGap(gap);
+        if (veGap) {
+          return { session: newSession, effects, error: veGap };
+        }
+        const a = newSession.answers;
+        const whRaw = a.warehouseClearHeightMm;
+        if (typeof whRaw !== 'number') {
+          return {
+            session: newSession,
+            effects,
+            error: 'Pé-direito em falta. Volte atrás ou recomece o fluxo de altura.',
+          };
+        }
+        const derived = deriveModuleFromWarehouseClearHeight({
+          warehouseClearHeightMm: whRaw,
+          minGapBetweenConsecutiveBeamsMm: gap,
+          hasGroundLevel: a.hasGroundLevel !== false,
+          firstLevelOnGround:
+            typeof a.firstLevelOnGround === 'boolean'
+              ? a.firstLevelOnGround
+              : true,
+        });
+        newSession = goNext(
+          newSession,
+          {
+            levels: derived.structuralLevels,
+            heightMm: derived.moduleHeightMm,
+            warehouseClearHeightMm: derived.warehouseClearHeightMm,
+            warehouseMinBeamGapMm: gap,
+            heightMode: 'DIRECT',
+            heightDefinitionMode: HEIGHT_DEFINITION_WAREHOUSE_CLEAR,
+          },
+          'CHOOSE_COLUMN_PROTECTOR'
         );
         effects.push({ type: 'SEND' });
       }

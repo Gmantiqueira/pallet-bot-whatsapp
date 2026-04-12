@@ -5,6 +5,7 @@ import {
   type LayoutResult,
 } from './layoutEngine';
 import { normalizeUprightHeightMmToColumnStep } from './rackColumnStep';
+import { HEIGHT_DEFINITION_MODULE_TOTAL } from './warehouseHeightDerive';
 import { selectStructure, type StructureResult } from './structureEngine';
 
 /** Profundidade de módulo padrão (mm) se não for informada. */
@@ -122,6 +123,10 @@ export function finalizeSummaryAnswers(
     structure: engines.structure,
     budget: engines.budget,
     generate3d: true,
+    heightDefinitionMode:
+      typeof stripped.heightDefinitionMode === 'string'
+        ? stripped.heightDefinitionMode
+        : HEIGHT_DEFINITION_MODULE_TOTAL,
     heightMode: 'DIRECT',
     beamLengthMm:
       typeof answers.beamLengthMm === 'number'

@@ -1,4 +1,5 @@
 import { Session } from '../domain/session';
+import { HEIGHT_DEFINITION_WAREHOUSE_CLEAR } from '../domain/warehouseHeightDerive';
 import { OutgoingMessage } from '../types/messages';
 import { State } from '../domain/stateMachine';
 import type { BudgetResult } from '../domain/budgetEngine';
@@ -190,6 +191,31 @@ const buildStateMessage = (session: Session): OutgoingMessage | null => {
       return {
         to: session.phone,
         text: 'Profundidade da posição (palete) em mm\n\nExemplos: 1000 ou 1100',
+      };
+
+    case 'CHOOSE_HEIGHT_DEFINITION':
+      return {
+        to: session.phone,
+        text:
+          'Como pretende definir a altura?\n\n• Altura do módulo — indica a altura total da estrutura (como até agora).\n• Pé-direito do galpão — indica a altura útil do edifício; calculamos a altura do módulo (múltiplos de 80 mm) e o maior número de níveis possível, sem ultrapassar o pé-direito (folga superior de 216 mm incluída no modelo).',
+        buttons: [
+          { id: 'HD_ALTURA_MODULO', label: 'Altura do módulo' },
+          { id: 'HD_PEDIREITO', label: 'Pé-direito' },
+        ],
+      };
+
+    case 'WAIT_WAREHOUSE_CLEAR_HEIGHT':
+      return {
+        to: session.phone,
+        text:
+          'Pé-direito útil do galpão (altura interior disponível) em mm\n\nA estrutura não ultrapassará este valor. Ex.: 10000',
+      };
+
+    case 'WAIT_LOAD_HEIGHT_FOR_SPACING':
+      return {
+        to: session.phone,
+        text:
+          'Espaçamento mínimo entre eixos consecutivos de longarina (mm)\n\nServe para maximizar níveis dentro do pé-direito. Entre 800 e 5000. Ex.: 1200',
       };
 
     case 'WAIT_LEVELS':
@@ -434,6 +460,19 @@ const buildSummary = (session: Session): string => {
 
   if (typeof a.heightMm === 'number') {
     lines.push(`Altura útil do sistema: ${a.heightMm} mm`);
+  }
+  if (a.heightDefinitionMode === HEIGHT_DEFINITION_WAREHOUSE_CLEAR) {
+    if (typeof a.warehouseClearHeightMm === 'number') {
+      lines.push(`Pé-direito do galpão (limite): ${a.warehouseClearHeightMm} mm`);
+    }
+    if (typeof a.warehouseMinBeamGapMm === 'number') {
+      lines.push(
+        `Espaçamento mín. entre eixos de longarina (critério): ${a.warehouseMinBeamGapMm} mm`
+      );
+    }
+    lines.push(
+      'Altura do módulo e níveis calculados automaticamente (máx. níveis, passo 80 mm, folga superior 216 mm).'
+    );
   }
 
   if (typeof a.columnProtector === 'boolean') {
