@@ -20,11 +20,11 @@ const COL_WH_STROKE = '#94a3b8';
 /** Faixa de fileira: fundo contínuo atrás dos módulos (leitura de “linha”). */
 const COL_ROW_SINGLE = '#eef2f7';
 const COL_ROW_DOUBLE = '#e2edf8';
-/** Nível 2 — módulo: preenchimento médio; contorno **entre** células é leve (ver stroke abaixo). */
+/** Nível 2 — módulo: preenchimento médio; contorno perimetral forte (unidade estrutural). */
 const COL_MOD_FILL = '#f1f5f9';
-/** Contorno do retângulo do módulo: médio (não compete com corredor nem com baias). */
-const COL_MOD_STROKE = '#cbd5e1';
-const COL_MOD_STROKE_W = 0.95;
+/** Contorno do módulo: mais escuro e espesso que a subdivisão interna (baias). */
+const COL_MOD_STROKE = '#94a3b8';
+const COL_MOD_STROKE_W = 1.52;
 const COL_MOD_TUNNEL_FILL = '#fffbeb';
 const COL_MOD_TUNNEL_STROKE = '#b45309';
 /**
@@ -48,7 +48,7 @@ const COL_DIM = '#111827';
 const COL_INK = '#111827';
 /** Contorno da **faixa da linha** (unidade contínua), desenhado por cima dos módulos. */
 const COL_ROW_ENVELOPE_STROKE = '#334155';
-const ROW_ENVELOPE_SW = 2.35;
+const ROW_ENVELOPE_SW = 2.65;
 
 const SEM_ORDER: Record<FloorPlanCirculationSemantic, number> = {
   residual: 0,
@@ -86,10 +86,10 @@ function sortCirculation(
   );
 }
 
-/** Divisão interna 2 baias: traço fino na cor dos níveis da elevação (acento, não preenchimento). */
+/** Divisão interna 2 baias: traço bem mais leve que o perímetro do módulo (só leitura de vão). */
 function moduleBayHintLine(s: FloorPlanModelV2['structureRects'][0]): string {
-  const thin = 0.32;
-  const op = 0.48;
+  const thin = 0.2;
+  const op = 0.28;
   if (s.w >= s.h) {
     const mx = s.x + s.w / 2;
     return `<line x1="${mx}" y1="${s.y}" x2="${mx}" y2="${s.y + s.h}" stroke="${ELEV_PALLET_TIER_STROKE}" stroke-width="${thin}" opacity="${op}"/>`;
@@ -219,7 +219,7 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
     const isTunnel = s.variant === 'tunnel';
     const fillMod = isTunnel ? COL_MOD_TUNNEL_FILL : COL_MOD_FILL;
     const strokeMod = isTunnel ? COL_MOD_TUNNEL_STROKE : COL_MOD_STROKE;
-    const sw = isTunnel ? 1.2 : COL_MOD_STROKE_W;
+    const sw = COL_MOD_STROKE_W;
     parts.push(
       `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="${fillMod}" stroke="${strokeMod}" stroke-width="${sw}"/>`
     );
