@@ -102,8 +102,8 @@ export type ProjectAnswersV2 = {
 
 /**
  * Melhor aproveitamento com viés para along_length.
- * Usa a mesma convenção que {@link buildLayoutSolutionV2}: maior dimensão = vão por baia;
- * o passo na fileira é o comprimento do módulo (2 baias + estrutura).
+ * Mesma convenção que {@link buildLayoutSolutionV2}: `moduleWidthMm` = vão por baia;
+ * `moduleDepthMm` = profundidade de faixa; o passo na fileira é `moduleLengthAlongBeamMm(vão)`.
  */
 export function pickBetterOrientationBySimpleCount(
   lengthMm: number,
@@ -112,8 +112,8 @@ export function pickBetterOrientationBySimpleCount(
   moduleDepthMm: number,
   moduleWidthMm: number
 ): LayoutOrientationV2 {
-  const rackDepthMm = Math.min(moduleWidthMm, moduleDepthMm);
-  const bayClearAlongMm = Math.max(moduleWidthMm, moduleDepthMm);
+  const rackDepthMm = Math.max(0, moduleDepthMm);
+  const bayClearAlongMm = Math.max(0, moduleWidthMm);
   const moduleStepAlongMm = moduleLengthAlongBeamMm(bayClearAlongMm);
   const alongL = maxModulesSingleDepth(
     lengthMm,

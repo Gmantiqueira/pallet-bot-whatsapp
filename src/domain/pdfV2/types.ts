@@ -38,7 +38,7 @@ export type LayoutSolutionV2 = {
   moduleWidthMm: number;
   moduleDepthMm: number;
   /**
-   * Vão livre de **uma baia** ao longo da fileira (maior dimensão do par nos campos do fluxo).
+   * Vão livre de **uma baia** ao longo das longarinas (`moduleWidthMm` / `beamLengthMm`).
    * A elevação frontal usa este valor por baia; não é o comprimento total do módulo em planta.
    */
   beamAlongModuleMm: number;

@@ -686,14 +686,13 @@ export function buildLayoutSolutionV2(
   } = answers;
 
   /**
-   * Maior dimensão do par (campos do fluxo) = vão livre de **uma baia** ao longo da fileira.
-   * Menor = profundidade de posição (transversal). Um **módulo** em planta = 2 baias + estrutura
-   * (`moduleLengthAlongBeamMm`), repetido ponta a ponta.
+   * Semântica fixa (não usar max/min entre os dois — isso invertia vão vs profundidade):
+   * - `moduleWidthMm` = vão livre de **uma baia** ao longo das longarinas (entrada `beamLengthMm` / `moduleWidthMm`).
+   * - `moduleDepthMm` = profundidade de posição, eixo transversal ao vão.
+   * Um **módulo** em planta = 2 baias + estrutura (`moduleLengthAlongBeamMm`), repetido ponta a ponta.
    */
-  const w = Math.max(0, moduleWidthMm);
-  const d = Math.max(0, moduleDepthMm);
-  const bayClearSpanAlongBeamMm = Math.max(w, d);
-  const rackDepthMm = Math.min(w, d);
+  const bayClearSpanAlongBeamMm = Math.max(0, moduleWidthMm);
+  const rackDepthMm = Math.max(0, moduleDepthMm);
   const moduleLengthAlongBeamMm = computeModuleLengthAlongBeamMm(
     bayClearSpanAlongBeamMm
   );

@@ -106,6 +106,9 @@ describe('buildLayoutSolutionV2', () => {
   it('5: túnel no centro', () => {
     const a = {
       ...base(),
+      /** Quadrado: `pickBetterOrientation` mantém along_length (vão paralelo ao eixo X nos asserts). */
+      lengthMm: 20_000,
+      widthMm: 20_000,
       hasTunnel: true,
       tunnelPosition: 'MEIO' as const,
       tunnelAppliesTo: 'AMBOS' as const,
@@ -153,8 +156,9 @@ describe('buildLayoutSolutionV2', () => {
   it('8: meio módulo rejeitado sem circulação (1 fileira, sem túnel)', () => {
     const a = {
       ...base(),
-      lengthMm: 10_450,
-      /** Transversal estreita: só 1 fileira (com rackDepth=1100, 6000 mm cabiam 2 fileiras). */
+      /** Remanescente entre meio e um módulo completo com passo real ~2575 mm (vão 1100). */
+      lengthMm: 12_300,
+      /** Transversal estreita: só 1 fileira (prof. 2700 mm + corredores não cabem 2 fileiras em 4000 mm). */
       widthMm: 4000,
       corridorMm: 3000,
       halfModuleOptimization: true,
@@ -170,6 +174,8 @@ describe('buildLayoutSolutionV2', () => {
   it('9: túnel no centro deixa vazio ao centro (dois blocos nas extremidades)', () => {
     const a = {
       ...base(),
+      lengthMm: 20_000,
+      widthMm: 20_000,
       hasTunnel: true,
       tunnelPosition: 'MEIO' as const,
       tunnelAppliesTo: 'AMBOS' as const,
@@ -195,9 +201,11 @@ describe('buildLayoutSolutionV2', () => {
     expect(minRight - maxLeft).toBeGreaterThan(0);
   });
 
-  it('10: orientação do vão vem só do ajuste ao galpão (along_length quando o comprimento é o eixo dominante)', () => {
+  it('10: galpão quadrado favorece along_length (empate no optimizador)', () => {
     const s = buildLayoutSolutionV2({
       ...base(),
+      lengthMm: 20_000,
+      widthMm: 20_000,
       lineStrategy: 'APENAS_SIMPLES',
     });
     expect(s.orientation).toBe('along_length');
@@ -215,7 +223,7 @@ describe('buildLayoutSolutionV2', () => {
     expect(s.orientation).toBe('along_width');
   });
 
-  it('12: usa moduleWidthMm quando beamLengthMm ausente (eixo longo não pode cair no curto)', () => {
+  it('12: moduleWidthMm = vão por baia; moduleDepthMm = profundidade (sem trocar campos por max/min)', () => {
     const session: Record<string, unknown> = {
       lengthMm: 12_000,
       widthMm: 10_000,
@@ -239,18 +247,20 @@ describe('buildLayoutSolutionV2', () => {
     expect(s.rackDepthMm).toBe(1100);
   });
 
-  it('13: vão < prof. em mm — maior dimensão ao longo da fileira (ponta com ponta no X, prof. transversal)', () => {
+  it('13: vão (1100) e profundidade (2700) — pegada ao longo do vão usa passo do módulo, transversal usa profundidade', () => {
     const a = {
       ...base(),
+      lengthMm: 20_000,
+      widthMm: 20_000,
       moduleWidthMm: 1100,
       moduleDepthMm: 2700,
       lineStrategy: 'APENAS_SIMPLES' as const,
     };
     const s = buildLayoutSolutionV2(a);
     expect(s.orientation).toBe('along_length');
-    expect(s.beamAlongModuleMm).toBe(2700);
-    expect(s.moduleLengthAlongBeamMm).toBe(moduleLengthAlongBeamMm(2700));
-    expect(s.rackDepthMm).toBe(1100);
+    expect(s.beamAlongModuleMm).toBe(1100);
+    expect(s.moduleLengthAlongBeamMm).toBe(moduleLengthAlongBeamMm(1100));
+    expect(s.rackDepthMm).toBe(2700);
     const full = s.rows[0]?.modules.find(
       m => m.type === 'full' && m.variant !== 'tunnel'
     );
@@ -258,10 +268,10 @@ describe('buildLayoutSolutionV2', () => {
     if (!full) return;
     const dx = Math.abs(full.x1 - full.x0);
     const dy = Math.abs(full.y1 - full.y0);
-    const modLen = moduleLengthAlongBeamMm(2700);
+    const modLen = moduleLengthAlongBeamMm(1100);
     expect(dx).toBe(modLen);
-    expect(dy).toBe(1100);
-    expect(Math.max(dx, dy)).toBe(modLen);
-    expect(Math.min(dx, dy)).toBe(1100);
+    expect(dy).toBe(2700);
+    expect(Math.max(dx, dy)).toBe(2700);
+    expect(Math.min(dx, dy)).toBe(modLen);
   });
 });

@@ -563,11 +563,7 @@ function validateRackModuleBayAndPlanSemantics(
         `não corresponde a um módulo de ${MODULE_PALLET_BAYS_PER_LEVEL} baias (~${Math.round(expectedAlong)} mm).`
     );
   }
-  if (m.moduleLengthAxisMm + 1.5 < m.moduleDepthAxisMm) {
-    throw new LayoutGeometryValidationError(
-      `Módulo ${m.id}: em planta, o lado alongado deve seguir a fileira (profundidade não pode exceder o comprimento do módulo).`
-    );
-  }
+  /* Profundidade de posição pode ser maior que o passo ao longo do vão (ex.: vão 1100 mm, prof. 2700 mm). */
 }
 
 export function validateLayoutGeometry(geo: LayoutGeometry): void {
