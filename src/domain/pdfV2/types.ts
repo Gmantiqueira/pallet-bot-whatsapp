@@ -154,6 +154,8 @@ export type FloorPlanModelV2 = {
     h: number;
     kind: RackDepthModeV2;
     variant?: ModuleVariantV2;
+    /** Numeração global na planta (0…), linha a linha, ao longo do vão. */
+    displayIndex?: number;
   }[];
   /**
    * Preenchimento extra nos módulos normais: cor da elevação (longarinas / faixas de nível), opacidade 5–10%.

@@ -1,4 +1,4 @@
-import type { LayoutGeometry, RackRow } from './layoutGeometryV2';
+import type { LayoutGeometry, RackModule, RackRow } from './layoutGeometryV2';
 import type {
   FloorPlanCirculationSemantic,
   FloorPlanDimension,
@@ -56,6 +56,25 @@ function moduleLevelTintFromMetadata(
 
 function rackDepthModeFromRow(row: RackRow): RackDepthModeV2 {
   return row.rowType === 'backToBack' ? 'double' : 'single';
+}
+
+/** Ordem ao longo do vão (igual à cadeia de módulos na geometria). */
+function beamStartMm(
+  fp: RackModule['footprint'],
+  orientation: LayoutGeometry['orientation']
+): number {
+  return orientation === 'along_length'
+    ? Math.min(fp.x0, fp.x1)
+    : Math.min(fp.y0, fp.y1);
+}
+
+function sortModulesAlongBeam(
+  modules: RackModule[],
+  orientation: LayoutGeometry['orientation']
+): RackModule[] {
+  return [...modules].sort(
+    (a, b) => beamStartMm(a.footprint, orientation) - beamStartMm(b.footprint, orientation)
+  );
 }
 
 /**
@@ -175,6 +194,14 @@ export function buildFloorPlanModelV2(
     });
   });
 
+  const indexByModuleId = new Map<string, number>();
+  let nextIdx = 0;
+  for (const row of geometry.rows) {
+    for (const m of sortModulesAlongBeam(row.modules, geometry.orientation)) {
+      indexByModuleId.set(m.id, nextIdx++);
+    }
+  }
+
   const structureRects: FloorPlanModelV2['structureRects'] = [];
   for (const row of geometry.rows) {
     const kind = rackDepthModeFromRow(row);
@@ -188,6 +215,7 @@ export function buildFloorPlanModelV2(
         h: Math.max(0.5, toY(fp.y1) - toY(fp.y0)),
         kind,
         variant: m.type === 'tunnel' ? 'tunnel' : 'normal',
+        displayIndex: indexByModuleId.get(m.id),
       });
     }
   }

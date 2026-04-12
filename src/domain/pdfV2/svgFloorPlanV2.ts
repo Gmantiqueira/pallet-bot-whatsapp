@@ -88,6 +88,24 @@ function sortCirculation(
  * Divisão 2 baias: fio quase imperceptível + tracejado longo — sugere metades sem parecer segunda moldura.
  * Ajuda a escala mental (módulo ≈ 2× meia-baia) sem competir com o contorno nem com a faixa da linha.
  */
+/** Tamanho/opacidade do índice do módulo: muitos módulos ou caixa pequena → mais discreto. */
+function moduleDisplayFontOpacity(
+  s: FloorPlanModelV2['structureRects'][0],
+  totalModules: number
+): { fontPx: number; opacity: number; nudgeX: number; nudgeY: number } {
+  const minSide = Math.min(s.w, s.h);
+  const fromCount =
+    totalModules > 48 ? 10 : totalModules > 32 ? 11.5 : totalModules > 20 ? 13 : totalModules > 12 ? 14.5 : 16;
+  const fromBox = minSide * 0.185;
+  const fontPx = Math.max(8.5, Math.min(fromCount, fromBox));
+  let opacity =
+    totalModules > 45 ? 0.58 : totalModules > 28 ? 0.66 : totalModules > 16 ? 0.72 : 0.78;
+  if (fontPx < 10) opacity *= 0.94;
+  const nudgeY = -Math.min(5, s.h * 0.055);
+  const nudgeX = s.w >= s.h ? Math.min(4, s.w * 0.018) : 0;
+  return { fontPx, opacity, nudgeX, nudgeY };
+}
+
 function moduleBayHintLine(s: FloorPlanModelV2['structureRects'][0]): string {
   const thin = 0.095;
   const op = 0.125;
@@ -145,6 +163,7 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
     .fp-circ { font: 600 12px "Helvetica Neue", Helvetica, Arial, sans-serif; }
     .fp-circ-res { font: 500 10px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #a8a29e; }
     .fp-dim { font: 600 20px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: ${COL_DIM}; }
+    .fp-mod-num { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; font-weight: 600; fill: #334155; }
   </style>`);
   parts.push('</defs>');
   parts.push(`<rect width="${w}" height="${h}" fill="${COL_BG}"/>`);
@@ -219,6 +238,7 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
   }
 
   const levelTint = model.moduleLevelTint;
+  const moduleCount = model.structureRects.length;
   for (const s of model.structureRects) {
     const isTunnel = s.variant === 'tunnel';
     const fillMod = isTunnel ? COL_MOD_TUNNEL_FILL : COL_MOD_FILL;
@@ -267,6 +287,19 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
         );
       }
     }
+  }
+
+  for (const s of model.structureRects) {
+    if (s.displayIndex === undefined) continue;
+    const { fontPx, opacity, nudgeX, nudgeY } = moduleDisplayFontOpacity(
+      s,
+      moduleCount
+    );
+    const tcx = s.x + s.w / 2 + nudgeX;
+    const tcy = s.y + s.h / 2 + nudgeY;
+    parts.push(
+      `<text x="${tcx}" y="${tcy}" text-anchor="middle" dominant-baseline="middle" class="fp-mod-num" font-size="${fontPx}px" opacity="${opacity}">${s.displayIndex}</text>`
+    );
   }
 
   parts.push(orientationArrowSvg(o, model.beamSpanAlong));
