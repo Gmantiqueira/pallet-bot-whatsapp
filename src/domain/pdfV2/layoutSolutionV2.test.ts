@@ -310,4 +310,31 @@ describe('buildLayoutSolutionV2', () => {
     expect(tunnelCount(sUma)).toBe(1);
     expect(tunnelCount(sAmbos)).toBe(sAmbos.rows.length);
   });
+
+  it('15: posição do túnel (INICIO/MEIO/FIM) só recorta ao longo do vão — mesma quantidade de fileiras', () => {
+    const common = {
+      ...base(),
+      lengthMm: 40_000,
+      widthMm: 16_000,
+      hasTunnel: true,
+      tunnelAppliesTo: 'AMBOS' as const,
+      lineStrategy: 'APENAS_SIMPLES' as const,
+    };
+    const a = buildLayoutSolutionV2({
+      ...common,
+      tunnelPosition: 'INICIO',
+    });
+    const b = buildLayoutSolutionV2({
+      ...common,
+      tunnelPosition: 'MEIO',
+    });
+    const c = buildLayoutSolutionV2({
+      ...common,
+      tunnelPosition: 'FIM',
+    });
+    expect(a.rows.length).toBe(b.rows.length);
+    expect(b.rows.length).toBe(c.rows.length);
+    expect(a.orientation).toBe(b.orientation);
+    expect(b.orientation).toBe(c.orientation);
+  });
 });

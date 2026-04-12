@@ -137,49 +137,19 @@ function crossAxisPerimeterReserve(zoneLen: number): {
   };
 }
 
-/** Faixa de túnel ao longo da direção transversal (divide o galpão em zonas de fileiras). */
-function tunnelSpanCross(
-  crossSpan: number,
-  corridorMm: number,
-  pos: 'INICIO' | 'MEIO' | 'FIM'
-): { t0: number; t1: number } {
-  const tw = Math.min(tunnelWidthMm(corridorMm), crossSpan);
-  if (pos === 'INICIO') return { t0: 0, t1: tw };
-  if (pos === 'FIM') return { t0: Math.max(0, crossSpan - tw), t1: crossSpan };
-  const c = crossSpan / 2;
-  const half = tw / 2;
-  return { t0: Math.max(0, c - half), t1: Math.min(crossSpan, c + half) };
-}
-
 type CrossZone = { z0: number; z1: number; id: string };
 
-/** Particiona o comprimento transversal em zonas livres de racks (acima / abaixo da faixa de túnel). */
-function crossZonesForTunnel(
-  crossSpan: number,
-  hasTunnel: boolean,
-  tunnelPos: 'INICIO' | 'MEIO' | 'FIM' | undefined,
-  corridorMm: number
-): CrossZone[] {
-  if (!hasTunnel || !tunnelPos) {
-    return [{ z0: 0, z1: crossSpan, id: 'zone-all' }];
-  }
-  const { t0, t1 } = tunnelSpanCross(crossSpan, corridorMm, tunnelPos);
-  if (tunnelPos === 'MEIO') {
-    const zones: CrossZone[] = [];
-    if (t0 > EPS) zones.push({ z0: 0, z1: t0, id: 'zone-below' });
-    if (crossSpan - t1 > EPS)
-      zones.push({ z0: t1, z1: crossSpan, id: 'zone-above' });
-    return zones.length > 0
-      ? zones
-      : [{ z0: 0, z1: crossSpan, id: 'zone-all' }];
-  }
-  if (tunnelPos === 'INICIO') {
-    if (t1 >= crossSpan - EPS) return [];
-    return [{ z0: t1, z1: crossSpan, id: 'zone-after-tunnel' }];
-  }
-  /* FIM */
-  if (t0 <= EPS) return [];
-  return [{ z0: 0, z1: t0, id: 'zone-before-tunnel' }];
+/**
+ * Zonas transversais para empacotar fileiras.
+ *
+ * O túnel é modelado **só ao longo do vão** (`tunnelSpanAlongBeam` + `splitBeamIntoModuleSegments`):
+ * módulo túnel + segmentos normais por fileira. Particionar também o eixo transversal com faixas
+ * `tunnelWidthMm` (como antes) duplicava a perda de capacidade — faixas inteiras sem fileiras **e**
+ * o recorte longitudinal no mesmo sítio — e deslocava o impacto de INICIO/FIM/MEIO para o eixo
+ * errado em relação ao texto “posição ao longo do armazém”.
+ */
+function crossZonesForTunnel(crossSpan: number): CrossZone[] {
+  return [{ z0: 0, z1: crossSpan, id: 'zone-all' }];
 }
 
 export type RowBandCross = { id: string; c0: number; c1: number };
@@ -263,12 +233,7 @@ export function fillWarehouseCross(ctx: FillContext): {
   rowBands: RowBandCross[];
   corridors: CirculationZone[];
 } {
-  const zones = crossZonesForTunnel(
-    ctx.crossSpan,
-    ctx.hasTunnel,
-    ctx.tunnelPosition,
-    ctx.corridorMm
-  );
+  const zones = crossZonesForTunnel(ctx.crossSpan);
 
   const rowBands: RowBandCross[] = [];
   const corridors: CirculationZone[] = [];
