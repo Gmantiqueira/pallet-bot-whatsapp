@@ -203,12 +203,17 @@ export function validateElevationAxesAgainstGeometry(
     );
   }
 
-  if (Math.abs(front.beamLengthMm - rep.bayClearSpanAlongBeamMm) > ELEV_AXIS_TOL_MM) {
+  if (
+    Math.abs(front.beamLengthMm - rep.bayClearSpanAlongBeamMm) >
+    ELEV_AXIS_TOL_MM
+  ) {
     throw new ElevationModelValidationError(
       `Elevação frontal: vão por baia (${front.beamLengthMm} mm) não alinha com o layout (esperado ${rep.bayClearSpanAlongBeamMm} mm).`
     );
   }
-  if (Math.abs(front.moduleDepthMm - rep.moduleDepthAxisMm) > ELEV_AXIS_TOL_MM) {
+  if (
+    Math.abs(front.moduleDepthMm - rep.moduleDepthAxisMm) > ELEV_AXIS_TOL_MM
+  ) {
     throw new ElevationModelValidationError(
       `Elevação: profundidade de posição (${front.moduleDepthMm} mm) não alinha com a planta (${rep.moduleDepthAxisMm} mm).`
     );
@@ -231,7 +236,10 @@ export function validateElevationAxesAgainstGeometry(
       `Elevação lateral: perfil de uma costa (${front.lateralProfileDepthMm} mm) deve ser rackDepthMm (${rackSingle} mm).`
     );
   }
-  if (Math.abs(model.lateral.lateralProfileDepthMm - rackSingle) > ELEV_AXIS_TOL_MM) {
+  if (
+    Math.abs(model.lateral.lateralProfileDepthMm - rackSingle) >
+    ELEV_AXIS_TOL_MM
+  ) {
     throw new ElevationModelValidationError(
       `Payload lateral: lateralProfileDepthMm deve ser ${rackSingle} mm.`
     );
@@ -245,7 +253,10 @@ export function validateElevationAxesAgainstGeometry(
         'Elevação túnel: módulo túnel ausente na geometria.'
       );
     }
-    if (Math.abs(tun.beamLengthMm - tunMod.bayClearSpanAlongBeamMm) > ELEV_AXIS_TOL_MM) {
+    if (
+      Math.abs(tun.beamLengthMm - tunMod.bayClearSpanAlongBeamMm) >
+      ELEV_AXIS_TOL_MM
+    ) {
       throw new ElevationModelValidationError(
         `Elevação túnel: vão por baia (${tun.beamLengthMm} mm) não alinha com módulo túnel (esperado ${tunMod.bayClearSpanAlongBeamMm} mm).`
       );

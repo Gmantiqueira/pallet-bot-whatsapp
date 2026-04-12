@@ -35,7 +35,10 @@ export function tunnelClearanceMmFromCorridor(corridorMm: number): number {
   return Math.max(2200, Math.min(4500, corridorMm + 800));
 }
 
-function bandDepthForMode(depthMode: RackDepthModeV2, moduleDepthMm: number): number {
+function bandDepthForMode(
+  depthMode: RackDepthModeV2,
+  moduleDepthMm: number
+): number {
   return depthMode === 'single'
     ? moduleDepthMm
     : 2 * moduleDepthMm + SPINE_BACK_TO_BACK_MM;
@@ -45,14 +48,22 @@ function bandDepthForMode(depthMode: RackDepthModeV2, moduleDepthMm: number): nu
  * Máximo de fileiras numa faixa de profundidade (transversal ao vão) quando
  * se alterna fileira + corredor: n·band + (n−1)·corridor ≤ zoneLen.
  */
-function maxRowsInZone(zoneLen: number, bandDepth: number, corridorMm: number): number {
+function maxRowsInZone(
+  zoneLen: number,
+  bandDepth: number,
+  corridorMm: number
+): number {
   if (zoneLen <= 0 || bandDepth <= 0) return 0;
   if (zoneLen < bandDepth) return 0;
   return Math.floor((zoneLen + corridorMm) / (bandDepth + corridorMm));
 }
 
 /** Espaço transversal ocupado por n fileiras e (n−1) corredores entre elas. */
-function usedCrossForRows(n: number, bandDepth: number, corridorMm: number): number {
+function usedCrossForRows(
+  n: number,
+  bandDepth: number,
+  corridorMm: number
+): number {
   if (n <= 0) return 0;
   return n * bandDepth + Math.max(0, n - 1) * corridorMm;
 }
@@ -111,8 +122,11 @@ function crossZonesForTunnel(
   if (tunnelPos === 'MEIO') {
     const zones: CrossZone[] = [];
     if (t0 > EPS) zones.push({ z0: 0, z1: t0, id: 'zone-below' });
-    if (crossSpan - t1 > EPS) zones.push({ z0: t1, z1: crossSpan, id: 'zone-above' });
-    return zones.length > 0 ? zones : [{ z0: 0, z1: crossSpan, id: 'zone-all' }];
+    if (crossSpan - t1 > EPS)
+      zones.push({ z0: t1, z1: crossSpan, id: 'zone-above' });
+    return zones.length > 0
+      ? zones
+      : [{ z0: 0, z1: crossSpan, id: 'zone-all' }];
   }
   if (tunnelPos === 'INICIO') {
     if (t1 >= crossSpan - EPS) return [];
@@ -295,7 +309,12 @@ function countRowsAcrossZones(
   hasTunnel: boolean,
   tunnelPos: 'INICIO' | 'MEIO' | 'FIM' | undefined
 ): number {
-  const zones = crossZonesForTunnel(crossSpan, hasTunnel, tunnelPos, corridorMm);
+  const zones = crossZonesForTunnel(
+    crossSpan,
+    hasTunnel,
+    tunnelPos,
+    corridorMm
+  );
   let total = 0;
   for (const z of zones) {
     const zLen = z.z1 - z.z0;
@@ -306,7 +325,10 @@ function countRowsAcrossZones(
 }
 
 /** Quantos módulos cabem no vão ao longo do eixo de fileira (passo = lado longo da pegada). */
-function countModulesAlongBeamSpan(beamSpanMm: number, moduleLengthAxisMm: number): number {
+function countModulesAlongBeamSpan(
+  beamSpanMm: number,
+  moduleLengthAxisMm: number
+): number {
   if (moduleLengthAxisMm <= 0) return 0;
   return Math.floor(beamSpanMm / moduleLengthAxisMm);
 }
@@ -404,7 +426,8 @@ function canHaveHalfAtBeamEnd(
   if (rowBandCount >= 2) return true;
   if (beamPassage) {
     const nearPassage =
-      Math.abs(endCoord - beamPassage.t0) <= 2 || Math.abs(endCoord - beamPassage.t1) <= 2;
+      Math.abs(endCoord - beamPassage.t0) <= 2 ||
+      Math.abs(endCoord - beamPassage.t1) <= 2;
     if (nearPassage) return true;
   }
   if (!beamPassage) {
@@ -503,7 +526,8 @@ function fillSegmentModules(
   halfOpt: boolean,
   allowHalfEnd: boolean
 ): { full: number; half: boolean; rejectedHalf: boolean } {
-  if (moduleLengthAxisMm <= 0) return { full: 0, half: false, rejectedHalf: false };
+  if (moduleLengthAxisMm <= 0)
+    return { full: 0, half: false, rejectedHalf: false };
   const nFull = Math.floor(len / moduleLengthAxisMm);
   const rem = len - nFull * moduleLengthAxisMm;
   const wantHalf =
@@ -537,7 +561,16 @@ function buildModuleSegmentsForRow(
 
     if (bs.kind === 'tunnel') {
       segments.push(
-        rectForTunnelModule(orientation, rowId, idx++, bs.a, bs.b, crossSeg, corridorMm, globalLevels)
+        rectForTunnelModule(
+          orientation,
+          rowId,
+          idx++,
+          bs.a,
+          bs.b,
+          crossSeg,
+          corridorMm,
+          globalLevels
+        )
       );
       moduleEquiv += 1;
       continue;
@@ -547,13 +580,17 @@ function buildModuleSegmentsForRow(
       continue;
     }
 
-    const allowHalfEnd = canHaveHalfAtBeamEnd(bs.b, beamSpan, tunnel, rowBandCount);
-    const { full, half, rejectedHalf: rh } = fillSegmentModules(
-      len,
-      moduleLengthAlongBeamMm,
-      halfOpt,
-      allowHalfEnd
+    const allowHalfEnd = canHaveHalfAtBeamEnd(
+      bs.b,
+      beamSpan,
+      tunnel,
+      rowBandCount
     );
+    const {
+      full,
+      half,
+      rejectedHalf: rh,
+    } = fillSegmentModules(len, moduleLengthAlongBeamMm, halfOpt, allowHalfEnd);
     if (rh) rejectedHalf = true;
 
     const placeRects = (nFull: number, hasHalf: boolean) => {
@@ -561,14 +598,18 @@ function buildModuleSegmentsForRow(
       for (let i = 0; i < nFull; i++) {
         const a = cursor;
         const b = cursor + moduleLengthAlongBeamMm;
-        segments.push(rectFor(orientation, rowId, idx++, a, b, crossSeg, 'full', 'normal'));
+        segments.push(
+          rectFor(orientation, rowId, idx++, a, b, crossSeg, 'full', 'normal')
+        );
         cursor = b;
         moduleEquiv += 1;
       }
       if (hasHalf) {
         const a = cursor;
         const b = cursor + moduleLengthAlongBeamMm / 2;
-        segments.push(rectFor(orientation, rowId, idx++, a, b, crossSeg, 'half', 'normal'));
+        segments.push(
+          rectFor(orientation, rowId, idx++, a, b, crossSeg, 'half', 'normal')
+        );
         moduleEquiv += 0.5;
       }
     };
@@ -626,7 +667,9 @@ function rectForTunnelModule(
  * Consolida a solução geométrica (fileiras, corredores, túnel, meio módulo).
  * Não gera SVG nem PDF.
  */
-export function buildLayoutSolutionV2(answers: BuildLayoutSolutionV2Input): LayoutSolutionV2 {
+export function buildLayoutSolutionV2(
+  answers: BuildLayoutSolutionV2Input
+): LayoutSolutionV2 {
   const {
     lengthMm,
     widthMm,
@@ -651,7 +694,9 @@ export function buildLayoutSolutionV2(answers: BuildLayoutSolutionV2Input): Layo
   const d = Math.max(0, moduleDepthMm);
   const bayClearSpanAlongBeamMm = Math.max(w, d);
   const rackDepthMm = Math.min(w, d);
-  const moduleLengthAlongBeamMm = computeModuleLengthAlongBeamMm(bayClearSpanAlongBeamMm);
+  const moduleLengthAlongBeamMm = computeModuleLengthAlongBeamMm(
+    bayClearSpanAlongBeamMm
+  );
 
   const orientation = resolveOrientation(answers);
 

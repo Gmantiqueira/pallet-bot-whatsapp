@@ -2,7 +2,10 @@ import { buildMessages } from './messageBuilder';
 import { Session } from '../domain/session';
 import { finalizeSummaryAnswers } from '../domain/projectEngines';
 
-const createSession = (state: string, answers: Record<string, unknown> = {}): Session => {
+const createSession = (
+  state: string,
+  answers: Record<string, unknown> = {}
+): Session => {
   return {
     phone: '5511999999999',
     state,
@@ -67,7 +70,9 @@ describe('MessageBuilder', () => {
       });
 
       expect(messages.length).toBeGreaterThan(1);
-      const imageMessage = messages.find((m) => m.text?.includes('Imagem recebida'));
+      const imageMessage = messages.find(m =>
+        m.text?.includes('Imagem recebida')
+      );
       expect(imageMessage).toBeDefined();
       expect(imageMessage?.text).toContain('12000');
       expect(imageMessage?.text).toContain('10000');
@@ -121,7 +126,10 @@ describe('MessageBuilder', () => {
       const messages = buildMessages(session);
 
       expect(messages[0].buttons).toHaveLength(2);
-      expect(messages[0].buttons?.map((b) => b.id)).toEqual(['GRS_SIM', 'GRS_NAO']);
+      expect(messages[0].buttons?.map(b => b.id)).toEqual([
+        'GRS_SIM',
+        'GRS_NAO',
+      ]);
     });
 
     it('should build SUMMARY_CONFIRM message with summary and buttons', () => {
@@ -140,7 +148,7 @@ describe('MessageBuilder', () => {
           guardRailSimple: true,
           guardRailSimplePosition: 'AMBOS',
           guardRailDouble: false,
-        }),
+        })
       );
       const messages = buildMessages(session);
 

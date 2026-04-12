@@ -21,19 +21,22 @@ const createSession = (
 describe('State Machine - Edit Flow', () => {
   describe('Edit from FINAL_CONFIRM', () => {
     it('should go to CHOOSE_EDIT_FIELD when clicking Editar', () => {
-      const session = createSession('FINAL_CONFIRM', finalizeSummaryAnswers({
-        lengthMm: 12000,
-        widthMm: 10000,
-        corridorMm: 3000,
-        moduleDepthMm: 2700,
-        beamLengthMm: 1100,
-        capacityKg: 2000,
-        heightMode: 'DIRECT',
-        heightMm: 5000,
-        levels: 4,
-        guardRailSimple: false,
-        guardRailDouble: false,
-      }));
+      const session = createSession(
+        'FINAL_CONFIRM',
+        finalizeSummaryAnswers({
+          lengthMm: 12000,
+          widthMm: 10000,
+          corridorMm: 3000,
+          moduleDepthMm: 2700,
+          beamLengthMm: 1100,
+          capacityKg: 2000,
+          heightMode: 'DIRECT',
+          heightMm: 5000,
+          levels: 4,
+          guardRailSimple: false,
+          guardRailDouble: false,
+        })
+      );
       const input: Input = { type: 'BUTTON', value: 'EDITAR' };
 
       const result = transition(session, input);
@@ -85,7 +88,10 @@ describe('State Machine - Edit Flow', () => {
         'WAIT_MODULE_DEPTH'
       );
 
-      const result = transition(session, { type: 'BUTTON', value: 'TUNNEL_NAO' });
+      const result = transition(session, {
+        type: 'BUTTON',
+        value: 'TUNNEL_NAO',
+      });
 
       expect(result.session.state).toBe('SUMMARY_CONFIRM');
       expect(result.session.editStopBefore).toBeUndefined();
@@ -139,11 +145,9 @@ describe('State Machine - Edit Flow', () => {
     });
 
     it('should go back when clicking VOLTAR_RESUMO', () => {
-      const session = createSession(
-        'CHOOSE_EDIT_FIELD',
-        { lengthMm: 12000 },
-        ['FINAL_CONFIRM']
-      );
+      const session = createSession('CHOOSE_EDIT_FIELD', { lengthMm: 12000 }, [
+        'FINAL_CONFIRM',
+      ]);
       const input: Input = { type: 'BUTTON', value: 'VOLTAR_RESUMO' };
 
       const result = transition(session, input);
@@ -168,7 +172,10 @@ describe('State Machine - Edit Flow', () => {
         }),
         ['FINAL_CONFIRM']
       );
-      const result = transition(session, { type: 'BUTTON', value: 'EDIT_PROTECOES' });
+      const result = transition(session, {
+        type: 'BUTTON',
+        value: 'EDIT_PROTECOES',
+      });
 
       expect(result.session.state).toBe('CHOOSE_COLUMN_PROTECTOR');
       expect(result.session.editStopBefore).toBe('SUMMARY_CONFIRM');

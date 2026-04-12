@@ -14,7 +14,13 @@ export type LayoutResult = {
 };
 
 export function calculateLayout(input: LayoutInput): LayoutResult {
-  const { warehouseWidthMm, warehouseLengthMm, corridorMm, moduleDepthMm, moduleWidthMm } = input;
+  const {
+    warehouseWidthMm,
+    warehouseLengthMm,
+    corridorMm,
+    moduleDepthMm,
+    moduleWidthMm,
+  } = input;
 
   const rows = Math.floor(warehouseWidthMm / (moduleDepthMm + corridorMm));
   const modulesPerRow = Math.floor(warehouseLengthMm / moduleWidthMm);

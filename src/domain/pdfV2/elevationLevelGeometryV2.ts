@@ -9,7 +9,9 @@ const EPS = 0.5;
  * Níveis de armazenagem ativos acima do vão de passagem no módulo túnel (sempre abaixo do total do projeto).
  * Regra: menos níveis ativos que o normal — não redistribuir o mesmo número de patamares só na zona superior.
  */
-export function tunnelActiveStorageLevelsFromGlobal(globalLevels: number): number {
+export function tunnelActiveStorageLevelsFromGlobal(
+  globalLevels: number
+): number {
   const g = Math.max(1, Math.floor(globalLevels));
   if (g <= 2) return 1;
   if (g === 3) return 1;
@@ -65,11 +67,14 @@ function minUsableMm(levels: number): number {
  * - espaçamento uniforme entre eixos consecutivos: gap = span / levels
  * - beam[k] = beam0 + k·gap, k = 0…levels, com beam[levels] = topIn
  */
-export function computeBeamElevations(input: BeamElevationInput): BeamElevationResult {
+export function computeBeamElevations(
+  input: BeamElevationInput
+): BeamElevationResult {
   const levels = Math.max(1, Math.floor(input.levels));
   const H0 = Math.max(EPS, input.uprightHeightMm);
 
-  let structuralBottom = input.structuralBottomMm ?? DEFAULT_STRUCTURAL_BOTTOM_MM;
+  let structuralBottom =
+    input.structuralBottomMm ?? DEFAULT_STRUCTURAL_BOTTOM_MM;
   let structuralTop = input.structuralTopMm ?? DEFAULT_STRUCTURAL_TOP_MM;
   structuralBottom = clamp(structuralBottom, 0, H0 * 0.25);
   structuralTop = clamp(structuralTop, 0, H0 * 0.25);
@@ -113,7 +118,7 @@ export function computeBeamElevations(input: BeamElevationInput): BeamElevationR
 
   if (hasList && rawList) {
     let g = rawList.map(x => Math.max(EPS, x));
-    let sumG = g.reduce((a, b) => a + b, 0);
+    const sumG = g.reduce((a, b) => a + b, 0);
     if (sumG > span + EPS) {
       const f = span / sumG;
       g = g.map(x => x * f);
@@ -228,13 +233,17 @@ export function computeTunnelRackBeamElevationsAlignedToNormal(input: {
     );
   }
 
-  const off = input.firstBeamOffsetAboveClearanceMm ?? TUNNEL_FIRST_BEAM_OFFSET_ABOVE_CLEARANCE_MM;
+  const off =
+    input.firstBeamOffsetAboveClearanceMm ??
+    TUNNEL_FIRST_BEAM_OFFSET_ABOVE_CLEARANCE_MM;
   const clearMin = input.tunnelClearanceMm + off;
   const topIn = b[L]!;
 
   const start = L - t;
   if (start < 0) {
-    throw new Error('computeTunnelRackBeamElevationsAlignedToNormal: tunnelLevels > globalLevels.');
+    throw new Error(
+      'computeTunnelRackBeamElevationsAlignedToNormal: tunnelLevels > globalLevels.'
+    );
   }
 
   let beamElevationsMm: number[];

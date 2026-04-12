@@ -1,5 +1,8 @@
 import { buildLayoutSolutionV2 } from './layoutSolutionV2';
-import { buildLayoutGeometry, validateLayoutGeometry } from './layoutGeometryV2';
+import {
+  buildLayoutGeometry,
+  validateLayoutGeometry,
+} from './layoutGeometryV2';
 import { build3DModelV2 } from './model3dV2';
 import { projectToIsometric, render3DViewV2 } from './view3dV2';
 import type { ProjectAnswersV2 } from './answerMapping';
@@ -94,7 +97,9 @@ describe('build3DModelV2 + projeção isométrica', () => {
       lineStrategy: 'APENAS_SIMPLES' as const,
     };
     const sol = buildLayoutSolutionV2(a);
-    expect(sol.rows.some(r => r.modules.some(m => m.variant === 'tunnel'))).toBe(true);
+    expect(
+      sol.rows.some(r => r.modules.some(m => m.variant === 'tunnel'))
+    ).toBe(true);
     const mTunnel = build3DModelV2(geomFromAnswers(a));
     const openingAtZ = mTunnel.lines.filter(
       l => l.kind === 'floor' && l.z1 > 500 && l.z2 > 500
@@ -110,7 +115,9 @@ describe('build3DModelV2 + projeção isométrica', () => {
       lineStrategy: 'APENAS_SIMPLES' as const,
     };
     const sol = buildLayoutSolutionV2(a);
-    expect(sol.rows.filter(r => r.modules.length > 0).length).toBeGreaterThanOrEqual(2);
+    expect(
+      sol.rows.filter(r => r.modules.length > 0).length
+    ).toBeGreaterThanOrEqual(2);
     const model = build3DModelV2(geomFromAnswers(a));
     const uprights = model.lines.filter(l => l.kind === 'upright').length;
     expect(uprights).toBeGreaterThan(8);

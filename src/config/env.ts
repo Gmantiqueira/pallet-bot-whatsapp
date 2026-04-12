@@ -16,7 +16,8 @@ export const loadEnv = (): EnvConfig => {
   const NODE_ENV = process.env.NODE_ENV || 'development';
   const WEBHOOK_SECRET_RAW = process.env.WEBHOOK_SECRET;
   const WEBHOOK_SECRET =
-    typeof WEBHOOK_SECRET_RAW === 'string' && WEBHOOK_SECRET_RAW.trim().length > 0
+    typeof WEBHOOK_SECRET_RAW === 'string' &&
+    WEBHOOK_SECRET_RAW.trim().length > 0
       ? WEBHOOK_SECRET_RAW.trim()
       : undefined;
 

@@ -9,7 +9,10 @@ import { finalizeSummaryAnswers } from '../domain/projectEngines';
 import { PdfService } from '../infra/pdf/pdfService';
 import type { GenerateProjectPdfResult } from '../infra/pdf/pdfService';
 
-const createSession = (state: string, answers: Record<string, unknown> = {}): Session => {
+const createSession = (
+  state: string,
+  answers: Record<string, unknown> = {}
+): Session => {
   return {
     phone: '5511999999999',
     state,
@@ -229,18 +232,20 @@ describe('MessageRouter', () => {
 
       expect(result.session.state).toBe('DONE');
       expect(result.session.answers.generate3d).toBe(true);
-      const textMsg = result.outgoingMessages.find((m) => m.type === 'text');
+      const textMsg = result.outgoingMessages.find(m => m.type === 'text');
       expect(textMsg?.text).toContain('Projeto gerado com sucesso');
       expect(textMsg?.text).toContain('integrador interno');
-      expect(
-        result.outgoingMessages.some((m) => m.type === 'document')
-      ).toBe(false);
-      expect(typeof result.session.answers.pdfFilename).toBe('string');
-      expect((result.session.answers.pdfFilename as string).length).toBeGreaterThan(
-        0
+      expect(result.outgoingMessages.some(m => m.type === 'document')).toBe(
+        false
       );
+      expect(typeof result.session.answers.pdfFilename).toBe('string');
+      expect(
+        (result.session.answers.pdfFilename as string).length
+      ).toBeGreaterThan(0);
       expect(typeof result.session.answers.pdfPath).toBe('string');
-      expect(fs.existsSync(result.session.answers.pdfPath as string)).toBe(true);
+      expect(fs.existsSync(result.session.answers.pdfPath as string)).toBe(
+        true
+      );
       expect(result.generatedPdf).toBeDefined();
       expect(result.generatedPdf?.mimeType).toBe('application/pdf');
       expect(result.generatedPdf?.absolutePath).toBe(
@@ -252,18 +257,18 @@ describe('MessageRouter', () => {
       );
 
       const names = fs.existsSync(storageDir)
-        ? fs.readdirSync(storageDir).filter((f) => f.includes('5511999999999'))
+        ? fs.readdirSync(storageDir).filter(f => f.includes('5511999999999'))
         : [];
-      expect(names.some((f) => f.startsWith('planta-') && f.endsWith('.svg'))).toBe(
-        true
-      );
+      expect(
+        names.some(f => f.startsWith('planta-') && f.endsWith('.svg'))
+      ).toBe(true);
       expect(
         names.some(
-          (f) => f.startsWith('elevacao-sem-tunel-') && f.endsWith('.svg')
+          f => f.startsWith('elevacao-sem-tunel-') && f.endsWith('.svg')
         )
       ).toBe(true);
       expect(
-        names.some((f) => f.startsWith('vista-3d-') && f.endsWith('.svg'))
+        names.some(f => f.startsWith('vista-3d-') && f.endsWith('.svg'))
       ).toBe(true);
       expect(
         fs.existsSync(
@@ -299,11 +304,11 @@ describe('MessageRouter', () => {
 
       expect(result.session.state).toBe('DONE');
       expect(result.session.answers.generate3d).toBe(true);
-      const textMsg = result.outgoingMessages.find((m) => m.type === 'text');
+      const textMsg = result.outgoingMessages.find(m => m.type === 'text');
       expect(textMsg?.text).toContain('Projeto gerado com sucesso');
-      expect(
-        result.outgoingMessages.some((m) => m.type === 'document')
-      ).toBe(false);
+      expect(result.outgoingMessages.some(m => m.type === 'document')).toBe(
+        false
+      );
       expect(result.generatedPdf?.absolutePath).toBeTruthy();
 
       const pdfPath = result.session.answers.pdfPath as string;
@@ -314,10 +319,10 @@ describe('MessageRouter', () => {
       expect(pdfDoc.getPageCount()).toBeGreaterThanOrEqual(5);
 
       const names = fs.existsSync(storageDir)
-        ? fs.readdirSync(storageDir).filter((f) => f.includes('5511999999999'))
+        ? fs.readdirSync(storageDir).filter(f => f.includes('5511999999999'))
         : [];
       const view3dName = names.find(
-        (f) => f.startsWith('vista-3d-') && f.endsWith('.svg')
+        f => f.startsWith('vista-3d-') && f.endsWith('.svg')
       );
       expect(view3dName).toBeDefined();
       const view3dSvg = fs.readFileSync(
@@ -361,11 +366,11 @@ describe('MessageRouter', () => {
 
       expect(result.session.state).toBe('SUMMARY_CONFIRM');
       expect(
-        result.outgoingMessages.some((m) =>
+        result.outgoingMessages.some(m =>
           m.text?.includes('Não foi possível gerar o documento')
         )
       ).toBe(true);
-      expect(result.outgoingMessages.some((m) => m.document)).toBe(false);
+      expect(result.outgoingMessages.some(m => m.document)).toBe(false);
     });
   });
 
@@ -500,7 +505,7 @@ describe('MessageRouter', () => {
       const result = await routeIncoming(session, incoming, repository);
 
       // Should have image analyzed message
-      const imageMessage = result.outgoingMessages.find((m) =>
+      const imageMessage = result.outgoingMessages.find(m =>
         m.text?.includes('Imagem recebida')
       );
       expect(imageMessage).toBeDefined();

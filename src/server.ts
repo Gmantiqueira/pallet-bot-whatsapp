@@ -14,4 +14,4 @@ const start = async (): Promise<void> => {
   }
 };
 
-start();
+void start();

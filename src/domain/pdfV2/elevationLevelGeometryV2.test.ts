@@ -40,7 +40,10 @@ describe('computeBeamElevations', () => {
     const bottom = DEFAULT_STRUCTURAL_BOTTOM_MM;
     const top = DEFAULT_STRUCTURAL_TOP_MM;
     const hWork = 5000 - bottom - top;
-    const lift = Math.min(DEFAULT_FIRST_LEVEL_LIFT_MM, Math.max(0.5, hWork * 0.22));
+    const lift = Math.min(
+      DEFAULT_FIRST_LEVEL_LIFT_MM,
+      Math.max(0.5, hWork * 0.22)
+    );
     expect(r.beamElevationsMm[0]).toBeCloseTo(bottom + lift, 3);
     const span = 5000 - top - r.beamElevationsMm[0]!;
     const gap = span / 5;
@@ -58,7 +61,10 @@ describe('computeBeamElevations', () => {
       levelSpacingsMm: [1500, 1500, 1500],
     });
     expect(r.beamElevationsMm).toHaveLength(5);
-    expect(r.beamElevationsMm[4]).toBeCloseTo(6000 - DEFAULT_STRUCTURAL_TOP_MM, 2);
+    expect(r.beamElevationsMm[4]).toBeCloseTo(
+      6000 - DEFAULT_STRUCTURAL_TOP_MM,
+      2
+    );
   });
 
   it('computeLevelSpacing: 5000 mm, 5 níveis, primeiro ao chão', () => {
@@ -110,11 +116,15 @@ describe('computeTunnelRackBeamElevationsAlignedToNormal', () => {
     expect(r.beamElevationsMm[0]!).toBeGreaterThanOrEqual(
       3200 + TUNNEL_FIRST_BEAM_OFFSET_ABOVE_CLEARANCE_MM
     );
-    expect(r.beamElevationsMm[tunnelTiers]!).toBeCloseTo(normal.beamElevationsMm[globalLevels]!, 3);
+    expect(r.beamElevationsMm[tunnelTiers]!).toBeCloseTo(
+      normal.beamElevationsMm[globalLevels]!,
+      3
+    );
     const start = globalLevels - tunnelTiers;
     for (let j = 0; j < tunnelTiers; j++) {
       const gN =
-        normal.beamElevationsMm[start + j + 1]! - normal.beamElevationsMm[start + j]!;
+        normal.beamElevationsMm[start + j + 1]! -
+        normal.beamElevationsMm[start + j]!;
       const gT = r.beamElevationsMm[j + 1]! - r.beamElevationsMm[j]!;
       expect(gT).toBeCloseTo(gN, 2);
     }

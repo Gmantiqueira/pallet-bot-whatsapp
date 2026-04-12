@@ -484,11 +484,14 @@ export async function renderPdfV2(
       moveDown: 0.18,
     });
     if (elevFrontTunRaster) {
-      drawCentered('Mesmo modelo estrutural; vão de passagem na zona inferior', {
-        size: 8.5,
-        color: COL_MUTED,
-        moveDown: 0.28,
-      });
+      drawCentered(
+        'Mesmo modelo estrutural; vão de passagem na zona inferior',
+        {
+          size: 8.5,
+          color: COL_MUTED,
+          moveDown: 0.28,
+        }
+      );
       horizontalRule(doc.y + 3, 0.1, COL_RULE);
       doc.moveDown(0.38);
       embedFullWidthDrawing(elevFrontTunRaster);
@@ -528,11 +531,14 @@ export async function renderPdfV2(
       moveDown: 0.18,
     });
     if (elevLateralTunRaster) {
-      drawCentered('Abertura inferior e níveis ativos alinhados ao módulo túnel', {
-        size: 8.5,
-        color: COL_MUTED,
-        moveDown: 0.28,
-      });
+      drawCentered(
+        'Abertura inferior e níveis ativos alinhados ao módulo túnel',
+        {
+          size: 8.5,
+          color: COL_MUTED,
+          moveDown: 0.28,
+        }
+      );
       horizontalRule(doc.y + 3, 0.1, COL_RULE);
       doc.moveDown(0.38);
       embedFullWidthDrawing(elevLateralTunRaster);

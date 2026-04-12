@@ -1,5 +1,10 @@
 import type { LayoutGeometry, RackRow } from './layoutGeometryV2';
-import type { FloorPlanDimension, FloorPlanLabel, FloorPlanModelV2, RackDepthModeV2 } from './types';
+import type {
+  FloorPlanDimension,
+  FloorPlanLabel,
+  FloorPlanModelV2,
+  RackDepthModeV2,
+} from './types';
 
 /**
  * Canvas SVG da planta.
@@ -31,7 +36,12 @@ function rackDepthModeFromRow(row: RackRow): RackDepthModeV2 {
 }
 
 /** Retângulo da faixa da fileira no referencial do galpão (mm). */
-function rowBandFootprintMm(row: RackRow): { x0: number; y0: number; x1: number; y1: number } {
+function rowBandFootprintMm(row: RackRow): {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+} {
   if (row.layoutOrientation === 'along_length') {
     return {
       x0: row.originX,
@@ -51,7 +61,9 @@ function rowBandFootprintMm(row: RackRow): { x0: number; y0: number; x1: number;
 /**
  * Converte o modelo geométrico canónico num modelo de planta com coordenadas de desenho.
  */
-export function buildFloorPlanModelV2(geometry: LayoutGeometry): FloorPlanModelV2 {
+export function buildFloorPlanModelV2(
+  geometry: LayoutGeometry
+): FloorPlanModelV2 {
   const { warehouseLengthMm: L, warehouseWidthMm: W } = geometry;
   const innerW = VB_W - 2 * PAD;
   const innerH = VB_H - PAD - HEADER - DIM_OUT - 28;

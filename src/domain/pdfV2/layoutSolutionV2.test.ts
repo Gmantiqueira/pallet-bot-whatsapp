@@ -64,7 +64,9 @@ describe('buildLayoutSolutionV2', () => {
     const s = buildLayoutSolutionV2(a);
     expect(s.metadata.hasTunnel).toBe(false);
     expect(s.rows.length).toBeGreaterThanOrEqual(2);
-    expect(s.corridors.some(c => c.label === 'Passagem transversal')).toBe(true);
+    expect(s.corridors.some(c => c.label === 'Passagem transversal')).toBe(
+      true
+    );
 
     const maxGapAlongBeam = (): number => {
       const row = s.rows[0]!;
@@ -95,7 +97,9 @@ describe('buildLayoutSolutionV2', () => {
     };
     const s = buildLayoutSolutionV2(a);
     expect(s.tunnels.length).toBe(0);
-    expect(s.rows.some(r => r.modules.some(m => m.variant === 'tunnel'))).toBe(true);
+    expect(s.rows.some(r => r.modules.some(m => m.variant === 'tunnel'))).toBe(
+      true
+    );
     expect(s.rows.some(r => r.modules.length > 0)).toBe(true);
   });
 
@@ -125,7 +129,9 @@ describe('buildLayoutSolutionV2', () => {
     };
     const s = buildLayoutSolutionV2(a);
     expect(s.tunnels.length).toBe(0);
-    expect(s.rows.some(r => r.modules.some(m => m.variant === 'tunnel'))).toBe(true);
+    expect(s.rows.some(r => r.modules.some(m => m.variant === 'tunnel'))).toBe(
+      true
+    );
   });
 
   it('7: meio módulo aceito (com túnel adjacente / extremos)', () => {
@@ -176,15 +182,24 @@ describe('buildLayoutSolutionV2', () => {
     expect(tunnelMod).toBeDefined();
     if (!tunnelMod) return;
     const beam = { x0: tunnelMod.x0, x1: tunnelMod.x1 };
-    const maxLeft = Math.max(...m.filter(mod => mod.x1 <= beam.x0 + 1).map(mod => mod.x1), -1);
-    const minRight = Math.min(...m.filter(mod => mod.x0 >= beam.x1 - 1).map(mod => mod.x0), Infinity);
+    const maxLeft = Math.max(
+      ...m.filter(mod => mod.x1 <= beam.x0 + 1).map(mod => mod.x1),
+      -1
+    );
+    const minRight = Math.min(
+      ...m.filter(mod => mod.x0 >= beam.x1 - 1).map(mod => mod.x0),
+      Infinity
+    );
     expect(maxLeft).toBeGreaterThan(0);
     expect(minRight).toBeLessThan(Infinity);
     expect(minRight - maxLeft).toBeGreaterThan(0);
   });
 
   it('10: orientação do vão vem só do ajuste ao galpão (along_length quando o comprimento é o eixo dominante)', () => {
-    const s = buildLayoutSolutionV2({ ...base(), lineStrategy: 'APENAS_SIMPLES' });
+    const s = buildLayoutSolutionV2({
+      ...base(),
+      lineStrategy: 'APENAS_SIMPLES',
+    });
     expect(s.orientation).toBe('along_length');
   });
 
@@ -236,7 +251,9 @@ describe('buildLayoutSolutionV2', () => {
     expect(s.beamAlongModuleMm).toBe(2700);
     expect(s.moduleLengthAlongBeamMm).toBe(moduleLengthAlongBeamMm(2700));
     expect(s.rackDepthMm).toBe(1100);
-    const full = s.rows[0]?.modules.find(m => m.type === 'full' && m.variant !== 'tunnel');
+    const full = s.rows[0]?.modules.find(
+      m => m.type === 'full' && m.variant !== 'tunnel'
+    );
     expect(full).toBeDefined();
     if (!full) return;
     const dx = Math.abs(full.x1 - full.x0);

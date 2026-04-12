@@ -43,7 +43,7 @@ describe('BudgetEngine', () => {
       expect.arrayContaining([
         { name: 'Montante 8T', quantity: 8 },
         { name: 'Par de Longarinas', quantity: 24 },
-      ]),
+      ])
     );
     expect(result.items).toHaveLength(2);
   });

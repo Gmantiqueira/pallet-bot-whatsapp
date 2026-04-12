@@ -26,7 +26,11 @@ export function uprightWidthsMmForFrontBayCount(
 ): number[] {
   const w: number[] = [];
   for (let i = 0; i <= bayCount; i++) {
-    w.push(tunnelFrontUprights && i <= 1 ? UPRIGHT_TUNNEL_PORTICO_MM : UPRIGHT_NORMAL_MM);
+    w.push(
+      tunnelFrontUprights && i <= 1
+        ? UPRIGHT_TUNNEL_PORTICO_MM
+        : UPRIGHT_NORMAL_MM
+    );
   }
   return w;
 }

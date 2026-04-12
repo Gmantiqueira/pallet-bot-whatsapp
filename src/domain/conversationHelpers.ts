@@ -22,8 +22,8 @@ export const parseNumber = (text: string): number | null => {
 export const parseCommaSeparatedNumbers = (text: string): number[] | null => {
   const parts = text
     .split(/[,;]+/)
-    .map((p) => p.trim())
-    .filter((p) => p.length > 0);
+    .map(p => p.trim())
+    .filter(p => p.length > 0);
   if (parts.length === 0) {
     return null;
   }

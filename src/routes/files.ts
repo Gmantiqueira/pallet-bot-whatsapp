@@ -29,7 +29,10 @@ export const filesRoutes = async (fastify: FastifyInstance): Promise<void> => {
         }
       },
     },
-    async (request: FastifyRequest<{ Params: FilesParams }>, reply: FastifyReply) => {
+    async (
+      request: FastifyRequest<{ Params: FilesParams }>,
+      reply: FastifyReply
+    ) => {
       const { name } = request.params;
 
       // Protect against path traversal

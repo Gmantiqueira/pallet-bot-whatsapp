@@ -20,7 +20,7 @@ describe('PdfService', () => {
   afterEach(() => {
     if (fs.existsSync(testStoragePath)) {
       const files = fs.readdirSync(testStoragePath);
-      files.forEach((file) => {
+      files.forEach(file => {
         fs.unlinkSync(path.join(testStoragePath, file));
       });
       fs.rmdirSync(testStoragePath);
@@ -99,9 +99,7 @@ describe('svgRasterToPng', () => {
     const { buffer, widthPx, heightPx } = await svgRasterToPng(svg, 320, 320);
     expect(widthPx).toBeGreaterThan(0);
     expect(heightPx).toBeGreaterThan(0);
-    expect(buffer.subarray(0, 8).toString('hex')).toBe(
-      '89504e470d0a1a0a'
-    );
+    expect(buffer.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a');
     expect(buffer.length).toBeGreaterThan(80);
   });
 });

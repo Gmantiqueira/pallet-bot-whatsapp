@@ -148,7 +148,12 @@ export function build3DModelV2(geometry: LayoutGeometry): Rack3DModel {
 
   for (const row of geometry.rows) {
     for (const mod of row.modules) {
-      const fps = footprintsForBackToBackModule(row, mod, rackDepthMm, layoutOrientation);
+      const fps = footprintsForBackToBackModule(
+        row,
+        mod,
+        rackDepthMm,
+        layoutOrientation
+      );
       for (const fp of fps) {
         emitPalletRackPrism(lines, mod, fp, uprightSeen);
       }

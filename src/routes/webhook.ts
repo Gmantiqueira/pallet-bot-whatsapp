@@ -24,7 +24,9 @@ interface WebhookResponse {
 
 const START_STATE = 'START';
 
-export const webhookRoutes = async (fastify: FastifyInstance): Promise<void> => {
+export const webhookRoutes = async (
+  fastify: FastifyInstance
+): Promise<void> => {
   const sessionRepository = new SqliteSessionRepository();
   const { WEBHOOK_SECRET } = loadEnv();
 

@@ -1,8 +1,15 @@
 import { transition, Input } from './stateMachine';
 import { Session } from './session';
-import { DEFAULT_BEAM_LENGTH_MM, finalizeSummaryAnswers } from './projectEngines';
+import {
+  DEFAULT_BEAM_LENGTH_MM,
+  finalizeSummaryAnswers,
+} from './projectEngines';
 
-const createSession = (state: string, answers: Record<string, unknown> = {}, stack: string[] = []): Session => {
+const createSession = (
+  state: string,
+  answers: Record<string, unknown> = {},
+  stack: string[] = []
+): Session => {
   return {
     phone: '5511999999999',
     state,
@@ -40,7 +47,10 @@ describe('State Machine', () => {
     });
 
     it('should handle "voltar" command and return to previous state', () => {
-      const session = createSession('WAIT_WIDTH', { lengthMm: 1000 }, ['MENU', 'WAIT_LENGTH']);
+      const session = createSession('WAIT_WIDTH', { lengthMm: 1000 }, [
+        'MENU',
+        'WAIT_LENGTH',
+      ]);
       const input: Input = { type: 'GLOBAL', command: 'voltar' };
 
       const result = transition(session, input);
@@ -52,11 +62,11 @@ describe('State Machine', () => {
     });
 
     it('should handle "voltar" with 2 steps back', () => {
-      const session = createSession('WAIT_CORRIDOR', { lengthMm: 1000, widthMm: 2000 }, [
-        'MENU',
-        'WAIT_LENGTH',
-        'WAIT_WIDTH',
-      ]);
+      const session = createSession(
+        'WAIT_CORRIDOR',
+        { lengthMm: 1000, widthMm: 2000 },
+        ['MENU', 'WAIT_LENGTH', 'WAIT_WIDTH']
+      );
       const input: Input = { type: 'GLOBAL', command: 'voltar' };
 
       const result1 = transition(session, input);
@@ -82,7 +92,9 @@ describe('State Machine', () => {
 
   describe('START state', () => {
     it('should go to MENU on any text without validating content', () => {
-      const session = createSession('START', { lengthMm: 9999 }, ['WAIT_LENGTH']);
+      const session = createSession('START', { lengthMm: 9999 }, [
+        'WAIT_LENGTH',
+      ]);
       const result = transition(session, { type: 'TEXT', value: '1' });
 
       expect(result.session.state).toBe('MENU');
@@ -196,7 +208,10 @@ describe('State Machine', () => {
       expect(result.session.answers.layout).toBeDefined();
       expect(result.session.answers.structure).toBeDefined();
       expect(result.session.answers.budget).toBeDefined();
-      expect((result.session.answers.budget as { totals: { modules: number } }).totals.modules).toBe(10);
+      expect(
+        (result.session.answers.budget as { totals: { modules: number } })
+          .totals.modules
+      ).toBe(10);
     });
 
     it('should reach WAIT_HEIGHT_DIRECT after capacity with heightMode DIRECT', () => {
@@ -237,7 +252,10 @@ describe('State Machine', () => {
     });
 
     it('should reject corridor below minimum', () => {
-      const session = createSession('WAIT_CORRIDOR', { lengthMm: 12000, widthMm: 10000 });
+      const session = createSession('WAIT_CORRIDOR', {
+        lengthMm: 12000,
+        widthMm: 10000,
+      });
       const input: Input = { type: 'TEXT', value: '500' };
 
       const result = transition(session, input);
@@ -247,7 +265,10 @@ describe('State Machine', () => {
     });
 
     it('should reject corridor above maximum', () => {
-      const session = createSession('WAIT_CORRIDOR', { lengthMm: 12000, widthMm: 10000 });
+      const session = createSession('WAIT_CORRIDOR', {
+        lengthMm: 12000,
+        widthMm: 10000,
+      });
       const input: Input = { type: 'TEXT', value: '7000' };
 
       const result = transition(session, input);
@@ -333,7 +354,10 @@ describe('State Machine', () => {
     });
 
     it('should preserve answers when going back', () => {
-      const session = createSession('WAIT_WIDTH', { lengthMm: 12000 }, ['MENU', 'WAIT_LENGTH']);
+      const session = createSession('WAIT_WIDTH', { lengthMm: 12000 }, [
+        'MENU',
+        'WAIT_LENGTH',
+      ]);
       const result = transition(session, { type: 'GLOBAL', command: 'voltar' });
 
       expect(result.session.state).toBe('WAIT_LENGTH');

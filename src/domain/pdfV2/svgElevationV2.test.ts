@@ -1,5 +1,8 @@
 import { buildLayoutSolutionV2 } from './layoutSolutionV2';
-import { buildLayoutGeometry, validateLayoutGeometry } from './layoutGeometryV2';
+import {
+  buildLayoutGeometry,
+  validateLayoutGeometry,
+} from './layoutGeometryV2';
 import { buildElevationModelV2 } from './elevationModelV2';
 import { serializeElevationPagesV2 } from './svgElevationV2';
 import type { ProjectAnswersV2 } from './answerMapping';
@@ -97,7 +100,9 @@ describe('serializeElevationPagesV2', () => {
     validateLayoutGeometry(geo);
     const model = buildElevationModelV2(session, geo);
     expect(model.frontWithTunnel).toBeDefined();
-    expect(model.frontWithoutTunnel.levels).toBeGreaterThan(model.frontWithTunnel!.levels);
+    expect(model.frontWithoutTunnel.levels).toBeGreaterThan(
+      model.frontWithTunnel!.levels
+    );
     const pages = serializeElevationPagesV2(model);
     expect(pages.frontWithTunnel).toBeDefined();
     expect(model.lateralWithTunnel).toBeDefined();

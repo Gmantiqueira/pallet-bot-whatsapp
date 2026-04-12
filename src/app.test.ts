@@ -83,7 +83,10 @@ describe('App Smoke Test', () => {
     fs.mkdirSync(dir, { recursive: true });
     const name = `smoke-${Date.now()}.pdf`;
     const filePath = path.join(dir, name);
-    fs.writeFileSync(filePath, Buffer.from('%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF'));
+    fs.writeFileSync(
+      filePath,
+      Buffer.from('%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF')
+    );
 
     const res = await app.inject({
       method: 'GET',

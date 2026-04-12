@@ -1,5 +1,8 @@
 import { Session } from './session';
-import { DEFAULT_BEAM_LENGTH_MM, finalizeSummaryAnswers } from './projectEngines';
+import {
+  DEFAULT_BEAM_LENGTH_MM,
+  finalizeSummaryAnswers,
+} from './projectEngines';
 import {
   parseNumber,
   validateCorridor,
@@ -57,10 +60,15 @@ const patchAnswersForState = (
   nextState: State
 ): Record<string, unknown> => {
   const merged = { ...base, ...patch };
-  return nextState === 'SUMMARY_CONFIRM' ? finalizeSummaryAnswers(merged) : merged;
+  return nextState === 'SUMMARY_CONFIRM'
+    ? finalizeSummaryAnswers(merged)
+    : merged;
 };
 
-function finishEditSection(session: Session, fullAnswers: Record<string, unknown>): Session {
+function finishEditSection(
+  session: Session,
+  fullAnswers: Record<string, unknown>
+): Session {
   const poppedStack =
     session.stack.length > 0 ? session.stack.slice(0, -1) : session.stack;
   return {
@@ -107,7 +115,10 @@ function goNext(
   };
 }
 
-export const transition = (session: Session, input: Input): TransitionResult => {
+export const transition = (
+  session: Session,
+  input: Input
+): TransitionResult => {
   let newSession: Session = { ...session };
   const effects: Effect[] = [];
   let error: string | undefined;
@@ -277,7 +288,11 @@ export const transition = (session: Session, input: Input): TransitionResult => 
       if (ve) {
         return { session: newSession, effects, error: ve };
       }
-      newSession = goNext(newSession, { corridorMm: corridor }, 'CHOOSE_LINE_STRATEGY');
+      newSession = goNext(
+        newSession,
+        { corridorMm: corridor },
+        'CHOOSE_LINE_STRATEGY'
+      );
       effects.push({ type: 'SEND' });
       return { session: newSession, effects, error };
     }
@@ -301,7 +316,11 @@ export const transition = (session: Session, input: Input): TransitionResult => 
     case 'CHOOSE_TUNNEL':
       if (input.type === 'BUTTON') {
         if (input.value === 'TUNNEL_SIM') {
-          newSession = goNext(newSession, { hasTunnel: true }, 'CHOOSE_TUNNEL_POSITION');
+          newSession = goNext(
+            newSession,
+            { hasTunnel: true },
+            'CHOOSE_TUNNEL_POSITION'
+          );
         } else if (input.value === 'TUNNEL_NAO') {
           const cleared = { ...newSession.answers, hasTunnel: false };
           delete (cleared as { tunnelPosition?: unknown }).tunnelPosition;
@@ -310,7 +329,11 @@ export const transition = (session: Session, input: Input): TransitionResult => 
             ...newSession,
             answers: cleared,
           };
-          newSession = goNext(newSession, { hasTunnel: false }, 'WAIT_MODULE_DEPTH');
+          newSession = goNext(
+            newSession,
+            { hasTunnel: false },
+            'WAIT_MODULE_DEPTH'
+          );
         }
         effects.push({ type: 'SEND' });
       }
@@ -327,7 +350,11 @@ export const transition = (session: Session, input: Input): TransitionResult => 
         if (!pos) {
           return { session: newSession, effects };
         }
-        newSession = goNext(newSession, { tunnelPosition: pos }, 'CHOOSE_TUNNEL_APPLIES');
+        newSession = goNext(
+          newSession,
+          { tunnelPosition: pos },
+          'CHOOSE_TUNNEL_APPLIES'
+        );
         effects.push({ type: 'SEND' });
       }
       return { session: newSession, effects };
@@ -343,7 +370,11 @@ export const transition = (session: Session, input: Input): TransitionResult => 
         if (!ap) {
           return { session: newSession, effects };
         }
-        newSession = goNext(newSession, { tunnelAppliesTo: ap }, 'WAIT_MODULE_DEPTH');
+        newSession = goNext(
+          newSession,
+          { tunnelAppliesTo: ap },
+          'WAIT_MODULE_DEPTH'
+        );
         effects.push({ type: 'SEND' });
       }
       return { session: newSession, effects };
@@ -385,7 +416,8 @@ export const transition = (session: Session, input: Input): TransitionResult => 
         if (ve) {
           return { session: newSession, effects, error: ve };
         }
-        const next: State = levels <= 1 ? 'WAIT_CAPACITY' : 'CHOOSE_FIRST_LEVEL_GROUND';
+        const next: State =
+          levels <= 1 ? 'WAIT_CAPACITY' : 'CHOOSE_FIRST_LEVEL_GROUND';
         newSession = goNext(newSession, { levels }, next);
         effects.push({ type: 'SEND' });
       }
@@ -397,7 +429,11 @@ export const transition = (session: Session, input: Input): TransitionResult => 
           return { session: newSession, effects };
         }
         const onGround = input.value === 'FLG_SIM';
-        newSession = goNext(newSession, { firstLevelOnGround: onGround }, 'WAIT_CAPACITY');
+        newSession = goNext(
+          newSession,
+          { firstLevelOnGround: onGround },
+          'WAIT_CAPACITY'
+        );
         effects.push({ type: 'SEND' });
       }
       return { session: newSession, effects };
@@ -468,9 +504,14 @@ export const transition = (session: Session, input: Input): TransitionResult => 
           newSession = goNext(newSession, {}, 'CHOOSE_GUARD_RAIL_SIMPLE_POS');
         } else if (input.value === 'GRS_NAO') {
           const cleared = { ...newSession.answers, guardRailSimple: false };
-          delete (cleared as { guardRailSimplePosition?: unknown }).guardRailSimplePosition;
+          delete (cleared as { guardRailSimplePosition?: unknown })
+            .guardRailSimplePosition;
           newSession = { ...newSession, answers: cleared };
-          newSession = goNext(newSession, { guardRailSimple: false }, 'CHOOSE_GUARD_RAIL_DOUBLE');
+          newSession = goNext(
+            newSession,
+            { guardRailSimple: false },
+            'CHOOSE_GUARD_RAIL_DOUBLE'
+          );
         }
         effects.push({ type: 'SEND' });
       }
@@ -502,9 +543,14 @@ export const transition = (session: Session, input: Input): TransitionResult => 
           newSession = goNext(newSession, {}, 'CHOOSE_GUARD_RAIL_DOUBLE_POS');
         } else if (input.value === 'GRD_NAO') {
           const cleared = { ...newSession.answers, guardRailDouble: false };
-          delete (cleared as { guardRailDoublePosition?: unknown }).guardRailDoublePosition;
+          delete (cleared as { guardRailDoublePosition?: unknown })
+            .guardRailDoublePosition;
           newSession = { ...newSession, answers: cleared };
-          newSession = goNext(newSession, { guardRailDouble: false }, 'SUMMARY_CONFIRM');
+          newSession = goNext(
+            newSession,
+            { guardRailDouble: false },
+            'SUMMARY_CONFIRM'
+          );
         }
         effects.push({ type: 'SEND' });
       }

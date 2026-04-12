@@ -10,7 +10,7 @@ export const getDb = (): Database.Database => {
   }
 
   const dbPath = process.env.DB_PATH || './data/app.db';
-  
+
   // Ensure directory exists
   const dbDir = path.dirname(dbPath);
   if (!fs.existsSync(dbDir)) {

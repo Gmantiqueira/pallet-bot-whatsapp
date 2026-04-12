@@ -31,16 +31,23 @@ export function buildProjectAnswersV2(
       ? answers.moduleDepthMm
       : DEFAULT_MODULE_DEPTH_MM;
   const fromBeam =
-    typeof answers.beamLengthMm === 'number' ? (answers.beamLengthMm as number) : undefined;
+    typeof answers.beamLengthMm === 'number'
+      ? (answers.beamLengthMm as number)
+      : undefined;
   const fromWidthField =
     typeof (answers as Record<string, unknown>).moduleWidthMm === 'number'
       ? ((answers as Record<string, unknown>).moduleWidthMm as number)
       : undefined;
   const moduleWidthMm = fromBeam ?? fromWidthField ?? DEFAULT_MODULE_WIDTH_MM;
 
-  const lineStrategy = (answers.lineStrategy as LineStrategyCode | undefined) ?? 'MELHOR_LAYOUT';
-  const tunnelPosition = answers.tunnelPosition as TunnelPositionCode | undefined;
-  const tunnelAppliesTo = answers.tunnelAppliesTo as TunnelAppliesCode | undefined;
+  const lineStrategy =
+    (answers.lineStrategy as LineStrategyCode | undefined) ?? 'MELHOR_LAYOUT';
+  const tunnelPosition = answers.tunnelPosition as
+    | TunnelPositionCode
+    | undefined;
+  const tunnelAppliesTo = answers.tunnelAppliesTo as
+    | TunnelAppliesCode
+    | undefined;
 
   return {
     lengthMm: answers.lengthMm,
@@ -56,11 +63,20 @@ export function buildProjectAnswersV2(
     tunnelAppliesTo,
     halfModuleOptimization: answers.halfModuleOptimization === true,
     firstLevelOnGround:
-      typeof answers.firstLevelOnGround === 'boolean' ? answers.firstLevelOnGround : true,
+      typeof answers.firstLevelOnGround === 'boolean'
+        ? answers.firstLevelOnGround
+        : true,
     heightMode: answers.heightMode === 'CALC' ? 'CALC' : 'DIRECT',
-    heightMm: typeof answers.heightMm === 'number' ? answers.heightMm : undefined,
-    loadHeightMm: typeof answers.loadHeightMm === 'number' ? answers.loadHeightMm : undefined,
-    clearHeightMm: typeof answers.clearHeightMm === 'number' ? answers.clearHeightMm : undefined,
+    heightMm:
+      typeof answers.heightMm === 'number' ? answers.heightMm : undefined,
+    loadHeightMm:
+      typeof answers.loadHeightMm === 'number'
+        ? answers.loadHeightMm
+        : undefined,
+    clearHeightMm:
+      typeof answers.clearHeightMm === 'number'
+        ? answers.clearHeightMm
+        : undefined,
   };
 }
 

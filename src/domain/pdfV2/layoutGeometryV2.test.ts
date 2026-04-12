@@ -29,7 +29,9 @@ describe('buildLayoutGeometry + validateLayoutGeometry', () => {
     const sol = buildLayoutSolutionV2(a);
     const geo = buildLayoutGeometry(sol, a);
     expect(geo.rows.length).toBeGreaterThan(0);
-    expect(geo.rows[0]!.modules[0]!.beamGeometry.beamElevationsMm.length).toBe(a.levels + 1);
+    expect(geo.rows[0]!.modules[0]!.beamGeometry.beamElevationsMm.length).toBe(
+      a.levels + 1
+    );
     validateLayoutGeometry(geo);
   });
 
@@ -48,8 +50,12 @@ describe('buildLayoutGeometry + validateLayoutGeometry', () => {
     expect(tun!.openBelow).toBe(true);
     expect(tun!.uprightThicknessMm).toBe(100);
     expect(tun!.activeStorageLevels).toBeLessThan(tun!.globalLevels);
-    expect(tun!.activeStorageLevels).toBe(tunnelActiveStorageLevelsFromGlobal(5));
-    expect(tun!.beamGeometry.beamElevationsMm.length).toBe(tun!.activeStorageLevels + 1);
+    expect(tun!.activeStorageLevels).toBe(
+      tunnelActiveStorageLevelsFromGlobal(5)
+    );
+    expect(tun!.beamGeometry.beamElevationsMm.length).toBe(
+      tun!.activeStorageLevels + 1
+    );
     validateLayoutGeometry(geo);
   });
 
@@ -69,6 +75,8 @@ describe('buildLayoutGeometry + validateLayoutGeometry', () => {
     const sol = buildLayoutSolutionV2(a);
     const geo = buildLayoutGeometry(sol, a);
     geo.rows[0]!.modules[0]!.uprightThicknessMm = 99;
-    expect(() => validateLayoutGeometry(geo)).toThrow(LayoutGeometryValidationError);
+    expect(() => validateLayoutGeometry(geo)).toThrow(
+      LayoutGeometryValidationError
+    );
   });
 });

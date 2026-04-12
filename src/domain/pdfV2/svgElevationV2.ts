@@ -699,28 +699,18 @@ function drawFrontRack(
       `<line x1="${tx0}" y1="${yPassTop}" x2="${tx1}" y2="${yPassTop}" stroke="#b45309" stroke-width="1.05" opacity="0.9"/>`
     );
     parts.push(
-      textLines(
-        tx0 + tw * 0.25,
-        yMid - 2 * ls,
-        ['PASSAGEM'],
-        {
-          fontSize: 9.25 * ls,
-          fill: '#b45309',
-          fontWeight: '700',
-        }
-      )
+      textLines(tx0 + tw * 0.25, yMid - 2 * ls, ['PASSAGEM'], {
+        fontSize: 9.25 * ls,
+        fill: '#b45309',
+        fontWeight: '700',
+      })
     );
     parts.push(
-      textLines(
-        tx0 + tw * 0.75,
-        yMid - 2 * ls,
-        ['PASSAGEM'],
-        {
-          fontSize: 9.25 * ls,
-          fill: '#b45309',
-          fontWeight: '700',
-        }
-      )
+      textLines(tx0 + tw * 0.75, yMid - 2 * ls, ['PASSAGEM'], {
+        fontSize: 9.25 * ls,
+        fill: '#b45309',
+        fontWeight: '700',
+      })
     );
     parts.push(
       textLines(
@@ -761,10 +751,7 @@ function drawFrontRack(
     const bay = bays[bi]!;
     for (let j = 0; j < nStorageBeams; j++) {
       const yy = beamYsPx[j]!;
-      if (
-        showTunnelOpening &&
-        yy >= yPassTop - beamTh * 0.55
-      ) {
+      if (showTunnelOpening && yy >= yPassTop - beamTh * 0.55) {
         continue;
       }
       const bh = Math.max(beamTh, 2.2);
@@ -781,17 +768,17 @@ function drawFrontRack(
     }
   }
 
-  if (typeof data.capacityKgPerLevel === 'number' && data.capacityKgPerLevel > 0) {
+  if (
+    typeof data.capacityKgPerLevel === 'number' &&
+    data.capacityKgPerLevel > 0
+  ) {
     const capText = `${Math.round(data.capacityKgPerLevel)}kg`;
     const capFs = 14.5 * ls;
     for (let bi = 0; bi < bays.length; bi++) {
       const bay = bays[bi]!;
       for (let j = 0; j < nStorageBeams; j++) {
         const yy = beamYsPx[j]!;
-        if (
-          showTunnelOpening &&
-          yy >= yPassTop - beamTh * 0.55
-        ) {
+        if (showTunnelOpening && yy >= yPassTop - beamTh * 0.55) {
           continue;
         }
         const bh = Math.max(beamTh, 2.2);
@@ -810,7 +797,9 @@ function drawFrontRack(
     `<line x1="${uprightXs[0]}" y1="${topY}" x2="${lastUx + lastUw}" y2="${topY}" stroke="#475569" stroke-width="1.05" stroke-linecap="square" opacity="0.75"/>`
   );
 
-  parts.push(dimensionLineHArrows(faceSpanLeft, dimTopY, faceSpanRight, DIM_MINOR));
+  parts.push(
+    dimensionLineHArrows(faceSpanLeft, dimTopY, faceSpanRight, DIM_MINOR)
+  );
   const faceTitle = `Módulo 2 baias · vão ${escapeXml(
     formatMmPtBr(Math.round(beamL))
   )} mm/baia · face de armazenagem`;
@@ -845,9 +834,7 @@ function drawFrontRack(
       axisGapsMm,
       uprightH,
       ls,
-      showTunnelOpening
-        ? { clearanceMm: clearanceMm, yPassTop }
-        : undefined
+      showTunnelOpening ? { clearanceMm: clearanceMm, yPassTop } : undefined
     )
   );
 
@@ -892,7 +879,16 @@ function drawLateral(
   const rackMaxW = Math.min(pw - 48, Math.max(120, pw * 0.54));
   const rackMaxH = ph - Math.round(72 / ls);
   /** Um perfil de profundidade (uma baia visível); níveis vêm do mesmo payload. */
-  const g = buildBeamGeometry(data, rackMaxW * 0.98, rackMaxH, ox, oy, pw, ph, 1);
+  const g = buildBeamGeometry(
+    data,
+    rackMaxW * 0.98,
+    rackMaxH,
+    ox,
+    oy,
+    pw,
+    ph,
+    1
+  );
 
   const { storageTiers, uprightH, beamH, uprightWidthsPx } = g;
   const nBeamAxes = beamH.length;
@@ -921,7 +917,9 @@ function drawLateral(
 
   const showTunnelOpening =
     data.tunnel === true && typeof data.tunnelClearanceMm === 'number';
-  const clearanceMm = showTunnelOpening ? Math.max(0, data.tunnelClearanceMm!) : 0;
+  const clearanceMm = showTunnelOpening
+    ? Math.max(0, data.tunnelClearanceMm!)
+    : 0;
   const floorTopLat = y0 + dh;
   const yPassTop =
     showTunnelOpening && clearanceMm > 0
@@ -1006,10 +1004,7 @@ function drawLateral(
   const bhLat = Math.max(2, 2.2 * scaleY);
   for (let j = 0; j < nLatBeams; j++) {
     const yy = beamYLocal(j);
-    if (
-      showTunnelOpening &&
-      yy >= yPassTop - bhLat * 0.55
-    ) {
+    if (showTunnelOpening && yy >= yPassTop - bhLat * 0.55) {
       continue;
     }
     parts.push(
@@ -1047,9 +1042,7 @@ function drawLateral(
       g.axisGapsMm,
       uprightH,
       ls,
-      clearanceLatMm > 0
-        ? { clearanceMm: clearanceLatMm, yPassTop }
-        : undefined
+      clearanceLatMm > 0 ? { clearanceMm: clearanceLatMm, yPassTop } : undefined
     )
   );
 
@@ -1210,15 +1203,7 @@ export function serializeElevationSvgV2(model: ElevationModelV2): string {
         ? 'Elevação dupla com túnel'
         : 'Elevação com túnel';
     parts.push(
-      drawFrontRack(
-        36,
-        y,
-        panelW,
-        bandH,
-        std,
-        'Elevação sem túnel',
-        undefined
-      )
+      drawFrontRack(36, y, panelW, bandH, std, 'Elevação sem túnel', undefined)
     );
     parts.push(
       drawFrontRack(
@@ -1233,15 +1218,7 @@ export function serializeElevationSvgV2(model: ElevationModelV2): string {
     );
   } else {
     parts.push(
-      drawFrontRack(
-        36,
-        y,
-        w - 72,
-        bandH,
-        std,
-        'Elevação sem túnel',
-        undefined
-      )
+      drawFrontRack(36, y, w - 72, bandH, std, 'Elevação sem túnel', undefined)
     );
   }
 

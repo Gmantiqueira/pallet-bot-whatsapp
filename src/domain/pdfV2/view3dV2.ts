@@ -1,4 +1,9 @@
-import type { Projected2D, ProjectedLine2D, Rack3DModel, SvgGroup } from './types';
+import type {
+  Projected2D,
+  ProjectedLine2D,
+  Rack3DModel,
+  SvgGroup,
+} from './types';
 
 /**
  * Projeção isométrica (cabinet-style) para 2D:

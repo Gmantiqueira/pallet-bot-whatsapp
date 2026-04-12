@@ -40,7 +40,8 @@ export function calculateBudget(input: BudgetInput): BudgetResult {
   const modules = layout.modulesTotal;
   const positions = modules * levels;
 
-  const uprightName = structure.uprightType === '8T' ? 'Montante 8T' : 'Montante 15T';
+  const uprightName =
+    structure.uprightType === '8T' ? 'Montante 8T' : 'Montante 15T';
   const uprightQuantity = (layout.modulesPerRow + 1) * layout.rows;
   const longarinaPairsQuantity = modules * levels;
 

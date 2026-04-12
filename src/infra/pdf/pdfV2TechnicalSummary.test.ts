@@ -38,7 +38,10 @@ describe('technicalSummaryRowsFromLayoutGeometry', () => {
       levels: 5,
     };
     const sol = buildLayoutSolutionV2(a);
-    const geo = buildLayoutGeometry(sol, a as unknown as Record<string, unknown>);
+    const geo = buildLayoutGeometry(
+      sol,
+      a as unknown as Record<string, unknown>
+    );
 
     const rows = technicalSummaryRowsFromLayoutGeometry(
       a as unknown as Record<string, unknown>,
@@ -62,7 +65,10 @@ describe('technicalSummaryRowsFromLayoutGeometry', () => {
   it('não segue um layout legado fictício: módulos/posições vêm da geometria V2', () => {
     const a = minimal();
     const sol = buildLayoutSolutionV2(a);
-    const geo = buildLayoutGeometry(sol, a as unknown as Record<string, unknown>);
+    const geo = buildLayoutGeometry(
+      sol,
+      a as unknown as Record<string, unknown>
+    );
 
     const bogusLegacy: LayoutResult = {
       rows: 1,

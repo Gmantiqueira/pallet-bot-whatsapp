@@ -66,7 +66,9 @@ export function fitRasterInBox(
 }
 
 /** Pé-direito a partir das respostas da sessão (não depende do layout). */
-export function formatPeDireitoAltura(project: Record<string, unknown>): string {
+export function formatPeDireitoAltura(
+  project: Record<string, unknown>
+): string {
   if (typeof project.heightMm === 'number') {
     return formatMm(project.heightMm);
   }
@@ -104,9 +106,7 @@ export function technicalSummaryRows(
   layout: LayoutResult
 ): { label: string; value: string }[] {
   const comprimento =
-    typeof project.lengthMm === 'number'
-      ? formatMm(project.lengthMm)
-      : '—';
+    typeof project.lengthMm === 'number' ? formatMm(project.lengthMm) : '—';
   const largura =
     typeof project.widthMm === 'number' ? formatMm(project.widthMm) : '—';
   const niveis =
@@ -119,7 +119,10 @@ export function technicalSummaryRows(
     { label: 'Pé-direito / altura', value: formatPeDireitoAltura(project) },
     { label: 'Níveis', value: niveis },
     { label: 'Módulos', value: modulos },
-    { label: 'Posições estimadas', value: formatPosicoesEstimadas(project, layout) },
+    {
+      label: 'Posições estimadas',
+      value: formatPosicoesEstimadas(project, layout),
+    },
   ];
 }
 

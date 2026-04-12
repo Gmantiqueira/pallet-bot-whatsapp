@@ -155,7 +155,10 @@ export class LayoutGeometryValidationError extends Error {
  * Eixo do vão (ponta com ponta) vs profundidade de faixa vêm da orientação **calculada** na solução
  * (não do utilizador). Não usar max(dx,dy): em dupla costas a faixa transversal pode ser mais longa que o vão.
  */
-function moduleDims(m: ModuleSegment, orientation: LayoutOrientationV2): { widthMm: number; depthMm: number } {
+function moduleDims(
+  m: ModuleSegment,
+  orientation: LayoutOrientationV2
+): { widthMm: number; depthMm: number } {
   const dx = Math.abs(m.x1 - m.x0);
   const dy = Math.abs(m.y1 - m.y0);
   if (orientation === 'along_length') {
@@ -164,7 +167,9 @@ function moduleDims(m: ModuleSegment, orientation: LayoutOrientationV2): { width
   return { widthMm: dy, depthMm: dx };
 }
 
-function clearHeightFromAnswers(answers: Record<string, unknown>): number | undefined {
+function clearHeightFromAnswers(
+  answers: Record<string, unknown>
+): number | undefined {
   if (typeof answers.clearHeightMm === 'number') {
     return answers.clearHeightMm;
   }
@@ -205,8 +210,7 @@ function buildStorageLevels(
   for (let i = 0; i < nTiers; i++) {
     const beamY = beams[i + 1]!;
     const clearHeightBelow = beams[i + 1]! - beams[i]!;
-    const active =
-      moduleType === 'tunnel' ? i < activeStorageLevels : true;
+    const active = moduleType === 'tunnel' ? i < activeStorageLevels : true;
     out.push({
       index: i,
       beamY,
@@ -236,7 +240,10 @@ function beamResultForModule(
       levels: globalLevels,
       firstLevelOnGround,
       equalLevelSpacing: answers.equalLevelSpacing === true,
-      levelSpacingMm: typeof answers.levelSpacingMm === 'number' ? answers.levelSpacingMm : undefined,
+      levelSpacingMm:
+        typeof answers.levelSpacingMm === 'number'
+          ? answers.levelSpacingMm
+          : undefined,
       levelSpacingsMm: Array.isArray(answers.levelSpacingsMm)
         ? (answers.levelSpacingsMm as number[])
         : undefined,
@@ -253,7 +260,10 @@ function beamResultForModule(
     levels: globalLevels,
     firstLevelOnGround,
     equalLevelSpacing: answers.equalLevelSpacing === true,
-    levelSpacingMm: typeof answers.levelSpacingMm === 'number' ? answers.levelSpacingMm : undefined,
+    levelSpacingMm:
+      typeof answers.levelSpacingMm === 'number'
+        ? answers.levelSpacingMm
+        : undefined,
     levelSpacingsMm: Array.isArray(answers.levelSpacingsMm)
       ? (answers.levelSpacingsMm as number[])
       : undefined,
@@ -269,13 +279,17 @@ function rackModuleFromSegment(
 ): RackModule {
   const levels = typeof answers.levels === 'number' ? answers.levels : 1;
   const firstLevelOnGround =
-    typeof answers.firstLevelOnGround === 'boolean' ? answers.firstLevelOnGround : true;
+    typeof answers.firstLevelOnGround === 'boolean'
+      ? answers.firstLevelOnGround
+      : true;
   const cap = typeof answers.capacityKg === 'number' ? answers.capacityKg : 0;
   const H = uprightHeightMmFromAnswers(answers);
   const { widthMm, depthMm } = moduleDims(m, solution.orientation);
   const type: RackModuleType = m.variant === 'tunnel' ? 'tunnel' : 'normal';
   const uprightThicknessMm =
-    type === 'tunnel' ? UPRIGHT_THICKNESS_TUNNEL_MM : UPRIGHT_THICKNESS_NORMAL_MM;
+    type === 'tunnel'
+      ? UPRIGHT_THICKNESS_TUNNEL_MM
+      : UPRIGHT_THICKNESS_NORMAL_MM;
   const activeStorageLevels =
     m.activeStorageLevels != null
       ? m.activeStorageLevels
@@ -283,7 +297,13 @@ function rackModuleFromSegment(
         ? tunnelActiveStorageLevelsFromGlobal(levels)
         : levels;
 
-  const beamGeometry = beamResultForModule(m, H, levels, firstLevelOnGround, answers);
+  const beamGeometry = beamResultForModule(
+    m,
+    H,
+    levels,
+    firstLevelOnGround,
+    answers
+  );
   const expectedBeamAxes =
     type === 'tunnel' ? activeStorageLevels + 1 : levels + 1;
   if (beamGeometry.beamElevationsMm.length !== expectedBeamAxes) {
@@ -292,10 +312,17 @@ function rackModuleFromSegment(
     );
   }
 
-  const storageLevels = buildStorageLevels(beamGeometry, cap, type, activeStorageLevels);
+  const storageLevels = buildStorageLevels(
+    beamGeometry,
+    cap,
+    type,
+    activeStorageLevels
+  );
 
   const tunnelClearance =
-    type === 'tunnel' && m.tunnelClearanceMm != null ? m.tunnelClearanceMm : undefined;
+    type === 'tunnel' && m.tunnelClearanceMm != null
+      ? m.tunnelClearanceMm
+      : undefined;
 
   const bayClear = solution.beamAlongModuleMm;
   const moduleLenAlong = widthMm;
@@ -387,7 +414,8 @@ export function buildLayoutGeometry(
   );
 
   const orientation = solution.orientation;
-  const beamSpanDirection: 'x' | 'y' = orientation === 'along_length' ? 'x' : 'y';
+  const beamSpanDirection: 'x' | 'y' =
+    orientation === 'along_length' ? 'x' : 'y';
 
   return {
     warehouseLengthMm: solution.warehouse.lengthMm,
@@ -434,8 +462,13 @@ function beamStartCoord(m: RackModule, ori: LayoutOrientationV2): number {
 }
 
 /** Garante mesma profundidade transversal ao longo da fileira (mesma banda). */
-function validateRowModuleChaining(row: RackRow, ori: LayoutOrientationV2): void {
-  const mods = [...row.modules].sort((a, b) => beamStartCoord(a, ori) - beamStartCoord(b, ori));
+function validateRowModuleChaining(
+  row: RackRow,
+  ori: LayoutOrientationV2
+): void {
+  const mods = [...row.modules].sort(
+    (a, b) => beamStartCoord(a, ori) - beamStartCoord(b, ori)
+  );
   const ref = mods[0]!;
   const cref0 =
     ori === 'along_length'
@@ -479,7 +512,9 @@ function validateModulesSpanLengthAxis(
     if (m.type === 'tunnel') continue;
 
     const expected =
-      m.segmentType === 'half' ? moduleLengthAlongBeamMm / 2 : moduleLengthAlongBeamMm;
+      m.segmentType === 'half'
+        ? moduleLengthAlongBeamMm / 2
+        : moduleLengthAlongBeamMm;
     const tol = 2.5;
     const along = m.moduleLengthAxisMm;
 
@@ -501,7 +536,10 @@ function validateModulesSpanLengthAxis(
 }
 
 /** Invariants: rectangular module = 2 bays on front; plan long axis = row direction. */
-function validateRackModuleBayAndPlanSemantics(m: RackModule, meta: LayoutGeometryMetadata): void {
+function validateRackModuleBayAndPlanSemantics(
+  m: RackModule,
+  meta: LayoutGeometryMetadata
+): void {
   if (m.baysPerLevel !== MODULE_PALLET_BAYS_PER_LEVEL) {
     throw new LayoutGeometryValidationError(
       `Módulo ${m.id}: esperado ${MODULE_PALLET_BAYS_PER_LEVEL} baias por nível na face frontal.`
@@ -534,7 +572,8 @@ function validateRackModuleBayAndPlanSemantics(m: RackModule, meta: LayoutGeomet
 
 export function validateLayoutGeometry(geo: LayoutGeometry): void {
   const md = geo.metadata.rackDepthMm;
-  const { beamAlongModuleMm, rackDepthMm, moduleLengthAlongBeamMm } = geo.metadata;
+  const { beamAlongModuleMm, rackDepthMm, moduleLengthAlongBeamMm } =
+    geo.metadata;
   if (beamAlongModuleMm <= EPS || rackDepthMm <= EPS) {
     throw new LayoutGeometryValidationError(
       'Layout: vão e profundidade de posição devem ser positivos.'
@@ -573,21 +612,30 @@ export function validateLayoutGeometry(geo: LayoutGeometry): void {
 
     for (const m of row.modules) {
       if (m.rowId !== row.id) {
-        throw new LayoutGeometryValidationError(`Módulo ${m.id} com rowId inválido.`);
+        throw new LayoutGeometryValidationError(
+          `Módulo ${m.id} com rowId inválido.`
+        );
       }
 
       validateRackModuleBayAndPlanSemantics(m, geo.metadata);
 
       if (m.type === 'tunnel') {
         if (!m.openBelow) {
-          throw new LayoutGeometryValidationError(`Módulo túnel ${m.id}: openBelow obrigatório.`);
+          throw new LayoutGeometryValidationError(
+            `Módulo túnel ${m.id}: openBelow obrigatório.`
+          );
         }
-        if (m.tunnelClearanceHeightMm == null || m.tunnelClearanceHeightMm <= EPS) {
+        if (
+          m.tunnelClearanceHeightMm == null ||
+          m.tunnelClearanceHeightMm <= EPS
+        ) {
           throw new LayoutGeometryValidationError(
             `Módulo túnel ${m.id}: tunnelClearanceHeightMm > 0 obrigatório.`
           );
         }
-        if (Math.abs(m.uprightThicknessMm - UPRIGHT_THICKNESS_TUNNEL_MM) > EPS) {
+        if (
+          Math.abs(m.uprightThicknessMm - UPRIGHT_THICKNESS_TUNNEL_MM) > EPS
+        ) {
           throw new LayoutGeometryValidationError(
             `Módulo túnel ${m.id}: montantes devem ser ${UPRIGHT_THICKNESS_TUNNEL_MM} mm.`
           );
@@ -597,7 +645,9 @@ export function validateLayoutGeometry(geo: LayoutGeometry): void {
             `Módulo túnel ${m.id}: níveis ativos (${m.activeStorageLevels}) devem ser inferiores ao total do projeto (${m.globalLevels}).`
           );
         }
-        const capTunnelActive = tunnelActiveStorageLevelsFromGlobal(m.globalLevels);
+        const capTunnelActive = tunnelActiveStorageLevelsFromGlobal(
+          m.globalLevels
+        );
         if (m.activeStorageLevels > capTunnelActive) {
           throw new LayoutGeometryValidationError(
             `Módulo túnel ${m.id}: níveis ativos (${m.activeStorageLevels}) não podem exceder ${capTunnelActive} (armazenagem só acima do vão, sem preservar a contagem global comprimida no topo).`
@@ -605,14 +655,17 @@ export function validateLayoutGeometry(geo: LayoutGeometry): void {
         }
         const beams = m.beamGeometry.beamElevationsMm;
         const minFirstBeamAxis =
-          m.tunnelClearanceHeightMm! + TUNNEL_FIRST_BEAM_OFFSET_ABOVE_CLEARANCE_MM;
+          m.tunnelClearanceHeightMm! +
+          TUNNEL_FIRST_BEAM_OFFSET_ABOVE_CLEARANCE_MM;
         if (beams[0]! + 0.5 < minFirstBeamAxis) {
           throw new LayoutGeometryValidationError(
             `Módulo túnel ${m.id}: primeiro eixo de armazenagem deve ficar acima do pé livre + folga estrutural (≥ ${Math.round(minFirstBeamAxis)} mm).`
           );
         }
       } else {
-        if (Math.abs(m.uprightThicknessMm - UPRIGHT_THICKNESS_NORMAL_MM) > EPS) {
+        if (
+          Math.abs(m.uprightThicknessMm - UPRIGHT_THICKNESS_NORMAL_MM) > EPS
+        ) {
           throw new LayoutGeometryValidationError(
             `Módulo normal ${m.id}: montantes devem ser ${UPRIGHT_THICKNESS_NORMAL_MM} mm.`
           );
@@ -623,7 +676,10 @@ export function validateLayoutGeometry(geo: LayoutGeometry): void {
       const dy = Math.abs(m.footprint.y1 - m.footprint.y0);
       const beamExtent = ori === 'along_length' ? dx : dy;
       const crossExtent = ori === 'along_length' ? dy : dx;
-      if (Math.abs(beamExtent - m.widthMm) > 1 || Math.abs(crossExtent - m.depthMm) > 1) {
+      if (
+        Math.abs(beamExtent - m.widthMm) > 1 ||
+        Math.abs(crossExtent - m.depthMm) > 1
+      ) {
         throw new LayoutGeometryValidationError(
           `Módulo ${m.id}: vão / profundidade de faixa incoerentes com a pegada.`
         );
@@ -641,7 +697,9 @@ export function validateLayoutGeometry(geo: LayoutGeometry): void {
 }
 
 /** Primeiro módulo túnel, se existir. */
-export function findTunnelModuleGeometry(geo: LayoutGeometry): RackModule | undefined {
+export function findTunnelModuleGeometry(
+  geo: LayoutGeometry
+): RackModule | undefined {
   for (const row of geo.rows) {
     for (const m of row.modules) {
       if (m.type === 'tunnel') return m;
@@ -651,7 +709,9 @@ export function findTunnelModuleGeometry(geo: LayoutGeometry): RackModule | unde
 }
 
 /** Módulo de referência para elevação esquemática: prioriza módulo normal (estrutura típica). */
-export function representativeModuleForElevation(geo: LayoutGeometry): RackModule {
+export function representativeModuleForElevation(
+  geo: LayoutGeometry
+): RackModule {
   for (const row of geo.rows) {
     for (const m of row.modules) {
       if (m.type === 'normal') return m;
@@ -659,7 +719,9 @@ export function representativeModuleForElevation(geo: LayoutGeometry): RackModul
   }
   const first = geo.rows[0]?.modules[0];
   if (!first) {
-    throw new LayoutGeometryValidationError('LayoutGeometry sem módulos para elevação.');
+    throw new LayoutGeometryValidationError(
+      'LayoutGeometry sem módulos para elevação.'
+    );
   }
   return first;
 }
