@@ -272,4 +272,42 @@ describe('buildLayoutSolutionV2', () => {
     expect(Math.max(dx, dy)).toBe(2700);
     expect(Math.min(dx, dy)).toBe(modLen);
   });
+
+  it('14: tunnelAppliesTo UMA — só a primeira fileira tem módulo túnel; AMBOS aplica a todas', () => {
+    const common = {
+      ...base(),
+      lengthMm: 20_000,
+      widthMm: 20_000,
+      hasTunnel: true,
+      tunnelPosition: 'MEIO' as const,
+      lineStrategy: 'APENAS_SIMPLES' as const,
+    };
+    const sAmbos = buildLayoutSolutionV2({
+      ...common,
+      tunnelAppliesTo: 'AMBOS',
+    });
+    const sUma = buildLayoutSolutionV2({
+      ...common,
+      tunnelAppliesTo: 'UMA',
+    });
+
+    expect(sUma.rows.length).toBeGreaterThanOrEqual(2);
+    expect(sAmbos.rows.length).toBe(sUma.rows.length);
+
+    const rowHasTunnel = (r: (typeof sUma.rows)[number]) =>
+      r.modules.some(m => m.variant === 'tunnel');
+
+    expect(rowHasTunnel(sUma.rows[0]!)).toBe(true);
+    expect(rowHasTunnel(sUma.rows[1]!)).toBe(false);
+    expect(rowHasTunnel(sAmbos.rows[0]!)).toBe(true);
+    expect(rowHasTunnel(sAmbos.rows[1]!)).toBe(true);
+
+    const tunnelCount = (s: typeof sUma) =>
+      s.rows.reduce(
+        (n, r) => n + r.modules.filter(m => m.variant === 'tunnel').length,
+        0
+      );
+    expect(tunnelCount(sUma)).toBe(1);
+    expect(tunnelCount(sAmbos)).toBe(sAmbos.rows.length);
+  });
 });

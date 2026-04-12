@@ -181,6 +181,7 @@ const buildStateMessage = (session: Session): OutgoingMessage | null => {
         buttons: [
           { id: 'TUNNEL_AP_SIMPLES', label: 'Linhas simples' },
           { id: 'TUNNEL_AP_DUPLOS', label: 'Linhas duplas' },
+          { id: 'TUNNEL_AP_UMA', label: 'Uma linha' },
           { id: 'TUNNEL_AP_AMBOS', label: 'Ambas' },
         ],
       };
@@ -344,6 +345,7 @@ const tunnelAppliesLabel = (v: unknown): string => {
   const m: Record<string, string> = {
     LINHAS_SIMPLES: 'Linhas simples',
     LINHAS_DUPLOS: 'Linhas duplas',
+    UMA: 'Uma linha (primeira fileira)',
     AMBOS: 'Ambas',
   };
   return typeof v === 'string' ? (m[v] ?? v) : '—';

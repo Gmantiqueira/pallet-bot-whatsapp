@@ -365,6 +365,7 @@ export const transition = (
           TUNNEL_AP_SIMPLES: 'LINHAS_SIMPLES',
           TUNNEL_AP_DUPLOS: 'LINHAS_DUPLOS',
           TUNNEL_AP_AMBOS: 'AMBOS',
+          TUNNEL_AP_UMA: 'UMA',
         };
         const ap = map[input.value];
         if (!ap) {

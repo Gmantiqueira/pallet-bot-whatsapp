@@ -18,7 +18,16 @@ export type LineStrategyCode =
 
 export type TunnelPositionCode = 'INICIO' | 'MEIO' | 'FIM';
 
-export type TunnelAppliesCode = 'LINHAS_SIMPLES' | 'LINHAS_DUPLOS' | 'AMBOS';
+/**
+ * - `LINHAS_SIMPLES` / `LINHAS_DUPLOS`: módulo túnel só em fileiras simples ou só em dupla costas.
+ * - `AMBOS`: em todas as fileiras geradas (que respeitem o modo de profundidade).
+ * - `UMA`: módulo túnel em **uma única** fileira — a primeira na ordem de implantação (menor faixa transversal).
+ */
+export type TunnelAppliesCode =
+  | 'LINHAS_SIMPLES'
+  | 'LINHAS_DUPLOS'
+  | 'AMBOS'
+  | 'UMA';
 
 export type ModuleSegmentType = 'full' | 'half';
 

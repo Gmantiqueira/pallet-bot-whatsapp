@@ -168,11 +168,21 @@ function rowBandsSingleDepth(
   );
 }
 
+/**
+ * Indica se **esta** faixa de fileira deve usar segmentação ao longo do vão com módulo túnel
+ * (`beamSegs` com troço `tunnel`), em vez de uma única corrida normal em todo o vão.
+ *
+ * `UMA`: apenas `rowBandIndex === 0` (primeira fileira na ordem em que o motor as gera).
+ */
 export function tunnelAppliesToRow(
   applies: TunnelAppliesCode | undefined,
-  rowKind: 'single' | 'double'
+  rowKind: 'single' | 'double',
+  rowBandIndex: number
 ): boolean {
   if (!applies) return true;
+  if (applies === 'UMA') {
+    return rowBandIndex === 0;
+  }
   if (applies === 'AMBOS') return true;
   if (applies === 'LINHAS_SIMPLES') return rowKind === 'single';
   return rowKind === 'double';

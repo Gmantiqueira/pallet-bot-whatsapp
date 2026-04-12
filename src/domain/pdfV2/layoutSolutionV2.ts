@@ -667,13 +667,15 @@ function buildLayoutSolutionV2Core(
   let totalModEquiv = 0;
   let anyRejectedHalf = false;
 
-  for (const rb of rowBands) {
+  for (let rowBandIndex = 0; rowBandIndex < rowBands.length; rowBandIndex++) {
+    const rb = rowBands[rowBandIndex]!;
     const c0 = rb.c0;
     const c1 = rb.c1;
     const rowKind: RackDepthModeV2 = depthMode;
     const appliesTunnelToThisRow = tunnelAppliesToRow(
       tunnelAppliesTo,
-      rowKind === 'single' ? 'single' : 'double'
+      rowKind === 'single' ? 'single' : 'double',
+      rowBandIndex
     );
 
     const useBeamSplit =
