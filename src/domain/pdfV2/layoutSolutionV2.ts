@@ -63,38 +63,24 @@ function maxRowsInZone(
   return Math.floor((zoneLen + corridorMm) / (bandDepth + corridorMm));
 }
 
-/** Espaço transversal ocupado por n fileiras e (n−1) corredores entre elas. */
-function usedCrossForRows(
-  n: number,
-  bandDepth: number,
-  corridorMm: number
-): number {
-  if (n <= 0) return 0;
-  return n * bandDepth + Math.max(0, n - 1) * corridorMm;
-}
-
 /**
- * Faixa útil para empacotar fileiras com corredor operacional (`corridorMm`) também junto aos limites
- * da zona (exceto quando o galpão é demasiado estreito — aí mantém-se o vão todo para não perder a última fileira).
+ * Comprimento transversal útil para empacotar fileiras.
+ *
+ * Não subtrair automaticamente `2×corridorMm` nos bordos do edifício: isso duplicava a noção de
+ * “corredor operacional” (já aplicado **entre** fileiras) e reduzia fileiras sem regra física explícita.
+ * Circulação perimetral pode existir no projeto, mas não é modelada como segunda faixa = largura total
+ * do corredor principal — isso era conservadorismo excessivo e grandes vazios.
  */
-function crossAxisPerimeterReserve(
-  zoneLen: number,
-  bandDepth: number,
-  corridorMm: number
-): { innerLen: number; leadingG: number; trailingG: number } {
-  const g = Math.max(0, corridorMm);
-  if (g <= EPS || bandDepth <= 0) {
-    return { innerLen: Math.max(0, zoneLen), leadingG: 0, trailingG: 0 };
-  }
-  const minForOneRowWithSideAisles = 2 * g + bandDepth;
-  if (zoneLen + EPS >= minForOneRowWithSideAisles) {
-    return {
-      innerLen: Math.max(0, zoneLen - 2 * g),
-      leadingG: g,
-      trailingG: g,
-    };
-  }
-  return { innerLen: Math.max(0, zoneLen), leadingG: 0, trailingG: 0 };
+function crossAxisPerimeterReserve(zoneLen: number): {
+  innerLen: number;
+  leadingG: number;
+  trailingG: number;
+} {
+  return {
+    innerLen: Math.max(0, zoneLen),
+    leadingG: 0,
+    trailingG: 0,
+  };
 }
 
 /** Faixa de túnel ao longo da direção transversal (divide o galpão em zonas de fileiras). */
@@ -145,8 +131,8 @@ function crossZonesForTunnel(
 export type RowBandCross = { id: string; c0: number; c1: number };
 
 /**
- * Preenche uma zona [zoneStart, zoneEnd] com fileiras e corredores até não caber mais;
- * sobra é repartida em margem simétrica (evita “bloco” só de um lado).
+ * Preenche uma zona [zoneStart, zoneEnd] com fileiras e corredores operacionais **entre** fileiras.
+ * Fileiras encostam ao início da zona; o remanescente transversal fica no fim (sem margem simétrica).
  */
 function fillCrossZone(
   zone: CrossZone,
@@ -158,65 +144,12 @@ function fillCrossZone(
   widthMm: number
 ): { rows: RowBandCross[]; corridors: CirculationZone[] } {
   const zoneLen = zone.z1 - zone.z0;
-  const { innerLen, leadingG, trailingG } = crossAxisPerimeterReserve(
-    zoneLen,
-    bandDepth,
-    corridorMm
-  );
+  const { innerLen } = crossAxisPerimeterReserve(zoneLen);
   const n = maxRowsInZone(innerLen, bandDepth, corridorMm);
-  const used = usedCrossForRows(n, bandDepth, corridorMm);
-  const margin = n > 0 && innerLen > used ? (innerLen - used) / 2 : 0;
-  let y = zone.z0 + leadingG + margin;
+  let y = zone.z0;
 
   const rows: RowBandCross[] = [];
   const corridors: CirculationZone[] = [];
-
-  const pushPerimeterStrip = (
-    id: string,
-    crossA: number,
-    crossB: number,
-    label: string
-  ): void => {
-    if (crossB - crossA <= EPS) return;
-    if (orientation === 'along_length') {
-      corridors.push({
-        id,
-        kind: 'corridor',
-        x0: 0,
-        x1: lengthMm,
-        y0: crossA,
-        y1: crossB,
-        label,
-      });
-    } else {
-      corridors.push({
-        id,
-        kind: 'corridor',
-        x0: crossA,
-        x1: crossB,
-        y0: 0,
-        y1: widthMm,
-        label,
-      });
-    }
-  };
-
-  if (leadingG > EPS) {
-    pushPerimeterStrip(
-      `${idPrefix}-peri-start`,
-      zone.z0,
-      zone.z0 + leadingG,
-      'Circulação (bordo)'
-    );
-  }
-  if (trailingG > EPS) {
-    pushPerimeterStrip(
-      `${idPrefix}-peri-end`,
-      zone.z1 - trailingG,
-      zone.z1,
-      'Circulação (bordo)'
-    );
-  }
 
   for (let i = 0; i < n; i++) {
     const c0 = y;
@@ -323,7 +256,7 @@ function countRowsAcrossZones(
   let total = 0;
   for (const z of zones) {
     const zLen = z.z1 - z.z0;
-    const { innerLen } = crossAxisPerimeterReserve(zLen, bandDepth, corridorMm);
+    const { innerLen } = crossAxisPerimeterReserve(zLen);
     total += maxRowsInZone(innerLen, bandDepth, corridorMm);
   }
   return total;

@@ -154,20 +154,18 @@ function maxModulesSingleDepth(
 }
 
 /**
- * Nº de fileiras em profundidade simples — alinhado a {@link layoutSolutionV2}:
- * quando cabe, reserva `corridorMm` em cada bordo da faixa antes de contar fileiras.
+ * Nº de fileiras no eixo transversal — mesma lógica que {@link maxRowsInZone} em `layoutSolutionV2`
+ * (sem reserva artificial de corredor nos bordos do galpão).
  */
 function rowBandsSingleDepth(
   crossSpanMm: number,
   moduleDepthMm: number,
   corridorMm: number
 ): number {
-  if (moduleDepthMm <= 0) return 0;
-  const g = Math.max(0, corridorMm);
-  const minOne = 2 * g + moduleDepthMm;
-  const innerLen =
-    crossSpanMm + 1e-6 >= minOne ? crossSpanMm - 2 * g : crossSpanMm;
-  return Math.floor((innerLen + corridorMm) / (moduleDepthMm + corridorMm));
+  if (moduleDepthMm <= 0 || crossSpanMm < moduleDepthMm) return 0;
+  return Math.floor(
+    (crossSpanMm + corridorMm) / (moduleDepthMm + corridorMm)
+  );
 }
 
 export function tunnelAppliesToRow(

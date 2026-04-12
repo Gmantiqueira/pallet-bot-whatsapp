@@ -140,8 +140,8 @@ describe('buildLayoutSolutionV2', () => {
   it('7: meio módulo aceito (com túnel adjacente / extremos)', () => {
     const a = {
       ...base(),
-      /** Comprimento maior para, após o vão central, sobrar remanescente entre metade e um módulo completo (passo real ≈ 5,8 m). */
-      lengthMm: 60_000,
+      /** Comprimento onde um segmento após o túnel ainda permite meio módulo (depende do passo real). */
+      lengthMm: 72_000,
       halfModuleOptimization: true,
       hasTunnel: true,
       tunnelPosition: 'MEIO' as const,
@@ -211,16 +211,14 @@ describe('buildLayoutSolutionV2', () => {
     expect(s.orientation).toBe('along_length');
   });
 
-  it('11: galpão mais largo que longo favorece along_width quando o contagem de posições ganha', () => {
-    // Com reserva perimetral no eixo transversal, 16×40 m pode preferir along_length.
-    // Com comprimento curto, vigas ao longo da largura maximizam módulos ao longo do vão.
+  it('11: galpão estreito e longo — mais posições com vão ao longo da dimensão maior do piso', () => {
     const s = buildLayoutSolutionV2({
       ...base(),
       lengthMm: 6_000,
       widthMm: 50_000,
       lineStrategy: 'APENAS_SIMPLES' as const,
     });
-    expect(s.orientation).toBe('along_width');
+    expect(s.orientation).toBe('along_length');
   });
 
   it('12: moduleWidthMm = vão por baia; moduleDepthMm = profundidade (sem trocar campos por max/min)', () => {
