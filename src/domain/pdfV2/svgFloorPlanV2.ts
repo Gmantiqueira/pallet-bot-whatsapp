@@ -84,16 +84,21 @@ function sortCirculation(
   );
 }
 
-/** Divisão interna 2 baias: traço terciário — não compete com o contorno do módulo. */
+/**
+ * Divisão 2 baias: fio quase imperceptível + tracejado longo — sugere metades sem parecer segunda moldura.
+ * Ajuda a escala mental (módulo ≈ 2× meia-baia) sem competir com o contorno nem com a faixa da linha.
+ */
 function moduleBayHintLine(s: FloorPlanModelV2['structureRects'][0]): string {
-  const thin = 0.14;
-  const op = 0.17;
+  const thin = 0.095;
+  const op = 0.125;
+  const dash = '1.8 8';
+  const cap = 'stroke-linecap="round"';
   if (s.w >= s.h) {
     const mx = s.x + s.w / 2;
-    return `<line x1="${mx}" y1="${s.y}" x2="${mx}" y2="${s.y + s.h}" stroke="${ELEV_PALLET_TIER_STROKE}" stroke-width="${thin}" opacity="${op}"/>`;
+    return `<line x1="${mx}" y1="${s.y}" x2="${mx}" y2="${s.y + s.h}" stroke="${ELEV_PALLET_TIER_STROKE}" stroke-width="${thin}" opacity="${op}" stroke-dasharray="${dash}" ${cap}/>`;
   }
   const my = s.y + s.h / 2;
-  return `<line x1="${s.x}" y1="${my}" x2="${s.x + s.w}" y2="${my}" stroke="${ELEV_PALLET_TIER_STROKE}" stroke-width="${thin}" opacity="${op}"/>`;
+  return `<line x1="${s.x}" y1="${my}" x2="${s.x + s.w}" y2="${my}" stroke="${ELEV_PALLET_TIER_STROKE}" stroke-width="${thin}" opacity="${op}" stroke-dasharray="${dash}" ${cap}/>`;
 }
 
 function orientationArrowSvg(
