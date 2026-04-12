@@ -1,5 +1,6 @@
 import type { LayoutGeometry, RackRow } from './layoutGeometryV2';
 import type {
+  FloorPlanCirculationSemantic,
   FloorPlanDimension,
   FloorPlanLabel,
   FloorPlanModelV2,
@@ -39,6 +40,25 @@ function formatMm(mm: number): string {
 
 function rackDepthModeFromRow(row: RackRow): RackDepthModeV2 {
   return row.rowType === 'backToBack' ? 'double' : 'single';
+}
+
+function circulationSemanticFromZone(
+  kind: 'corridor' | 'tunnel',
+  label: string | undefined
+): FloorPlanCirculationSemantic {
+  if (kind === 'tunnel') return 'tunnel';
+  const t = label ?? '';
+  if (
+    t.includes('residual') ||
+    t.includes('inferior ao corredor') ||
+    t.includes('Faixa transversal residual')
+  ) {
+    return 'residual';
+  }
+  if (t.includes('Passagem transversal')) {
+    return 'cross_passage';
+  }
+  return 'operational';
 }
 
 /** Retângulo da faixa da fileira no referencial do galpão (mm). */
@@ -83,8 +103,9 @@ export function buildFloorPlanModelV2(
   const toY = (ymm: number) => by + ymm * scale;
 
   const rowBandRects: FloorPlanModelV2['rowBandRects'] = [];
-  for (const row of geometry.rows) {
+  geometry.rows.forEach((row, rowIndex) => {
     const r = rowBandFootprintMm(row);
+    const nMod = row.modules.length;
     rowBandRects.push({
       id: `${row.id}-band`,
       x: toX(r.x0),
@@ -92,8 +113,10 @@ export function buildFloorPlanModelV2(
       w: Math.max(0.5, toX(r.x1) - toX(r.x0)),
       h: Math.max(0.5, toY(r.y1) - toY(r.y0)),
       kind: rackDepthModeFromRow(row),
+      rowTitle: `Linha ${rowIndex + 1}`,
+      moduleCountHint: `${nMod} ${nMod === 1 ? 'módulo' : 'módulos'}`,
     });
-  }
+  });
 
   const structureRects: FloorPlanModelV2['structureRects'] = [];
   for (const row of geometry.rows) {
@@ -123,6 +146,7 @@ export function buildFloorPlanModelV2(
       h: Math.max(0.5, toY(c.y1) - toY(c.y0)),
       kind: 'corridor',
       label: c.label,
+      semantic: circulationSemanticFromZone('corridor', c.label),
     });
   }
   for (const t of geometry.tunnelOverlays) {
@@ -134,6 +158,7 @@ export function buildFloorPlanModelV2(
       h: Math.max(0.5, toY(t.y1) - toY(t.y0)),
       kind: 'tunnel',
       label: t.label,
+      semantic: 'tunnel',
     });
   }
 
@@ -216,6 +241,7 @@ export function buildFloorPlanModelV2(
   return {
     viewBox: { w: VB_W, h: VB_H },
     warehouseOutline: { x: bx, y: by, w: boxW, h: boxH },
+    beamSpanAlong: geometry.beamSpanDirection,
     rowBandRects,
     structureRects,
     circulationRects,

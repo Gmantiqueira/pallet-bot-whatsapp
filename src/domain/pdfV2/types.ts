@@ -120,10 +120,19 @@ export type CirculationZone = {
 
 export type TunnelZone = CirculationZone & { kind: 'tunnel' };
 
+/** Papel da zona na planta (só representação). */
+export type FloorPlanCirculationSemantic =
+  | 'operational'
+  | 'residual'
+  | 'cross_passage'
+  | 'tunnel';
+
 /** Modelo de planta: entidades já posicionadas em unidades SVG (viewBox). */
 export type FloorPlanModelV2 = {
   viewBox: { w: number; h: number };
   warehouseOutline: { x: number; y: number; w: number; h: number };
+  /** Direção do vão das longarinas no plano (eixo das linhas de armazenagem). */
+  beamSpanAlong: 'x' | 'y';
   /** Faixa da fileira (estrutura) por baixo dos módulos. */
   rowBandRects: {
     id: string;
@@ -132,6 +141,10 @@ export type FloorPlanModelV2 = {
     w: number;
     h: number;
     kind: RackDepthModeV2;
+    /** Rótulo estável, ex.: "Linha 1". */
+    rowTitle: string;
+    /** Texto opcional, ex.: "8 módulos" (segmentos ao longo do vão). */
+    moduleCountHint?: string;
   }[];
   structureRects: {
     id: string;
@@ -150,6 +163,8 @@ export type FloorPlanModelV2 = {
     h: number;
     kind: CirculationKind;
     label?: string;
+    /** Classificação para hierarquia visual (cor/traço). */
+    semantic?: FloorPlanCirculationSemantic;
   }[];
   dimensionLines: FloorPlanDimension[];
   labels: FloorPlanLabel[];
