@@ -4,6 +4,7 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
+  { ignores: ['dist/**', 'api/**', 'node_modules/**'] },
   eslint.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
   eslintPluginPrettierRecommended,

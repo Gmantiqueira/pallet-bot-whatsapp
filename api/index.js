@@ -1,0 +1,27 @@
+'use strict';
+
+const serverless = require('serverless-http');
+
+let cachedHandler;
+let pending;
+
+async function getHandler() {
+  if (cachedHandler) {
+    return cachedHandler;
+  }
+  if (!pending) {
+    pending = (async () => {
+      const { createApp } = require('../dist/app');
+      const app = await createApp();
+      await app.ready();
+      return serverless(app.server);
+    })();
+  }
+  cachedHandler = await pending;
+  return cachedHandler;
+}
+
+module.exports = async (req, res) => {
+  const handler = await getHandler();
+  return handler(req, res);
+};
