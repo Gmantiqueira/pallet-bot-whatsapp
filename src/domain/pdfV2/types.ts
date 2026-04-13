@@ -16,6 +16,7 @@ export type LineStrategyCode =
   | 'APENAS_DUPLOS'
   | 'MELHOR_LAYOUT';
 
+/** Compatível com START / MIDDLE / END (API em inglês). */
 export type TunnelPositionCode = 'INICIO' | 'MEIO' | 'FIM';
 
 /**
@@ -81,6 +82,8 @@ export type LayoutSolutionV2 = {
     hasTunnel: boolean;
     /** Onde aplicável: posição do vão (túnel / passagem) usada nesta solução. */
     tunnelPosition?: TunnelPositionCode;
+    /** Início efetivo do vão ao longo do `beamSpanMm` (mm), após limites geométricos. */
+    tunnelOffsetEffectiveMm?: number;
   };
 };
 

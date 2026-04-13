@@ -96,6 +96,10 @@ export function buildProjectAnswersV2(
     lineStrategy,
     hasTunnel: answers.hasTunnel === true,
     tunnelPosition,
+    tunnelOffsetMm:
+      typeof answers.tunnelOffsetMm === 'number'
+        ? answers.tunnelOffsetMm
+        : undefined,
     tunnelAppliesTo,
     halfModuleOptimization: answers.halfModuleOptimization === true,
     firstLevelOnGround:
@@ -157,6 +161,11 @@ export type ProjectAnswersV2 = {
   lineStrategy: LineStrategyCode;
   hasTunnel: boolean;
   tunnelPosition?: TunnelPositionCode;
+  /**
+   * Início do vão do túnel ao longo da fileira (mm), desde a origem do vão na solução.
+   * Se definido, tem prioridade sobre `tunnelPosition`.
+   */
+  tunnelOffsetMm?: number;
   tunnelAppliesTo?: TunnelAppliesCode;
   halfModuleOptimization: boolean;
   firstLevelOnGround: boolean;

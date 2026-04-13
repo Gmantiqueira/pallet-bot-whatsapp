@@ -6,6 +6,7 @@ import { HEIGHT_DEFINITION_WAREHOUSE_CLEAR } from '../domain/warehouseHeightDeri
 import { OutgoingMessage } from '../types/messages';
 import { State } from '../domain/stateMachine';
 import type { BudgetResult } from '../domain/budgetEngine';
+import type { LayoutSolutionV2 } from '../domain/pdfV2/types';
 import type { StructureResult } from '../domain/structureEngine';
 
 /** Mensagem enquanto a geração do PDF está em curso (router + estado). */
@@ -435,15 +436,21 @@ const buildSummary = (session: Session): string => {
    */
   let tunnelForSummary: boolean | undefined =
     typeof a.hasTunnel === 'boolean' ? a.hasTunnel : undefined;
+  let layoutForTunnel: LayoutSolutionV2 | null = null;
   const v2 = buildProjectAnswersV2(a);
   if (v2) {
-    const sol = buildLayoutSolutionV2(v2);
-    const geo = buildLayoutGeometry(sol, a as Record<string, unknown>);
+    layoutForTunnel = buildLayoutSolutionV2(v2);
+    const geo = buildLayoutGeometry(layoutForTunnel, a as Record<string, unknown>);
     tunnelForSummary = geo.metadata.hasTunnel;
   }
   if (tunnelForSummary === true) {
     lines.push('Túnel para empilhador: Sim');
-    if (a.tunnelPosition) {
+    const effOff = layoutForTunnel?.metadata.tunnelOffsetEffectiveMm;
+    if (typeof effOff === 'number') {
+      lines.push(
+        `  • Início do vão ao longo da fileira: ${effOff.toLocaleString('pt-BR')} mm`
+      );
+    } else if (a.tunnelPosition) {
       lines.push(`  • Posição: ${posLabel(a.tunnelPosition)}`);
     }
     if (a.tunnelAppliesTo) {

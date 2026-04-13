@@ -39,6 +39,7 @@ describe('layoutAuditLog', () => {
       label: 'audit',
     });
     expect(text).toContain('beamAlongModuleMm');
+    expect(text).toContain('tunnelOffsetEffectiveMm');
     expect(text).toContain('tunnelPosition');
     expect(text).toContain('MEIO');
     expect(text).toContain('positions');

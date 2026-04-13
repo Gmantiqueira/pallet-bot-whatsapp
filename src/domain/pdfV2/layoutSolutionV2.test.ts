@@ -67,7 +67,6 @@ describe('buildLayoutSolutionV2', () => {
       corridorMm: 3000,
       depthMode: 'single',
       hasTunnel: false,
-      tunnelPosition: undefined,
     });
     expect(r.rowBands).toHaveLength(1);
     const trailing = r.corridors.find(c => c.id.endsWith('cor-trailing'));
@@ -91,7 +90,6 @@ describe('buildLayoutSolutionV2', () => {
       corridorMm: 3000,
       depthMode: 'single',
       hasTunnel: false,
-      tunnelPosition: undefined,
     });
     expect(r.rowBands).toHaveLength(1);
     const trailing = r.corridors.find(c => c.id.endsWith('cor-trailing'));
@@ -420,5 +418,30 @@ describe('buildLayoutSolutionV2', () => {
     expect(b.rows.length).toBe(c.rows.length);
     expect(a.orientation).toBe(b.orientation);
     expect(b.orientation).toBe(c.orientation);
+  });
+
+  it('tunnelOffsetMm posiciona o troço do túnel ao longo do vão (mm desde a origem da fileira)', () => {
+    const common = {
+      ...base(),
+      lengthMm: 40_000,
+      hasTunnel: true,
+      tunnelAppliesTo: 'AMBOS' as const,
+      lineStrategy: 'APENAS_SIMPLES' as const,
+    };
+    const mid = buildLayoutSolutionV2({
+      ...common,
+      tunnelPosition: 'MEIO' as const,
+    });
+    const off = buildLayoutSolutionV2({
+      ...common,
+      tunnelOffsetMm: 500,
+    });
+    const tunMid = mid.rows[0]!.modules.find(m => m.variant === 'tunnel')!;
+    const tunOff = off.rows[0]!.modules.find(m => m.variant === 'tunnel')!;
+    const x0m = Math.min(tunMid.x0, tunMid.x1);
+    const x0o = Math.min(tunOff.x0, tunOff.x1);
+    expect(Math.abs(x0o - 500)).toBeLessThan(2);
+    expect(Math.abs(x0m - x0o)).toBeGreaterThan(10);
+    expect(off.metadata.tunnelOffsetEffectiveMm).toBeCloseTo(500, 3);
   });
 });

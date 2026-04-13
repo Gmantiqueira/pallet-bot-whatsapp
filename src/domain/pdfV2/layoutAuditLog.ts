@@ -290,6 +290,10 @@ export function formatLayoutAuditReport(
   if (!sol.metadata.hasTunnel) {
     push('  (sem túnel neste projeto)');
   } else {
+    push(`  tunnelOffsetMm (pedido): ${answers.tunnelOffsetMm ?? '—'}`);
+    push(
+      `  tunnelOffsetEffectiveMm: ${sol.metadata.tunnelOffsetEffectiveMm ?? '—'}`
+    );
     push(`  tunnelPosition: ${answers.tunnelPosition ?? '—'}`);
     push(`  tunnelAppliesTo: ${answers.tunnelAppliesTo ?? '—'}`);
     for (const row of sol.rows) {
