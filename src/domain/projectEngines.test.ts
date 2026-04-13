@@ -2,6 +2,7 @@ import {
   computeProjectEngines,
   finalizeSummaryAnswers,
 } from './projectEngines';
+import type { ModulePricingSnapshot } from './modulePricingComponents';
 import { HEIGHT_MODE_WAREHOUSE_HEIGHT } from './warehouseHeightDerive';
 
 describe('projectEngines WAREHOUSE_HEIGHT', () => {
@@ -20,6 +21,8 @@ describe('projectEngines WAREHOUSE_HEIGHT', () => {
   it('computeProjectEngines deriva níveis e altura sem campo levels nas respostas', () => {
     const snap = computeProjectEngines(base);
     expect(snap).not.toBeNull();
+    expect(snap!.modulePricing.totalComponents.beams).toBeGreaterThan(0);
+    expect(snap!.modulePricing.moduleComponents.pallets).toBeGreaterThan(0);
   });
 
   it('finalizeSummaryAnswers preenche heightMm, levels, totalLevels e mantém heightMode', () => {
@@ -29,5 +32,7 @@ describe('projectEngines WAREHOUSE_HEIGHT', () => {
     expect(typeof out.levels).toBe('number');
     expect(typeof out.totalLevels).toBe('number');
     expect((out.heightMm as number) % 80).toBe(0);
+    const mp = out.modulePricing as ModulePricingSnapshot;
+    expect(mp.totalComponents.beams).toBeGreaterThan(0);
   });
 });

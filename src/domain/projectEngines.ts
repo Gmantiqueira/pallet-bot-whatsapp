@@ -11,6 +11,10 @@ import {
   HEIGHT_DEFINITION_MODULE_TOTAL,
   HEIGHT_MODE_WAREHOUSE_HEIGHT,
 } from './warehouseHeightDerive';
+import {
+  computeModulePricingSnapshot,
+  type ModulePricingSnapshot,
+} from './modulePricingComponents';
 import { selectStructure, type StructureResult } from './structureEngine';
 
 /** Profundidade de módulo padrão (mm) se não for informada. */
@@ -24,6 +28,8 @@ export type ProjectEnginesSnapshot = {
   layout: LayoutResult;
   structure: StructureResult;
   budget: BudgetResult;
+  /** Base para precificação por módulo (sem preços). */
+  modulePricing: ModulePricingSnapshot;
 };
 
 function deriveWarehouseHeightMmFromAnswers(
@@ -152,7 +158,13 @@ export function computeProjectEngines(
 
   const budget = calculateBudget({ layout, structure, levels });
 
-  return { layout, structure, budget };
+  const hasGround =
+    typeof answers.hasGroundLevel === 'boolean'
+      ? answers.hasGroundLevel
+      : true;
+  const modulePricing = computeModulePricingSnapshot(layout, levels, hasGround);
+
+  return { layout, structure, budget, modulePricing };
 }
 
 export function finalizeSummaryAnswers(
@@ -201,6 +213,7 @@ export function finalizeSummaryAnswers(
     layout: engines.layout,
     structure: engines.structure,
     budget: engines.budget,
+    modulePricing: engines.modulePricing,
     generate3d: true,
     heightDefinitionMode:
       typeof stripped.heightDefinitionMode === 'string'
