@@ -1,11 +1,14 @@
+import { MIN_LEVEL_GAP_MM } from '../conversationHelpers';
 import {
   DEFAULT_MODULE_DEPTH_MM,
   DEFAULT_MODULE_WIDTH_MM,
 } from '../projectEngines';
 import { normalizeUprightHeightMmToColumnStep } from '../rackColumnStep';
 import {
+  deriveRackFromWarehouseHeightMm,
   HEIGHT_DEFINITION_MODULE_TOTAL,
   HEIGHT_DEFINITION_WAREHOUSE_CLEAR,
+  HEIGHT_MODE_WAREHOUSE_HEIGHT,
   type HeightDefinitionMode,
 } from '../warehouseHeightDerive';
 import { maxFullModulesInBeamRun } from './rackModuleSpec';
@@ -25,9 +28,36 @@ export function buildProjectAnswersV2(
     typeof answers.lengthMm !== 'number' ||
     typeof answers.widthMm !== 'number' ||
     typeof answers.corridorMm !== 'number' ||
-    typeof answers.levels !== 'number' ||
     typeof answers.capacityKg !== 'number'
   ) {
+    return null;
+  }
+
+  let levels: number;
+  let derivedWh: ReturnType<typeof deriveRackFromWarehouseHeightMm> | undefined;
+
+  if (answers.heightMode === HEIGHT_MODE_WAREHOUSE_HEIGHT) {
+    if (typeof answers.warehouseHeightMm !== 'number') {
+      return null;
+    }
+    const gap =
+      typeof answers.warehouseMinBeamGapMm === 'number'
+        ? answers.warehouseMinBeamGapMm
+        : MIN_LEVEL_GAP_MM;
+    derivedWh = deriveRackFromWarehouseHeightMm({
+      warehouseHeightMm: answers.warehouseHeightMm,
+      minGapBetweenConsecutiveBeamsMm: gap,
+      hasGroundLevel: answers.hasGroundLevel !== false,
+      firstLevelOnGround: answers.firstLevelOnGround !== false,
+      loadHeightMm:
+        typeof answers.loadHeightMm === 'number'
+          ? answers.loadHeightMm
+          : undefined,
+    });
+    levels = derivedWh.levels;
+  } else if (typeof answers.levels === 'number') {
+    levels = answers.levels;
+  } else {
     return null;
   }
 
@@ -61,7 +91,7 @@ export function buildProjectAnswersV2(
     corridorMm: answers.corridorMm,
     moduleDepthMm,
     moduleWidthMm,
-    levels: answers.levels,
+    levels,
     capacityKg: answers.capacityKg,
     lineStrategy,
     hasTunnel: answers.hasTunnel === true,
@@ -76,7 +106,12 @@ export function buildProjectAnswersV2(
       typeof answers.hasGroundLevel === 'boolean'
         ? answers.hasGroundLevel
         : true,
-    heightMode: answers.heightMode === 'CALC' ? 'CALC' : 'DIRECT',
+    heightMode:
+      answers.heightMode === 'CALC'
+        ? 'CALC'
+        : answers.heightMode === HEIGHT_MODE_WAREHOUSE_HEIGHT
+          ? 'WAREHOUSE_HEIGHT'
+          : 'DIRECT',
     heightDefinitionMode:
       answers.heightDefinitionMode === HEIGHT_DEFINITION_WAREHOUSE_CLEAR
         ? HEIGHT_DEFINITION_WAREHOUSE_CLEAR
@@ -84,7 +119,14 @@ export function buildProjectAnswersV2(
     heightMm:
       typeof answers.heightMm === 'number'
         ? normalizeUprightHeightMmToColumnStep(answers.heightMm)
+        : derivedWh !== undefined
+          ? derivedWh.alturaFinalMm
+          : undefined,
+    warehouseHeightMm:
+      typeof answers.warehouseHeightMm === 'number'
+        ? answers.warehouseHeightMm
         : undefined,
+    totalLevels: derivedWh?.totalLevels,
     warehouseClearHeightMm:
       typeof answers.warehouseClearHeightMm === 'number'
         ? answers.warehouseClearHeightMm
@@ -125,8 +167,12 @@ export type ProjectAnswersV2 = {
   hasGroundLevel?: boolean;
   /** Modo A: altura do módulo; modo B: pé-direito do galpão (níveis derivados). */
   heightDefinitionMode?: HeightDefinitionMode;
-  heightMode: 'DIRECT' | 'CALC';
+  heightMode: 'DIRECT' | 'CALC' | 'WAREHOUSE_HEIGHT';
   heightMm?: number;
+  /** Modo WAREHOUSE_HEIGHT: pé-direito total do galpão (mm). */
+  warehouseHeightMm?: number;
+  /** Patamares (níveis com longarina + piso quando aplicável), modo WAREHOUSE_HEIGHT. */
+  totalLevels?: number;
   /** Modo pé-direito: limite superior declarado pelo utilizador (mm). */
   warehouseClearHeightMm?: number;
   /** Modo pé-direito: espaçamento mínimo entre eixos de longarina usado no cálculo (mm). */

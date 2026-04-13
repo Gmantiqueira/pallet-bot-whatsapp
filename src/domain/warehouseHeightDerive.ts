@@ -21,6 +21,12 @@ export const HEIGHT_DEFINITION_MODULE_TOTAL = 'module_total';
 /** Modo B: utilizador define pé-direito; sistema calcula altura de módulo e níveis. */
 export const HEIGHT_DEFINITION_WAREHOUSE_CLEAR = 'warehouse_clear_height';
 
+/**
+ * Modo C: `heightMode` explícito — pé-direito total do galpão (`warehouseHeightMm`);
+ * altura de montante e níveis são derivados (folga superior 216 mm via geometria de elevação).
+ */
+export const HEIGHT_MODE_WAREHOUSE_HEIGHT = 'WAREHOUSE_HEIGHT';
+
 export type HeightDefinitionMode =
   | typeof HEIGHT_DEFINITION_MODULE_TOTAL
   | typeof HEIGHT_DEFINITION_WAREHOUSE_CLEAR;
@@ -113,5 +119,42 @@ export function deriveModuleFromWarehouseClearHeight(params: {
     moduleHeightMm,
     structuralLevels,
     warehouseClearHeightMm: params.warehouseClearHeightMm,
+  };
+}
+
+/**
+ * Deriva altura final do montante (múltiplo de 80 mm) e níveis a partir do pé-direito do galpão.
+ * Reutiliza a mesma lógica que {@link deriveModuleFromWarehouseClearHeight}: a folga superior
+ * fixa de 216 mm aplica-se no modelo de eixos ({@link computeBeamElevations}), não como
+ * subtração explícita antes do arredondamento ao passo de coluna.
+ */
+export function deriveRackFromWarehouseHeightMm(params: {
+  warehouseHeightMm: number;
+  minGapBetweenConsecutiveBeamsMm: number;
+  hasGroundLevel: boolean;
+  firstLevelOnGround: boolean;
+  loadHeightMm?: number;
+}): {
+  /** Altura do montante (mm), múltipla de 80, ≤ pé-direito declarado. */
+  alturaFinalMm: number;
+  /** Níveis estruturais com longarina (1…12). */
+  levels: number;
+  /** Patamares de armazenagem: níveis com longarina + nível de piso quando aplicável. */
+  totalLevels: number;
+  warehouseHeightMm: number;
+} {
+  const d = deriveModuleFromWarehouseClearHeight({
+    warehouseClearHeightMm: params.warehouseHeightMm,
+    minGapBetweenConsecutiveBeamsMm: params.minGapBetweenConsecutiveBeamsMm,
+    hasGroundLevel: params.hasGroundLevel,
+    firstLevelOnGround: params.firstLevelOnGround,
+    loadHeightMm: params.loadHeightMm,
+  });
+  const totalLevels = d.structuralLevels + (params.hasGroundLevel ? 1 : 0);
+  return {
+    alturaFinalMm: d.moduleHeightMm,
+    levels: d.structuralLevels,
+    totalLevels,
+    warehouseHeightMm: params.warehouseHeightMm,
   };
 }

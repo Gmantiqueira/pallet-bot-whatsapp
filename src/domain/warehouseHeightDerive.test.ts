@@ -1,7 +1,9 @@
 import {
   deriveModuleFromWarehouseClearHeight,
+  deriveRackFromWarehouseHeightMm,
   HEIGHT_DEFINITION_MODULE_TOTAL,
   HEIGHT_DEFINITION_WAREHOUSE_CLEAR,
+  HEIGHT_MODE_WAREHOUSE_HEIGHT,
   maxStructuralLevelsForModuleHeight,
   moduleHeightMmFromWarehouseClearHeightCeiling,
 } from './warehouseHeightDerive';
@@ -10,6 +12,7 @@ describe('warehouseHeightDerive', () => {
   it('exporta constantes de modo distintas', () => {
     expect(HEIGHT_DEFINITION_MODULE_TOTAL).toBe('module_total');
     expect(HEIGHT_DEFINITION_WAREHOUSE_CLEAR).toBe('warehouse_clear_height');
+    expect(HEIGHT_MODE_WAREHOUSE_HEIGHT).toBe('WAREHOUSE_HEIGHT');
   });
 
   it('moduleHeightMmFromWarehouseClearHeightCeiling: maior múltiplo de 80 não acima do pé-direito', () => {
@@ -46,5 +49,34 @@ describe('warehouseHeightDerive', () => {
     expect(d.structuralLevels).toBeGreaterThanOrEqual(1);
     expect(d.structuralLevels).toBeLessThanOrEqual(12);
     expect(d.warehouseClearHeightMm).toBe(9600);
+  });
+
+  it('deriveRackFromWarehouseHeightMm alinha-se ao modo pé-direito e soma piso em totalLevels', () => {
+    const a = deriveModuleFromWarehouseClearHeight({
+      warehouseClearHeightMm: 9600,
+      minGapBetweenConsecutiveBeamsMm: 1200,
+      hasGroundLevel: true,
+      firstLevelOnGround: true,
+    });
+    const b = deriveRackFromWarehouseHeightMm({
+      warehouseHeightMm: 9600,
+      minGapBetweenConsecutiveBeamsMm: 1200,
+      hasGroundLevel: true,
+      firstLevelOnGround: true,
+    });
+    expect(b.alturaFinalMm).toBe(a.moduleHeightMm);
+    expect(b.levels).toBe(a.structuralLevels);
+    expect(b.totalLevels).toBe(a.structuralLevels + 1);
+    expect(b.warehouseHeightMm).toBe(9600);
+  });
+
+  it('deriveRackFromWarehouseHeightMm sem nível de piso: totalLevels igual a níveis estruturais', () => {
+    const b = deriveRackFromWarehouseHeightMm({
+      warehouseHeightMm: 8000,
+      minGapBetweenConsecutiveBeamsMm: 800,
+      hasGroundLevel: false,
+      firstLevelOnGround: true,
+    });
+    expect(b.totalLevels).toBe(b.levels);
   });
 });

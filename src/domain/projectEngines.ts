@@ -1,11 +1,16 @@
 import { calculateBudget, type BudgetResult } from './budgetEngine';
+import { MIN_LEVEL_GAP_MM } from './conversationHelpers';
 import {
   calculateLayout,
   type LayoutInput,
   type LayoutResult,
 } from './layoutEngine';
 import { normalizeUprightHeightMmToColumnStep } from './rackColumnStep';
-import { HEIGHT_DEFINITION_MODULE_TOTAL } from './warehouseHeightDerive';
+import {
+  deriveRackFromWarehouseHeightMm,
+  HEIGHT_DEFINITION_MODULE_TOTAL,
+  HEIGHT_MODE_WAREHOUSE_HEIGHT,
+} from './warehouseHeightDerive';
 import { selectStructure, type StructureResult } from './structureEngine';
 
 /** Profundidade de módulo padrão (mm) se não for informada. */
@@ -21,9 +26,43 @@ export type ProjectEnginesSnapshot = {
   budget: BudgetResult;
 };
 
+function deriveWarehouseHeightMmFromAnswers(
+  answers: Record<string, unknown>
+): { uprightHeightMm: number; levels: number; totalLevels: number } | null {
+  if (
+    answers.heightMode !== HEIGHT_MODE_WAREHOUSE_HEIGHT ||
+    typeof answers.warehouseHeightMm !== 'number'
+  ) {
+    return null;
+  }
+  const gap =
+    typeof answers.warehouseMinBeamGapMm === 'number'
+      ? answers.warehouseMinBeamGapMm
+      : MIN_LEVEL_GAP_MM;
+  const d = deriveRackFromWarehouseHeightMm({
+    warehouseHeightMm: answers.warehouseHeightMm,
+    minGapBetweenConsecutiveBeamsMm: gap,
+    hasGroundLevel: answers.hasGroundLevel !== false,
+    firstLevelOnGround: answers.firstLevelOnGround !== false,
+    loadHeightMm:
+      typeof answers.loadHeightMm === 'number'
+        ? answers.loadHeightMm
+        : undefined,
+  });
+  return {
+    uprightHeightMm: d.alturaFinalMm,
+    levels: d.levels,
+    totalLevels: d.totalLevels,
+  };
+}
+
 function uprightHeightMmFromAnswers(
   answers: Record<string, unknown>
 ): number | null {
+  const wh = deriveWarehouseHeightMmFromAnswers(answers);
+  if (wh) {
+    return wh.uprightHeightMm;
+  }
   if (typeof answers.heightMm === 'number') {
     return normalizeUprightHeightMmToColumnStep(answers.heightMm);
   }
@@ -57,15 +96,25 @@ export function resolveUprightHeightMmForProject(
 export function computeProjectEngines(
   answers: Record<string, unknown>
 ): ProjectEnginesSnapshot | null {
-  const { lengthMm, widthMm, corridorMm, capacityKg, levels } = answers;
+  const { lengthMm, widthMm, corridorMm, capacityKg } = answers;
 
   if (
     typeof lengthMm !== 'number' ||
     typeof widthMm !== 'number' ||
     typeof corridorMm !== 'number' ||
-    typeof capacityKg !== 'number' ||
-    typeof levels !== 'number'
+    typeof capacityKg !== 'number'
   ) {
+    return null;
+  }
+
+  const whDerived = deriveWarehouseHeightMmFromAnswers(answers);
+  const levels =
+    whDerived !== null
+      ? whDerived.levels
+      : typeof answers.levels === 'number'
+        ? answers.levels
+        : null;
+  if (levels === null) {
     return null;
   }
 
@@ -113,10 +162,38 @@ export function finalizeSummaryAnswers(
     stripped.heightMm = normalizeUprightHeightMmToColumnStep(stripped.heightMm);
   }
 
+  if (
+    stripped.heightMode === HEIGHT_MODE_WAREHOUSE_HEIGHT &&
+    typeof stripped.warehouseHeightMm === 'number'
+  ) {
+    const gap =
+      typeof stripped.warehouseMinBeamGapMm === 'number'
+        ? stripped.warehouseMinBeamGapMm
+        : MIN_LEVEL_GAP_MM;
+    const d = deriveRackFromWarehouseHeightMm({
+      warehouseHeightMm: stripped.warehouseHeightMm,
+      minGapBetweenConsecutiveBeamsMm: gap,
+      hasGroundLevel: stripped.hasGroundLevel !== false,
+      firstLevelOnGround: stripped.firstLevelOnGround !== false,
+      loadHeightMm:
+        typeof stripped.loadHeightMm === 'number'
+          ? stripped.loadHeightMm
+          : undefined,
+    });
+    stripped.heightMm = d.alturaFinalMm;
+    stripped.levels = d.levels;
+    stripped.totalLevels = d.totalLevels;
+  }
+
   const engines = computeProjectEngines(stripped);
   if (!engines) {
     return stripped;
   }
+  const heightModeOut =
+    stripped.heightMode === HEIGHT_MODE_WAREHOUSE_HEIGHT
+      ? HEIGHT_MODE_WAREHOUSE_HEIGHT
+      : 'DIRECT';
+
   return {
     ...stripped,
     layout: engines.layout,
@@ -127,7 +204,7 @@ export function finalizeSummaryAnswers(
       typeof stripped.heightDefinitionMode === 'string'
         ? stripped.heightDefinitionMode
         : HEIGHT_DEFINITION_MODULE_TOTAL,
-    heightMode: 'DIRECT',
+    heightMode: heightModeOut,
     beamLengthMm:
       typeof answers.beamLengthMm === 'number'
         ? answers.beamLengthMm
