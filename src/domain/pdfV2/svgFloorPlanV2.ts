@@ -157,6 +157,7 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
   parts.push(`<style>
     .fp-title { font: 700 40px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: ${COL_INK}; letter-spacing: 0.05em; }
     .fp-sub { font: 500 25px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #4b5563; }
+    .fp-plan-hint { font: 400 13px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #4b5563; }
     .fp-row-title { font: 700 17px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: ${ELEV_BEAM_EDGE}; stroke: #ffffff; stroke-width: 3.5px; paint-order: stroke fill; stroke-linejoin: round; }
     .fp-row-sub { font: 500 13px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #334155; stroke: #ffffff; stroke-width: 3px; paint-order: stroke fill; stroke-linejoin: round; }
     .fp-circ-op { font: 800 14px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #0f172a; stroke: #ffffff; stroke-width: 3.5px; paint-order: stroke fill; stroke-linejoin: round; }

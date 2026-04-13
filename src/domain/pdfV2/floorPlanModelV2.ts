@@ -195,7 +195,7 @@ export function buildFloorPlanModelV2(
   });
 
   const indexByModuleId = new Map<string, number>();
-  let nextIdx = 0;
+  let nextIdx = 1;
   for (const row of geometry.rows) {
     for (const m of sortModulesAlongBeam(row.modules, geometry.orientation)) {
       indexByModuleId.set(m.id, nextIdx++);
@@ -351,6 +351,7 @@ export function buildFloorPlanModelV2(
       text: `${formatMm(L)} × ${formatMm(W)}`,
       className: 'fp-sub',
     },
+    ...planCaptionLabels(geometry),
   ];
 
   return {
@@ -364,6 +365,53 @@ export function buildFloorPlanModelV2(
     labels,
     moduleLevelTint,
   };
+}
+
+/**
+ * Legendas sob o título da planta: o que são os números e capacidade média por módulo.
+ */
+function planCaptionLabels(geometry: LayoutGeometry): FloorPlanLabel[] {
+  const cx = VB_W / 2;
+  const line1: FloorPlanLabel = {
+    id: 'cap-line-mod',
+    x: cx,
+    y: PAD + 80,
+    text: 'Cada número representa um módulo de armazenagem',
+    className: 'fp-plan-hint',
+  };
+  const line2Text = planPositionsPerModuleHintLine(geometry);
+  const line2: FloorPlanLabel = {
+    id: 'cap-line-pos',
+    x: cx,
+    y: PAD + 98,
+    text: line2Text,
+    className: 'fp-plan-hint',
+  };
+  return [line1, line2];
+}
+
+function planPositionsPerModuleHintLine(geometry: LayoutGeometry): string {
+  if (shouldUsePositionsAverageDisclaimer(geometry)) {
+    return 'Valores médios por módulo — ver resumo técnico';
+  }
+  const { positionCount, moduleCount } = geometry.totals;
+  if (
+    moduleCount <= 0 ||
+    !Number.isFinite(positionCount) ||
+    !Number.isFinite(moduleCount)
+  ) {
+    return 'Valores médios por módulo — ver resumo técnico';
+  }
+  const approx = Math.round(positionCount / moduleCount);
+  return `Cada módulo representa aproximadamente ${approx} posições de armazenagem`;
+}
+
+/** Túnel ou equivalente de módulo fracionário → capacidade por retângulo pode variar. */
+function shouldUsePositionsAverageDisclaimer(geometry: LayoutGeometry): boolean {
+  if (geometry.totals.tunnelCount > 0) return true;
+  const mc = geometry.totals.moduleCount;
+  if (Math.abs(mc - Math.round(mc)) > 1e-4) return true;
+  return false;
 }
 
 export { escapeXml };
