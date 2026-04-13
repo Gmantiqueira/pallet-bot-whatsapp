@@ -141,10 +141,11 @@ describe('MessageBuilder', () => {
           corridorMm: 3000,
           moduleDepthMm: 2700,
           beamLengthMm: 1100,
-          capacityKg: 2000,
+          capacityKg: 800,
           heightMode: 'DIRECT',
           heightMm: 5040,
           levels: 4,
+          hasGroundLevel: false,
           guardRailSimple: true,
           guardRailSimplePosition: 'AMBOS',
           guardRailDouble: false,
@@ -156,7 +157,7 @@ describe('MessageBuilder', () => {
       expect(messages[0].text).toContain('12000');
       expect(messages[0].text).toContain('10000');
       expect(messages[0].text).toContain('3000');
-      expect(messages[0].text).toContain('2000');
+      expect(messages[0].text).toContain('800');
       expect(messages[0].text).toContain('5040');
       expect(messages[0].text).toContain('Altura útil do sistema');
       expect(messages[0].text).toContain('Profundidade da posição');
@@ -164,7 +165,7 @@ describe('MessageBuilder', () => {
       expect(messages[0].text).toContain('Ambos');
       expect(messages[0].text).toContain('Módulos: 10');
       expect(messages[0].text).toContain('Posições: 40');
-      expect(messages[0].text).toContain('Tipo de montante: Montante 8T');
+      expect(messages[0].text).toContain('Coluna selecionada: 8T');
       expect(messages[0].text).toContain('Pares de longarinas: 40');
       expect(messages[0].buttons).toHaveLength(1);
       expect(messages[0].buttons?.[0].id).toBe('CONTINUAR');

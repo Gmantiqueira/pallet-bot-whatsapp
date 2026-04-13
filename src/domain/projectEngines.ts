@@ -118,8 +118,7 @@ export function computeProjectEngines(
     return null;
   }
 
-  const uprightHeightMm = uprightHeightMmFromAnswers(answers);
-  if (uprightHeightMm === null) {
+  if (uprightHeightMmFromAnswers(answers) === null) {
     return null;
   }
 
@@ -144,8 +143,11 @@ export function computeProjectEngines(
 
   const structure = selectStructure({
     capacityKgPerLevel: capacityKg,
-    uprightHeightMm,
     levels,
+    hasGroundLevel:
+      typeof answers.hasGroundLevel === 'boolean'
+        ? answers.hasGroundLevel
+        : true,
   });
 
   const budget = calculateBudget({ layout, structure, levels });

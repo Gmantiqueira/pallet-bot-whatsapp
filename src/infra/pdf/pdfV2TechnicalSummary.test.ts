@@ -2,6 +2,7 @@ import type { LayoutResult } from '../../domain/layoutEngine';
 import { buildLayoutSolutionV2 } from '../../domain/pdfV2/layoutSolutionV2';
 import { buildLayoutGeometry } from '../../domain/pdfV2/layoutGeometryV2';
 import type { ProjectAnswersV2 } from '../../domain/pdfV2/answerMapping';
+import { selectStructure } from '../../domain/structureEngine';
 import { formatModuleCountForDocumentPt } from '../../domain/pdfV2/formatModuleCountDisplay';
 import { technicalSummaryRows } from './pdfService';
 import {
@@ -47,11 +48,18 @@ describe('technicalSummaryRowsFromLayoutGeometry', () => {
       a as unknown as Record<string, unknown>
     );
 
-    const rows = technicalSummaryRowsFromLayoutGeometry(
-      a as unknown as Record<string, unknown>,
-      geo
-    );
+    const structure = selectStructure({
+      capacityKgPerLevel: a.capacityKg,
+      levels: a.levels,
+      hasGroundLevel: a.hasGroundLevel !== false,
+    });
+    const project = {
+      ...(a as unknown as Record<string, unknown>),
+      structure,
+    };
+    const rows = technicalSummaryRowsFromLayoutGeometry(project, geo);
 
+    expect(rowValue(rows, 'Coluna selecionada:')).toBe(structure.uprightType);
     expect(rowValue(rows, 'Módulos:')).toBe(
       formatModuleCountForDocumentPt(geo.totals.moduleCount)
     );
@@ -85,10 +93,15 @@ describe('technicalSummaryRowsFromLayoutGeometry', () => {
       sol,
       a as unknown as Record<string, unknown>
     );
-    const rows = technicalSummaryRowsFromLayoutGeometry(
-      a as unknown as Record<string, unknown>,
-      geo
-    );
+    const project = {
+      ...(a as unknown as Record<string, unknown>),
+      structure: selectStructure({
+        capacityKgPerLevel: a.capacityKg,
+        levels: a.levels,
+        hasGroundLevel: a.hasGroundLevel !== false,
+      }),
+    };
+    const rows = technicalSummaryRowsFromLayoutGeometry(project, geo);
     expect(rowValue(rows, 'Túnel:')).toBe('Não');
     expect(geo.totals.tunnelCount).toBe(0);
   });
@@ -112,10 +125,15 @@ describe('technicalSummaryRowsFromLayoutGeometry', () => {
       a as unknown as Record<string, unknown>,
       bogusLegacy
     );
-    const v2Rows = technicalSummaryRowsFromLayoutGeometry(
-      a as unknown as Record<string, unknown>,
-      geo
-    );
+    const project = {
+      ...(a as unknown as Record<string, unknown>),
+      structure: selectStructure({
+        capacityKgPerLevel: a.capacityKg,
+        levels: a.levels,
+        hasGroundLevel: a.hasGroundLevel !== false,
+      }),
+    };
+    const v2Rows = technicalSummaryRowsFromLayoutGeometry(project, geo);
 
     expect(rowValue(legacyRows, 'Módulos')).toBe('999');
     expect(rowValue(v2Rows, 'Módulos:')).toBe(

@@ -510,7 +510,7 @@ const buildSummary = (session: Session): string => {
     lines.push('— Estimativa técnica —');
     lines.push(`Módulos: ${budget.totals.modules}`);
     lines.push(`Posições: ${budget.totals.positions}`);
-    lines.push(`Tipo de montante: Montante ${structure.uprightType}`);
+    lines.push(`Coluna selecionada: ${structure.uprightType}`);
     const longarinas = budget.items.find(
       item => item.name === 'Par de Longarinas'
     );

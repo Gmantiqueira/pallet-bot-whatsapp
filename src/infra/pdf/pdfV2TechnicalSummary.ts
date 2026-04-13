@@ -1,4 +1,5 @@
 import type { LayoutGeometry } from '../../domain/pdfV2/layoutGeometryV2';
+import type { StructureResult } from '../../domain/structureEngine';
 import { formatModuleCountForDocumentPt } from '../../domain/pdfV2/formatModuleCountDisplay';
 import { formatMm, formatPeDireitoAltura } from './pdfService';
 
@@ -29,7 +30,9 @@ export function technicalSummaryRowsFromLayoutGeometry(
       ? `${niveisText} (${totals.levelCount} patamares no total)`
       : niveisText;
 
-  return [
+  const structure = project.structure as StructureResult | undefined;
+
+  const rows: { label: string; value: string }[] = [
     { label: 'Comprimento:', value: formatMm(warehouseLengthMm) },
     { label: 'Largura:', value: formatMm(warehouseWidthMm) },
     { label: 'Altura do sistema:', value: formatPeDireitoAltura(project) },
@@ -38,4 +41,13 @@ export function technicalSummaryRowsFromLayoutGeometry(
     { label: 'Posições totais:', value: String(totals.positionCount) },
     { label: 'Túnel:', value: metadata.hasTunnel ? 'Sim' : 'Não' },
   ];
+
+  if (structure?.uprightType) {
+    rows.push({
+      label: 'Coluna selecionada:',
+      value: structure.uprightType,
+    });
+  }
+
+  return rows;
 }

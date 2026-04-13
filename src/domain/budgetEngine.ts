@@ -1,5 +1,5 @@
 import type { LayoutResult } from './layoutEngine';
-import type { StructureResult } from './structureEngine';
+import type { StructureResult, UprightType } from './structureEngine';
 
 export type BudgetInput = {
   layout: LayoutResult;
@@ -40,8 +40,12 @@ export function calculateBudget(input: BudgetInput): BudgetResult {
   const modules = layout.modulesTotal;
   const positions = modules * levels;
 
-  const uprightName =
-    structure.uprightType === '8T' ? 'Montante 8T' : 'Montante 15T';
+  const uprightNames: Record<UprightType, string> = {
+    '8T': 'Montante 8T',
+    '12T': 'Montante 12T',
+    '15T': 'Montante 15T',
+  };
+  const uprightName = uprightNames[structure.uprightType];
   const uprightQuantity = (layout.modulesPerRow + 1) * layout.rows;
   const longarinaPairsQuantity = modules * levels;
 

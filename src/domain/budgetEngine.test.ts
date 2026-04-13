@@ -13,7 +13,11 @@ const baseLayout = (overrides: Partial<LayoutResult> = {}): LayoutResult => ({
 describe('BudgetEngine', () => {
   it('deve calcular posições corretamente', () => {
     const layout = baseLayout({ modulesTotal: 20 });
-    const structure: StructureResult = { uprightType: '8T' };
+    const structure: StructureResult = {
+      uprightType: '8T',
+      loadTonPerModule: 5,
+      loadExceedsTableMax: false,
+    };
 
     const result = calculateBudget({ layout, structure, levels: 3 });
 
@@ -33,7 +37,11 @@ describe('BudgetEngine', () => {
       modulesPerRow: 3,
       modulesTotal: 6,
     });
-    const structure: StructureResult = { uprightType: '8T' };
+    const structure: StructureResult = {
+      uprightType: '8T',
+      loadTonPerModule: 5,
+      loadExceedsTableMax: false,
+    };
 
     const result = calculateBudget({ layout, structure, levels: 4 });
 
