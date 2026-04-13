@@ -56,7 +56,11 @@ export type Input =
   | { type: 'BUTTON'; value: string }
   | { type: 'MEDIA_IMAGE'; id: string };
 
-export type Effect = { type: 'SEND' } | { type: 'GENERATE_PDF' };
+export type Effect =
+  | { type: 'SEND' }
+  | { type: 'GENERATE_PDF' }
+  /** Reenviar o PDF já gravado (botão "Baixar" em DONE). */
+  | { type: 'RESEND_PDF' };
 
 export interface TransitionResult {
   session: Session;
@@ -809,6 +813,11 @@ export const transition = (
       return { session: newSession, effects: [] };
 
     case 'DONE':
+      if (input.type === 'BUTTON' && input.value === 'BAIXAR_PDF') {
+        effects.push({ type: 'RESEND_PDF' });
+        effects.push({ type: 'SEND' });
+        return { session: newSession, effects };
+      }
       newSession = transitionToCleanMenu(newSession);
       effects.push({ type: 'SEND' });
       return { session: newSession, effects };

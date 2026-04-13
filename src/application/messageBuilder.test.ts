@@ -171,7 +171,7 @@ describe('MessageBuilder', () => {
       expect(messages[0].buttons?.[0].id).toBe('CONTINUAR');
     });
 
-    it('should build DONE as text only (integrador envia PDF)', () => {
+    it('should build DONE com botão Baixar PDF (integrador envia PDF)', () => {
       const session = createSession('DONE');
       const messages = buildMessages(session, {
         pdfFilename: 'projeto-1730000000000.pdf',
@@ -181,6 +181,9 @@ describe('MessageBuilder', () => {
       expect(messages[0].type).toBe('text');
       expect(messages[0].text).toContain('Projeto gerado com sucesso');
       expect(messages[0].text).toContain('integrador interno');
+      expect(messages[0].buttons).toEqual([
+        { id: 'BAIXAR_PDF', label: 'Baixar PDF' },
+      ]);
       expect(messages.some(m => m.type === 'document')).toBe(false);
     });
 

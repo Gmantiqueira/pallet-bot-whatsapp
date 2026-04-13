@@ -125,6 +125,20 @@ describe('State Machine', () => {
       expect(result.effects).toContainEqual({ type: 'SEND' });
     });
 
+    it('DONE + BAIXAR_PDF mantém estado e pede reenvio do PDF', () => {
+      const session = createSession('DONE', {
+        pdfFilename: 'projeto.pdf',
+        pdfPath: '/tmp/projeto.pdf',
+      });
+      const result = transition(session, {
+        type: 'BUTTON',
+        value: 'BAIXAR_PDF',
+      });
+
+      expect(result.session.state).toBe('DONE');
+      expect(result.effects.some(e => e.type === 'RESEND_PDF')).toBe(true);
+    });
+
     it('FINAL_CONFIRM + TEXT goes to MENU', () => {
       const session = createSession('FINAL_CONFIRM', { lengthMm: 1000 });
       const result = transition(session, { type: 'TEXT', value: 'ola' });

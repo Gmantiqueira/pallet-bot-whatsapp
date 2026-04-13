@@ -19,6 +19,8 @@ export interface MessageContext {
   imageAnalyzed?: boolean;
   /** Nome do ficheiro PDF em `storage` (ex.: `projeto-1730000000000.pdf`). */
   pdfFilename?: string;
+  /** Utilizador pediu reenvio do PDF (botão Baixar no estado DONE). */
+  doneResendPdf?: boolean;
 }
 
 export const buildMessages = (
@@ -77,10 +79,14 @@ export const buildMessages = (
      * Texto para o utilizador: sem anexo nem URL pública neste core.
      * O integrador interno recebe `generatedPdf` na resposta HTTP do webhook e envia o PDF pelo WhatsApp.
      */
+    const textDone = ctx.doneResendPdf
+      ? 'A reenviar o PDF do projeto. O integrador WhatsApp deve anexar o ficheiro novamente.'
+      : 'Projeto gerado com sucesso. O PDF foi gravado; o envio pelo WhatsApp é tratado pelo integrador interno.';
     messages.push({
       to: session.phone,
       type: 'text',
-      text: 'Projeto gerado com sucesso. O PDF foi gravado; o envio pelo WhatsApp é tratado pelo integrador interno.',
+      text: textDone,
+      buttons: [{ id: 'BAIXAR_PDF', label: 'Baixar PDF' }],
     });
     return messages;
   }

@@ -57,6 +57,31 @@ export interface RouterResult {
 
 const GLOBAL_COMMANDS = ['novo', 'voltar', 'cancelar', 'status'];
 
+function generatedPdfFromSessionAnswers(
+  answers: Session['answers']
+): GeneratedPdfArtifact | undefined {
+  const fn =
+    typeof answers.pdfFilename === 'string' ? answers.pdfFilename.trim() : '';
+  const abs =
+    typeof answers.pdfPath === 'string' ? answers.pdfPath.trim() : '';
+  if (!fn || !abs) return undefined;
+  try {
+    if (!fs.existsSync(abs)) return undefined;
+    const stat = fs.statSync(abs);
+    const storageDir = resolveStoragePath();
+    const rel = path.relative(storageDir, abs);
+    return {
+      filename: fn,
+      absolutePath: abs,
+      mimeType: 'application/pdf',
+      sizeBytes: stat.size,
+      storageRelativePath: rel,
+    };
+  } catch {
+    return undefined;
+  }
+}
+
 const isGlobalCommand = (text: string): boolean => {
   const normalized = text.trim().toLowerCase();
   return GLOBAL_COMMANDS.includes(normalized);
@@ -302,6 +327,16 @@ export const routeIncoming = async (
     }
   }
 
+  const hasResendPdfEffect = transitionResult.effects.some(
+    e => e.type === 'RESEND_PDF'
+  );
+  if (hasResendPdfEffect && updatedSession.state === 'DONE') {
+    const resent = generatedPdfFromSessionAnswers(updatedSession.answers);
+    if (resent) {
+      generatedPdf = resent;
+    }
+  }
+
   const imageAnalyzed =
     previousState === 'WAIT_PLANT_IMAGE' &&
     updatedSession.state === 'WAIT_PLANT_CONFIRM_DIMS';
@@ -311,6 +346,7 @@ export const routeIncoming = async (
     imageAnalyzed,
     previousState,
     lastError: deliveryError,
+    doneResendPdf: hasResendPdfEffect,
   };
 
   if (
