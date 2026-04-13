@@ -380,7 +380,7 @@ export async function renderPdfV2(
   doc.y = doc.page.margins.top;
   doc.moveDown(0.32);
 
-  drawCentered('PROJETO PORTA PALETES', {
+  drawCentered('PROJETO DE PORTA-PALETES', {
     size: 20,
     font: 'Helvetica-Bold',
     color: COL_INK,
@@ -397,16 +397,6 @@ export async function renderPdfV2(
     .stroke();
   doc.moveDown(0.55);
 
-  doc
-    .font('Helvetica')
-    .fontSize(9)
-    .fillColor(COL_MUTED)
-    .text('Documento técnico', left, doc.y, {
-      width: usableW,
-      align: 'center',
-    });
-  doc.moveDown(0.85);
-
   horizontalRule(doc.y, 0.1, COL_RULE);
   doc.moveDown(0.55);
 
@@ -416,7 +406,7 @@ export async function renderPdfV2(
     left,
     rowY,
     usableW,
-    'Cliente',
+    'Cliente:',
     coverCliente(input.project),
     labelColW
   );
@@ -425,7 +415,7 @@ export async function renderPdfV2(
     left,
     rowY,
     usableW,
-    'Projeto',
+    'Projeto:',
     coverProjeto(input.project),
     labelColW
   );
@@ -434,7 +424,7 @@ export async function renderPdfV2(
     left,
     rowY,
     usableW,
-    'Data',
+    'Data:',
     coverDataEmissao(input.project),
     labelColW
   );
@@ -491,13 +481,13 @@ export async function renderPdfV2(
 
   doc.addPage();
   doc.y = doc.page.margins.top + 6;
-  drawCentered('PLANTA DO GALPÃO', {
+  drawCentered('PLANTA DE IMPLANTAÇÃO', {
     size: 12,
     font: 'Helvetica-Bold',
     color: COL_INK,
     moveDown: 0.14,
   });
-  drawCentered('Implantação — corredores e túnel', {
+  drawCentered('Layout dos módulos, corredores e túnel', {
     size: 8.5,
     color: COL_MUTED,
     moveDown: 0.22,
@@ -508,13 +498,13 @@ export async function renderPdfV2(
 
   doc.addPage();
   doc.y = doc.page.margins.top + 6;
-  drawCentered('Vista frontal — sem túnel', {
+  drawCentered('Vista frontal — módulo padrão', {
     size: 12,
     font: 'Helvetica-Bold',
     color: COL_INK,
     moveDown: 0.18,
   });
-  drawCentered('Módulo de armazenagem normal (referência)', {
+  drawCentered('Referência de armazenagem', {
     size: 8.5,
     color: COL_MUTED,
     moveDown: 0.28,
@@ -526,21 +516,18 @@ export async function renderPdfV2(
   if (hasTunnel) {
     doc.addPage();
     doc.y = doc.page.margins.top + 6;
-    drawCentered('Vista frontal — com túnel', {
+    drawCentered('Vista frontal — módulo com túnel', {
       size: 12,
       font: 'Helvetica-Bold',
       color: COL_INK,
       moveDown: 0.18,
     });
     if (elevFrontTunRaster) {
-      drawCentered(
-        'Mesmo modelo estrutural; vão de passagem na zona inferior',
-        {
-          size: 8.5,
-          color: COL_MUTED,
-          moveDown: 0.28,
-        }
-      );
+      drawCentered('Abertura de passagem no nível inferior', {
+        size: 8.5,
+        color: COL_MUTED,
+        moveDown: 0.28,
+      });
       horizontalRule(doc.y + 3, 0.1, COL_RULE);
       doc.moveDown(0.38);
       embedFullWidthDrawing(elevFrontTunRaster);
@@ -555,13 +542,13 @@ export async function renderPdfV2(
 
   doc.addPage();
   doc.y = doc.page.margins.top + 6;
-  drawCentered('Vista lateral — sem túnel', {
+  drawCentered('Vista lateral — estrutura do módulo', {
     size: 12,
     font: 'Helvetica-Bold',
     color: COL_INK,
     moveDown: 0.18,
   });
-  drawCentered('Profundidade de faixa e treliçagem (perfil único)', {
+  drawCentered('Profundidade e níveis de armazenagem', {
     size: 8.5,
     color: COL_MUTED,
     moveDown: 0.28,
@@ -573,21 +560,18 @@ export async function renderPdfV2(
   if (hasTunnel) {
     doc.addPage();
     doc.y = doc.page.margins.top + 6;
-    drawCentered('Vista lateral — com túnel', {
+    drawCentered('Vista lateral — estrutura do módulo', {
       size: 12,
       font: 'Helvetica-Bold',
       color: COL_INK,
       moveDown: 0.18,
     });
     if (elevLateralTunRaster) {
-      drawCentered(
-        'Abertura inferior e níveis ativos alinhados ao módulo túnel',
-        {
-          size: 8.5,
-          color: COL_MUTED,
-          moveDown: 0.28,
-        }
-      );
+      drawCentered('Profundidade e níveis de armazenagem', {
+        size: 8.5,
+        color: COL_MUTED,
+        moveDown: 0.28,
+      });
       horizontalRule(doc.y + 3, 0.1, COL_RULE);
       doc.moveDown(0.38);
       embedFullWidthDrawing(elevLateralTunRaster);
@@ -602,13 +586,13 @@ export async function renderPdfV2(
 
   doc.addPage();
   doc.y = doc.page.margins.top + 6;
-  drawCentered('VISUALIZAÇÃO 3D', {
+  drawCentered('Visualização 3D do layout', {
     size: 12,
     font: 'Helvetica-Bold',
     color: COL_INK,
     moveDown: 0.18,
   });
-  drawCentered('Projeção isométrica do layout calculado (wireframe)', {
+  drawCentered('Representação simplificada da estrutura', {
     size: 8.5,
     color: COL_MUTED,
     moveDown: 0.28,

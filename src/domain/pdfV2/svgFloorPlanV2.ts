@@ -138,7 +138,7 @@ function orientationArrowSvg(
       : 'Linhas · paralelas à largura do galpão';
   return `<g>
     <rect x="${gx}" y="${gy}" width="${gw}" height="${gh}" rx="5" fill="#ffffff" fill-opacity="0.94" stroke="#cbd5e1" stroke-width="0.75"/>
-    <text x="${gx + 8}" y="${gy + 16}" font-size="11px" font-weight="600" fill="#0f172a" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">Sentido do vão (linhas)</text>
+    <text x="${gx + 8}" y="${gy + 16}" font-size="11px" font-weight="600" fill="#0f172a" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">Sentido de entrada / operação</text>
     <text x="${gx + 8}" y="${gy + 32}" font-size="9px" fill="#64748b" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">${escapeXml(sub)}</text>
     ${shaft}
   </g>`;
@@ -159,7 +159,6 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
     .fp-sub { font: 500 25px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #4b5563; }
     .fp-plan-hint { font: 400 13px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #4b5563; }
     .fp-row-title { font: 700 17px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: ${ELEV_BEAM_EDGE}; stroke: #ffffff; stroke-width: 3.5px; paint-order: stroke fill; stroke-linejoin: round; }
-    .fp-row-sub { font: 500 13px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #334155; stroke: #ffffff; stroke-width: 3px; paint-order: stroke fill; stroke-linejoin: round; }
     .fp-circ-op { font: 800 14px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #0f172a; stroke: #ffffff; stroke-width: 3.5px; paint-order: stroke fill; stroke-linejoin: round; }
     .fp-circ { font: 600 12px "Helvetica Neue", Helvetica, Arial, sans-serif; }
     .fp-circ-res { font: 500 10px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #a8a29e; }
@@ -274,20 +273,9 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
   for (const r of model.rowBandRects) {
     const cx = r.x + r.w / 2;
     const cy = r.y + r.h / 2;
-    if (Math.min(r.w, r.h) < 40) {
-      parts.push(
-        `<text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="middle" class="fp-row-title">${escapeXml(r.rowTitle)}</text>`
-      );
-    } else {
-      parts.push(
-        `<text x="${cx}" y="${cy - 7}" text-anchor="middle" dominant-baseline="middle" class="fp-row-title">${escapeXml(r.rowTitle)}</text>`
-      );
-      if (r.moduleCountHint) {
-        parts.push(
-          `<text x="${cx}" y="${cy + 11}" text-anchor="middle" dominant-baseline="middle" class="fp-row-sub">${escapeXml(r.moduleCountHint)}</text>`
-        );
-      }
-    }
+    parts.push(
+      `<text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="middle" class="fp-row-title">${escapeXml(r.rowCaption)}</text>`
+    );
   }
 
   for (const s of model.structureRects) {

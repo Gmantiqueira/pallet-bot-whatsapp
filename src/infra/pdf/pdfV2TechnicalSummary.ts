@@ -30,12 +30,12 @@ export function technicalSummaryRowsFromLayoutGeometry(
       : niveisText;
 
   return [
-    { label: 'Comprimento', value: formatMm(warehouseLengthMm) },
-    { label: 'Largura', value: formatMm(warehouseWidthMm) },
-    { label: 'Pé-direito / altura', value: formatPeDireitoAltura(project) },
-    { label: 'Níveis de armazenagem', value: niveisDetail },
-    { label: 'Quantidade de módulos', value: modulos },
-    { label: 'Total de posições', value: String(totals.positionCount) },
-    { label: 'Túnel', value: metadata.hasTunnel ? 'Sim' : 'Não' },
+    { label: 'Comprimento:', value: formatMm(warehouseLengthMm) },
+    { label: 'Largura:', value: formatMm(warehouseWidthMm) },
+    { label: 'Altura do sistema:', value: formatPeDireitoAltura(project) },
+    { label: 'Níveis de armazenagem:', value: niveisDetail },
+    { label: 'Módulos:', value: modulos },
+    { label: 'Posições totais:', value: String(totals.positionCount) },
+    { label: 'Túnel:', value: metadata.hasTunnel ? 'Sim' : 'Não' },
   ];
 }

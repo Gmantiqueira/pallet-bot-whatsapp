@@ -52,21 +52,21 @@ describe('technicalSummaryRowsFromLayoutGeometry', () => {
       geo
     );
 
-    expect(rowValue(rows, 'Quantidade de módulos')).toBe(
+    expect(rowValue(rows, 'Módulos:')).toBe(
       formatModuleCountForDocumentPt(geo.totals.moduleCount)
     );
-    expect(rowValue(rows, 'Total de posições')).toBe(
+    expect(rowValue(rows, 'Posições totais:')).toBe(
       String(geo.totals.positionCount)
     );
-    expect(rowValue(rows, 'Níveis de armazenagem')).toBe(
+    expect(rowValue(rows, 'Níveis de armazenagem:')).toBe(
       `${formatNiveisArmazenagemForDocumentPt(geo.metadata)} (${geo.totals.levelCount} patamares no total)`
     );
-    expect(rowValue(rows, 'Túnel')).toBe('Sim');
+    expect(rowValue(rows, 'Túnel:')).toBe('Sim');
     expect(geo.totals.tunnelCount).toBeGreaterThan(0);
-    expect(rowValue(rows, 'Comprimento')).toContain(
+    expect(rowValue(rows, 'Comprimento:')).toContain(
       geo.warehouseLengthMm.toLocaleString('pt-BR')
     );
-    expect(rowValue(rows, 'Largura')).toContain(
+    expect(rowValue(rows, 'Largura:')).toContain(
       geo.warehouseWidthMm.toLocaleString('pt-BR')
     );
   });
@@ -89,7 +89,7 @@ describe('technicalSummaryRowsFromLayoutGeometry', () => {
       a as unknown as Record<string, unknown>,
       geo
     );
-    expect(rowValue(rows, 'Túnel')).toBe('Não');
+    expect(rowValue(rows, 'Túnel:')).toBe('Não');
     expect(geo.totals.tunnelCount).toBe(0);
   });
 
@@ -118,13 +118,13 @@ describe('technicalSummaryRowsFromLayoutGeometry', () => {
     );
 
     expect(rowValue(legacyRows, 'Módulos')).toBe('999');
-    expect(rowValue(v2Rows, 'Quantidade de módulos')).toBe(
+    expect(rowValue(v2Rows, 'Módulos:')).toBe(
       formatModuleCountForDocumentPt(geo.totals.moduleCount)
     );
     expect(geo.totals.moduleCount).not.toBe(999);
 
     expect(rowValue(legacyRows, 'Posições estimadas')).toBeDefined();
-    expect(rowValue(v2Rows, 'Total de posições')).toBe(
+    expect(rowValue(v2Rows, 'Posições totais:')).toBe(
       String(geo.totals.positionCount)
     );
   });

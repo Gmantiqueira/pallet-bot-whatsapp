@@ -141,10 +141,8 @@ export type FloorPlanModelV2 = {
     w: number;
     h: number;
     kind: RackDepthModeV2;
-    /** Rótulo estável, ex.: "Linha 1". */
-    rowTitle: string;
-    /** Texto opcional, ex.: "8 módulos" (segmentos ao longo do vão). */
-    moduleCountHint?: string;
+    /** Uma linha: "Linha N — X módulos". */
+    rowCaption: string;
   }[];
   structureRects: {
     id: string;

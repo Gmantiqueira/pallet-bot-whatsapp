@@ -115,7 +115,7 @@ function corridorPlanDimensionLabel(
   if (t.includes('faixa transversal') && t.includes('Corredor')) {
     return `Corredor (faixa transversal): ${fmt}`;
   }
-  return `Corredor: ${fmt}`;
+  return `Corredor operacional: ${fmt}`;
 }
 
 function circulationSemanticFromZone(
@@ -189,8 +189,7 @@ export function buildFloorPlanModelV2(
       w: Math.max(0.5, toX(r.x1) - toX(r.x0)),
       h: Math.max(0.5, toY(r.y1) - toY(r.y0)),
       kind: rackDepthModeFromRow(row),
-      rowTitle: `Linha ${rowIndex + 1}`,
-      moduleCountHint: `${nMod} ${nMod === 1 ? 'módulo' : 'módulos'}`,
+      rowCaption: `Linha ${rowIndex + 1} — ${nMod} ${nMod === 1 ? 'módulo' : 'módulos'}`,
     });
   });
 
@@ -255,7 +254,7 @@ export function buildFloorPlanModelV2(
     y1: dimY,
     x2: bx + boxW,
     y2: dimY,
-    text: `Comprimento galpão: ${formatMm(L)}`,
+    text: `Comprimento do galpão: ${formatMm(L)}`,
   });
   const dimX = bx - 44;
   dimensionLines.push({
@@ -264,7 +263,7 @@ export function buildFloorPlanModelV2(
     y1: by,
     x2: dimX,
     y2: by + boxH,
-    text: `Largura galpão: ${formatMm(W)}`,
+    text: `Largura do galpão: ${formatMm(W)}`,
     offset: -28,
   });
 
@@ -341,13 +340,20 @@ export function buildFloorPlanModelV2(
       id: 'title',
       x: VB_W / 2,
       y: PAD + 24,
-      text: 'PLANTA — IMPLANTAÇÃO',
+      text: 'PLANTA DE IMPLANTAÇÃO',
       className: 'fp-title',
     },
     {
       id: 'sub',
       x: VB_W / 2,
       y: PAD + 54,
+      text: 'Layout dos módulos, corredores e túnel',
+      className: 'fp-sub',
+    },
+    {
+      id: 'sub-dims',
+      x: VB_W / 2,
+      y: PAD + 82,
       text: `${formatMm(L)} × ${formatMm(W)}`,
       className: 'fp-sub',
     },
@@ -367,51 +373,29 @@ export function buildFloorPlanModelV2(
   };
 }
 
-/**
- * Legendas sob o título da planta: o que são os números e capacidade média por módulo.
- */
+/** Legenda única dos números dos módulos (≈ posições por módulo). */
 function planCaptionLabels(geometry: LayoutGeometry): FloorPlanLabel[] {
-  const cx = VB_W / 2;
-  const line1: FloorPlanLabel = {
-    id: 'cap-line-mod',
-    x: cx,
-    y: PAD + 80,
-    text: 'Cada número representa um módulo de armazenagem',
+  const line: FloorPlanLabel = {
+    id: 'cap-module-line',
+    x: VB_W / 2,
+    y: PAD + 110,
+    text: planModuleSingleCaption(geometry),
     className: 'fp-plan-hint',
   };
-  const line2Text = planPositionsPerModuleHintLine(geometry);
-  const line2: FloorPlanLabel = {
-    id: 'cap-line-pos',
-    x: cx,
-    y: PAD + 98,
-    text: line2Text,
-    className: 'fp-plan-hint',
-  };
-  return [line1, line2];
+  return [line];
 }
 
-function planPositionsPerModuleHintLine(geometry: LayoutGeometry): string {
-  if (shouldUsePositionsAverageDisclaimer(geometry)) {
-    return 'Valores médios por módulo — ver resumo técnico';
-  }
+function planModuleSingleCaption(geometry: LayoutGeometry): string {
   const { positionCount, moduleCount } = geometry.totals;
   if (
     moduleCount <= 0 ||
     !Number.isFinite(positionCount) ||
     !Number.isFinite(moduleCount)
   ) {
-    return 'Valores médios por módulo — ver resumo técnico';
+    return 'Cada número representa um módulo (ver resumo técnico)';
   }
   const approx = Math.round(positionCount / moduleCount);
-  return `Cada módulo representa aproximadamente ${approx} posições de armazenagem`;
-}
-
-/** Túnel ou equivalente de módulo fracionário → capacidade por retângulo pode variar. */
-function shouldUsePositionsAverageDisclaimer(geometry: LayoutGeometry): boolean {
-  if (geometry.totals.tunnelCount > 0) return true;
-  const mc = geometry.totals.moduleCount;
-  if (Math.abs(mc - Math.round(mc)) > 1e-4) return true;
-  return false;
+  return `Cada número representa um módulo (≈${approx} posições)`;
 }
 
 export { escapeXml };
