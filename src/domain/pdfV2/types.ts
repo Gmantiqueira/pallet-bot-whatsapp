@@ -79,6 +79,8 @@ export type LayoutSolutionV2 = {
     /** Patamar de palete no piso sem longarina. */
     hasGroundLevel: boolean;
     hasTunnel: boolean;
+    /** Onde aplicável: posição do vão (túnel / passagem) usada nesta solução. */
+    tunnelPosition?: TunnelPositionCode;
   };
 };
 

@@ -1,5 +1,9 @@
 import { buildProjectAnswersV2 } from './answerMapping';
-import { buildLayoutSolutionV2, fillWarehouseCross } from './layoutSolutionV2';
+import {
+  buildLayoutSolutionV2,
+  fillWarehouseCross,
+  MELHOR_LAYOUT_MAX_CANDIDATES,
+} from './layoutSolutionV2';
 import { MODULE_PALLET_BAYS_PER_LEVEL, moduleLengthAlongBeamMm } from './rackModuleSpec';
 import type { ProjectAnswersV2 } from './answerMapping';
 
@@ -39,6 +43,17 @@ describe('buildLayoutSolutionV2', () => {
     const s = buildLayoutSolutionV2(base());
     expect(s.totals.positions).toBeGreaterThan(0);
     expect(typeof s.metadata.hasTunnel).toBe('boolean');
+  });
+
+  it('MELHOR_LAYOUT: até 48 variantes quando túnel é geometricamente possível (níveis ≥ 2)', () => {
+    expect(MELHOR_LAYOUT_MAX_CANDIDATES).toBe(48);
+    const s = buildLayoutSolutionV2({ ...base(), levels: 4 });
+    expect(s.totals.positions).toBeGreaterThan(0);
+  });
+
+  it('MELHOR_LAYOUT com 1 nível não inclui túnel (incompatível com validação de geometria)', () => {
+    const s = buildLayoutSolutionV2({ ...base(), levels: 1 });
+    expect(s.metadata.hasTunnel).toBe(false);
   });
 
   it('faixa transversal remanescente vira corredor no modelo (uma fileira + espaço útil)', () => {

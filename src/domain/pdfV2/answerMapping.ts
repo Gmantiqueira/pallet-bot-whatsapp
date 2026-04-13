@@ -184,7 +184,7 @@ export type ProjectAnswersV2 = {
 /**
  * Heurística rápida de orientação (proxy analítico, **sem** simular layout completo).
  * {@link buildLayoutSolutionV2} em `layoutSolutionV2` escolhe por **capacidade real** entre candidatos
- * (MELHOR_LAYOUT: orientação × profundidade × túnel sim/não);
+ * (MELHOR_LAYOUT: pesquisa mais rica em `layoutSolutionV2`);
  * mantém-se esta função para testes ou chamadas externas que não precisem do motor completo.
  */
 export function pickBetterOrientationBySimpleCount(

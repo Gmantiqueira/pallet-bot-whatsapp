@@ -15,6 +15,7 @@ import type {
   ModuleVariantV2,
   RackDepthModeV2,
   RackRowSolution,
+  TunnelPositionCode,
   TunnelZone,
 } from './types';
 
@@ -78,12 +79,20 @@ type LayoutCandidate = {
   depthMode: RackDepthModeV2;
   /** Para MELHOR_LAYOUT pode divergir do pedido do utilizador — escolha por capacidade. */
   hasTunnel: boolean;
+  /** Só preenchido em MELHOR_LAYOUT (pesquisa exaustiva de posição do vão). */
+  tunnelPosition?: TunnelPositionCode;
+  /** Só preenchido em MELHOR_LAYOUT (com/sem meio módulo). */
+  halfModuleOptimization?: boolean;
 };
+
+/** Nº máximo de candidatos MELHOR_LAYOUT: 2×2×2×3×2 = 48 (orient × profundidade × túnel × posição × meio módulo). */
+export const MELHOR_LAYOUT_MAX_CANDIDATES = 48;
 
 /**
  * Enumera combinações para `lineStrategy`:
  * - APENAS_*: 2 (orientação) × modo de profundidade fixo, túnel = respostas.
- * - MELHOR_LAYOUT: 2×2 orientação/profundidade × **2** variantes de túnel (sem / com) = **8** candidatos.
+ * - MELHOR_LAYOUT: orientação × profundidade × túnel × posição do vão (INICIO/MEIO/FIM) × meio módulo (off/on)
+ *   = até {@link MELHOR_LAYOUT_MAX_CANDIDATES} candidatos (não pára no primeiro válido).
  */
 function layoutSearchCandidates(
   answers: BuildLayoutSolutionV2Input
@@ -110,29 +119,86 @@ function layoutSearchCandidates(
     }));
   }
 
+  const tunnelPositions: TunnelPositionCode[] = ['INICIO', 'MEIO', 'FIM'];
+  const structuralLevels = Math.max(1, Math.floor(answers.levels));
+  /** Módulo túnel exige níveis ativos < total ({@link validateLayoutGeometry}) — com 1 nível não é válido. */
+  const tunnelGeometryAllowed = structuralLevels >= 2;
+
   const out: LayoutCandidate[] = [];
   for (const orientation of orientations) {
     for (const depthMode of ['single', 'double'] as const) {
       for (const hasTunnel of [false, true] as const) {
-        out.push({ orientation, depthMode, hasTunnel });
+        if (hasTunnel && !tunnelGeometryAllowed) {
+          continue;
+        }
+        for (const tunnelPosition of tunnelPositions) {
+          for (const halfModuleOptimization of [false, true] as const) {
+            out.push({
+              orientation,
+              depthMode,
+              hasTunnel,
+              tunnelPosition,
+              halfModuleOptimization,
+            });
+          }
+        }
       }
     }
   }
   return out;
 }
 
+function transverseUsedMm(s: LayoutSolutionV2): number {
+  const band = bandDepthForMode(s.rackDepthMode, s.rackDepthMm);
+  const n = s.rows.length;
+  const cor = s.corridorMm;
+  if (n <= 0) return 0;
+  return n * band + Math.max(0, n - 1) * cor;
+}
+
+/** Faixa transversal não ocupada por fileiras+corredores (mm) — menor é melhor em empate. */
+function transverseResidualMm(s: LayoutSolutionV2): number {
+  return Math.max(0, s.crossSpanMm - transverseUsedMm(s));
+}
+
+/** Área residual (faixa transversal × vão) em mm² — desempate após posições. */
+function residualWarehouseStripAreaMm2(s: LayoutSolutionV2): number {
+  return transverseResidualMm(s) * s.beamSpanMm;
+}
+
+/** Soma de módulos-equivalente por fileira (meio módulo = 0,5). */
+function rowModuleEquivSum(row: RackRowSolution): number {
+  return row.modules.reduce((acc, m) => acc + (m.type === 'half' ? 0.5 : 1), 0);
+}
+
 /**
- * Prioridade lexicográfica:
- * 1) posições
- * 2) módulos-equivalente
- * 3) mais fileiras (melhor distribuição espacial em empate de capacidade)
- * 4) orientação along_length (desempate determinístico)
+ * Variância dos módulos-equivalente entre fileiras — menor = mais uniforme (empate).
+ */
+function rowModuleEquivVariance(s: LayoutSolutionV2): number {
+  if (s.rows.length === 0) return 0;
+  const equivs = s.rows.map(rowModuleEquivSum);
+  const mean = equivs.reduce((a, b) => a + b, 0) / equivs.length;
+  return equivs.reduce((acc, v) => acc + (v - mean) ** 2, 0) / equivs.length;
+}
+
+/**
+ * Prioridade lexicográfica (componentes posteriores só se os anteriores empatam):
+ * 1) posições (maximizar)
+ * 2) −área residual (minimizar área da faixa transversal não usada × comprimento ao longo do vão)
+ * 3) −variância de módulos/fileira (distribuição mais simétrica)
+ * 4) módulos-equivalente
+ * 5) mais fileiras
+ * 6) orientação along_length (desempate determinístico)
  */
 function layoutSolutionScoreTuple(
   s: LayoutSolutionV2
-): readonly [number, number, number, number] {
+): readonly number[] {
+  const stripArea = residualWarehouseStripAreaMm2(s);
+  const rowVar = rowModuleEquivVariance(s);
   return [
     s.totals.positions,
+    -stripArea,
+    -rowVar,
     s.totals.modules,
     s.rows.length,
     s.orientation === 'along_length' ? 1 : 0,
@@ -832,15 +898,16 @@ function buildLayoutSolutionV2Core(
       structuralLevels,
       hasGroundLevel,
       hasTunnel,
+      tunnelPosition: tunnelPos,
     },
   };
 }
 
 /**
- * Escolhe a melhor combinação por capacidade real (posições → módulos → fileiras → orientação).
+ * Escolhe a melhor combinação por capacidade real (lexicográfica, ver {@link layoutSolutionScoreTuple}).
  *
- * `MELHOR_LAYOUT` avalia **8** variantes (4 orientação/profundidade × túnel sim/não) com a mesma
- * geometria que o PDF; não para na primeira solução válida nem favorece estética antes de capacidade.
+ * `MELHOR_LAYOUT` avalia até **48** variantes (orientação × profundidade × túnel × posição do vão × meio módulo)
+ * com a mesma geometria que o PDF; não para na primeira solução válida.
  */
 export function buildLayoutSolutionV2(
   answers: BuildLayoutSolutionV2Input
@@ -853,6 +920,12 @@ export function buildLayoutSolutionV2(
     const merged: BuildLayoutSolutionV2Input = {
       ...answers,
       hasTunnel: cand.hasTunnel,
+      ...(cand.tunnelPosition !== undefined
+        ? { tunnelPosition: cand.tunnelPosition }
+        : {}),
+      ...(cand.halfModuleOptimization !== undefined
+        ? { halfModuleOptimization: cand.halfModuleOptimization }
+        : {}),
     };
     const sol = buildLayoutSolutionV2Core(
       merged,
