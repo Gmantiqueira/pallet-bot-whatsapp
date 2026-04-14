@@ -133,9 +133,10 @@ export function render3DViewV2(
   options?: { debug?: boolean }
 ): SvgGroup {
   const debug = options?.debug === true;
-  const vbW = 1100;
-  const vbH = 640;
-  const pad = 28;
+  /** Formato vertical (~0,72) alinhado à área útil A4 para o PDF preencher a folha. */
+  const vbW = 1040;
+  const vbH = 1440;
+  const pad = 20;
   const { minX, maxX, minY, maxY } = projected.bounds;
   const spanX = Math.max(maxX - minX, 1);
   const spanY = Math.max(maxY - minY, 1);
@@ -154,7 +155,7 @@ export function render3DViewV2(
   );
   parts.push(`<rect width="${vbW}" height="${vbH}" fill="#fafafa"/>`);
   parts.push(
-    `<rect x="14" y="14" width="${vbW - 28}" height="${vbH - 28}" rx="4" fill="none" stroke="#e2e8f0" stroke-width="0.9"/>`
+    `<rect x="12" y="12" width="${vbW - 24}" height="${vbH - 24}" rx="4" fill="none" stroke="#e2e8f0" stroke-width="0.9"/>`
   );
   if (debug) {
     parts.push(

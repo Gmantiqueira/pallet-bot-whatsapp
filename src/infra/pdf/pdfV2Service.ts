@@ -34,8 +34,8 @@ import {
 } from './pdfV2TechnicalSummary';
 import { buildPdfArtifactAfterWrite } from './pdfArtifact';
 
-/** Margens página A4: mais estreitas nas folhas de desenho para maximizar área útil (sem distorcer bitmaps). */
-const PAGE_MARGIN_PT = 36;
+/** Margens página A4 — equilíbrio entre aparência e área útil para desenhos. */
+const PAGE_MARGIN_PT = 24;
 const COL_INK = '#0f172a';
 const COL_MUTED = '#64748b';
 const COL_RULE = '#cbd5e1';
@@ -54,8 +54,8 @@ function ptToPx(pt: number): number {
  * cabeçalho real em {@link renderPdfV2} para a proporção do PNG ≈ caixa no PDF.
  */
 /** Alinhado ao bloco real em {@link renderPdfV2} (título à esquerda + nota + traço). */
-const DRAWING_SHEET_HEADER_BUDGET_PT = 44;
-const DRAWING_SHEET_BOTTOM_PAD_PT = 5;
+const DRAWING_SHEET_HEADER_BUDGET_PT = 38;
+const DRAWING_SHEET_BOTTOM_PAD_PT = 2;
 
 function drawingRasterPixelSize(): { pxW: number; pxH: number } {
   const pageW = 595.28;
@@ -66,17 +66,26 @@ function drawingRasterPixelSize(): { pxW: number; pxH: number } {
   const imgBoxH = pageBottom - imgTop - DRAWING_SHEET_BOTTOM_PAD_PT;
   return {
     pxW: ptToPx(usableW),
-    /** Ligeiro oversampling vertical para nitidez; base ≈ altura útil real. */
-    pxH: ptToPx(Math.max(120, imgBoxH * 1.12)),
+    /** Oversampling para nitidez ao escalar para a caixa útil (planta + 3D). */
+    pxH: ptToPx(Math.max(120, imgBoxH * 1.22)),
   };
 }
 
-/** Raster mais denso para elevações (detalhe de cotas). */
+/** Raster mais denso para elevações (cotas finas) — ligeiramente maior que planta/3D. */
 function elevationDrawingRasterPixelSize(): { pxW: number; pxH: number } {
   const base = drawingRasterPixelSize();
   return {
-    pxW: Math.round(base.pxW * 1.12),
-    pxH: Math.round(base.pxH * 1.18),
+    pxW: Math.round(base.pxW * 1.14),
+    pxH: Math.round(base.pxH * 1.24),
+  };
+}
+
+/** Vista isométrica: bitmap um pouco maior para preservar traços ao preencher a folha. */
+function view3dRasterPixelSize(): { pxW: number; pxH: number } {
+  const b = drawingRasterPixelSize();
+  return {
+    pxW: Math.round(b.pxW * 1.08),
+    pxH: Math.round(b.pxH * 1.12),
   };
 }
 
@@ -298,6 +307,7 @@ export async function renderPdfV2(
 
   const { pxW, pxH } = drawingRasterPixelSize();
   const { pxW: elW, pxH: elH } = elevationDrawingRasterPixelSize();
+  const { pxW: v3W, pxH: v3H } = view3dRasterPixelSize();
 
   let floorRaster: { buffer: Buffer; widthPx: number; heightPx: number };
   let elevFrontStdRaster: { buffer: Buffer; widthPx: number; heightPx: number };
@@ -320,7 +330,7 @@ export async function renderPdfV2(
       svgRasterToPng(input.floorPlanSvg, pxW, pxH),
       svgRasterToPng(input.elevationPages.frontWithoutTunnel, elW, elH),
       svgRasterToPng(input.elevationPages.lateral, elW, elH),
-      svgRasterToPng(input.view3dSvg, pxW, pxH),
+      svgRasterToPng(input.view3dSvg, v3W, v3H),
       ...(tunSvg ? [svgRasterToPng(tunSvg, elW, elH)] : []),
       ...(latTunSvg ? [svgRasterToPng(latTunSvg, elW, elH)] : []),
     ]);
@@ -353,7 +363,7 @@ export async function renderPdfV2(
     doc.page.width - doc.page.margins.left - doc.page.margins.right;
   const pageBottom = doc.page.height - doc.page.margins.bottom;
   /** Espaço mínimo sob o desenho até ao fim da página. */
-  const imgBottomPad = 6;
+  const imgBottomPad = 3;
 
   const drawCentered = (
     text: string,
@@ -402,7 +412,7 @@ export async function renderPdfV2(
     },
     opts?: { bottomPadPt?: number }
   ): void => {
-    const yImg = doc.y + 2;
+    const yImg = doc.y + 0.5;
     const bottomPad = opts?.bottomPadPt ?? imgBottomPad;
     const availH = pageBottom - yImg - bottomPad;
     const { dw, dh } = fitRasterInBox(
@@ -425,7 +435,7 @@ export async function renderPdfV2(
     options?: { subtitle?: string; titleSize?: number }
   ): void => {
     const tSize = options?.titleSize ?? 11.5;
-    let y = doc.page.margins.top + 4;
+    let y = doc.page.margins.top + 2;
     doc.font('Helvetica-Bold').fontSize(tSize).fillColor(COL_INK);
     const hTitle = doc.heightOfString(title, { width: usableW });
     doc.text(title, left, y, { width: usableW, align: 'left' });
@@ -434,7 +444,7 @@ export async function renderPdfV2(
       doc.font('Helvetica').fontSize(9).fillColor(COL_MUTED);
       const hSub = doc.heightOfString(options.subtitle, { width: usableW });
       doc.text(options.subtitle, left, y, { width: usableW, align: 'left' });
-      y += hSub + 6;
+      y += hSub + 4;
     }
     const ruleY = y;
     doc
@@ -443,7 +453,7 @@ export async function renderPdfV2(
       .moveTo(left, ruleY)
       .lineTo(left + usableW, ruleY)
       .stroke();
-    doc.y = ruleY + 8;
+    doc.y = ruleY + 5;
   };
 
   const labelColW = 154;
@@ -571,7 +581,7 @@ export async function renderPdfV2(
   beginDrawingSheetHeader('Planta de implantação', {
     subtitle: 'Cotas em milímetros · escala gráfica',
   });
-  embedFullWidthDrawing(floorRaster, { bottomPadPt: 4 });
+  embedFullWidthDrawing(floorRaster, { bottomPadPt: 2 });
 
   doc.addPage();
   beginDrawingSheetHeader('Vista frontal — módulo padrão', {

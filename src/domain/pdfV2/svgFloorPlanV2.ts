@@ -291,7 +291,7 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
   </style>`);
   parts.push('</defs>');
   parts.push(`<rect width="${w}" height="${h}" fill="${COL_BG}"/>`);
-  const fpPad = 20;
+  const fpPad = 14;
   parts.push(
     `<rect x="${fpPad}" y="${fpPad}" width="${w - 2 * fpPad}" height="${h - 2 * fpPad}" fill="none" stroke="${COL_FRAME}" stroke-width="0.65"/>`
   );

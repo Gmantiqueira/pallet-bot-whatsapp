@@ -18,16 +18,15 @@ import { ELEV_BEAM_FILL } from './elevationVisualTokens';
  * Não há segunda geometria aqui — só escala e projeção para o viewBox SVG.
  *
  * - Para L ≈ W, se `innerH` < `innerW`, `scale = innerH/W` fica baixo e o bitmap fica “paisagem”; no PDF
- *   o encaixe limita pela largura e sobra ~metade da página em branco. Por isso `VB_H` é alto o suficiente
- *   para `innerH >= innerW` (escala passa a usar a largura útil) e a razão VB_W/VB_H ≈ 0,72 aproxima a
- *   zona útil A4 (largura/altura) para o `fitRasterInBox` encher altura e largura ao mesmo tempo.
+ *   o encaixe limita pela largura e sobra área em branco. Por isso `VB_H` é alto o suficiente
+ *   para `innerH >= innerW` quando possível, e VB_W/VB_H ≈ 0,72 aproxima a zona útil A4 retrato.
  */
-const VB_W = 1360;
-const VB_H = 1900;
-const PAD = 22;
+const VB_W = 1420;
+const VB_H = 1980;
+const PAD = 16;
 /** Espaço superior sem título duplicado (o PDF traz o cabeçalho da folha). */
-const HEADER = 28;
-const DIM_OUT = 22;
+const HEADER = 22;
+const DIM_OUT = 16;
 
 function escapeXml(text: string): string {
   return text
@@ -171,7 +170,7 @@ export function buildFloorPlanModelV2(
 ): FloorPlanModelV2 {
   const { warehouseLengthMm: L, warehouseWidthMm: W } = geometry;
   const innerW = VB_W - 2 * PAD;
-  const innerH = VB_H - PAD - HEADER - DIM_OUT - 28;
+  const innerH = VB_H - PAD - HEADER - DIM_OUT - 18;
   const scale = Math.min(innerW / L, innerH / W);
   const boxW = L * scale;
   const boxH = W * scale;
