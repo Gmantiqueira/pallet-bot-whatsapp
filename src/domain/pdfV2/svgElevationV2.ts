@@ -93,34 +93,44 @@ function drawFrontGuardRailMarkers(
   const y2 = rackBottom + 1;
   const parts: string[] = [];
   const post = (x: number, kind: 'simple' | 'double') => {
-    const col = kind === 'double' ? '#b91c1c' : '#ca8a04';
-    if (kind === 'double') {
+    const col = kind === 'double' ? '#991b1b' : '#a16207';
+    const wMain = kind === 'double' ? 3.4 : 5.4;
+    const wBack = wMain + 4.2;
+    const xs =
+      kind === 'double' ? ([x - 3.2, x + 3.2] as const) : ([x] as const);
+    for (const xv of xs) {
       parts.push(
-        `<line x1="${x - 3}" y1="${y1}" x2="${x - 3}" y2="${y2}" stroke="${col}" stroke-width="2.8" stroke-linecap="square" opacity="0.95"/>`,
-        `<line x1="${x + 3}" y1="${y1}" x2="${x + 3}" y2="${y2}" stroke="${col}" stroke-width="2.8" stroke-linecap="square" opacity="0.95"/>`
+        `<line x1="${xv}" y1="${y1}" x2="${xv}" y2="${y2}" stroke="#f8fafc" stroke-width="${wBack}" stroke-linecap="round" opacity="0.96"/>`
       );
-    } else {
       parts.push(
-        `<line x1="${x}" y1="${y1}" x2="${x}" y2="${y2}" stroke="${col}" stroke-width="3.6" stroke-linecap="square" opacity="0.95"/>`
+        `<line x1="${xv}" y1="${y1}" x2="${xv}" y2="${y2}" stroke="${col}" stroke-width="${wMain}" stroke-linecap="square" opacity="1"/>`
       );
     }
-    parts.push(
-      `<line x1="${x - 9}" y1="${y1 + 4 * ls}" x2="${x + 9}" y2="${y1 + 4 * ls}" stroke="${col}" stroke-width="2" stroke-linecap="square" opacity="0.88"/>`
-    );
+    const span = y2 - y1;
+    const r1 = y1 + span * 0.12;
+    const rm = y1 + span * 0.5;
+    const r2 = y1 + span * 0.88;
+    const half = kind === 'double' ? 11 : 9;
+    for (const ry of [r1, rm, r2]) {
+      parts.push(
+        `<line x1="${x - half}" y1="${ry}" x2="${x + half}" y2="${ry}" stroke="${col}" stroke-width="${2.1 * ls}" stroke-linecap="square" opacity="0.93"/>`
+      );
+    }
   };
   if (left !== 'none') post(faceSpanLeft - 5, left);
   if (right !== 'none') post(faceSpanRight + 5, right);
-  const tag = (kind: 'simple' | 'double') => (kind === 'double' ? 'G2' : 'G1');
+  const tag = (kind: 'simple' | 'double') =>
+    kind === 'double' ? 'Dupla' : 'Simples';
   if (left !== 'none') {
-    const col = left === 'double' ? '#b91c1c' : '#ca8a04';
+    const col = left === 'double' ? '#991b1b' : '#a16207';
     parts.push(
-      `<text x="${faceSpanLeft - 22}" y="${(y1 + y2) / 2 + 3 * ls}" text-anchor="end" font-size="${7.8 * ls}px" font-weight="800" fill="${col}" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">${tag(left)}</text>`
+      `<text x="${faceSpanLeft - 24}" y="${(y1 + y2) / 2 + 3.2 * ls}" text-anchor="end" font-size="${9.2 * ls}px" font-weight="800" fill="${col}" stroke="#ffffff" stroke-width="${0.42 * ls}" paint-order="stroke fill" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">${tag(left)}</text>`
     );
   }
   if (right !== 'none') {
-    const col = right === 'double' ? '#b91c1c' : '#ca8a04';
+    const col = right === 'double' ? '#991b1b' : '#a16207';
     parts.push(
-      `<text x="${faceSpanRight + 22}" y="${(y1 + y2) / 2 + 3 * ls}" text-anchor="start" font-size="${7.8 * ls}px" font-weight="800" fill="${col}" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">${tag(right)}</text>`
+      `<text x="${faceSpanRight + 24}" y="${(y1 + y2) / 2 + 3.2 * ls}" text-anchor="start" font-size="${9.2 * ls}px" font-weight="800" fill="${col}" stroke="#ffffff" stroke-width="${0.42 * ls}" paint-order="stroke fill" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">${tag(right)}</text>`
     );
   }
   return parts.join('');
@@ -142,34 +152,44 @@ function drawLateralGuardRailMarkers(
   const y2 = rackBottom + 1;
   const parts: string[] = [];
   const post = (x: number, kind: 'simple' | 'double') => {
-    const col = kind === 'double' ? '#b91c1c' : '#ca8a04';
-    if (kind === 'double') {
+    const col = kind === 'double' ? '#991b1b' : '#a16207';
+    const wMain = kind === 'double' ? 3.4 : 5.4;
+    const wBack = wMain + 4.2;
+    const xs =
+      kind === 'double' ? ([x - 3.2, x + 3.2] as const) : ([x] as const);
+    for (const xv of xs) {
       parts.push(
-        `<line x1="${x - 3}" y1="${y1}" x2="${x - 3}" y2="${y2}" stroke="${col}" stroke-width="2.8" stroke-linecap="square" opacity="0.95"/>`,
-        `<line x1="${x + 3}" y1="${y1}" x2="${x + 3}" y2="${y2}" stroke="${col}" stroke-width="2.8" stroke-linecap="square" opacity="0.95"/>`
+        `<line x1="${xv}" y1="${y1}" x2="${xv}" y2="${y2}" stroke="#f8fafc" stroke-width="${wBack}" stroke-linecap="round" opacity="0.96"/>`
       );
-    } else {
       parts.push(
-        `<line x1="${x}" y1="${y1}" x2="${x}" y2="${y2}" stroke="${col}" stroke-width="3.6" stroke-linecap="square" opacity="0.95"/>`
+        `<line x1="${xv}" y1="${y1}" x2="${xv}" y2="${y2}" stroke="${col}" stroke-width="${wMain}" stroke-linecap="square" opacity="1"/>`
       );
     }
-    parts.push(
-      `<line x1="${x - 9}" y1="${y1 + 4 * ls}" x2="${x + 9}" y2="${y1 + 4 * ls}" stroke="${col}" stroke-width="2" stroke-linecap="square" opacity="0.88"/>`
-    );
+    const span = y2 - y1;
+    const r1 = y1 + span * 0.12;
+    const rm = y1 + span * 0.5;
+    const r2 = y1 + span * 0.88;
+    const half = kind === 'double' ? 11 : 9;
+    for (const ry of [r1, rm, r2]) {
+      parts.push(
+        `<line x1="${x - half}" y1="${ry}" x2="${x + half}" y2="${ry}" stroke="${col}" stroke-width="${2.1 * ls}" stroke-linecap="square" opacity="0.93"/>`
+      );
+    }
   };
   if (left !== 'none') post(xLeftOuter - 5, left);
   if (right !== 'none') post(xRightOuter + 5, right);
-  const tag = (kind: 'simple' | 'double') => (kind === 'double' ? 'G2' : 'G1');
+  const tag = (kind: 'simple' | 'double') =>
+    kind === 'double' ? 'Dupla' : 'Simples';
   if (left !== 'none') {
-    const col = left === 'double' ? '#b91c1c' : '#ca8a04';
+    const col = left === 'double' ? '#991b1b' : '#a16207';
     parts.push(
-      `<text x="${xLeftOuter - 22}" y="${(y1 + y2) / 2 + 3 * ls}" text-anchor="end" font-size="${7.8 * ls}px" font-weight="800" fill="${col}" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">${tag(left)}</text>`
+      `<text x="${xLeftOuter - 24}" y="${(y1 + y2) / 2 + 3.2 * ls}" text-anchor="end" font-size="${9.2 * ls}px" font-weight="800" fill="${col}" stroke="#ffffff" stroke-width="${0.42 * ls}" paint-order="stroke fill" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">${tag(left)}</text>`
     );
   }
   if (right !== 'none') {
-    const col = right === 'double' ? '#b91c1c' : '#ca8a04';
+    const col = right === 'double' ? '#991b1b' : '#a16207';
     parts.push(
-      `<text x="${xRightOuter + 22}" y="${(y1 + y2) / 2 + 3 * ls}" text-anchor="start" font-size="${7.8 * ls}px" font-weight="800" fill="${col}" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">${tag(right)}</text>`
+      `<text x="${xRightOuter + 24}" y="${(y1 + y2) / 2 + 3.2 * ls}" text-anchor="start" font-size="${9.2 * ls}px" font-weight="800" fill="${col}" stroke="#ffffff" stroke-width="${0.42 * ls}" paint-order="stroke fill" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">${tag(right)}</text>`
     );
   }
   return parts.join('');
@@ -887,15 +907,20 @@ function drawFrontRack(
       `<rect x="${ux + uw * 0.06}" y="${ry}" width="${uw * 0.2}" height="${innerH}" fill="${FV_UPRIGHT_FACE}" opacity="0.35"/>`
     );
     const prot = data.columnProtector === true;
-    const baseH = prot ? 7.2 : 3.2;
-    const padXP = prot ? 0.85 : 0.35;
+    const baseH = prot ? 8.6 : 3.2;
+    const padXP = prot ? 0.95 : 0.35;
+    if (prot) {
+      parts.push(
+        `<rect x="${ux - padXP - 0.6}" y="${floorTop - baseH - 0.45}" width="${uw + 2 * padXP + 1.2}" height="${baseH + 0.9}" fill="none" stroke="#ffffff" stroke-width="0.55" opacity="0.88"/>`
+      );
+    }
     parts.push(
-      `<rect x="${ux - padXP}" y="${floorTop - baseH}" width="${uw + 2 * padXP}" height="${baseH}" fill="${prot ? '#ea580c' : '#334155'}" stroke="${FV_UPRIGHT_STROKE}" stroke-width="${prot ? 0.58 : 0.45}" opacity="${prot ? 0.96 : 1}"/>`
+      `<rect x="${ux - padXP}" y="${floorTop - baseH}" width="${uw + 2 * padXP}" height="${baseH}" fill="${prot ? '#ea580c' : '#334155'}" stroke="${prot ? '#431407' : FV_UPRIGHT_STROKE}" stroke-width="${prot ? 0.85 : 0.45}" opacity="${prot ? 0.99 : 1}"/>`
     );
     if (prot) {
       parts.push(
-        `<line x1="${ux + uw * 0.08}" y1="${floorTop - baseH * 0.45}" x2="${ux + uw * 0.92}" y2="${floorTop - baseH * 0.45}" stroke="#ffedd5" stroke-width="0.65" opacity="0.95"/>`,
-        `<line x1="${ux + uw * 0.15}" y1="${floorTop - 1.1}" x2="${ux + uw * 0.85}" y2="${floorTop - 1.1}" stroke="#9a3412" stroke-width="0.5" opacity="0.88"/>`
+        `<line x1="${ux + uw * 0.06}" y1="${floorTop - baseH * 0.42}" x2="${ux + uw * 0.94}" y2="${floorTop - baseH * 0.42}" stroke="#ffedd5" stroke-width="0.82" opacity="0.96"/>`,
+        `<line x1="${ux + uw * 0.12}" y1="${floorTop - 1.15}" x2="${ux + uw * 0.88}" y2="${floorTop - 1.15}" stroke="#7c2d12" stroke-width="0.62" opacity="0.92"/>`
       );
     }
   }
@@ -955,10 +980,10 @@ function drawFrontRack(
       const yTop = Math.min(yBeam0Elev, rackBottom);
       const yBot = Math.max(yBeam0Elev, rackBottom);
       parts.push(
-        `<rect x="${bay.left}" y="${yTop}" width="${bay.right - bay.left}" height="${yBot - yTop}" fill="#fef9c3" fill-opacity="0.52" stroke="none"/>`
+        `<rect x="${bay.left}" y="${yTop}" width="${bay.right - bay.left}" height="${yBot - yTop}" fill="#ffedd5" fill-opacity="0.58" stroke="#ea580c" stroke-width="0.65" stroke-dasharray="7 5" opacity="0.92"/>`
       );
       parts.push(
-        `<line x1="${bay.left}" y1="${(yTop + yBot) / 2}" x2="${bay.right}" y2="${(yTop + yBot) / 2}" stroke="#ca8a04" stroke-width="0.55" stroke-dasharray="5 4" opacity="0.88"/>`
+        `<line x1="${bay.left}" y1="${(yTop + yBot) / 2}" x2="${bay.right}" y2="${(yTop + yBot) / 2}" stroke="#c2410c" stroke-width="0.72" stroke-dasharray="6 5" opacity="0.92"/>`
       );
     }
     const cx = (faceSpanLeft + faceSpanRight) / 2;
@@ -966,7 +991,7 @@ function drawFrontRack(
       (Math.min(yBeam0Elev, rackBottom) + Math.max(yBeam0Elev, rackBottom)) /
       2;
     parts.push(
-      `<text x="${cx}" y="${cyMid - 4 * ls}" text-anchor="middle" font-size="${7.8 * ls}px" font-weight="600" fill="#a16207" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif">Folga inicial · 1.º eixo elevado</text>`
+      `<text x="${cx}" y="${cyMid - 4.5 * ls}" text-anchor="middle" font-size="${8.6 * ls}px" font-weight="800" fill="#9a3412" stroke="#ffffff" stroke-width="${0.35 * ls}" paint-order="stroke fill" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif">1.º eixo elevado (folga sob o patamar)</text>`
     );
   } else if (
     data.firstLevelOnGround === true &&
@@ -977,7 +1002,7 @@ function drawFrontRack(
     for (let bi = 0; bi < bays.length; bi++) {
       const bay = bays[bi]!;
       parts.push(
-        `<line x1="${bay.left}" y1="${yBeam0Elev}" x2="${bay.right}" y2="${yBeam0Elev}" stroke="#0d9488" stroke-width="1.35" opacity="0.78"/>`
+        `<line x1="${bay.left}" y1="${yBeam0Elev}" x2="${bay.right}" y2="${yBeam0Elev}" stroke="#0d9488" stroke-width="1.85" opacity="0.9"/>`
       );
     }
   } else if (
@@ -989,12 +1014,12 @@ function drawFrontRack(
     for (let bi = 0; bi < bays.length; bi++) {
       const bay = bays[bi]!;
       parts.push(
-        `<line x1="${bay.left}" y1="${yBeam0Elev}" x2="${bay.right}" y2="${yBeam0Elev}" stroke="#0d9488" stroke-width="2.75" stroke-linecap="square" opacity="0.92"/>`
+        `<line x1="${bay.left}" y1="${yBeam0Elev}" x2="${bay.right}" y2="${yBeam0Elev}" stroke="#0d9488" stroke-width="3.35" stroke-linecap="square" opacity="0.96"/>`
       );
     }
     const cx = (faceSpanLeft + faceSpanRight) / 2;
     parts.push(
-      `<text x="${cx}" y="${yBeam0Elev - 5.5 * ls}" text-anchor="middle" font-size="${7.5 * ls}px" font-weight="700" fill="#0f766e" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif">1.º feixe ao piso · sem vão útil abaixo</text>`
+      `<text x="${cx}" y="${yBeam0Elev - 5.8 * ls}" text-anchor="middle" font-size="${8.4 * ls}px" font-weight="800" fill="#0f766e" stroke="#ffffff" stroke-width="${0.35 * ls}" paint-order="stroke fill" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif">1.º feixe ao piso (sem vão útil abaixo)</text>`
     );
   }
 
@@ -1311,18 +1336,19 @@ function drawLateral(
   );
 
   if (data.columnProtector === true) {
-    const bh = 7.4;
-    const padB = 0.85;
-    parts.push(
-      `<rect x="${xLeftU - padB}" y="${floorTopLat - bh}" width="${uSide + 2 * padB}" height="${bh}" fill="#ea580c" stroke="${FV_UPRIGHT_STROKE}" stroke-width="0.72" opacity="0.97"/>`
-    );
-    parts.push(
-      `<rect x="${xRightU - padB}" y="${floorTopLat - bh}" width="${uSide + 2 * padB}" height="${bh}" fill="#ea580c" stroke="${FV_UPRIGHT_STROKE}" stroke-width="0.72" opacity="0.97"/>`
-    );
-    parts.push(
-      `<line x1="${xLeftU + uSide * 0.1}" y1="${floorTopLat - bh * 0.42}" x2="${xLeftU + uSide * 0.9}" y2="${floorTopLat - bh * 0.42}" stroke="#ffedd5" stroke-width="0.72" opacity="0.92"/>`,
-      `<line x1="${xRightU + uSide * 0.1}" y1="${floorTopLat - bh * 0.42}" x2="${xRightU + uSide * 0.9}" y2="${floorTopLat - bh * 0.42}" stroke="#ffedd5" stroke-width="0.72" opacity="0.92"/>`
-    );
+    const bh = 8.8;
+    const padB = 0.95;
+    for (const xu of [xLeftU, xRightU] as const) {
+      parts.push(
+        `<rect x="${xu - padB - 0.55}" y="${floorTopLat - bh - 0.45}" width="${uSide + 2 * padB + 1.1}" height="${bh + 0.9}" fill="none" stroke="#ffffff" stroke-width="0.55" opacity="0.88"/>`
+      );
+      parts.push(
+        `<rect x="${xu - padB}" y="${floorTopLat - bh}" width="${uSide + 2 * padB}" height="${bh}" fill="#ea580c" stroke="#431407" stroke-width="0.82" opacity="0.99"/>`
+      );
+      parts.push(
+        `<line x1="${xu + uSide * 0.08}" y1="${floorTopLat - bh * 0.4}" x2="${xu + uSide * 0.92}" y2="${floorTopLat - bh * 0.4}" stroke="#ffedd5" stroke-width="0.78" opacity="0.94"/>`
+      );
+    }
   }
 
   if (showTunnelOpening && yPassTop < floorTopLat - 2.5) {
@@ -1371,10 +1397,10 @@ function drawLateral(
     const yTop = Math.min(yB0Lat, floorTopLat);
     const yBot = Math.max(yB0Lat, floorTopLat);
     parts.push(
-      `<rect x="${bayLeft}" y="${yTop}" width="${bayRight - bayLeft}" height="${yBot - yTop}" fill="#fef9c3" fill-opacity="0.48" stroke="none"/>`
+      `<rect x="${bayLeft}" y="${yTop}" width="${bayRight - bayLeft}" height="${yBot - yTop}" fill="#ffedd5" fill-opacity="0.55" stroke="#ea580c" stroke-width="0.62" stroke-dasharray="7 5" opacity="0.9"/>`
     );
     parts.push(
-      `<line x1="${bayLeft}" y1="${(yTop + yBot) / 2}" x2="${bayRight}" y2="${(yTop + yBot) / 2}" stroke="#ca8a04" stroke-width="0.55" stroke-dasharray="5 4" opacity="0.85"/>`
+      `<line x1="${bayLeft}" y1="${(yTop + yBot) / 2}" x2="${bayRight}" y2="${(yTop + yBot) / 2}" stroke="#c2410c" stroke-width="0.68" stroke-dasharray="6 5" opacity="0.9"/>`
     );
   } else if (
     data.firstLevelOnGround === true &&
@@ -1382,7 +1408,7 @@ function drawLateral(
     Math.abs(yB0Lat - floorTopLat) > 5
   ) {
     parts.push(
-      `<line x1="${bayLeft}" y1="${yB0Lat}" x2="${bayRight}" y2="${yB0Lat}" stroke="#0d9488" stroke-width="1.2" opacity="0.78"/>`
+      `<line x1="${bayLeft}" y1="${yB0Lat}" x2="${bayRight}" y2="${yB0Lat}" stroke="#0d9488" stroke-width="2.05" opacity="0.9"/>`
     );
   }
 
