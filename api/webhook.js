@@ -14,6 +14,9 @@ module.exports = async (req, res) => {
     const q = raw.includes('?') ? raw.slice(raw.indexOf('?')) : '';
     req.url = '/webhook' + q;
   }
+  console.log('[diag][api-webhook] before-getServerlessHandler');
   const handler = await getServerlessHandler();
+  console.log('[diag][api-webhook] after-getServerlessHandler');
+  console.log('[diag][api-webhook] before-handler-invoke');
   return handler(req, res);
 };

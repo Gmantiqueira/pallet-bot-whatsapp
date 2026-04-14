@@ -199,9 +199,9 @@ export const routeIncoming = async (
   const previousState = session.state as State;
 
   // Call state machine transition
-  console.log('[diag] rt:3-pre-transition');
+  console.log('[diag][webhook] before-transition');
   const transitionResult = transition(session, input);
-  console.log('[diag] rt:4-post-transition');
+  console.log('[diag][webhook] after-transition');
 
   // If there's an error, don't advance state but show error message
   if (transitionResult.error) {
@@ -375,9 +375,9 @@ export const routeIncoming = async (
 
   // Persist session
   updatedSession.updatedAt = Date.now();
-  console.log('[diag] rt:7-pre-final-upsert');
+  console.log('[diag][webhook] before-final-upsert');
   await sessionRepository.upsert(updatedSession);
-  console.log('[diag] rt:8-post-final-upsert');
+  console.log('[diag][webhook] after-final-upsert');
 
   return {
     session: updatedSession,

@@ -34,19 +34,18 @@ export const webhookRoutes = async (
     '/webhook',
     {
       preHandler: async (request: FastifyRequest, reply: FastifyReply) => {
-        console.log('[diag] wb:v1-enter');
         try {
           if (!WEBHOOK_SECRET) {
-            console.log('[diag] wb:v2-auth-skip');
+            console.log('[diag][webhook] auth-skip-no-secret');
             return;
           }
           if (!verifyBearerToken(request.headers.authorization, WEBHOOK_SECRET)) {
-            console.error('[diag] wb:v2-auth-fail');
+            console.error('[diag][webhook] auth-fail');
             return reply.code(401).send({ error: 'Unauthorized' });
           }
-          console.log('[diag] wb:v2-auth-ok');
+          console.log('[diag][webhook] auth-ok');
         } catch (err) {
-          console.error('[diag] wb:v2-auth-err', err);
+          console.error('[diag][webhook] auth-err', err);
           throw err;
         }
       },
@@ -55,16 +54,17 @@ export const webhookRoutes = async (
       request: FastifyRequest<{ Body: IncomingWebhookPayload }>,
       reply: FastifyReply
     ) => {
+      console.log('[diag][webhook] route-handler-enter');
+      console.log('[diag][webhook] after-auth');
       const incoming: IncomingPayload = request.body;
 
       try {
-        // Load or create session
-        console.log('[diag] wb:v3-pre-get');
+        console.log('[diag][webhook] before-session-get');
         let session = await sessionRepository.get(incoming.from);
-        console.log('[diag] wb:v4-post-get');
+        console.log('[diag][webhook] after-session-get');
 
         if (!session) {
-          console.log('[diag] wb:v5-pre-create-upsert');
+          console.log('[diag][webhook] before-initial-upsert');
           session = {
             phone: incoming.from,
             state: START_STATE,
@@ -73,18 +73,20 @@ export const webhookRoutes = async (
             updatedAt: Date.now(),
           };
           await sessionRepository.upsert(session);
-          console.log('[diag] wb:v6-post-create-upsert');
+          console.log('[diag][webhook] after-initial-upsert');
         }
 
+        console.log('[diag][webhook] before-routeIncoming');
         const result = await routeIncoming(session, incoming, sessionRepository);
+        console.log('[diag][webhook] after-routeIncoming');
 
-        console.log('[diag] wb:v7-pre-reply');
+        console.log('[diag][webhook] before-reply-send');
         return reply.code(200).send({
           messages: result.outgoingMessages,
           ...(result.generatedPdf ? { generatedPdf: result.generatedPdf } : {}),
         });
       } catch (err) {
-        console.error('[diag] wb:err', err);
+        console.error('[diag][webhook] route-err', err);
         throw err;
       }
     }
