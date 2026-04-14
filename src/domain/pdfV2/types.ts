@@ -308,8 +308,9 @@ export type Rack3DLine3D = {
    * `warehouse_slab` — perímetro do piso do galpão (excluído do zoom).
    * `module_footprint` — contorno Z=0 de cada prisma.
    * `spine_divider` — arestas verticais do vão da espinha (dupla costas), para não colapsar visualmente as duas pegadas.
+   * `bay_divider` — montante e longarina interiores entre as 2 baias (módulo completo; omitido em meio-módulo).
    */
-  lineRole?: 'warehouse_slab' | 'module_footprint' | 'spine_divider';
+  lineRole?: 'warehouse_slab' | 'module_footprint' | 'spine_divider' | 'bay_divider';
   /** Só preenchido em modo debug — evita dedupe para colorir por módulo. */
   debugTint?: 'tunnel' | 'normal' | 'boundary';
 };
@@ -340,6 +341,10 @@ export type Rack3DModelAudit = {
    * Confirma que a espinha foi desenhada em altura, não só no piso.
    */
   spineDividerSegmentCount: number;
+  /** Segmentos `lineRole: bay_divider` tipo beam (longarina ao longo da profundidade em cada nível). */
+  bayDividerBeamSegmentCount: number;
+  /** Segmentos `lineRole: bay_divider` tipo upright (2 por prisma: frente e fundo da costa). */
+  bayDividerUprightSegmentCount: number;
 };
 
 /** Geometria wireframe derivada de {@link LayoutSolutionV2} (sem motor 3D). */
@@ -361,7 +366,7 @@ export type ProjectedLine2D = {
   x2: number;
   y2: number;
   kind: 'upright' | 'beam' | 'floor' | 'module_outline';
-  lineRole?: 'warehouse_slab' | 'module_footprint' | 'spine_divider';
+  lineRole?: 'warehouse_slab' | 'module_footprint' | 'spine_divider' | 'bay_divider';
   debugTint?: 'tunnel' | 'normal' | 'boundary';
 };
 

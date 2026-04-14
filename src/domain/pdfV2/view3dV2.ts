@@ -121,6 +121,12 @@ function strokeForLine(
   if (ln.lineRole === 'spine_divider') {
     return { c: '#0369a1', w: 1.5, opacity: 0.93 };
   }
+  if (ln.lineRole === 'bay_divider') {
+    if (ln.kind === 'beam') {
+      return { c: '#b45309', w: 1.12, opacity: 0.78 };
+    }
+    return { c: '#475569', w: 1.28, opacity: 0.86 };
+  }
   if (debug && ln.debugTint !== undefined && ln.kind !== 'module_outline') {
     return STROKE_DEBUG[ln.debugTint][ln.kind];
   }
@@ -170,6 +176,7 @@ export function render3DViewV2(
   for (const kind of DRAW_ORDER) {
     for (const ln of projected.lines) {
       if (ln.kind !== kind) continue;
+      if (ln.lineRole === 'bay_divider') continue;
       if (kind === 'upright' && ln.lineRole === 'spine_divider') continue;
       const a = toSvg(ln.x1, ln.y1);
       const b = toSvg(ln.x2, ln.y2);
@@ -187,6 +194,18 @@ export function render3DViewV2(
     const st = strokeForLine(ln, debug);
     parts.push(
       `<line x1="${a.x.toFixed(2)}" y1="${a.y.toFixed(2)}" x2="${b.x.toFixed(2)}" y2="${b.y.toFixed(2)}" stroke="${st.c}" stroke-width="${st.w}" stroke-opacity="${st.opacity}" stroke-dasharray="5 4" stroke-linecap="square" fill="none"/>`
+    );
+  }
+
+  for (const ln of projected.lines) {
+    if (ln.lineRole !== 'bay_divider') continue;
+    const a = toSvg(ln.x1, ln.y1);
+    const b = toSvg(ln.x2, ln.y2);
+    const st = strokeForLine(ln, debug);
+    const dash =
+      ln.kind === 'beam' ? ` stroke-dasharray="4 3.5"` : '';
+    parts.push(
+      `<line x1="${a.x.toFixed(2)}" y1="${a.y.toFixed(2)}" x2="${b.x.toFixed(2)}" y2="${b.y.toFixed(2)}" stroke="${st.c}" stroke-width="${st.w}" stroke-opacity="${st.opacity}"${dash} stroke-linecap="round" fill="none"/>`
     );
   }
 

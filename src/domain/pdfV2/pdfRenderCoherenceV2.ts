@@ -1,5 +1,8 @@
 import { tunnelActiveStorageLevelsFromGlobal } from './elevationLevelGeometryV2';
-import { splitModuleFootprintsFor3d } from './model3dV2';
+import {
+  expectedBayDividerSegmentCounts,
+  splitModuleFootprintsFor3d,
+} from './model3dV2';
 import { audit3dModelCoherence } from './model3dV2Coherence';
 import { MODULE_PALLET_BAYS_PER_LEVEL } from './rackModuleSpec';
 import type { LayoutGeometry } from './layoutGeometryV2';
@@ -165,7 +168,7 @@ function validateFootprintsWithinWarehouse(
  */
 export function validatePdfRenderCoherence(
   geometry: LayoutGeometry,
-  options: { rack3dModel: Rack3DModel; layoutSolution?: LayoutSolutionV2 }
+  options: { rack3dModel: Rack3DModel; layoutSolution: LayoutSolutionV2 }
 ): void {
   const errors: string[] = [];
 
@@ -216,24 +219,27 @@ export function validatePdfRenderCoherence(
   validateFootprintsWithinWarehouse(geometry, errors);
 
   const sol = options.layoutSolution;
-  if (sol) {
-    if (sol.rows.length !== geometry.rows.length) {
+  if (sol.rows.length !== geometry.rows.length) {
+    errors.push(
+      `layoutSolution.rows (${sol.rows.length}) ≠ geometry.rows (${geometry.rows.length})`
+    );
+  }
+  if (Math.abs(sol.totals.modules - geometry.totals.moduleCount) > MM_EPS) {
+    errors.push(
+      `layoutSolution.totals.modules (${sol.totals.modules}) ≠ geometry.totals.moduleCount (${geometry.totals.moduleCount})`
+    );
+  }
+  const nRow = Math.min(sol.rows.length, geometry.rows.length);
+  for (let i = 0; i < nRow; i++) {
+    if (sol.rows[i]!.id !== geometry.rows[i]!.id) {
       errors.push(
-        `layoutSolution.rows (${sol.rows.length}) ≠ geometry.rows (${geometry.rows.length})`
+        `Fileira [${i}]: layoutSolution.id (${sol.rows[i]!.id}) ≠ geometry.id (${geometry.rows[i]!.id})`
       );
     }
-    if (Math.abs(sol.totals.modules - geometry.totals.moduleCount) > MM_EPS) {
+    if (sol.rows[i]!.modules.length !== geometry.rows[i]!.modules.length) {
       errors.push(
-        `layoutSolution.totals.modules (${sol.totals.modules}) ≠ geometry.totals.moduleCount (${geometry.totals.moduleCount})`
+        `Fileira [${i}]: layoutSolution tem ${sol.rows[i]!.modules.length} segmento(s), geometria tem ${geometry.rows[i]!.modules.length}`
       );
-    }
-    const n = Math.min(sol.rows.length, geometry.rows.length);
-    for (let i = 0; i < n; i++) {
-      if (sol.rows[i]!.id !== geometry.rows[i]!.id) {
-        errors.push(
-          `Fileira [${i}]: layoutSolution.id (${sol.rows[i]!.id}) ≠ geometry.id (${geometry.rows[i]!.id})`
-        );
-      }
     }
   }
 
@@ -289,6 +295,18 @@ export function validatePdfRenderCoherence(
   if (a.spineDividerSegmentCount !== expSpine) {
     errors.push(
       `Modelo 3D: segmentos spine_divider (${a.spineDividerSegmentCount}) ≠ esperado (${expSpine}) (espinha dupla costas em altura).`
+    );
+  }
+
+  const expBay = expectedBayDividerSegmentCounts(geometry);
+  if (a.bayDividerUprightSegmentCount !== expBay.upright) {
+    errors.push(
+      `Modelo 3D: bay_divider upright (${a.bayDividerUprightSegmentCount}) ≠ esperado (${expBay.upright}) (subdivisão 2 baias).`
+    );
+  }
+  if (a.bayDividerBeamSegmentCount !== expBay.beam) {
+    errors.push(
+      `Modelo 3D: bay_divider beam (${a.bayDividerBeamSegmentCount}) ≠ esperado (${expBay.beam}).`
     );
   }
 

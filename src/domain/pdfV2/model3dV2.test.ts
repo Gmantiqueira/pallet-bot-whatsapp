@@ -5,6 +5,8 @@ import {
 } from './layoutGeometryV2';
 import {
   build3DModelV2,
+  expectedBayDividerSegmentCounts,
+  middleUprightCenterAlongFromBeamStartMm,
   splitModuleFootprintsFor3d,
 } from './model3dV2';
 import { audit3dModelCoherence } from './model3dV2Coherence';
@@ -53,6 +55,8 @@ describe('build3DModelV2 + projeção isométrica', () => {
         moduleOutlineLineCount: 0,
         tunnelOpeningFloorSegmentCount: 0,
         spineDividerSegmentCount: 0,
+        bayDividerBeamSegmentCount: 0,
+        bayDividerUprightSegmentCount: 0,
       },
       lines: [
         {
@@ -223,6 +227,41 @@ describe('build3DModelV2 + projeção isométrica', () => {
     expect(() =>
       validatePdfRenderCoherence(g, { rack3dModel: model, layoutSolution: sol })
     ).not.toThrow();
+  });
+
+  it('9: subdivisão 2 baias — bay_divider bate com expectedBayDividerSegmentCounts', () => {
+    const a = { ...base(), lineStrategy: 'APENAS_SIMPLES' as const };
+    const g = geomFromAnswers(a);
+    const model = build3DModelV2(g);
+    const exp = expectedBayDividerSegmentCounts(g);
+    expect(model.audit.bayDividerUprightSegmentCount).toBe(exp.upright);
+    expect(model.audit.bayDividerBeamSegmentCount).toBe(exp.beam);
+    expect(exp.upright).toBeGreaterThan(0);
+  });
+
+  it('10: meio módulo — sem montante central entre baias no 3D', () => {
+    const a = {
+      ...base(),
+      lengthMm: 72_000,
+      halfModuleOptimization: true,
+      hasTunnel: true,
+      tunnelPosition: 'MEIO' as const,
+      tunnelAppliesTo: 'AMBOS' as const,
+      lineStrategy: 'APENAS_SIMPLES' as const,
+    };
+    const sol = buildLayoutSolutionV2(a);
+    const g = buildLayoutGeometry(sol, a);
+    validateLayoutGeometry(g);
+    for (const row of g.rows) {
+      for (const mod of row.modules) {
+        if (mod.segmentType === 'half') {
+          expect(middleUprightCenterAlongFromBeamStartMm(mod)).toBeNull();
+        }
+      }
+    }
+    const model = build3DModelV2(g);
+    validatePdfRenderCoherence(g, { rack3dModel: model, layoutSolution: sol });
+    expect(model.audit.halfModuleSegmentCount).toBeGreaterThan(0);
   });
 
   it('8: coerência — contagem de prismas bate com a soma dos splits por módulo', () => {

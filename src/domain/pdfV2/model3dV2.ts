@@ -1,5 +1,9 @@
 import type { LayoutGeometry, RackModule, RackRow } from './layoutGeometryV2';
 import type { LayoutOrientationV2, Rack3DLine3D, Rack3DModel } from './types';
+import {
+  INTER_BAY_GAP_WITHIN_MODULE_MM,
+  UPRIGHT_NORMAL_MM,
+} from './rackModuleSpec';
 
 const EPS = 0.5;
 /** Espinha entre costas em dupla — alinhado a layoutSolutionV2 / layoutGeometryV2. */
@@ -34,6 +38,57 @@ function pushLine(
 /** Dedupe montantes só **dentro** do mesmo prisma (cantos do retângulo). */
 function uprightKey(x: number, y: number): string {
   return `${Math.round(x * 10) / 10}:${Math.round(y * 10) / 10}`;
+}
+
+function beamStartCoord(
+  m: RackModule,
+  ori: LayoutOrientationV2
+): number {
+  return ori === 'along_length'
+    ? Math.min(m.footprint.x0, m.footprint.x1)
+    : Math.min(m.footprint.y0, m.footprint.y1);
+}
+
+/**
+ * Distância do início da face ao longo do vão até ao eixo do montante central (2 baias).
+ * Meio-módulo (1 baia) e túnel → null (sem divisor interior).
+ */
+export function middleUprightCenterAlongFromBeamStartMm(
+  mod: RackModule
+): number | null {
+  if (mod.type !== 'normal' || mod.segmentType === 'half') return null;
+  const w = UPRIGHT_NORMAL_MM;
+  return (
+    w +
+    mod.bayClearSpanAlongBeamMm +
+    INTER_BAY_GAP_WITHIN_MODULE_MM +
+    w / 2
+  );
+}
+
+function absoluteMidAlongMm(
+  mod: RackModule,
+  ori: LayoutOrientationV2
+): number | null {
+  const off = middleUprightCenterAlongFromBeamStartMm(mod);
+  if (off == null) return null;
+  return beamStartCoord(mod, ori) + off;
+}
+
+function bayDividerFitsFootprint(
+  fp: ModuleFootprint3d,
+  ori: LayoutOrientationV2,
+  absoluteMid: number
+): boolean {
+  const alongLo =
+    ori === 'along_length'
+      ? Math.min(fp.x0, fp.x1)
+      : Math.min(fp.y0, fp.y1);
+  const alongHi =
+    ori === 'along_length'
+      ? Math.max(fp.x0, fp.x1)
+      : Math.max(fp.y0, fp.y1);
+  return absoluteMid > alongLo + EPS && absoluteMid < alongHi - EPS;
 }
 
 export type ModuleFootprint3d = { x0: number; y0: number; x1: number; y1: number };
@@ -253,6 +308,7 @@ function emitPalletRackPrism(
   mod: RackModule,
   footprint: ModuleFootprint3d,
   uprightSeen: Set<string>,
+  layoutOrientation: LayoutOrientationV2,
   debugModuleTint: Rack3DLine3D['debugTint'] | undefined
 ): void {
   const x0 = Math.min(footprint.x0, footprint.x1);
@@ -284,6 +340,86 @@ function emitPalletRackPrism(
     pushLine(lines, 'upright', cx, cy, 0, cx, cy, mod.heightMm, dt);
   }
 
+  const midAlong = absoluteMidAlongMm(mod, layoutOrientation);
+  const bayOpts = { lineRole: 'bay_divider' as const };
+  if (midAlong != null && bayDividerFitsFootprint(footprint, layoutOrientation, midAlong)) {
+    if (layoutOrientation === 'along_length') {
+      pushLine(
+        lines,
+        'upright',
+        midAlong,
+        y0,
+        0,
+        midAlong,
+        y0,
+        mod.heightMm,
+        bayOpts
+      );
+      pushLine(
+        lines,
+        'upright',
+        midAlong,
+        y1,
+        0,
+        midAlong,
+        y1,
+        mod.heightMm,
+        bayOpts
+      );
+      for (const z of beamZs) {
+        if (isTunnel && z < clearanceMm - EPS) continue;
+        pushLine(
+          lines,
+          'beam',
+          midAlong,
+          y0,
+          z,
+          midAlong,
+          y1,
+          z,
+          bayOpts
+        );
+      }
+    } else {
+      pushLine(
+        lines,
+        'upright',
+        x0,
+        midAlong,
+        0,
+        x0,
+        midAlong,
+        mod.heightMm,
+        bayOpts
+      );
+      pushLine(
+        lines,
+        'upright',
+        x1,
+        midAlong,
+        0,
+        x1,
+        midAlong,
+        mod.heightMm,
+        bayOpts
+      );
+      for (const z of beamZs) {
+        if (isTunnel && z < clearanceMm - EPS) continue;
+        pushLine(
+          lines,
+          'beam',
+          x0,
+          midAlong,
+          z,
+          x1,
+          midAlong,
+          z,
+          bayOpts
+        );
+      }
+    }
+  }
+
   if (isTunnel && clearanceMm > EPS) {
     const zOpen = Math.min(mod.heightMm, Math.max(0, clearanceMm));
     const dt =
@@ -303,6 +439,22 @@ function emitPalletRackPrism(
     pushLine(lines, 'beam', x1, y1, z, x0, y1, z, dt);
     pushLine(lines, 'beam', x0, y1, z, x0, y0, z, dt);
   }
+}
+
+/** Níveis com longarina interior onde se desenha o segmento bay_divider (par com emitPalletRackPrism). */
+export function countBeamZsForBayDivider3d(mod: RackModule): number {
+  const isTunnel = mod.type === 'tunnel';
+  const clearanceMm = mod.tunnelClearanceHeightMm ?? 0;
+  const beamZsAll = mod.beamGeometry.beamElevationsMm.filter(
+    z => z >= EPS && z <= mod.heightMm + EPS
+  );
+  const beamZs = beamZsAll.length >= 2 ? beamZsAll.slice(0, -1) : beamZsAll;
+  let n = 0;
+  for (const z of beamZs) {
+    if (isTunnel && z < clearanceMm - EPS) continue;
+    n += 1;
+  }
+  return n;
 }
 
 function maxUprightHeightAndTiers(geometry: LayoutGeometry): {
@@ -326,11 +478,14 @@ function maxUprightHeightAndTiers(geometry: LayoutGeometry): {
  * default: pegadas vêm de {@link RackModule.footprint} (vão, profundidade, meio módulo).
  *
  * Cada módulo usa as cotas verticais de {@link RackModule.beamGeometry}.
+ * Módulo **completo** (2 baias): montantes + longarina interiores em `lineRole: bay_divider`
+ * (mesma geometria que {@link rackModuleSpec}: vão + gap + montante central).
+ * **Meio módulo** (1 baia): sem divisor interior — a pegada já é metade da face.
  * Dupla costas: dois prismas por módulo quando {@link splitModuleFootprintsFor3d} parte
  * a pegada; contorno de espinha ao nível do piso + `module_outline` em Z=0 por prisma
  * (não deduplicado) para leitura da planta no 3D.
  *
- * Montantes são deduplicados **por prisma** (cantos); não há dedupe global — evita colapsar
+ * Montantes de canto são deduplicados **por prisma** (cantos); não há dedupe global — evita colapsar
  * subdivisões entre módulos. Espinha dupla: contorno ao piso + montantes do vão até à altura do módulo.
  */
 export function build3DModelV2(
@@ -364,6 +519,8 @@ export function build3DModelV2(
   let halfModuleSegmentCount = 0;
   let backToBackCollapsedCount = 0;
   let spineDividerSegmentCount = 0;
+  let bayDividerUprightSegmentCount = 0;
+  let bayDividerBeamSegmentCount = 0;
 
   for (const row of geometry.rows) {
     for (const mod of row.modules) {
@@ -397,7 +554,14 @@ export function build3DModelV2(
       for (const fp of fps) {
         const uprightSeen = new Set<string>();
         emitModuleFootprintOutline(lines, fp, z0, modTint);
-        emitPalletRackPrism(lines, mod, fp, uprightSeen, modTint);
+        emitPalletRackPrism(
+          lines,
+          mod,
+          fp,
+          uprightSeen,
+          layoutOrientation,
+          modTint
+        );
       }
       if (
         fps.length === 2 &&
@@ -420,6 +584,13 @@ export function build3DModelV2(
   }
 
   const linesDeduped = lines;
+
+  bayDividerUprightSegmentCount = linesDeduped.filter(
+    l => l.lineRole === 'bay_divider' && l.kind === 'upright'
+  ).length;
+  bayDividerBeamSegmentCount = linesDeduped.filter(
+    l => l.lineRole === 'bay_divider' && l.kind === 'beam'
+  ).length;
 
   const moduleOutlineLineCount = linesDeduped.filter(
     l => l.kind === 'module_outline'
@@ -451,6 +622,34 @@ export function build3DModelV2(
       moduleOutlineLineCount,
       tunnelOpeningFloorSegmentCount,
       spineDividerSegmentCount,
+      bayDividerBeamSegmentCount,
+      bayDividerUprightSegmentCount,
     },
   };
+}
+
+/**
+ * Contagem esperada de segmentos bay_divider (validação vs. {@link build3DModelV2}).
+ */
+export function expectedBayDividerSegmentCounts(
+  geometry: LayoutGeometry
+): { upright: number; beam: number } {
+  const rackDepthMm = geometry.metadata.rackDepthMm;
+  const ori = geometry.orientation;
+  let upright = 0;
+  let beam = 0;
+  for (const row of geometry.rows) {
+    for (const mod of row.modules) {
+      const mid = absoluteMidAlongMm(mod, ori);
+      if (mid == null) continue;
+      const fps = splitModuleFootprintsFor3d(row, mod, rackDepthMm, ori);
+      const nb = countBeamZsForBayDivider3d(mod);
+      for (const fp of fps) {
+        if (!bayDividerFitsFootprint(fp, ori, mid)) continue;
+        upright += 2;
+        beam += nb;
+      }
+    }
+  }
+  return { upright, beam };
 }
