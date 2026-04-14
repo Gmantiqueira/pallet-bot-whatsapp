@@ -55,10 +55,16 @@ coerente com uso de empilhador em corredor.
 
 ## Validação
 
-- **`validateOperationalAccess(geo)`** — função explícita (em `layoutGeometryV2.ts`) que aplica o
-  modelo de acesso acima sobre o `LayoutGeometry` usado na planta. Fileiras `backToBack` sem faixa
-  bilateral ≥ `corridorMm` falham (área residual estreita **não** satisfaz o requisito).
+| Modo | Acesso (eixo transversal) | Validação em `validateOperationalAccess` |
+|------|---------------------------|----------------------------------------|
+| Simples | Um lado (face oposta ao corredor entre fileiras / remanescente) | Só fileiras **duplas** são verificadas quanto ao perímetro |
+| Dupla | **Dois lados** — faixa ≥ `corridorMm` até **cada** parede | Falha se a banda encostar ou se só houver **residual** < `corridorMm` |
+
+- **`validateOperationalAccess(layout)`** — `layout` é o `LayoutGeometry` da planta/PDF.
+  Para cada fileira `backToBack`, calcula `gapLow` / `gapHigh` (espaço até às paredes transversais)
+  via `doubleRowTransverseGapsMm`; ambos devem ser ≥ `corridorMm` (com tolerância). **Não** trata
+  faixa residual estreita como corredor operacional.
 - **`validateLayoutGeometry`** chama `validateOperationalAccess` no fim (após invariantes de pegada).
 - **`layoutSolutionPassesOperationalAccess(sol)`** — mesmo critério sobre `LayoutSolutionV2`, para o
-  motor rejeitar candidatos inviáveis antes da pontuação (`MELHOR_LAYOUT` pode preferir outra
-  orientação, fileira simples, ou menos fileiras quando o duplo não cabe com acesso bilateral).
+  motor rejeitar candidatos antes da pontuação (`buildLayoutSolutionV2`: menos fileiras, troca para
+  simples, ou outra orientação quando `MELHOR_LAYOUT` aplica).

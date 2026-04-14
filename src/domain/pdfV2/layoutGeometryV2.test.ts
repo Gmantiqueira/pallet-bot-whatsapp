@@ -2,6 +2,7 @@ import { buildLayoutSolutionV2 } from './layoutSolutionV2';
 import { tunnelActiveStorageLevelsFromGlobal } from './elevationLevelGeometryV2';
 import {
   buildLayoutGeometry,
+  doubleRowTransverseGapsMm,
   LayoutGeometryValidationError,
   layoutSolutionPassesOperationalAccess,
   validateLayoutGeometry,
@@ -92,7 +93,7 @@ describe('buildLayoutGeometry + validateLayoutGeometry', () => {
     expect(layoutSolutionPassesOperationalAccess(sol)).toBe(true);
   });
 
-  it('validateOperationalAccess: dupla encostada à parede transversal → rejeita', () => {
+  it('validateOperationalAccess: dupla encostada à parede transversal (lado baixo) → rejeita', () => {
     const a: ProjectAnswersV2 = {
       ...minimal(),
       lineStrategy: 'APENAS_DUPLOS',
@@ -100,10 +101,47 @@ describe('buildLayoutGeometry + validateLayoutGeometry', () => {
     const sol = buildLayoutSolutionV2(a);
     const geo = buildLayoutGeometry(sol, a);
     validateLayoutGeometry(geo);
-    geo.rows[0]!.originY = 0;
+    const row = geo.rows[0]!;
+    if (geo.orientation === 'along_length') {
+      row.originY = 0;
+    } else {
+      row.originX = 0;
+    }
     expect(() => validateOperationalAccess(geo)).toThrow(
       LayoutGeometryValidationError
     );
+  });
+
+  it('validateOperationalAccess: dupla encostada à parede oposta (lado alto) → rejeita', () => {
+    const a: ProjectAnswersV2 = {
+      ...minimal(),
+      lineStrategy: 'APENAS_DUPLOS',
+    };
+    const sol = buildLayoutSolutionV2(a);
+    const geo = buildLayoutGeometry(sol, a);
+    validateLayoutGeometry(geo);
+    const row = geo.rows[0]!;
+    const crossSpan =
+      geo.orientation === 'along_length'
+        ? geo.warehouseWidthMm
+        : geo.warehouseLengthMm;
+    const d = row.rowDepthMm;
+    const bump = geo.metadata.corridorMm * 0.4;
+    if (geo.orientation === 'along_length') {
+      row.originY = crossSpan - d - bump;
+    } else {
+      row.originX = crossSpan - d - bump;
+    }
+    expect(() => validateOperationalAccess(geo)).toThrow(
+      LayoutGeometryValidationError
+    );
+  });
+
+  it('doubleRowTransverseGapsMm: gaps espelham corredor até às paredes', () => {
+    expect(doubleRowTransverseGapsMm({ lo: 3000, hi: 8500, crossSpanMm: 12_000 })).toEqual({
+      gapLow: 3000,
+      gapHigh: 3500,
+    });
   });
 
   it('layoutSolutionPassesOperationalAccess: dupla sem faixa bilateral → false', () => {

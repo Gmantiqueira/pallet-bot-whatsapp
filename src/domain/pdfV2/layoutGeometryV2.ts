@@ -808,55 +808,111 @@ export function validateLayoutGeometry(geo: LayoutGeometry): void {
 export const OPERATIONAL_ACCESS_TOL_MM = 2.5;
 
 /**
- * Valida **acesso operacional** no eixo transversal ao vão (não confunde com área residual).
- *
- * Modelo assumido:
- * - **Fileira simples** — acesso tipicamente **unilateral**: uma face pode encostar à parede
- *   sem corredor dedicado nesse lado.
- * - **Fileira dupla (back-to-back)** — **bilateral** por omissão: cada banda precisa de faixa
- *   com largura **≥ `corridorMm`** antes de **ambas** as paredes do compartimento nesse eixo;
- *   faixa residual estreita **não** conta como corredor operacional para esse fim.
- *
- * Deve ser invocado sobre o mesmo {@link LayoutGeometry} usado na planta/PDF (coerência).
+ * Faixa livre (mm) entre cada face exterior da banda dupla e a parede transversal mais próxima.
+ * Valores ≥ `corridorMm` (com tolerância) implicam corredor operacional; inferior não conta
+ * como acesso válido para regra bilateral.
  */
-export function validateOperationalAccess(geo: LayoutGeometry): void {
-  const cor = geo.metadata.corridorMm;
+export function doubleRowTransverseGapsMm(args: {
+  lo: number;
+  hi: number;
+  crossSpanMm: number;
+}): { gapLow: number; gapHigh: number } {
+  const { lo, hi, crossSpanMm } = args;
+  return { gapLow: lo, gapHigh: crossSpanMm - hi };
+}
+
+/**
+ * Única fonte de verdade: fileira dupla exige **dois** corredores transversais ≥ `corridorMm`
+ * (não aceita faixa residual estreita como substituto).
+ */
+function doubleBandHasBilateralOperationalAccess(args: {
+  lo: number;
+  hi: number;
+  crossSpanMm: number;
+  corridorMm: number;
+  tolMm: number;
+}): boolean {
+  const { lo, hi, crossSpanMm, corridorMm, tolMm } = args;
+  if (corridorMm <= EPS) return false;
+  const { gapLow, gapHigh } = doubleRowTransverseGapsMm({
+    lo,
+    hi,
+    crossSpanMm,
+  });
+  return (
+    gapLow >= corridorMm - tolMm && gapHigh >= corridorMm - tolMm
+  );
+}
+
+/**
+ * Valida **acesso operacional** no eixo transversal ao vão (não confunde área residual com corredor).
+ *
+ * Modelo:
+ * - **Fileira simples** — acesso **por um lado** (unilateral): sem exigência de corredor em ambas
+ *   as paredes; esta função **não** falha por face à parede.
+ * - **Fileira dupla (back-to-back)** — acesso **por dois lados** (bilateral): a banda **não** pode
+ *   encostar numa parede; exige faixa **≥ `corridorMm`** até a parede em **ambos** os lados do eixo
+ *   transversal.
+ *
+ * @param layout Geometria canónica da planta (mesma instância que o PDF) — {@link LayoutGeometry}.
+ */
+export function validateOperationalAccess(layout: LayoutGeometry): void {
+  const cor = layout.metadata.corridorMm;
   const tol = OPERATIONAL_ACCESS_TOL_MM;
-  if (geo.metadata.rackDepthMode !== 'double') return;
+  if (layout.metadata.rackDepthMode !== 'double') return;
+
+  if (cor <= EPS) {
+    throw new LayoutGeometryValidationError(
+      'Fileira dupla: corredor declarado deve ser > 0 mm para modelar acesso bilateral mínimo.'
+    );
+  }
 
   const crossSpan =
-    geo.orientation === 'along_length'
-      ? geo.warehouseWidthMm
-      : geo.warehouseLengthMm;
+    layout.orientation === 'along_length'
+      ? layout.warehouseWidthMm
+      : layout.warehouseLengthMm;
 
-  for (const row of geo.rows) {
+  for (const row of layout.rows) {
     if (row.rowType !== 'backToBack') continue;
 
     const c0 =
-      geo.orientation === 'along_length' ? row.originY : row.originX;
+      layout.orientation === 'along_length' ? row.originY : row.originX;
     const c1 = c0 + row.rowDepthMm;
     const lo = Math.min(c0, c1);
     const hi = Math.max(c0, c1);
 
-    if (lo < cor - tol) {
+    if (
+      !doubleBandHasBilateralOperationalAccess({
+        lo,
+        hi,
+        crossSpanMm: crossSpan,
+        corridorMm: cor,
+        tolMm: tol,
+      })
+    ) {
+      const { gapLow, gapHigh } = doubleRowTransverseGapsMm({
+        lo,
+        hi,
+        crossSpanMm: crossSpan,
+      });
+      if (gapLow < cor - tol) {
+        throw new LayoutGeometryValidationError(
+          `Fileira dupla ${row.id}: banda encostada ao perímetro sem faixa de acesso ≥ ${cor} mm (corredor declarado).`
+        );
+      }
       throw new LayoutGeometryValidationError(
-        `Fileira dupla ${row.id}: banda encostada ao perímetro sem faixa de acesso ≥ ${cor} mm (corredor declarado).`
-      );
-    }
-    if (hi > crossSpan - cor + tol) {
-      throw new LayoutGeometryValidationError(
-        `Fileira dupla ${row.id}: banda encostada ao perímetro oposto sem faixa ≥ ${cor} mm.`
+        `Fileira dupla ${row.id}: banda encostada ao perímetro oposto sem faixa ≥ ${cor} mm (lado livre ~${Math.round(gapHigh)} mm).`
       );
     }
   }
 }
 
 /**
- * Verificação rápida (sobre {@link LayoutSolutionV2}) alinhada a {@link validateOperationalAccess}
- * após `buildLayoutGeometry`. Usada para **rejeitar candidatos** inviáveis antes da pontuação
- * (ex.: `MELHOR_LAYOUT` prefere outra orientação / fileira simples).
+ * Verificação rápida (sobre {@link LayoutSolutionV2}), critério idêntico a {@link validateOperationalAccess}.
+ * Usada para **rejeitar candidatos** antes da pontuação (menos fileiras / troca simples↔dupla /
+ * outra orientação via `MELHOR_LAYOUT`).
  *
- * Layout sem fileiras ou dupla sem faixa bilateral mínima → `false`.
+ * Sem fileiras, ou dupla sem corredor bilateral mínimo → `false`.
  */
 export function layoutSolutionPassesOperationalAccess(
   sol: LayoutSolutionV2
@@ -869,6 +925,8 @@ export function layoutSolutionPassesOperationalAccess(
 
   if (sol.rackDepthMode !== 'double') return true;
 
+  if (cor <= EPS) return false;
+
   for (const row of sol.rows) {
     if (row.kind !== 'double') continue;
     const c0 =
@@ -877,8 +935,17 @@ export function layoutSolutionPassesOperationalAccess(
       sol.orientation === 'along_length' ? row.y1 : row.x1;
     const lo = Math.min(c0, c1);
     const hi = Math.max(c0, c1);
-    if (lo < cor - tol) return false;
-    if (hi > crossSpan - cor + tol) return false;
+    if (
+      !doubleBandHasBilateralOperationalAccess({
+        lo,
+        hi,
+        crossSpanMm: crossSpan,
+        corridorMm: cor,
+        tolMm: tol,
+      })
+    ) {
+      return false;
+    }
   }
   return true;
 }
