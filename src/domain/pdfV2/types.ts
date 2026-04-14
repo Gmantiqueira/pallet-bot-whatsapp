@@ -310,6 +310,29 @@ export type Rack3DLine3D = {
   debugTint?: 'tunnel' | 'normal' | 'boundary';
 };
 
+/**
+ * Contagens derivadas do mesmo passe que gera o wireframe — para validar contra
+ * {@link LayoutGeometry} / planta (sem representação “ilustrativa” silenciosa).
+ */
+export type Rack3DModelAudit = {
+  /** Fileiras processadas (= nº de fileiras na geometria). */
+  rowCount: number;
+  /** Retângulos de módulo no layout (antes do split 3D). */
+  layoutModuleSegmentCount: number;
+  tunnelModuleSegmentCount: number;
+  halfModuleSegmentCount: number;
+  /**
+   * Em dupla costas, módulo normal deve gerar ≥ 2 prismas; >0 aqui indica colapso indevido.
+   */
+  backToBackCollapsedCount: number;
+  /** Arestas `module_outline` em Z=0 (esperado: 4 × footprintPrismCount). */
+  moduleOutlineLineCount: number;
+  /**
+   * Segmentos de piso a Z>0 sem `lineRole` (abertura do túnel); esperado alinhar com módulos túnel com pé livre.
+   */
+  tunnelOpeningFloorSegmentCount: number;
+};
+
 /** Geometria wireframe derivada de {@link LayoutSolutionV2} (sem motor 3D). */
 export type Rack3DModel = {
   warehouse: { lengthMm: number; widthMm: number };
@@ -320,6 +343,7 @@ export type Rack3DModel = {
   moduleEquivEmitted: number;
   /** Prismas de pega em planta (1 por costa em dupla costas após split). */
   footprintPrismCount: number;
+  audit: Rack3DModelAudit;
 };
 
 export type ProjectedLine2D = {

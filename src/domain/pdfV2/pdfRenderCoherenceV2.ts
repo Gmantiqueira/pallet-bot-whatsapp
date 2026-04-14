@@ -1,10 +1,12 @@
 import { tunnelActiveStorageLevelsFromGlobal } from './elevationLevelGeometryV2';
+import { splitModuleFootprintsFor3d } from './model3dV2';
 import { audit3dModelCoherence } from './model3dV2Coherence';
 import { MODULE_PALLET_BAYS_PER_LEVEL } from './rackModuleSpec';
 import type { LayoutGeometry } from './layoutGeometryV2';
-import type { Rack3DModel } from './types';
+import type { LayoutSolutionV2, Rack3DModel } from './types';
 
 const EPS = 0.001;
+const MM_EPS = 0.5;
 const WAREHOUSE_BOUNDS_TOL_MM = 2;
 
 /**
@@ -40,6 +42,39 @@ function tunnelModuleCount(geo: LayoutGeometry): number {
     }
   }
   return n;
+}
+
+function layoutModuleSegmentCount(geo: LayoutGeometry): number {
+  let n = 0;
+  for (const row of geo.rows) n += row.modules.length;
+  return n;
+}
+
+function halfModuleSegmentCount(geo: LayoutGeometry): number {
+  let n = 0;
+  for (const row of geo.rows) {
+    for (const m of row.modules) {
+      if (m.segmentType === 'half') n += 1;
+    }
+  }
+  return n;
+}
+
+/** 4 segmentos horizontais por prisma de túnel com pé livre > 0 (abertura desenhada em Z). */
+function expectedTunnelOpeningFloorSegments(geo: LayoutGeometry): number {
+  const rackDepthMm = geo.metadata.rackDepthMm;
+  const ori = geo.orientation;
+  let segs = 0;
+  for (const row of geo.rows) {
+    for (const mod of row.modules) {
+      if (mod.type !== 'tunnel') continue;
+      const clear = mod.tunnelClearanceHeightMm ?? 0;
+      if (clear <= MM_EPS) continue;
+      const fps = splitModuleFootprintsFor3d(row, mod, rackDepthMm, ori);
+      segs += 4 * fps.length;
+    }
+  }
+  return segs;
 }
 
 /**
@@ -110,10 +145,13 @@ function validateFootprintsWithinWarehouse(
  *
  * Deve ser chamada **após** {@link validateLayoutGeometry} e com o mesmo `LayoutGeometry`
  * usado em planta, elevações e `build3DModelV2`.
+ *
+ * Com `layoutSolution`, confirma que a geometria ainda corresponde ao motor de layout
+ * (sem deriva entre `buildLayoutSolutionV2` e `buildLayoutGeometry`).
  */
 export function validatePdfRenderCoherence(
   geometry: LayoutGeometry,
-  options: { rack3dModel: Rack3DModel }
+  options: { rack3dModel: Rack3DModel; layoutSolution?: LayoutSolutionV2 }
 ): void {
   const errors: string[] = [];
 
@@ -163,10 +201,73 @@ export function validatePdfRenderCoherence(
 
   validateFootprintsWithinWarehouse(geometry, errors);
 
+  const sol = options.layoutSolution;
+  if (sol) {
+    if (sol.rows.length !== geometry.rows.length) {
+      errors.push(
+        `layoutSolution.rows (${sol.rows.length}) ≠ geometry.rows (${geometry.rows.length})`
+      );
+    }
+    if (Math.abs(sol.totals.modules - geometry.totals.moduleCount) > MM_EPS) {
+      errors.push(
+        `layoutSolution.totals.modules (${sol.totals.modules}) ≠ geometry.totals.moduleCount (${geometry.totals.moduleCount})`
+      );
+    }
+    const n = Math.min(sol.rows.length, geometry.rows.length);
+    for (let i = 0; i < n; i++) {
+      if (sol.rows[i]!.id !== geometry.rows[i]!.id) {
+        errors.push(
+          `Fileira [${i}]: layoutSolution.id (${sol.rows[i]!.id}) ≠ geometry.id (${geometry.rows[i]!.id})`
+        );
+      }
+    }
+  }
+
   const m3d = options.rack3dModel;
   if (Math.abs(m3d.moduleEquivEmitted - geometry.totals.moduleCount) > EPS) {
     errors.push(
       `Modelo 3D: moduleEquivEmitted (${m3d.moduleEquivEmitted}) ≠ totals.moduleCount (${geometry.totals.moduleCount})`
+    );
+  }
+
+  const a = m3d.audit;
+  if (a.rowCount !== geometry.rows.length) {
+    errors.push(
+      `Modelo 3D audit: rowCount (${a.rowCount}) ≠ geometry.rows.length (${geometry.rows.length})`
+    );
+  }
+  const segGeo = layoutModuleSegmentCount(geometry);
+  if (a.layoutModuleSegmentCount !== segGeo) {
+    errors.push(
+      `Modelo 3D audit: segmentos de módulo (${a.layoutModuleSegmentCount}) ≠ planta (${segGeo})`
+    );
+  }
+  if (a.tunnelModuleSegmentCount !== tun) {
+    errors.push(
+      `Modelo 3D audit: módulos túnel (${a.tunnelModuleSegmentCount}) ≠ geometria (${tun})`
+    );
+  }
+  const halfGeo = halfModuleSegmentCount(geometry);
+  if (a.halfModuleSegmentCount !== halfGeo) {
+    errors.push(
+      `Modelo 3D audit: meio módulo (${a.halfModuleSegmentCount}) ≠ geometria (${halfGeo})`
+    );
+  }
+  if (a.backToBackCollapsedCount > 0) {
+    errors.push(
+      `Modelo 3D: fileira dupla com ${a.backToBackCollapsedCount} módulo(s) sem divisão em dois prismas (não pode colapsar costas).`
+    );
+  }
+  const outlineExpected = 4 * m3d.footprintPrismCount;
+  if (a.moduleOutlineLineCount !== outlineExpected) {
+    errors.push(
+      `Modelo 3D: linhas module_outline (${a.moduleOutlineLineCount}) ≠ 4×prismas (${outlineExpected}) — cada prisma deve ter contorno próprio em planta.`
+    );
+  }
+  const expTunnelFloor = expectedTunnelOpeningFloorSegments(geometry);
+  if (a.tunnelOpeningFloorSegmentCount !== expTunnelFloor) {
+    errors.push(
+      `Modelo 3D: segmentos de abertura de túnel (${a.tunnelOpeningFloorSegmentCount}) ≠ esperado (${expTunnelFloor}) para módulos túnel com pé livre.`
     );
   }
 
@@ -182,6 +283,12 @@ export function validatePdfRenderCoherence(
       w.includes('Inconsistência layout:') &&
       errors.some(e => e.includes('totals.moduleCount'));
     if (dupModuleTotal) continue;
+    if (
+      a.backToBackCollapsedCount > 0 &&
+      (w.includes('Dupla costas colapsada') || w.includes('volume único'))
+    ) {
+      continue;
+    }
     errors.push(`Modelo 3D: ${w}`);
   }
 

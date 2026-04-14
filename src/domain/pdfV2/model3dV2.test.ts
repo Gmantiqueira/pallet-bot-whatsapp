@@ -43,6 +43,15 @@ describe('build3DModelV2 + projeção isométrica', () => {
       levels: 3,
       moduleEquivEmitted: 0,
       footprintPrismCount: 0,
+      audit: {
+        rowCount: 0,
+        layoutModuleSegmentCount: 0,
+        tunnelModuleSegmentCount: 0,
+        halfModuleSegmentCount: 0,
+        backToBackCollapsedCount: 0,
+        moduleOutlineLineCount: 0,
+        tunnelOpeningFloorSegmentCount: 0,
+      },
       lines: [
         {
           kind: 'upright',

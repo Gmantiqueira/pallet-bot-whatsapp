@@ -269,7 +269,10 @@ export const routeIncoming = async (
           { debug: dbg }
         );
         const rack3d = build3DModelV2(geo);
-        validatePdfRenderCoherence(geo, { rack3dModel: rack3d });
+        validatePdfRenderCoherence(geo, {
+          rack3dModel: rack3d,
+          layoutSolution: sol,
+        });
         const rack3dView = dbg ? build3DModelV2(geo, { debug: true }) : rack3d;
         const view3dSvg = render3DViewV2(projectToIsometric(rack3dView), {
           debug: dbg,

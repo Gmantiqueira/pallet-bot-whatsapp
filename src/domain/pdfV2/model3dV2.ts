@@ -364,9 +364,17 @@ export function build3DModelV2(
 
   let moduleEquivEmitted = 0;
   let footprintPrismCount = 0;
+  let layoutModuleSegmentCount = 0;
+  let tunnelModuleSegmentCount = 0;
+  let halfModuleSegmentCount = 0;
+  let backToBackCollapsedCount = 0;
 
   for (const row of geometry.rows) {
     for (const mod of row.modules) {
+      layoutModuleSegmentCount += 1;
+      if (mod.type === 'tunnel') tunnelModuleSegmentCount += 1;
+      if (mod.segmentType === 'half') halfModuleSegmentCount += 1;
+
       moduleEquivEmitted += mod.segmentType === 'half' ? 0.5 : 1;
       const fps = splitModuleFootprintsFor3d(
         row,
@@ -375,6 +383,15 @@ export function build3DModelV2(
         layoutOrientation
       );
       footprintPrismCount += fps.length;
+
+      if (
+        row.rowType === 'backToBack' &&
+        mod.type !== 'tunnel' &&
+        fps.length < 2
+      ) {
+        backToBackCollapsedCount += 1;
+      }
+
       const modTint: Rack3DLine3D['debugTint'] | undefined = debug
         ? mod.type === 'tunnel'
           ? 'tunnel'
@@ -404,6 +421,20 @@ export function build3DModelV2(
 
   const linesDeduped = debug ? lines : dedupeWireframeLines(lines);
 
+  const moduleOutlineLineCount = linesDeduped.filter(
+    l => l.kind === 'module_outline'
+  ).length;
+  /** Abertura do túnel (lajes internas a Z>0); exclui laje do galpão (`lineRole`). */
+  const tunnelOpeningFloorSegmentCount = linesDeduped.filter(
+    l =>
+      l.kind === 'floor' &&
+      l.lineRole === undefined &&
+      l.z1 > EPS &&
+      Math.abs(l.z1 - l.z2) < EPS
+  ).length;
+
+  const rowCount = geometry.rows.length;
+
   return {
     warehouse: { lengthMm: L, widthMm: W },
     uprightHeightMm: H,
@@ -411,5 +442,14 @@ export function build3DModelV2(
     lines: linesDeduped,
     moduleEquivEmitted,
     footprintPrismCount,
+    audit: {
+      rowCount,
+      layoutModuleSegmentCount,
+      tunnelModuleSegmentCount,
+      halfModuleSegmentCount,
+      backToBackCollapsedCount,
+      moduleOutlineLineCount,
+      tunnelOpeningFloorSegmentCount,
+    },
   };
 }

@@ -685,7 +685,10 @@ export async function generatePdfV2FromSession(
     debug: debugPdf,
   });
   const rack3d = build3DModelV2(layoutGeometry);
-  validatePdfRenderCoherence(layoutGeometry, { rack3dModel: rack3d });
+  validatePdfRenderCoherence(layoutGeometry, {
+    rack3dModel: rack3d,
+    layoutSolution,
+  });
   const rack3dForView = debugPdf
     ? build3DModelV2(layoutGeometry, { debug: true })
     : rack3d;

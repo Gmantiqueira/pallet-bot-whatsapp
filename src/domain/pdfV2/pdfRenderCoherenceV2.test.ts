@@ -38,7 +38,10 @@ describe('validatePdfRenderCoherence', () => {
       geo.totals.positionCount
     );
     expect(() =>
-      validatePdfRenderCoherence(geo, { rack3dModel: rack3d })
+      validatePdfRenderCoherence(geo, {
+        rack3dModel: rack3d,
+        layoutSolution: sol,
+      })
     ).not.toThrow();
   });
 
@@ -56,7 +59,10 @@ describe('validatePdfRenderCoherence', () => {
     validateLayoutGeometry(geo);
     const rack3d = build3DModelV2(geo);
     expect(() =>
-      validatePdfRenderCoherence(geo, { rack3dModel: rack3d })
+      validatePdfRenderCoherence(geo, {
+        rack3dModel: rack3d,
+        layoutSolution: sol,
+      })
     ).not.toThrow();
   });
 
@@ -68,7 +74,25 @@ describe('validatePdfRenderCoherence', () => {
     geo.totals.moduleCount = geo.totals.moduleCount + 3;
     const rack3d = build3DModelV2(geo);
     expect(() =>
-      validatePdfRenderCoherence(geo, { rack3dModel: rack3d })
+      validatePdfRenderCoherence(geo, {
+        rack3dModel: rack3d,
+        layoutSolution: sol,
+      })
+    ).toThrow(PdfRenderCoherenceError);
+  });
+
+  it('lança se layoutSolution divergir da geometry (ids de fileira)', () => {
+    const a = minimal();
+    const sol = buildLayoutSolutionV2(a);
+    const geo = buildLayoutGeometry(sol, a);
+    validateLayoutGeometry(geo);
+    geo.rows[0] = { ...geo.rows[0]!, id: 'fileira-tampered' };
+    const rack3d = build3DModelV2(geo);
+    expect(() =>
+      validatePdfRenderCoherence(geo, {
+        rack3dModel: rack3d,
+        layoutSolution: sol,
+      })
     ).toThrow(PdfRenderCoherenceError);
   });
 });
