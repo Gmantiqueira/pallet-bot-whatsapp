@@ -668,7 +668,7 @@ export async function generatePdfV2FromSession(
     );
   }
   const debugPdf = isDebugPdf();
-  const floorModel = buildFloorPlanModelV2(layoutGeometry);
+  const floorModel = buildFloorPlanModelV2(layoutGeometry, answers);
   const floorPlanSvg = serializeFloorPlanSvgV2(floorModel);
   const elevationModel = buildElevationModelV2(answers, layoutGeometry);
   const elevationPages = serializeElevationPagesV2(elevationModel, {

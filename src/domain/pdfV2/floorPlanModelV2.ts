@@ -6,6 +6,7 @@ import type {
   FloorPlanModelV2,
   RackDepthModeV2,
 } from './types';
+import { buildFloorPlanAccessories } from './visualAccessoriesV2';
 import { ELEV_BEAM_FILL } from './elevationVisualTokens';
 
 /**
@@ -165,7 +166,8 @@ function rowBandFootprintMm(row: RackRow): {
  * Converte o modelo geométrico canónico num modelo de planta com coordenadas de desenho.
  */
 export function buildFloorPlanModelV2(
-  geometry: LayoutGeometry
+  geometry: LayoutGeometry,
+  answers?: Record<string, unknown>
 ): FloorPlanModelV2 {
   const { warehouseLengthMm: L, warehouseWidthMm: W } = geometry;
   const innerW = VB_W - 2 * PAD;
@@ -357,6 +359,8 @@ export function buildFloorPlanModelV2(
           })),
         ];
 
+  const planAccessories = buildFloorPlanAccessories(answers, geometry);
+
   const labels: FloorPlanLabel[] = [
     {
       id: 'sub-dims',
@@ -365,7 +369,7 @@ export function buildFloorPlanModelV2(
       text: `Dimensões do compartimento: ${formatMm(L)} × ${formatMm(W)}`,
       className: 'fp-drawing-meta',
     },
-    ...planCaptionLabels(geometry),
+    ...planCaptionLabels(geometry, planAccessories),
     ...rowLegendBlock,
   ];
 
@@ -373,6 +377,7 @@ export function buildFloorPlanModelV2(
     viewBox: { w: VB_W, h: VB_H },
     warehouseOutline: { x: bx, y: by, w: boxW, h: boxH },
     beamSpanAlong: geometry.beamSpanDirection,
+    planAccessories,
     rowBandRects,
     structureRects,
     circulationRects,
@@ -382,8 +387,11 @@ export function buildFloorPlanModelV2(
   };
 }
 
-/** Legenda única dos números dos módulos (≈ posições por módulo). */
-function planCaptionLabels(geometry: LayoutGeometry): FloorPlanLabel[] {
+/** Legenda única dos números dos módulos (≈ posições por módulo) + leitura do 1.º nível. */
+function planCaptionLabels(
+  geometry: LayoutGeometry,
+  planAccessories: FloorPlanModelV2['planAccessories']
+): FloorPlanLabel[] {
   const line: FloorPlanLabel = {
     id: 'cap-module-line',
     x: VB_W / 2,
@@ -391,7 +399,16 @@ function planCaptionLabels(geometry: LayoutGeometry): FloorPlanLabel[] {
     text: planModuleSingleCaption(geometry),
     className: 'fp-plan-hint',
   };
-  return [line];
+  const firstLevel: FloorPlanLabel = {
+    id: 'cap-first-level',
+    x: VB_W / 2,
+    y: PAD + 50,
+    text: planAccessories.firstLevelOnGround
+      ? '1.º eixo de feixe: ao piso (referência)'
+      : '1.º eixo de feixe: elevado — folga sob o primeiro patamar (referência)',
+    className: 'fp-first-level',
+  };
+  return [line, firstLevel];
 }
 
 function planModuleSingleCaption(geometry: LayoutGeometry): string {

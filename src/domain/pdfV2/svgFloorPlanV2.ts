@@ -1,6 +1,7 @@
 import type {
   FloorPlanCirculationSemantic,
   FloorPlanModelV2,
+  GuardRailPositionCode,
 } from './types';
 import { escapeXml } from './floorPlanModelV2';
 import { ELEV_PALLET_TIER_STROKE } from './elevationVisualTokens';
@@ -137,6 +138,108 @@ function moduleBayHintLine(s: FloorPlanModelV2['structureRects'][0]): string {
   return `<line x1="${s.x}" y1="${my}" x2="${s.x + s.w}" y2="${my}" stroke="${ELEV_PALLET_TIER_STROKE}" stroke-width="${thin}" opacity="${op}" stroke-dasharray="${dash}" ${cap}/>`;
 }
 
+function edgeWantsGuard(
+  pos: GuardRailPositionCode | undefined,
+  edge: 'start' | 'end'
+): boolean {
+  if (!pos) return false;
+  if (pos === 'AMBOS') return true;
+  if (edge === 'start') return pos === 'INICIO';
+  return pos === 'FINAL';
+}
+
+function guardKindAtPlanEdge(
+  a: FloorPlanModelV2['planAccessories'],
+  edge: 'start' | 'end'
+): 'none' | 'simple' | 'double' {
+  const d =
+    a.guardRailDouble &&
+    edgeWantsGuard(a.guardRailDoublePosition, edge);
+  const s =
+    a.guardRailSimple &&
+    edgeWantsGuard(a.guardRailSimplePosition, edge);
+  if (d) return 'double';
+  if (s) return 'simple';
+  return 'none';
+}
+
+/** Protetores nos cantos + guardas nas extremidades ao longo do vão (símbolo). */
+function appendFloorPlanAccessoryGraphics(
+  model: FloorPlanModelV2,
+  parts: string[]
+): void {
+  const a = model.planAccessories;
+  const o = model.warehouseOutline;
+  const along = model.beamSpanAlong;
+
+  if (a.columnProtector) {
+    const pw = 13;
+    const ph = 9;
+    const corners: [number, number][] = [
+      [o.x - 2, o.y - 2],
+      [o.x + o.w - pw + 2, o.y - 2],
+      [o.x - 2, o.y + o.h - ph + 2],
+      [o.x + o.w - pw + 2, o.y + o.h - ph + 2],
+    ];
+    for (const [cx, cy] of corners) {
+      parts.push(
+        `<rect x="${cx}" y="${cy}" width="${pw}" height="${ph}" rx="1.4" fill="#fed7aa" stroke="#c2410c" stroke-width="1.15" opacity="0.98"/>`
+      );
+      parts.push(
+        `<line x1="${cx + 2}" y1="${cy + ph - 2.5}" x2="${cx + pw - 2}" y2="${cy + ph - 2.5}" stroke="#9a3412" stroke-width="0.9" opacity="0.85"/>`
+      );
+    }
+  }
+
+  const strokeRail = (
+    kind: 'none' | 'simple' | 'double',
+    vertical: boolean,
+    x0: number,
+    y0: number,
+    x1: number,
+    y1: number
+  ) => {
+    if (kind === 'none') return;
+    const col = kind === 'double' ? '#b91c1c' : '#ca8a04';
+    const w = kind === 'double' ? 2.5 : 3.5;
+    if (vertical) {
+      if (kind === 'double') {
+        parts.push(
+          `<line x1="${x0 - 3.5}" y1="${y0}" x2="${x0 - 3.5}" y2="${y1}" stroke="${col}" stroke-width="${w}" stroke-linecap="square" opacity="0.92"/>`,
+          `<line x1="${x0 + 3.5}" y1="${y0}" x2="${x0 + 3.5}" y2="${y1}" stroke="${col}" stroke-width="${w}" stroke-linecap="square" opacity="0.92"/>`
+        );
+      } else {
+        parts.push(
+          `<line x1="${x0}" y1="${y0}" x2="${x0}" y2="${y1}" stroke="${col}" stroke-width="${w}" stroke-linecap="square" opacity="0.95"/>`
+        );
+      }
+    } else if (kind === 'double') {
+      parts.push(
+        `<line x1="${x0}" y1="${y0 - 3.5}" x2="${x1}" y2="${y1 - 3.5}" stroke="${col}" stroke-width="${w}" stroke-linecap="square" opacity="0.92"/>`,
+        `<line x1="${x0}" y1="${y0 + 3.5}" x2="${x1}" y2="${y1 + 3.5}" stroke="${col}" stroke-width="${w}" stroke-linecap="square" opacity="0.92"/>`
+      );
+    } else {
+      parts.push(
+        `<line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" stroke="${col}" stroke-width="${w}" stroke-linecap="square" opacity="0.95"/>`
+      );
+    }
+  };
+
+  const startK = guardKindAtPlanEdge(a, 'start');
+  const endK = guardKindAtPlanEdge(a, 'end');
+  if (along === 'x') {
+    const xl = o.x - 3;
+    const xr = o.x + o.w + 3;
+    strokeRail(startK, true, xl, o.y, xl, o.y + o.h);
+    strokeRail(endK, true, xr, o.y, xr, o.y + o.h);
+  } else {
+    const yt = o.y - 3;
+    const yb = o.y + o.h + 3;
+    strokeRail(startK, false, o.x, yt, o.x + o.w, yt);
+    strokeRail(endK, false, o.x, yb, o.x + o.w, yb);
+  }
+}
+
 function orientationArrowSvg(
   o: FloorPlanModelV2['warehouseOutline'],
   beamAlong: 'x' | 'y'
@@ -178,6 +281,7 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
     .fp-drawing-meta { font: 600 14px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #334155; letter-spacing: 0.01em; }
     .fp-plan-hint { font: 400 12.5px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #64748b; }
     .fp-row-legend { font: 500 13px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #334155; letter-spacing: 0.01em; }
+    .fp-first-level { font: 500 12px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #0f766e; }
     .fp-anno-heading { font: 600 11px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #64748b; letter-spacing: 0.06em; text-transform: uppercase; }
     .fp-circ-op { font: 650 14px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #0f172a; }
     .fp-circ { font: 600 14px "Helvetica Neue", Helvetica, Arial, sans-serif; }
@@ -303,6 +407,8 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
       `<text x="${tcx}" y="${tcy}" text-anchor="middle" dominant-baseline="middle" class="fp-mod-num" font-size="${fontPx}px" opacity="${opacity}">${s.displayIndex}</text>`
     );
   }
+
+  appendFloorPlanAccessoryGraphics(model, parts);
 
   parts.push(orientationArrowSvg(o, model.beamSpanAlong));
 

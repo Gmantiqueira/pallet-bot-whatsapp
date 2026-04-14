@@ -1,6 +1,7 @@
 import { computeBeamElevations } from './elevationLevelGeometryV2';
 import { formatModuleCountForDocumentPt } from './formatModuleCountDisplay';
 import type { ElevationModelV2, ElevationPanelPayload } from './types';
+import { accessoryFieldsFromAnswers } from './visualAccessoriesV2';
 import { MODULE_PALLET_BAYS_PER_LEVEL } from './rackModuleSpec';
 import {
   findTunnelModuleGeometry,
@@ -92,6 +93,7 @@ function panelFromRackModule(
     structuralTopMm: geom.structuralTopMm,
     usableHeightMm: geom.usableHeightMm,
     meanGapMm: geom.meanGapMm,
+    ...accessoryFieldsFromAnswers(answers),
   };
 }
 
@@ -162,6 +164,7 @@ function buildFrontWithoutTunnelPayload(
     structuralTopMm: geom.structuralTopMm,
     usableHeightMm: geom.usableHeightMm,
     meanGapMm: geom.meanGapMm,
+    ...accessoryFieldsFromAnswers(answers),
   };
 }
 

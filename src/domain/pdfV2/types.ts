@@ -132,12 +132,27 @@ export type FloorPlanCirculationSemantic =
   | 'cross_passage'
   | 'tunnel';
 
+/** Posição da guarda-corpo ao longo do vão (fileira). */
+export type GuardRailPositionCode = 'INICIO' | 'FINAL' | 'AMBOS';
+
+/** Opções de projeto espelhadas no desenho (planta). */
+export type FloorPlanAccessoriesV2 = {
+  columnProtector: boolean;
+  guardRailSimple: boolean;
+  guardRailSimplePosition?: GuardRailPositionCode;
+  guardRailDouble: boolean;
+  guardRailDoublePosition?: GuardRailPositionCode;
+  firstLevelOnGround: boolean;
+};
+
 /** Modelo de planta: entidades já posicionadas em unidades SVG (viewBox). */
 export type FloorPlanModelV2 = {
   viewBox: { w: number; h: number };
   warehouseOutline: { x: number; y: number; w: number; h: number };
   /** Direção do vão das longarinas no plano (eixo das linhas de armazenagem). */
   beamSpanAlong: 'x' | 'y';
+  /** Protetores, guardas e leitura do 1.º nível — mesmo critério do resumo técnico. */
+  planAccessories: FloorPlanAccessoriesV2;
   /** Faixa da fileira (estrutura) por baixo dos módulos. */
   rowBandRects: {
     id: string;
@@ -253,6 +268,12 @@ export type ElevationPanelPayload = {
   structuralTopMm: number;
   usableHeightMm: number;
   meanGapMm: number;
+  /** Protetor de cantoneira na base dos montantes (face frontal). */
+  columnProtector?: boolean;
+  guardRailSimple?: boolean;
+  guardRailSimplePosition?: GuardRailPositionCode;
+  guardRailDouble?: boolean;
+  guardRailDoublePosition?: GuardRailPositionCode;
 };
 
 export type ElevationModelV2 = {

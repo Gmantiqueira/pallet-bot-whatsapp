@@ -1,4 +1,8 @@
-import type { ElevationModelV2, ElevationPanelPayload } from './types';
+import type {
+  ElevationModelV2,
+  ElevationPanelPayload,
+  GuardRailPositionCode,
+} from './types';
 import {
   INTER_BAY_GAP_WITHIN_MODULE_MM,
   uprightWidthsMmForFrontBayCount,
@@ -47,6 +51,98 @@ function escapeXml(text: string): string {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+function edgeWantsGuard(
+  pos: GuardRailPositionCode | undefined,
+  edge: 'start' | 'end'
+): boolean {
+  if (!pos) return false;
+  if (pos === 'AMBOS') return true;
+  if (edge === 'start') return pos === 'INICIO';
+  return pos === 'FINAL';
+}
+
+function guardKindAtFrontEdge(
+  data: ElevationPanelPayload,
+  edge: 'start' | 'end'
+): 'none' | 'simple' | 'double' {
+  const d =
+    data.guardRailDouble === true &&
+    edgeWantsGuard(data.guardRailDoublePosition, edge);
+  const s =
+    data.guardRailSimple === true &&
+    edgeWantsGuard(data.guardRailSimplePosition, edge);
+  if (d) return 'double';
+  if (s) return 'simple';
+  return 'none';
+}
+
+/** Marcadores junto à face de armazenagem (símbolo de guarda nas extremidades do vão). */
+function drawFrontGuardRailMarkers(
+  faceSpanLeft: number,
+  faceSpanRight: number,
+  rackBottom: number,
+  data: ElevationPanelPayload,
+  ls: number
+): string {
+  const left = guardKindAtFrontEdge(data, 'start');
+  const right = guardKindAtFrontEdge(data, 'end');
+  if (left === 'none' && right === 'none') return '';
+  const y1 = rackBottom - 30 * ls;
+  const y2 = rackBottom + 1;
+  const parts: string[] = [];
+  const post = (x: number, kind: 'simple' | 'double') => {
+    const col = kind === 'double' ? '#b91c1c' : '#ca8a04';
+    if (kind === 'double') {
+      parts.push(
+        `<line x1="${x - 3}" y1="${y1}" x2="${x - 3}" y2="${y2}" stroke="${col}" stroke-width="2.8" stroke-linecap="square" opacity="0.95"/>`,
+        `<line x1="${x + 3}" y1="${y1}" x2="${x + 3}" y2="${y2}" stroke="${col}" stroke-width="2.8" stroke-linecap="square" opacity="0.95"/>`
+      );
+    } else {
+      parts.push(
+        `<line x1="${x}" y1="${y1}" x2="${x}" y2="${y2}" stroke="${col}" stroke-width="3.6" stroke-linecap="square" opacity="0.95"/>`
+      );
+    }
+    parts.push(
+      `<line x1="${x - 9}" y1="${y1 + 4 * ls}" x2="${x + 9}" y2="${y1 + 4 * ls}" stroke="${col}" stroke-width="2" stroke-linecap="square" opacity="0.88"/>`
+    );
+  };
+  if (left !== 'none') post(faceSpanLeft - 5, left);
+  if (right !== 'none') post(faceSpanRight + 5, right);
+  return parts.join('');
+}
+
+/** Nota de rodapé do desenho: alinha com as opções do projeto. */
+export function buildElevationAccessorySubtitle(
+  data: ElevationPanelPayload
+): string | undefined {
+  const bits: string[] = [];
+  if (data.columnProtector === true) {
+    bits.push('Protetores de pilar na base');
+  }
+  if (data.guardRailSimple === true && data.guardRailSimplePosition) {
+    const p = data.guardRailSimplePosition;
+    bits.push(
+      p === 'AMBOS'
+        ? 'Guarda simples — ambas as extremidades'
+        : `Guarda simples — ${p === 'INICIO' ? 'início' : 'fim'} do vão`
+    );
+  }
+  if (data.guardRailDouble === true && data.guardRailDoublePosition) {
+    const p = data.guardRailDoublePosition;
+    bits.push(
+      p === 'AMBOS'
+        ? 'Guarda dupla — ambas as extremidades'
+        : `Guarda dupla — ${p === 'INICIO' ? 'início' : 'fim'} do vão`
+    );
+  }
+  bits.push(
+    data.firstLevelOnGround
+      ? '1.º eixo de feixe ao piso'
+      : '1.º eixo elevado (folga sob o primeiro patamar)'
+  );
+  return bits.join(' · ');
 }
 
 function formatMmPtBr(mm: number): string {
@@ -728,8 +824,11 @@ function drawFrontRack(
     parts.push(
       `<rect x="${ux + uw * 0.06}" y="${ry}" width="${uw * 0.2}" height="${innerH}" fill="${FV_UPRIGHT_FACE}" opacity="0.35"/>`
     );
+    const prot = data.columnProtector === true;
+    const baseH = prot ? 5.2 : 3.2;
+    const padXP = prot ? 0.75 : 0.35;
     parts.push(
-      `<rect x="${ux - 0.35}" y="${floorTop - 2.5}" width="${uw + 0.7}" height="3.2" fill="#334155" stroke="${FV_UPRIGHT_STROKE}" stroke-width="0.45"/>`
+      `<rect x="${ux - padXP}" y="${floorTop - baseH}" width="${uw + 2 * padXP}" height="${baseH}" fill="${prot ? '#ea580c' : '#334155'}" stroke="${FV_UPRIGHT_STROKE}" stroke-width="${prot ? 0.58 : 0.45}" opacity="${prot ? 0.96 : 1}"/>`
     );
   }
 
@@ -775,6 +874,45 @@ function drawFrontRack(
   const lastUx = uprightXs[nMod]!;
   const lastUw = uprightWidthsPx[nMod]!;
   const topY = ry;
+
+  const yBeam0Elev = beamYsPx[0];
+  if (
+    data.firstLevelOnGround === false &&
+    typeof yBeam0Elev === 'number' &&
+    !showTunnelOpening &&
+    rackBottom - yBeam0Elev > 6
+  ) {
+    for (let bi = 0; bi < bays.length; bi++) {
+      const bay = bays[bi]!;
+      const yTop = Math.min(yBeam0Elev, rackBottom);
+      const yBot = Math.max(yBeam0Elev, rackBottom);
+      parts.push(
+        `<rect x="${bay.left}" y="${yTop}" width="${bay.right - bay.left}" height="${yBot - yTop}" fill="#fef9c3" fill-opacity="0.52" stroke="none"/>`
+      );
+      parts.push(
+        `<line x1="${bay.left}" y1="${(yTop + yBot) / 2}" x2="${bay.right}" y2="${(yTop + yBot) / 2}" stroke="#ca8a04" stroke-width="0.55" stroke-dasharray="5 4" opacity="0.88"/>`
+      );
+    }
+    const cx = (faceSpanLeft + faceSpanRight) / 2;
+    const cyMid =
+      (Math.min(yBeam0Elev, rackBottom) + Math.max(yBeam0Elev, rackBottom)) /
+      2;
+    parts.push(
+      `<text x="${cx}" y="${cyMid - 4 * ls}" text-anchor="middle" font-size="${7.8 * ls}px" font-weight="600" fill="#a16207" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif">Folga inicial · 1.º eixo elevado</text>`
+    );
+  } else if (
+    data.firstLevelOnGround === true &&
+    typeof yBeam0Elev === 'number' &&
+    !showTunnelOpening &&
+    Math.abs(yBeam0Elev - rackBottom) > 5
+  ) {
+    for (let bi = 0; bi < bays.length; bi++) {
+      const bay = bays[bi]!;
+      parts.push(
+        `<line x1="${bay.left}" y1="${yBeam0Elev}" x2="${bay.right}" y2="${yBeam0Elev}" stroke="#0d9488" stroke-width="1.35" opacity="0.78"/>`
+      );
+    }
+  }
 
   const yBeam0 = beamYsPx[0];
   if (
@@ -877,6 +1015,16 @@ function drawFrontRack(
 
   parts.push(
     `<line x1="${uprightXs[0]}" y1="${topY}" x2="${lastUx + lastUw}" y2="${topY}" stroke="#475569" stroke-width="1.05" stroke-linecap="square" opacity="0.75"/>`
+  );
+
+  parts.push(
+    drawFrontGuardRailMarkers(
+      faceSpanLeft,
+      faceSpanRight,
+      rackBottom,
+      data,
+      ls
+    )
   );
 
   parts.push(
@@ -1078,6 +1226,17 @@ function drawLateral(
     `<rect x="${xRightU}" y="${y0}" width="${uSide}" height="${dh}" fill="${FV_UPRIGHT_FILL}" stroke="${FV_UPRIGHT_STROKE}" stroke-width="1.1"/>`
   );
 
+  if (data.columnProtector === true) {
+    const bh = 5.2;
+    const padB = 0.8;
+    parts.push(
+      `<rect x="${xLeftU - padB}" y="${floorTopLat - bh}" width="${uSide + 2 * padB}" height="${bh}" fill="#ea580c" stroke="${FV_UPRIGHT_STROKE}" stroke-width="0.55" opacity="0.96"/>`
+    );
+    parts.push(
+      `<rect x="${xRightU - padB}" y="${floorTopLat - bh}" width="${uSide + 2 * padB}" height="${bh}" fill="#ea580c" stroke="${FV_UPRIGHT_STROKE}" stroke-width="0.55" opacity="0.96"/>`
+    );
+  }
+
   if (showTunnelOpening && yPassTop < floorTopLat - 2.5) {
     const tw = Math.max(0, bayRight - bayLeft);
     const yMid = (yPassTop + floorTopLat) / 2;
@@ -1112,6 +1271,30 @@ function drawLateral(
           fontWeight: '700',
         }
       )
+    );
+  }
+
+  const yB0Lat = beamYLocal(0);
+  if (
+    data.firstLevelOnGround === false &&
+    !showTunnelOpening &&
+    floorTopLat - yB0Lat > 6
+  ) {
+    const yTop = Math.min(yB0Lat, floorTopLat);
+    const yBot = Math.max(yB0Lat, floorTopLat);
+    parts.push(
+      `<rect x="${bayLeft}" y="${yTop}" width="${bayRight - bayLeft}" height="${yBot - yTop}" fill="#fef9c3" fill-opacity="0.48" stroke="none"/>`
+    );
+    parts.push(
+      `<line x1="${bayLeft}" y1="${(yTop + yBot) / 2}" x2="${bayRight}" y2="${(yTop + yBot) / 2}" stroke="#ca8a04" stroke-width="0.55" stroke-dasharray="5 4" opacity="0.85"/>`
+    );
+  } else if (
+    data.firstLevelOnGround === true &&
+    !showTunnelOpening &&
+    Math.abs(yB0Lat - floorTopLat) > 5
+  ) {
+    parts.push(
+      `<line x1="${bayLeft}" y1="${yB0Lat}" x2="${bayRight}" y2="${yB0Lat}" stroke="#0d9488" stroke-width="1.2" opacity="0.78"/>`
     );
   }
 
@@ -1257,7 +1440,7 @@ export function serializeElevationPagesV2(
     innerHFront,
     std,
     '',
-    undefined,
+    buildElevationAccessorySubtitle(std),
     {
       labelScale: ls,
       debug: dbg,
@@ -1280,7 +1463,7 @@ export function serializeElevationPagesV2(
       innerHFront,
       tun,
       '',
-      undefined,
+      buildElevationAccessorySubtitle(tun),
       { labelScale: ls, debug: dbg }
     );
     frontWithTunnel = wrapElevationDrawingPage(
@@ -1352,7 +1535,15 @@ export function serializeElevationSvgV2(model: ElevationModelV2): string {
         ? 'Elevação dupla com túnel'
         : 'Elevação com túnel';
     parts.push(
-      drawFrontRack(36, y, panelW, bandH, std, 'Elevação sem túnel', undefined)
+      drawFrontRack(
+        36,
+        y,
+        panelW,
+        bandH,
+        std,
+        'Elevação sem túnel',
+        buildElevationAccessorySubtitle(std)
+      )
     );
     parts.push(
       drawFrontRack(
@@ -1362,12 +1553,20 @@ export function serializeElevationSvgV2(model: ElevationModelV2): string {
         bandH,
         tun,
         tunTitle,
-        undefined
+        buildElevationAccessorySubtitle(tun)
       )
     );
   } else {
     parts.push(
-      drawFrontRack(36, y, w - 72, bandH, std, 'Elevação sem túnel', undefined)
+      drawFrontRack(
+        36,
+        y,
+        w - 72,
+        bandH,
+        std,
+        'Elevação sem túnel',
+        buildElevationAccessorySubtitle(std)
+      )
     );
   }
 
