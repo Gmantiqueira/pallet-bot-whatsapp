@@ -264,8 +264,8 @@ Content-Type: application/pdf
 
 Interface web do simulador (chat estilo WhatsApp para testar o `POST /webhook`).
 
-- **Local (`npm run dev`)**: servido pelo Fastify a partir de `public/simulator.html`.
-- **Vercel**: `vercel.json` reescreve `/simulator` para o ficheiro estático `/simulator.html` (sem passar pela função Node), para carregar rápido.
+- **Local (`npm run dev`)**: Fastify serve `public/simulator.html` (após `npm run build`) ou `public/simulator.source.html`.
+- **Vercel**: `vercel.json` reescreve `/simulator` → `/simulator.html`; o ficheiro estático é **`public/simulator.html`** (gerado no build a partir de `simulator.source.html`).
 
 #### Response
 

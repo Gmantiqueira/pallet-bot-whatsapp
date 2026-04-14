@@ -3,10 +3,14 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 function resolveSimulatorHtmlPath(): string | undefined {
-  const segments = ['public', 'simulator.html'] as const;
+  const cwd = process.cwd();
+  const fromDist = path.join(__dirname, '..', '..');
+  /** Build gera `public/simulator.html`; em dev sem build usa-se o template. */
   const candidates = [
-    path.join(process.cwd(), ...segments),
-    path.join(__dirname, '..', '..', ...segments),
+    path.join(cwd, 'public', 'simulator.html'),
+    path.join(fromDist, 'public', 'simulator.html'),
+    path.join(cwd, 'public', 'simulator.source.html'),
+    path.join(fromDist, 'public', 'simulator.source.html'),
   ];
   for (const p of candidates) {
     if (fs.existsSync(p)) {

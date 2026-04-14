@@ -1,11 +1,8 @@
 /**
- * Gera `simulator.html` na raiz do repositório a partir de `public/simulator.html`.
- * - Garante que a Vercel encontra o ficheiro em `/simulator.html` após o build
- *   (o rewrite `/simulator` → `/simulator.html` serve ficheiro estático, sem Lambda).
- * - Injeta WEBHOOK_SECRET em build (variável de ambiente na Vercel), com fallback
- *   para o valor de desenvolvimento.
- *
- * Não executar à mão em CI se não quiseres gerar o artefacto; `npm run build` corre isto.
+ * Gera `public/simulator.html` a partir de `public/simulator.source.html`.
+ * Na Vercel (preset "Other"), ficheiros estáticos vêm de `public/` → URL `/simulator.html`.
+ * Gerar na raiz do repo não era servido como estático, daí GET /simulator → 404.
+ * Injeta WEBHOOK_SECRET em build (env na Vercel), com fallback para dev.
  */
 'use strict';
 
@@ -13,8 +10,8 @@ const fs = require('fs');
 const path = require('path');
 
 const root = path.join(__dirname, '..');
-const src = path.join(root, 'public', 'simulator.html');
-const dest = path.join(root, 'simulator.html');
+const src = path.join(root, 'public', 'simulator.source.html');
+const dest = path.join(root, 'public', 'simulator.html');
 
 let html = fs.readFileSync(src, 'utf8');
 

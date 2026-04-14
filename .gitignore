@@ -9,6 +9,5 @@ coverage/
 *~
 storage/
 data/
-# Gerado por scripts/sync-simulator-static.cjs no `npm run build` (não vai para o Git;
-# na Vercel o build cria este ficheiro no servidor — o rewrite em vercel.json continua válido).
-/simulator.html
+# Gerado por scripts/sync-simulator-static.cjs (injeta WEBHOOK_SECRET); template em public/simulator.source.html
+/public/simulator.html
