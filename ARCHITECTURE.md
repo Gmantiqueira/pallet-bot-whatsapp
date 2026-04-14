@@ -30,8 +30,9 @@ O projeto segue uma arquitetura em camadas (layered architecture) com separaçã
 
 ### Deploy na Vercel
 
-- **`api/index.js`**: após `npm run build`, carrega `dist/fastifyApp` e expõe o Fastify via **`serverless-http`** (uma Serverless Function para todos os caminhos). O ficheiro não se chama `app.ts` para a Vercel não confundir com Next.js App Router (`src/app`). Tanto `api/index.js` como `src/server.ts` fazem **`require`/`import` direto de `fastify`**, porque o [preset Fastify da Vercel](https://vercel.com/docs/frameworks/backend/fastify) procura esse import na entrada.
-- **`vercel.json`**: `rewrites` enviam `/*` para `/api`; em `VERCEL=1` um hook tenta restaurar o path nos headers da plataforma.
+- **`api/[[...path]].js`**: após `npm run build`, carrega `dist/fastifyApp` e expõe o Fastify via **`serverless-http`** (catch‑all para `/api/...`). O ficheiro não se chama `app.ts` para a Vercel não confundir com Next.js App Router (`src/app`). Tanto este ficheiro como `src/server.ts` fazem **`require`/`import` direto de `fastify`**, porque o [preset Fastify da Vercel](https://vercel.com/docs/frameworks/backend/fastify) procura esse import na entrada.
+- **`vercel.json`**: `rewrites` mapeiam `/*` para `/api/$1` (sem duplicar rotas que já começam por `/api`); em `VERCEL=1` um hook repõe o path (headers ou removendo o prefixo `/api`).
+- **`includeFiles`: `public/**`**: o simulador serve `public/index.html` por `fs`; sem isto o ficheiro não entra no bundle serverless na Vercel.
 - **`npm start` / `src/server.ts`**: continuam a servir para VPS ou `docker run` local; não são usados pelo runtime serverless da Vercel.
 - Limites de tempo e CPU aplicam-se às [Vercel Functions](https://vercel.com/docs/functions/limitations) (geração de PDF pode exigir plano com `maxDuration` maior).
 

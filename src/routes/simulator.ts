@@ -2,15 +2,29 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import * as fs from 'fs';
 import * as path from 'path';
 
+function resolveSimulatorHtmlPath(): string | undefined {
+  const segments = ['public', 'index.html'] as const;
+  const candidates = [
+    path.join(process.cwd(), ...segments),
+    path.join(__dirname, '..', '..', ...segments),
+  ];
+  for (const p of candidates) {
+    if (fs.existsSync(p)) {
+      return p;
+    }
+  }
+  return undefined;
+}
+
 export const simulatorRoutes = async (
   fastify: FastifyInstance
 ): Promise<void> => {
   fastify.get(
     '/simulator',
     async (_request: FastifyRequest, reply: FastifyReply) => {
-      const htmlPath = path.join(process.cwd(), 'public', 'index.html');
+      const htmlPath = resolveSimulatorHtmlPath();
 
-      if (!fs.existsSync(htmlPath)) {
+      if (!htmlPath) {
         return reply.code(404).send({ error: 'Simulator not found' });
       }
 
