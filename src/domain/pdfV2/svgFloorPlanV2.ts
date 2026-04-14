@@ -95,12 +95,20 @@ function moduleDisplayFontOpacity(
 ): { fontPx: number; opacity: number; nudgeX: number; nudgeY: number } {
   const minSide = Math.min(s.w, s.h);
   const fromCount =
-    totalModules > 48 ? 12 : totalModules > 32 ? 13.5 : totalModules > 20 ? 15 : totalModules > 12 ? 16.5 : 18;
-  const fromBox = minSide * 0.2;
-  const fontPx = Math.max(10, Math.min(fromCount, fromBox));
+    totalModules > 48
+      ? 14
+      : totalModules > 32
+        ? 15.5
+        : totalModules > 20
+          ? 17
+          : totalModules > 12
+            ? 19
+            : 21;
+  const fromBox = minSide * 0.22;
+  const fontPx = Math.max(12, Math.min(fromCount, fromBox));
   let opacity =
-    totalModules > 45 ? 0.62 : totalModules > 28 ? 0.7 : totalModules > 16 ? 0.76 : 0.82;
-  if (fontPx < 10) opacity *= 0.94;
+    totalModules > 45 ? 0.74 : totalModules > 28 ? 0.8 : totalModules > 16 ? 0.85 : 0.9;
+  if (fontPx < 12) opacity *= 0.96;
   const nudgeY = -Math.min(5, s.h * 0.055);
   const nudgeX = s.w >= s.h ? Math.min(4, s.w * 0.018) : 0;
   return { fontPx, opacity, nudgeX, nudgeY };
@@ -124,22 +132,22 @@ function orientationArrowSvg(
   beamAlong: 'x' | 'y'
 ): string {
   const pad = 8;
-  const gw = 210;
-  const gh = 58;
+  const gw = 248;
+  const gh = 68;
   const gx = o.x + o.w - gw - pad;
   const gy = o.y + o.h - gh - pad;
   const shaft =
     beamAlong === 'x'
-      ? `<line x1="${gx + 8}" y1="${gy + 38}" x2="${gx + gw - 24}" y2="${gy + 38}" stroke="#0f172a" stroke-width="2.35"/><polygon points="${gx + gw - 16},${gy + 38} ${gx + gw - 30},${gy + 29} ${gx + gw - 30},${gy + 47}" fill="#0f172a"/>`
-      : `<line x1="${gx + 36}" y1="${gy + gh - 12}" x2="${gx + 36}" y2="${gy + 14}" stroke="#0f172a" stroke-width="2.35"/><polygon points="${gx + 36},${gy + 8} ${gx + 26},${gy + 22} ${gx + 46},${gy + 22}" fill="#0f172a"/>`;
+      ? `<line x1="${gx + 10}" y1="${gy + 44}" x2="${gx + gw - 28}" y2="${gy + 44}" stroke="#0f172a" stroke-width="3.4"/><polygon points="${gx + gw - 18},${gy + 44} ${gx + gw - 36},${gy + 32} ${gx + gw - 36},${gy + 56}" fill="#0f172a"/>`
+      : `<line x1="${gx + 42}" y1="${gy + gh - 14}" x2="${gx + 42}" y2="${gy + 16}" stroke="#0f172a" stroke-width="3.4"/><polygon points="${gx + 42},${gy + 10} ${gx + 30},${gy + 26} ${gx + 54},${gy + 26}" fill="#0f172a"/>`;
   const sub =
     beamAlong === 'x'
       ? 'Linhas · paralelas ao comprimento do galpão'
       : 'Linhas · paralelas à largura do galpão';
   return `<g>
-    <rect x="${gx}" y="${gy}" width="${gw}" height="${gh}" rx="6" fill="#f8fafc" fill-opacity="0.97" stroke="#1e40af" stroke-width="1.15"/>
-    <text x="${gx + 10}" y="${gy + 20}" font-size="15px" font-weight="700" fill="#0f172a" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">Sentido de entrada / operação</text>
-    <text x="${gx + 10}" y="${gy + 40}" font-size="11.5px" fill="#334155" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">${escapeXml(sub)}</text>
+    <rect x="${gx}" y="${gy}" width="${gw}" height="${gh}" rx="7" fill="#f1f5f9" fill-opacity="0.98" stroke="#1e3a8a" stroke-width="1.45"/>
+    <text x="${gx + 12}" y="${gy + 24}" font-size="17px" font-weight="700" fill="#0f172a" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">Sentido de entrada / operação</text>
+    <text x="${gx + 12}" y="${gy + 46}" font-size="13px" fill="#1e293b" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">${escapeXml(sub)}</text>
     ${shaft}
   </g>`;
 }
@@ -155,15 +163,15 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
   );
   parts.push('<defs>');
   parts.push(`<style>
-    .fp-title { font: 700 40px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: ${COL_INK}; letter-spacing: 0.05em; }
-    .fp-sub { font: 500 27px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #4b5563; }
-    .fp-plan-hint { font: 400 15px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #4b5563; }
-    .fp-row-title { font: 700 23px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: ${ELEV_BEAM_EDGE}; stroke: #ffffff; stroke-width: 4px; paint-order: stroke fill; stroke-linejoin: round; }
-    .fp-circ-op { font: 800 18px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #0f172a; stroke: #ffffff; stroke-width: 4px; paint-order: stroke fill; stroke-linejoin: round; }
-    .fp-circ { font: 600 15px "Helvetica Neue", Helvetica, Arial, sans-serif; }
-    .fp-circ-res { font: 600 13px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #57534e; }
-    .fp-dim { font: 700 26px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: ${COL_DIM}; }
-    .fp-mod-num { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; font-weight: 600; fill: #334155; }
+    .fp-title { font: 700 44px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: ${COL_INK}; letter-spacing: 0.04em; }
+    .fp-sub { font: 500 30px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #374151; }
+    .fp-plan-hint { font: 400 17px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #4b5563; }
+    .fp-row-title { font: 700 28px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: ${ELEV_BEAM_EDGE}; stroke: #ffffff; stroke-width: 5px; paint-order: stroke fill; stroke-linejoin: round; }
+    .fp-circ-op { font: 800 22px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #0f172a; stroke: #ffffff; stroke-width: 5px; paint-order: stroke fill; stroke-linejoin: round; }
+    .fp-circ { font: 600 18px "Helvetica Neue", Helvetica, Arial, sans-serif; }
+    .fp-circ-res { font: 600 15px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #44403c; }
+    .fp-dim { font: 700 31px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: ${COL_DIM}; }
+    .fp-mod-num { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; font-weight: 600; fill: #1e293b; }
   </style>`);
   parts.push('</defs>');
   parts.push(`<rect width="${w}" height="${h}" fill="${COL_BG}"/>`);
@@ -230,7 +238,7 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
       );
     } else {
       const cls = 'fp-circ';
-      const fillT = sem === 'tunnel' ? '#92400e' : '#0c4a6e';
+      const fillT = sem === 'tunnel' ? '#7c2d12' : '#0c4a6e';
       parts.push(
         `<text x="${tcx}" y="${tcy}" text-anchor="middle" dominant-baseline="middle" class="${cls}" fill="${fillT}">${escapeXml(short)}</text>`
       );
@@ -293,9 +301,9 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
 
   parts.push(orientationArrowSvg(o, model.beamSpanAlong));
 
-  const dimExtStroke = 0.65;
-  const dimMainStroke = 0.95;
-  const tick = 5.5;
+  const dimExtStroke = 0.82;
+  const dimMainStroke = 1.12;
+  const tick = 6.5;
 
   for (const d of model.dimensionLines) {
     if (d.extensions?.length && d.textMode === 'corridor-outside') {

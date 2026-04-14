@@ -59,9 +59,9 @@ const STROKE: Record<
   ProjectedLine2D['kind'],
   { c: string; w: number; opacity: number }
 > = {
-  floor: { c: '#94a3b8', w: 1.2, opacity: 0.92 },
-  upright: { c: '#0f172a', w: 1.55, opacity: 1 },
-  beam: { c: '#ea580c', w: 1.25, opacity: 1 },
+  floor: { c: '#64748b', w: 1.45, opacity: 0.94 },
+  upright: { c: '#0f172a', w: 1.85, opacity: 1 },
+  beam: { c: '#c2410c', w: 1.55, opacity: 1 },
 };
 
 const DRAW_ORDER: ProjectedLine2D['kind'][] = ['floor', 'beam', 'upright'];

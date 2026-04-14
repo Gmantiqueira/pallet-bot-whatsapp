@@ -88,7 +88,7 @@ describe('build3DModelV2 + projeção isométrica', () => {
     const svg = render3DViewV2(projected);
     expect(svg).toContain('<svg xmlns');
     expect(svg).toContain('v2-3d-wireframe');
-    expect(svg).toMatch(/stroke="#ea580c"/);
+    expect(svg).toMatch(/stroke="#c2410c"/);
     expect(svg).toMatch(/stroke="#0f172a"/);
   });
 

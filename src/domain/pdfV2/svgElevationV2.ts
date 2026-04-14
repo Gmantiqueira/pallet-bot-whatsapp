@@ -37,7 +37,8 @@ const COL_FLOOR_FILL = '#f1f5f9';
 
 /** Cotas: hierarquia — principal / secundária. */
 const DIM_MAJOR = '#0f172a';
-const DIM_MINOR = '#64748b';
+/** Cotas secundárias: um pouco mais escuras para leitura em impressão/PDF. */
+const DIM_MINOR = '#475569';
 const COL_BRACE_STROKE = '#475569';
 
 function escapeXml(text: string): string {
@@ -1135,7 +1136,7 @@ function drawLateral(
 }
 
 /** Escala de cotas / legendas em páginas PDF dedicadas (uma elevação por folha). */
-const ELEV_PAGE_LABEL_SCALE = 1.72;
+const ELEV_PAGE_LABEL_SCALE = 1.9;
 const ELEV_PAGE_W = 1260;
 const ELEV_PAGE_H_FRONT = 1080;
 const ELEV_PAGE_H_LATERAL = 1040;
@@ -1164,7 +1165,7 @@ function wrapElevationDrawingPage(
   );
   parts.push(inner);
   parts.push(
-    `<text x="${width / 2}" y="${height - 22}" text-anchor="middle" font-size="${fsFoot}px" fill="#64748b">${escapeXml(footerLine)}</text>`
+    `<text x="${width / 2}" y="${height - 20}" text-anchor="middle" font-size="${fsFoot}px" fill="#475569">${escapeXml(footerLine)}</text>`
   );
   parts.push('</svg>');
   return parts.join('');
@@ -1314,12 +1315,12 @@ export function serializeElevationSvgV2(model: ElevationModelV2): string {
   let sy = h - 58;
   for (let i = model.summaryLines.length - 1; i >= 0; i--) {
     parts.push(
-      `<text x="${w / 2}" y="${sy}" text-anchor="middle" font-size="9px" fill="#334155">${escapeXml(model.summaryLines[i])}</text>`
+      `<text x="${w / 2}" y="${sy}" text-anchor="middle" font-size="10.5px" fill="#1e293b">${escapeXml(model.summaryLines[i])}</text>`
     );
-    sy -= 13;
+    sy -= 15;
   }
   parts.push(
-    `<text x="${w - 48}" y="${h - 40}" text-anchor="end" font-size="7.5px" fill="#94a3af">Cotas em mm · escala automática</text>`
+    `<text x="${w - 48}" y="${h - 38}" text-anchor="end" font-size="9px" fill="#64748b">Cotas em mm · escala automática</text>`
   );
 
   parts.push('</svg>');
