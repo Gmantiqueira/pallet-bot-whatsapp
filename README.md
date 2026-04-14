@@ -75,7 +75,7 @@ npm run format      # Formata código com Prettier
 ```
 src/
   ├── server.ts      # Ponto de entrada do servidor
-  ├── app.ts         # Instância Fastify
+  ├── fastifyApp.ts  # Instância Fastify
   ├── config/        # Configurações (env)
   ├── types/         # Tipos TypeScript
   ├── routes/        # Rotas HTTP

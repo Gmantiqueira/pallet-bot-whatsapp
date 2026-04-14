@@ -1,4 +1,4 @@
-import { createApp } from './app';
+import { createApp } from './fastifyApp';
 import { loadEnv } from './config/env';
 
 const start = async (): Promise<void> => {

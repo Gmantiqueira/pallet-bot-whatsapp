@@ -30,7 +30,7 @@ O projeto segue uma arquitetura em camadas (layered architecture) com separaçã
 
 ### Deploy na Vercel
 
-- **`api/index.js`**: após `npm run build`, carrega `dist/app` e expõe o Fastify via **`serverless-http`** (uma Serverless Function para todos os caminhos).
+- **`api/index.js`**: após `npm run build`, carrega `dist/fastifyApp` e expõe o Fastify via **`serverless-http`** (uma Serverless Function para todos os caminhos). O ficheiro não se chama `app.ts` para a Vercel não confundir com Next.js App Router (`src/app`).
 - **`vercel.json`**: `rewrites` enviam `/*` para `/api`; em `VERCEL=1` um hook tenta restaurar o path nos headers da plataforma.
 - **`npm start` / `src/server.ts`**: continuam a servir para VPS ou `docker run` local; não são usados pelo runtime serverless da Vercel.
 - Limites de tempo e CPU aplicam-se às [Vercel Functions](https://vercel.com/docs/functions/limitations) (geração de PDF pode exigir plano com `maxDuration` maior).
@@ -237,7 +237,7 @@ src/
 │   └── messages.ts
 ├── config/             # Configurações
 │   └── env.ts
-├── app.ts              # Setup Fastify
+├── fastifyApp.ts       # Setup Fastify (evita nome `app.ts` na Vercel)
 └── server.ts            # Entry point
 ```
 

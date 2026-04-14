@@ -1,3 +1,4 @@
+/** Fastify bootstrap — not named `app.ts` so Vercel does not treat `src/app*` as Next.js App Router. */
 import Fastify, { FastifyInstance } from 'fastify';
 import { webhookRoutes } from './routes/webhook';
 import { filesRoutes } from './routes/files';

@@ -11,7 +11,7 @@ async function getHandler() {
   }
   if (!pending) {
     pending = (async () => {
-      const { createApp } = require('../dist/app');
+      const { createApp } = require('../dist/fastifyApp');
       const app = await createApp();
       await app.ready();
       return serverless(app.server);
