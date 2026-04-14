@@ -8,6 +8,13 @@ import { MIN_LEVEL_GAP_MM } from '../../domain/conversationHelpers';
 import { formatModuleCountForDocumentPt } from '../../domain/pdfV2/formatModuleCountDisplay';
 import { formatMm, formatPeDireitoAltura } from './pdfService';
 
+export type TechnicalSummaryRow = {
+  label: string;
+  value: string;
+  /** Valores principais do projeto — tipografia maior no PDF. */
+  emphasis?: boolean;
+};
+
 function projectOriginLabel(project: Record<string, unknown>): string {
   if (project.projectType === 'PLANTA_REAL') return 'Planta real';
   if (project.projectType === 'MEDIDAS_DIGITADAS') return 'Medidas digitadas';
@@ -28,50 +35,106 @@ function edgePositionLabelPt(pos: unknown): string {
   return map[pos] ?? pos;
 }
 
-function heightModeSummaryRows(
+/**
+ * Bloco de altura alinhado ao fluxo de conversa: origem da definição + parâmetros de entrada
+ * (quando aplicável) + valor resultante, sem repetir o que as linhas de níveis já descrevem.
+ */
+function buildHeightDefinitionRows(
   project: Record<string, unknown>
-): { label: string; value: string }[] {
-  const hdef = project.heightDefinitionMode;
-  if (
-    hdef === HEIGHT_DEFINITION_WAREHOUSE_CLEAR &&
-    typeof project.warehouseClearHeightMm === 'number'
-  ) {
-    const gapMm =
-      typeof project.warehouseMinBeamGapMm === 'number'
-        ? (project.warehouseMinBeamGapMm as number)
-        : MIN_LEVEL_GAP_MM;
-    return [
-      {
-        label: 'Modo de altura:',
-        value:
-          'Pé-direito útil do galpão — níveis e altura do módulo calculados automaticamente',
-      },
-      {
-        label: 'Pé-direito útil informado:',
-        value: formatMm(project.warehouseClearHeightMm as number),
-      },
-      {
-        label: 'Espaçamento mín. entre eixos:',
-        value: formatMm(gapMm),
-      },
-    ];
-  }
+): TechnicalSummaryRow[] {
+  const gapDefault = MIN_LEVEL_GAP_MM;
+  const gapMm =
+    typeof project.warehouseMinBeamGapMm === 'number'
+      ? (project.warehouseMinBeamGapMm as number)
+      : gapDefault;
+
   if (
     project.heightMode === HEIGHT_MODE_WAREHOUSE_HEIGHT &&
     typeof project.warehouseHeightMm === 'number'
   ) {
     return [
       {
-        label: 'Modo de altura:',
+        label: 'Definição de altura:',
+        value: 'Pé-direito total do galpão',
+        emphasis: true,
+      },
+      {
+        label: 'Pé-direito total informado:',
+        value: formatMm(project.warehouseHeightMm),
+      },
+      {
+        label: 'Espaçamento mín. entre eixos:',
+        value: formatMm(gapMm),
+      },
+      {
+        label: 'Derivação:',
         value:
-          'Pé-direito total do galpão — níveis e altura do módulo derivados automaticamente',
+          'Níveis e altura do módulo obtidos automaticamente a partir do pé-direito total e do espaçamento.',
+      },
+      {
+        label: 'Altura do módulo (resultado):',
+        value: formatPeDireitoAltura(project),
+        emphasis: true,
       },
     ];
   }
+
+  if (
+    project.heightDefinitionMode === HEIGHT_DEFINITION_WAREHOUSE_CLEAR &&
+    typeof project.warehouseClearHeightMm === 'number'
+  ) {
+    return [
+      {
+        label: 'Definição de altura:',
+        value: 'Pé-direito útil do galpão',
+        emphasis: true,
+      },
+      {
+        label: 'Pé-direito útil informado:',
+        value: formatMm(project.warehouseClearHeightMm),
+      },
+      {
+        label: 'Espaçamento mín. entre eixos:',
+        value: formatMm(gapMm),
+      },
+      {
+        label: 'Derivação:',
+        value:
+          'Níveis e altura do módulo obtidos automaticamente a partir do pé-direito útil e do espaçamento.',
+      },
+      {
+        label: 'Altura do módulo (resultado):',
+        value: formatPeDireitoAltura(project),
+        emphasis: true,
+      },
+    ];
+  }
+
+  if (project.heightMode === 'CALC') {
+    return [
+      {
+        label: 'Definição de altura:',
+        value: 'Altura total = carga útil × níveis',
+        emphasis: true,
+      },
+      {
+        label: 'Altura referida:',
+        value: formatPeDireitoAltura(project),
+        emphasis: true,
+      },
+    ];
+  }
+
   return [
     {
-      label: 'Modo de altura:',
-      value: 'Altura total do módulo (definição direta)',
+      label: 'Definição de altura:',
+      value: 'Altura direta do módulo',
+      emphasis: true,
+    },
+    {
+      label: 'Altura do módulo (total):',
+      value: formatPeDireitoAltura(project),
+      emphasis: true,
     },
   ];
 }
@@ -95,13 +158,6 @@ export function formatNiveisArmazenagemForDocumentPt(
   }
   return String(metadata.structuralLevels);
 }
-
-export type TechnicalSummaryRow = {
-  label: string;
-  value: string;
-  /** Valores principais do projeto — tipografia maior no PDF. */
-  emphasis?: boolean;
-};
 
 /**
  * Resumo técnico da capa do PDF V2 alinhado à {@link LayoutGeometry} (planta/elevações).
@@ -133,13 +189,12 @@ export function technicalSummaryRowsFromLayoutGeometry(
       value: formatMm(warehouseWidthMm),
       emphasis: true,
     },
-    { label: 'Origem do projeto:', value: projectOriginLabel(project) },
-    ...heightModeSummaryRows(project).map(r => ({ ...r })),
     {
-      label: 'Altura do sistema:',
-      value: formatPeDireitoAltura(project),
+      label: 'Origem do projeto:',
+      value: projectOriginLabel(project),
       emphasis: true,
     },
+    ...buildHeightDefinitionRows(project),
     {
       label: 'Níveis de armazenagem:',
       value: niveisDetail,
@@ -166,11 +221,19 @@ export function technicalSummaryRowsFromLayoutGeometry(
     },
     {
       label: 'Guarda simples:',
-      value: guardWithPosition(project, 'guardRailSimple', 'guardRailSimplePosition'),
+      value: guardWithPosition(
+        project,
+        'guardRailSimple',
+        'guardRailSimplePosition'
+      ),
     },
     {
       label: 'Guarda dupla:',
-      value: guardWithPosition(project, 'guardRailDouble', 'guardRailDoublePosition'),
+      value: guardWithPosition(
+        project,
+        'guardRailDouble',
+        'guardRailDoublePosition'
+      ),
     },
   ];
 
