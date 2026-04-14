@@ -54,6 +54,42 @@ describe('App Smoke Test', () => {
     expect(body).toMatchObject({ error: expect.stringContaining('from') });
   });
 
+  it('simulator mode returns clientSession and does not require Redis', async () => {
+    const phone = '5511999000001';
+    const r1 = await app.inject({
+      method: 'POST',
+      url: '/webhook',
+      headers: {
+        authorization: `Bearer ${TEST_WEBHOOK_SECRET}`,
+        'content-type': 'application/json',
+      },
+      payload: { from: phone, simulator: true, text: 'ola' },
+    });
+    expect(r1.statusCode).toBe(200);
+    const b1 = JSON.parse(r1.body);
+    expect(b1.clientSession).toBeDefined();
+    expect(b1.clientSession.phone).toBe(phone);
+    expect(b1.clientSession.state).toBe('MENU');
+
+    const r2 = await app.inject({
+      method: 'POST',
+      url: '/webhook',
+      headers: {
+        authorization: `Bearer ${TEST_WEBHOOK_SECRET}`,
+        'content-type': 'application/json',
+      },
+      payload: {
+        from: phone,
+        simulator: true,
+        clientSession: b1.clientSession,
+        buttonReply: '2',
+      },
+    });
+    expect(r2.statusCode).toBe(200);
+    const b2 = JSON.parse(r2.body);
+    expect(b2.clientSession.state).toBe('WAIT_LENGTH');
+  });
+
   it('should normalize +prefix on from for same session key', async () => {
     const phone = '5511888777666';
     const r1 = await app.inject({

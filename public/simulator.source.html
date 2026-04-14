@@ -219,6 +219,25 @@
       return phone;
     }
     const PHONE = getOrCreateSimPhone();
+    /** Estado da conversa — devolvido pelo servidor em modo simulador; não usa Redis. */
+    var CLIENT_SESSION_KEY = 'palletBotClientSession';
+
+    function loadClientSession() {
+      try {
+        var raw = sessionStorage.getItem(CLIENT_SESSION_KEY);
+        if (!raw) return undefined;
+        var o = JSON.parse(raw);
+        if (o && typeof o === 'object' && o.phone === PHONE) return o;
+      } catch (e) {}
+      return undefined;
+    }
+
+    function saveClientSession(s) {
+      try {
+        if (s) sessionStorage.setItem(CLIENT_SESSION_KEY, JSON.stringify(s));
+      } catch (e) {}
+    }
+
     const API_URL = window.location.origin;
     const WEBHOOK_URL = `${API_URL}/webhook`;
 
@@ -281,6 +300,12 @@
     function applySessionBackendHint(data) {
       var el = document.getElementById('sessionBackendHint');
       if (!el || !data) return;
+      if (data.clientSession) {
+        el.innerHTML =
+          '<strong>Sessão:</strong> guardada neste browser (sessionStorage). Fluxo independente de Redis no servidor.';
+        el.style.color = '#e8f5e9';
+        return;
+      }
       var b = data.sessionBackend;
       if (b === 'upstash') {
         el.innerHTML =
@@ -301,6 +326,9 @@
     }
 
     function handleWebhookPayload(data) {
+      if (data.clientSession) {
+        saveClientSession(data.clientSession);
+      }
       applySessionBackendHint(data);
       renderWebhookMessages(data.messages);
       if (data.generatedPdf && data.generatedPdf.absolutePath) {
@@ -361,7 +389,10 @@
 
       const payload = {
         from: PHONE,
+        simulator: true,
       };
+      var cs = loadClientSession();
+      if (cs) payload.clientSession = cs;
 
       if (buttonId) {
         payload.buttonReply = buttonId;
@@ -434,11 +465,14 @@
     async function sendImage() {
       const payload = {
         from: PHONE,
+        simulator: true,
         media: {
           type: 'image',
           id: 'mock1',
         },
       };
+      var csImg = loadClientSession();
+      if (csImg) payload.clientSession = csImg;
 
       sendButton.disabled = true;
       imageButton.disabled = true;

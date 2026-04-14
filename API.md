@@ -21,6 +21,10 @@ interface IncomingWebhookPayload {
   from: string;              // Número (E.164); o servidor normaliza: trim, remove espaços e prefixo "+"
   text?: string;             // Texto da mensagem
   buttonReply?: string;      // ID do botão clicado
+  /** Simulador web: com `true`, a sessão não é lida nem gravada no Redis — usa `clientSession` no cliente. */
+  simulator?: boolean;
+  /** Estado anterior devolvido na resposta (obrigatório após o 1.º turno em modo simulador). */
+  clientSession?: object;
   media?: {
     type: "image";
     id: string;              // ID da mídia
@@ -35,6 +39,8 @@ interface WebhookResponse {
   messages: OutgoingMessage[];
   /** `upstash` = Redis (sessão partilhada). `memory` = só no processo (em serverless multi-pedido pode falhar). */
   sessionBackend: "memory" | "upstash";
+  /** Com `simulator: true` na request: sessão completa para o cliente guardar (ex.: sessionStorage). */
+  clientSession?: object;
   /** Opcional: presente quando o PDF é gerado neste pedido (integrador WhatsApp). */
   generatedPdf?: object;
 }

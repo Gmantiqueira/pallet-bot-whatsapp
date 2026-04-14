@@ -115,6 +115,8 @@ O projeto segue uma arquitetura em camadas (layered architecture) com separaçã
 
 **Responsabilidade:** Endpoints HTTP, parsing de requisições, formatação de respostas.
 
+- `POST /webhook` com `simulator: true`: sessão transportada no body (`clientSession` / resposta), sem ler nem gravar Redis — usado pelo simulador estático.
+
 #### Arquivos:
 
 - **`webhook.ts`**

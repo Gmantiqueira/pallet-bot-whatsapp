@@ -45,6 +45,14 @@ export interface IncomingPayload {
     type: 'image';
     id: string;
   };
+  /** Simulador web: estado no browser; não usado pela state machine. */
+  simulator?: boolean;
+  clientSession?: unknown;
+}
+
+export interface RouteIncomingOptions {
+  /** Predefinido true. Em false, não grava no SessionRepository (sessão só no cliente). */
+  persistSession?: boolean;
 }
 
 export interface RouterResult {
@@ -161,8 +169,10 @@ const convertToInput = (
 export const routeIncoming = async (
   session: Session,
   incoming: IncomingPayload,
-  sessionRepository: SessionRepository
+  sessionRepository: SessionRepository,
+  options?: RouteIncomingOptions
 ): Promise<RouterResult> => {
+  const persistSession = options?.persistSession !== false;
   if (session.state === 'GENERATING_DOC') {
     console.log('[diag] rt:x0-generating-doc-short');
     return {
@@ -238,10 +248,12 @@ export const routeIncoming = async (
       answers: finalizeSummaryAnswers({ ...updatedSession.answers }),
     };
 
-    await sessionRepository.upsert({
-      ...genSession,
-      updatedAt: Date.now(),
-    });
+    if (persistSession) {
+      await sessionRepository.upsert({
+        ...genSession,
+        updatedAt: Date.now(),
+      });
+    }
 
     try {
       const ts = Date.now();
@@ -399,7 +411,9 @@ export const routeIncoming = async (
   // Persist session
   updatedSession.updatedAt = Date.now();
   console.log('[diag][webhook] before-final-upsert');
-  await sessionRepository.upsert(updatedSession);
+  if (persistSession) {
+    await sessionRepository.upsert(updatedSession);
+  }
   console.log('[diag][webhook] after-final-upsert');
 
   return {

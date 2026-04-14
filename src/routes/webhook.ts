@@ -7,14 +7,22 @@ import {
   getSessionBackend,
   type SessionBackend,
 } from '../infra/repositories/createSessionRepository';
-import { routeIncoming, IncomingPayload } from '../application/messageRouter';
+import {
+  routeIncoming,
+  IncomingPayload,
+} from '../application/messageRouter';
 import type { GeneratedPdfArtifact } from '../types/generatedPdf';
+import type { Session } from '../domain/session';
 import { normalizeWebhookFrom } from '../infra/http/normalizeWebhookFrom';
+import { parseClientSession } from '../infra/http/parseClientSession';
 
 interface IncomingWebhookPayload {
   from: string;
   text?: string;
   buttonReply?: string;
+  /** Simulador: estado no browser; não usa Redis/memória no servidor. */
+  simulator?: boolean;
+  clientSession?: unknown;
   media?: {
     type: 'image';
     id: string;
@@ -25,6 +33,8 @@ interface WebhookResponse {
   messages: OutgoingMessage[];
   /** `upstash`: sessão partilhada entre instâncias. `memory`: só no processo atual (fluxos longos podem falhar em serverless). */
   sessionBackend: SessionBackend;
+  /** Só com `simulator: true` na request: estado completo para o simulador guardar em sessionStorage. */
+  clientSession?: Session;
   /** Metadados do PDF quando gerado neste pedido — para o integrador anexar ao WhatsApp. */
   generatedPdf?: GeneratedPdfArtifact;
 }
@@ -70,39 +80,68 @@ export const webhookRoutes = async (
       if (!from) {
         return reply.code(400).send({ error: 'Missing or invalid from' });
       }
+      const rb = rawBody as IncomingWebhookPayload;
+      const simulatorMode = rb.simulator === true;
+      const parsedClient = simulatorMode
+        ? parseClientSession(rb.clientSession, from)
+        : null;
+
       const incoming: IncomingPayload = {
         ...(rawBody as IncomingPayload),
         from,
       };
 
       try {
-        console.log('[diag][webhook] before-session-get');
-        let session = await sessionRepository.get(from);
-        console.log('[diag][webhook] after-session-get');
+        let session: Session;
+        let persistSession = true;
 
-        if (!session) {
-          console.log('[diag][webhook] before-initial-upsert');
-          session = {
-            phone: from,
-            state: START_STATE,
-            answers: {},
-            stack: [],
-            updatedAt: Date.now(),
-          };
-          await sessionRepository.upsert(session);
-          console.log('[diag][webhook] after-initial-upsert');
-        } else if (session.phone !== from) {
-          session = { ...session, phone: from };
+        if (simulatorMode) {
+          persistSession = false;
+          if (parsedClient) {
+            session = parsedClient;
+          } else {
+            session = {
+              phone: from,
+              state: START_STATE,
+              answers: {},
+              stack: [],
+              updatedAt: Date.now(),
+            };
+          }
+          console.log('[diag][webhook] simulator-client-session');
+        } else {
+          console.log('[diag][webhook] before-session-get');
+          let s = await sessionRepository.get(from);
+          console.log('[diag][webhook] after-session-get');
+
+          if (!s) {
+            console.log('[diag][webhook] before-initial-upsert');
+            s = {
+              phone: from,
+              state: START_STATE,
+              answers: {},
+              stack: [],
+              updatedAt: Date.now(),
+            };
+            await sessionRepository.upsert(s);
+            console.log('[diag][webhook] after-initial-upsert');
+          } else if (s.phone !== from) {
+            s = { ...s, phone: from };
+          }
+          session = s;
         }
 
         console.log('[diag][webhook] before-routeIncoming');
-        const result = await routeIncoming(session, incoming, sessionRepository);
+        const result = await routeIncoming(session, incoming, sessionRepository, {
+          persistSession,
+        });
         console.log('[diag][webhook] after-routeIncoming');
 
         console.log('[diag][webhook] before-reply-send');
         return reply.code(200).send({
           messages: result.outgoingMessages,
           sessionBackend: getSessionBackend(),
+          ...(simulatorMode ? { clientSession: result.session } : {}),
           ...(result.generatedPdf ? { generatedPdf: result.generatedPdf } : {}),
         });
       } catch (err) {
