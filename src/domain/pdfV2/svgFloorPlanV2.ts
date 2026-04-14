@@ -1,13 +1,9 @@
-import type { LayoutGeometry } from './layoutGeometryV2';
 import type {
   FloorPlanCirculationSemantic,
   FloorPlanModelV2,
 } from './types';
 import { escapeXml } from './floorPlanModelV2';
-import {
-  ELEV_BEAM_EDGE,
-  ELEV_PALLET_TIER_STROKE,
-} from './elevationVisualTokens';
+import { ELEV_PALLET_TIER_STROKE } from './elevationVisualTokens';
 
 /** Ligação visual com a elevação (traços de baia = `ELEV_PALLET_TIER_STROKE`). */
 
@@ -61,18 +57,32 @@ function circulationSemantic(
   return c.semantic ?? (c.kind === 'tunnel' ? 'tunnel' : 'operational');
 }
 
-function shortCorridorLabel(sem: FloorPlanCirculationSemantic): string {
+function corridorDisplayLabel(
+  sem: FloorPlanCirculationSemantic,
+  minSidePx: number
+): { text: string; fontSize: number } {
+  const compact = minSidePx < 150;
+  let text: string;
   switch (sem) {
     case 'residual':
-      return 'Área residual';
+      text = 'Área residual';
+      break;
     case 'cross_passage':
-      return 'Passagem transversal';
+      text = compact ? 'Passagem transv.' : 'Passagem transversal';
+      break;
     case 'tunnel':
-      return 'Túnel / passagem';
+      text = compact ? 'Túnel' : 'Túnel / passagem';
+      break;
     case 'operational':
     default:
-      return 'Corredor operacional';
+      text = compact ? 'Corredor op.' : 'Corredor operacional';
+      break;
   }
+  const fontSize = Math.max(
+    10,
+    Math.min(compact ? 13 : 15, minSidePx * 0.095)
+  );
+  return { text, fontSize };
 }
 
 function sortCirculation(
@@ -127,101 +137,36 @@ function moduleBayHintLine(s: FloorPlanModelV2['structureRects'][0]): string {
   return `<line x1="${s.x}" y1="${my}" x2="${s.x + s.w}" y2="${my}" stroke="${ELEV_PALLET_TIER_STROKE}" stroke-width="${thin}" opacity="${op}" stroke-dasharray="${dash}" ${cap}/>`;
 }
 
-function appendFloorPlanDebugOverlay(
-  geometry: LayoutGeometry,
-  model: FloorPlanModelV2,
-  parts: string[]
-): void {
-  const o = model.warehouseOutline;
-  const L = geometry.warehouseLengthMm;
-  const W = geometry.warehouseWidthMm;
-  const scaleX = o.w / L;
-  const scaleY = o.h / W;
-  const bx = o.x;
-  const by = o.y;
-  const toX = (xmm: number) => bx + xmm * scaleX;
-  const toY = (ymm: number) => by + ymm * scaleY;
-
-  parts.push(
-    '<g id="fp-debug" font-family="ui-monospace, monospace" pointer-events="none">'
-  );
-  parts.push(
-    `<text x="${model.viewBox.w / 2}" y="30" text-anchor="middle" font-size="12" font-weight="700" fill="#7c3aed">DEBUG planta · cotas em mm (referencial do galpão)</text>`
-  );
-
-  for (const row of geometry.rows) {
-    for (const m of row.modules) {
-      const fp = m.footprint;
-      const x0 = Math.min(fp.x0, fp.x1);
-      const x1 = Math.max(fp.x0, fp.x1);
-      const y0 = Math.min(fp.y0, fp.y1);
-      const y1 = Math.max(fp.y0, fp.y1);
-      const sx = toX(x0);
-      const sy = toY(y0);
-      const sw = Math.max(2, toX(x1) - toX(x0));
-      const sh = Math.max(2, toY(y1) - toY(y0));
-      const stroke =
-        m.type === 'tunnel'
-          ? '#a855f7'
-          : m.segmentType === 'half'
-            ? '#2563eb'
-            : '#0ea5e9';
-      parts.push(
-        `<rect x="${sx}" y="${sy}" width="${sw}" height="${sh}" fill="none" stroke="${stroke}" stroke-width="2.35" stroke-dasharray="7 5" opacity="0.95"/>`
-      );
-      const l1 = `${m.id}`;
-      const l2 = `(${Math.round(x0)},${Math.round(y0)})–(${Math.round(x1)},${Math.round(y1)}) mm`;
-      parts.push(
-        `<text x="${sx + 4}" y="${sy + 13}" font-size="9" fill="${stroke}">${escapeXml(l1)}</text>`,
-        `<text x="${sx + 4}" y="${sy + 25}" font-size="8.5" fill="${stroke}">${escapeXml(l2)}</text>`
-      );
-    }
-  }
-
-  parts.push(
-    `<text x="24" y="${model.viewBox.h - 28}" font-size="8.5" fill="#64748b">Debug: tracejado = bbox módulo · túnel=roxo · meio módulo=azul · completo=ciano · zonas cor/corredor por baixo</text>`
-  );
-  parts.push('</g>');
-}
-
 function orientationArrowSvg(
   o: FloorPlanModelV2['warehouseOutline'],
   beamAlong: 'x' | 'y'
 ): string {
   const pad = 8;
-  const gw = 248;
-  const gh = 68;
+  const gw = 200;
+  const gh = 54;
   const gx = o.x + o.w - gw - pad;
   const gy = o.y + o.h - gh - pad;
+  const ax = gx + gw / 2;
   const shaft =
     beamAlong === 'x'
-      ? `<line x1="${gx + 10}" y1="${gy + 44}" x2="${gx + gw - 28}" y2="${gy + 44}" stroke="#0f172a" stroke-width="3.4"/><polygon points="${gx + gw - 18},${gy + 44} ${gx + gw - 36},${gy + 32} ${gx + gw - 36},${gy + 56}" fill="#0f172a"/>`
-      : `<line x1="${gx + 42}" y1="${gy + gh - 14}" x2="${gx + 42}" y2="${gy + 16}" stroke="#0f172a" stroke-width="3.4"/><polygon points="${gx + 42},${gy + 10} ${gx + 30},${gy + 26} ${gx + 54},${gy + 26}" fill="#0f172a"/>`;
+      ? `<line x1="${gx + 8}" y1="${gy + 36}" x2="${gx + gw - 22}" y2="${gy + 36}" stroke="#0f172a" stroke-width="2.6"/><polygon points="${gx + gw - 14},${gy + 36} ${gx + gw - 28},${gy + 26} ${gx + gw - 28},${gy + 46}" fill="#0f172a"/>`
+      : `<line x1="${ax}" y1="${gy + gh - 10}" x2="${ax}" y2="${gy + 12}" stroke="#0f172a" stroke-width="2.6"/><polygon points="${ax},${gy + 6} ${ax - 8},${gy + 18} ${ax + 8},${gy + 18}" fill="#0f172a"/>`;
   const sub =
     beamAlong === 'x'
-      ? 'Linhas · paralelas ao comprimento do galpão'
-      : 'Linhas · paralelas à largura do galpão';
+      ? 'Linhas paralelas ao comprimento do galpão'
+      : 'Linhas paralelas à largura do galpão';
   return `<g>
-    <rect x="${gx}" y="${gy}" width="${gw}" height="${gh}" rx="6" fill="#f8fafc" fill-opacity="0.98" stroke="#64748b" stroke-width="1.1"/>
-    <text x="${gx + 12}" y="${gy + 22}" font-size="14px" font-weight="700" fill="#0f172a" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">Sentido de entrada / operação</text>
-    <text x="${gx + 12}" y="${gy + 42}" font-size="11.5px" fill="#475569" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">${escapeXml(sub)}</text>
+    <rect x="${gx}" y="${gy}" width="${gw}" height="${gh}" rx="5" fill="#f8fafc" fill-opacity="0.96" stroke="#cbd5e1" stroke-width="0.9"/>
+    <text x="${gx + 10}" y="${gy + 18}" font-size="11.5px" font-weight="600" fill="#334155" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">Sentido de entrada / operação</text>
+    <text x="${gx + 10}" y="${gy + 34}" font-size="10px" fill="#64748b" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">${escapeXml(sub)}</text>
     ${shaft}
   </g>`;
 }
 
-export type SerializeFloorPlanOptions = {
-  /** Só com `DEBUG_PDF=true` na pipeline. */
-  debug?: boolean;
-  geometryMm?: LayoutGeometry;
-};
-
 /**
  * Serializa o modelo de planta em SVG (apenas desenho, sem cálculo).
  */
-export function serializeFloorPlanSvgV2(
-  model: FloorPlanModelV2,
-  options?: SerializeFloorPlanOptions
-): string {
+export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
   const { w, h } = model.viewBox;
   const parts: string[] = [];
   parts.push(
@@ -229,14 +174,15 @@ export function serializeFloorPlanSvgV2(
   );
   parts.push('<defs>');
   parts.push(`<style>
-    /** Legenda global (não compete com o cabeçalho da folha no PDF). */
-    .fp-drawing-meta { font: 500 13.5px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #64748b; letter-spacing: 0.01em; }
-    .fp-plan-hint { font: 400 14px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #64748b; }
-    .fp-row-title { font: 700 28px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: ${ELEV_BEAM_EDGE}; stroke: #ffffff; stroke-width: 5px; paint-order: stroke fill; stroke-linejoin: round; }
-    .fp-circ-op { font: 800 22px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #0f172a; stroke: #ffffff; stroke-width: 5px; paint-order: stroke fill; stroke-linejoin: round; }
-    .fp-circ { font: 600 18px "Helvetica Neue", Helvetica, Arial, sans-serif; }
-    .fp-circ-res { font: 600 15px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #44403c; }
-    .fp-dim { font: 700 31px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: ${COL_DIM}; }
+    /** Bloco superior: metadado → desenho → cotas → legenda (hierarquia). */
+    .fp-drawing-meta { font: 600 14px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #334155; letter-spacing: 0.01em; }
+    .fp-plan-hint { font: 400 12.5px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #64748b; }
+    .fp-row-legend { font: 500 13px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #334155; letter-spacing: 0.01em; }
+    .fp-anno-heading { font: 600 11px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #64748b; letter-spacing: 0.06em; text-transform: uppercase; }
+    .fp-circ-op { font: 650 14px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #0f172a; }
+    .fp-circ { font: 600 14px "Helvetica Neue", Helvetica, Arial, sans-serif; }
+    .fp-circ-res { font: 600 12.5px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #44403c; }
+    .fp-dim { font: 600 18px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: ${COL_DIM}; }
     .fp-mod-num { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; font-weight: 600; fill: #1e293b; }
   </style>`);
   parts.push('</defs>');
@@ -291,22 +237,23 @@ export function serializeFloorPlanSvgV2(
     parts.push(
       `<rect x="${c.x}" y="${c.y}" width="${c.w}" height="${c.h}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"${dashAttr} opacity="${op}"/>`
     );
-    const short = shortCorridorLabel(sem);
+    const minSide = Math.min(c.w, c.h);
+    const { text: circText, fontSize } = corridorDisplayLabel(sem, minSide);
     const tcx = c.x + c.w / 2;
     const tcy = c.y + c.h / 2;
     if (sem === 'operational') {
       parts.push(
-        `<text x="${tcx}" y="${tcy}" text-anchor="middle" dominant-baseline="middle" class="fp-circ-op">${escapeXml(short)}</text>`
+        `<text x="${tcx}" y="${tcy}" text-anchor="middle" dominant-baseline="middle" class="fp-circ-op" font-size="${fontSize}px">${escapeXml(circText)}</text>`
       );
     } else if (sem === 'residual') {
       parts.push(
-        `<text x="${tcx}" y="${tcy}" text-anchor="middle" dominant-baseline="middle" class="fp-circ-res">${escapeXml(short)}</text>`
+        `<text x="${tcx}" y="${tcy}" text-anchor="middle" dominant-baseline="middle" class="fp-circ-res" font-size="${fontSize}px">${escapeXml(circText)}</text>`
       );
     } else {
       const cls = 'fp-circ';
       const fillT = sem === 'tunnel' ? '#7c2d12' : '#0c4a6e';
       parts.push(
-        `<text x="${tcx}" y="${tcy}" text-anchor="middle" dominant-baseline="middle" class="${cls}" fill="${fillT}">${escapeXml(short)}</text>`
+        `<text x="${tcx}" y="${tcy}" text-anchor="middle" dominant-baseline="middle" class="${cls}" fill="${fillT}" font-size="${fontSize}px">${escapeXml(circText)}</text>`
       );
     }
   }
@@ -341,14 +288,6 @@ export function serializeFloorPlanSvgV2(
     if (Math.min(r.w, r.h) < 14) continue;
     parts.push(
       `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="none" stroke="${COL_ROW_ENVELOPE_STROKE}" stroke-width="${ROW_ENVELOPE_SW}"/>`
-    );
-  }
-
-  for (const r of model.rowBandRects) {
-    const cx = r.x + r.w / 2;
-    const cy = r.y + r.h / 2;
-    parts.push(
-      `<text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="middle" class="fp-row-title">${escapeXml(r.rowCaption)}</text>`
     );
   }
 
@@ -418,7 +357,7 @@ export function serializeFloorPlanSvgV2(
       );
     } else {
       parts.push(
-        `<text x="${midX}" y="${d.y1 - 12}" text-anchor="middle" class="fp-dim">${escapeXml(d.text)}</text>`
+        `<text x="${midX}" y="${d.y1 - 10}" text-anchor="middle" class="fp-dim">${escapeXml(d.text)}</text>`
       );
     }
   }
@@ -428,10 +367,6 @@ export function serializeFloorPlanSvgV2(
     parts.push(
       `<text x="${lb.x}" y="${lb.y}" text-anchor="middle" class="${cls}">${escapeXml(lb.text)}</text>`
     );
-  }
-
-  if (options?.debug === true && options.geometryMm) {
-    appendFloorPlanDebugOverlay(options.geometryMm, model, parts);
   }
 
   parts.push('</svg>');

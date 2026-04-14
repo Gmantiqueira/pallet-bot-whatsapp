@@ -336,15 +336,37 @@ export function buildFloorPlanModelV2(
 
   const moduleLevelTint = moduleLevelTintFromMetadata(geometry.metadata);
 
+  const rowLegendBaseY = by + boxH + 56;
+  const rowLegendBlock: FloorPlanLabel[] =
+    rowBandRects.length === 0
+      ? []
+      : [
+          {
+            id: 'row-leg-heading',
+            x: VB_W / 2,
+            y: rowLegendBaseY,
+            text: 'Fileiras (referência)',
+            className: 'fp-anno-heading',
+          },
+          ...rowBandRects.map((r, i) => ({
+            id: `row-leg-${r.id}`,
+            x: VB_W / 2,
+            y: rowLegendBaseY + 22 + i * 19,
+            text: r.rowCaption,
+            className: 'fp-row-legend',
+          })),
+        ];
+
   const labels: FloorPlanLabel[] = [
     {
       id: 'sub-dims',
       x: VB_W / 2,
-      y: PAD + 18,
+      y: PAD + 16,
       text: `Dimensões do compartimento: ${formatMm(L)} × ${formatMm(W)}`,
       className: 'fp-drawing-meta',
     },
     ...planCaptionLabels(geometry),
+    ...rowLegendBlock,
   ];
 
   return {
@@ -365,7 +387,7 @@ function planCaptionLabels(geometry: LayoutGeometry): FloorPlanLabel[] {
   const line: FloorPlanLabel = {
     id: 'cap-module-line',
     x: VB_W / 2,
-    y: PAD + 36,
+    y: PAD + 34,
     text: planModuleSingleCaption(geometry),
     className: 'fp-plan-hint',
   };

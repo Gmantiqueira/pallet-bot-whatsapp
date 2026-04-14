@@ -260,10 +260,7 @@ export const routeIncoming = async (
         const geo: LayoutGeometry = buildLayoutGeometry(sol, ans);
         validateLayoutGeometry(geo);
         const dbg = isDebugPdf();
-        const floorSvg = serializeFloorPlanSvgV2(buildFloorPlanModelV2(geo), {
-          debug: dbg,
-          geometryMm: dbg ? geo : undefined,
-        });
+        const floorSvg = serializeFloorPlanSvgV2(buildFloorPlanModelV2(geo));
         const elevModel: ElevationModelV2 = buildElevationModelV2(ans, geo);
         const elevPages: ElevationPageSvgs = serializeElevationPagesV2(
           elevModel,
