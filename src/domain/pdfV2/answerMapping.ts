@@ -35,6 +35,8 @@ export function buildProjectAnswersV2(
 
   let levels: number;
   let derivedWh: ReturnType<typeof deriveRackFromWarehouseHeightMm> | undefined;
+  /** Gap efetivo usado no perfil (pode divergir do input após pesquisa layout no modo pé-direito). */
+  let warehouseMinBeamGapResolved: number | undefined;
 
   if (answers.heightMode === HEIGHT_MODE_WAREHOUSE_HEIGHT) {
     if (typeof answers.warehouseHeightMm !== 'number') {
@@ -44,17 +46,37 @@ export function buildProjectAnswersV2(
       typeof answers.warehouseMinBeamGapMm === 'number'
         ? answers.warehouseMinBeamGapMm
         : MIN_LEVEL_GAP_MM;
-    derivedWh = deriveRackFromWarehouseHeightMm({
-      warehouseHeightMm: answers.warehouseHeightMm,
-      minGapBetweenConsecutiveBeamsMm: gap,
-      hasGroundLevel: answers.hasGroundLevel !== false,
-      firstLevelOnGround: answers.firstLevelOnGround !== false,
-      loadHeightMm:
-        typeof answers.loadHeightMm === 'number'
-          ? answers.loadHeightMm
-          : undefined,
-    });
-    levels = derivedWh.levels;
+    const hasGround = answers.hasGroundLevel !== false;
+    const loadHm =
+      typeof answers.loadHeightMm === 'number'
+        ? answers.loadHeightMm
+        : undefined;
+    // Evita dependência circular estática answerMapping ↔ layout: require em runtime.
+    const { pickOptimalWarehouseRackWithLayout } =
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      require('../warehouseHeightLayoutPick') as typeof import('../warehouseHeightLayoutPick');
+    const optimal = pickOptimalWarehouseRackWithLayout(answers);
+    if (optimal) {
+      const totalLv = optimal.levels + (hasGround ? 1 : 0);
+      derivedWh = {
+        alturaFinalMm: optimal.alturaFinalMm,
+        levels: optimal.levels,
+        totalLevels: totalLv,
+        warehouseHeightMm: answers.warehouseHeightMm,
+      };
+      warehouseMinBeamGapResolved = optimal.minGapBetweenConsecutiveBeamsMm;
+      levels = optimal.levels;
+    } else {
+      derivedWh = deriveRackFromWarehouseHeightMm({
+        warehouseHeightMm: answers.warehouseHeightMm,
+        minGapBetweenConsecutiveBeamsMm: gap,
+        hasGroundLevel: hasGround,
+        firstLevelOnGround: answers.firstLevelOnGround !== false,
+        loadHeightMm: loadHm,
+      });
+      warehouseMinBeamGapResolved = gap;
+      levels = derivedWh.levels;
+    }
   } else if (typeof answers.levels === 'number') {
     levels = answers.levels;
   } else {
@@ -136,9 +158,11 @@ export function buildProjectAnswersV2(
         ? answers.warehouseClearHeightMm
         : undefined,
     warehouseMinBeamGapMm:
-      typeof answers.warehouseMinBeamGapMm === 'number'
-        ? answers.warehouseMinBeamGapMm
-        : undefined,
+      warehouseMinBeamGapResolved !== undefined
+        ? warehouseMinBeamGapResolved
+        : typeof answers.warehouseMinBeamGapMm === 'number'
+          ? answers.warehouseMinBeamGapMm
+          : undefined,
     loadHeightMm:
       typeof answers.loadHeightMm === 'number'
         ? answers.loadHeightMm

@@ -3,9 +3,9 @@
  * estruturais com base na geometria real de {@link computeBeamElevations}
  * (folga superior 216 mm incluída no modelo).
  *
- * A escolha não é só “teto ao passo de 80 + máximo L num único perfil”: enumera-se vários
- * pares (altura de montante × níveis) admissíveis e escolhe-se o melhor por patamares de
- * armazenagem (proxy de posições), depois aproveitamento de altura, depois espaçamento médio.
+ * Enumera-se vários pares (altura × níveis) admissíveis; o modo pé-direito no produto
+ * combina isto com {@link ../warehouseHeightLayoutPick.pickOptimalWarehouseRackWithLayout}
+ * (posições reais do layout + aproveitamento de altura). Sem layout, usa-se ordenação só de perfil.
  */
 
 import {
@@ -111,6 +111,11 @@ export type WarehouseRackPickResult = {
   meanGapMm: number;
 };
 
+export type WarehouseRackPickWithGap = WarehouseRackPickResult & {
+  /** Espaçamento mínimo entre eixos usado nesta avaliação (mm). */
+  minGapBetweenConsecutiveBeamsMm: number;
+};
+
 /**
  * Enumera pares (altura de montante × níveis) admissíveis com {@link computeBeamElevations}
  * (sem compressão forçada de vãos) e intervalo mínimo entre eixos ≥ `minGap`,
@@ -122,14 +127,17 @@ export type WarehouseRackPickResult = {
  * Isto evita o comportamento “sempre teto 80 mm + só um L” em que pequenas variações
  * de entrada não alteravam níveis nem altura de módulo.
  */
-export function pickBestWarehouseRackFromCeilingMm(params: {
-  /** Teto vertical disponível para o perfil (pé-direito total ou útil, conforme o fluxo). */
+/**
+ * Todas as combinações (altura de montante × níveis) admissíveis para o teto e espaçamento,
+ * para avaliação externa (ex.: motor de layout) — evita uma única escolha por ordenação interna.
+ */
+export function listFeasibleWarehouseRacksForCeiling(params: {
   ceilingMm: number;
   minGapBetweenConsecutiveBeamsMm: number;
   hasGroundLevel: boolean;
   firstLevelOnGround: boolean;
   loadHeightMm?: number;
-}): WarehouseRackPickResult | null {
+}): WarehouseRackPickWithGap[] {
   const Hwh = Math.min(MAX_MM, Math.max(MIN_MM, params.ceilingMm));
   const minGap = Math.max(
     400,
@@ -139,8 +147,7 @@ export function pickBestWarehouseRackFromCeilingMm(params: {
   const maxHmod = Math.floor(Hwh / step) * step;
   const minHmod = Math.ceil(MIN_MM / step) * step;
 
-  type Cand = WarehouseRackPickResult;
-  const feasible: Cand[] = [];
+  const feasible: WarehouseRackPickWithGap[] = [];
 
   for (let Hmod = maxHmod; Hmod >= minHmod; Hmod -= step) {
     for (let L = MIN_LEVELS; L <= MAX_LEVELS; L++) {
@@ -166,25 +173,44 @@ export function pickBestWarehouseRackFromCeilingMm(params: {
         storageTierCount,
         heightUtilization: Hmod / Hwh,
         meanGapMm: r.meanGapMm,
+        minGapBetweenConsecutiveBeamsMm: minGap,
       });
     }
   }
 
+  return feasible;
+}
+
+/** Ordenação “só perfil” (sem layout): patamares → altura → vão médio. */
+function sortWarehouseRackCandidates(
+  a: WarehouseRackPickResult,
+  b: WarehouseRackPickResult
+): number {
+  if (b.storageTierCount !== a.storageTierCount) {
+    return b.storageTierCount - a.storageTierCount;
+  }
+  if (b.heightUtilization !== a.heightUtilization) {
+    return b.heightUtilization - a.heightUtilization;
+  }
+  return b.meanGapMm - a.meanGapMm;
+}
+
+export function pickBestWarehouseRackFromCeilingMm(params: {
+  /** Teto vertical disponível para o perfil (pé-direito total ou útil, conforme o fluxo). */
+  ceilingMm: number;
+  minGapBetweenConsecutiveBeamsMm: number;
+  hasGroundLevel: boolean;
+  firstLevelOnGround: boolean;
+  loadHeightMm?: number;
+}): WarehouseRackPickResult | null {
+  const feasible = listFeasibleWarehouseRacksForCeiling(params);
   if (feasible.length === 0) {
     return null;
   }
-
-  feasible.sort((a, b) => {
-    if (b.storageTierCount !== a.storageTierCount) {
-      return b.storageTierCount - a.storageTierCount;
-    }
-    if (b.alturaFinalMm !== a.alturaFinalMm) {
-      return b.alturaFinalMm - a.alturaFinalMm;
-    }
-    return b.meanGapMm - a.meanGapMm;
-  });
-
-  return feasible[0]!;
+  feasible.sort(sortWarehouseRackCandidates);
+  const best = feasible[0]!;
+  const { minGapBetweenConsecutiveBeamsMm: _g, ...rest } = best;
+  return rest;
 }
 
 export function deriveModuleFromWarehouseClearHeight(params: {
