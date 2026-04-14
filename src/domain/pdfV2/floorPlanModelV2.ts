@@ -25,8 +25,8 @@ const VB_W = 1360;
 const VB_H = 1900;
 const PAD = 22;
 /** Espaço superior sem título duplicado (o PDF traz o cabeçalho da folha). */
-const HEADER = 34;
-const DIM_OUT = 24;
+const HEADER = 28;
+const DIM_OUT = 22;
 
 function escapeXml(text: string): string {
   return text

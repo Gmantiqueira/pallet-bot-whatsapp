@@ -34,14 +34,14 @@ const COL_CORRIDOR_OP_STROKE_W = 2.6;
 /** Passagem transversal (ainda legível, um degrau abaixo do corredor principal). */
 const COL_CROSS_FILL = '#bae6fd';
 const COL_CROSS_STROKE = '#0369a1';
-/** Túnel / passagem. */
-const COL_TUNNEL_FILL = '#fde68a';
+/** Túnel / passagem — contraste reforçado face ao corredor. */
+const COL_TUNNEL_FILL = '#fef3c7';
 const COL_TUNNEL_STROKE = '#b45309';
 /**
- * Nível 3 — área residual: mais clara que módulos, nunca “ativa”.
+ * Nível 3 — área residual: leitura clara vs. corredor ativo.
  */
-const COL_RESIDUAL_FILL = '#fafafa';
-const COL_RESIDUAL_STROKE = '#e5e7eb';
+const COL_RESIDUAL_FILL = '#f4f4f5';
+const COL_RESIDUAL_STROKE = '#a1a1aa';
 const COL_DIM = '#111827';
 const COL_INK = '#111827';
 /** Contorno da **faixa da linha** (unidade contínua), desenhado por cima dos módulos. */
@@ -123,23 +123,23 @@ function orientationArrowSvg(
   o: FloorPlanModelV2['warehouseOutline'],
   beamAlong: 'x' | 'y'
 ): string {
-  const pad = 10;
-  const gw = 188;
-  const gh = 54;
+  const pad = 8;
+  const gw = 210;
+  const gh = 58;
   const gx = o.x + o.w - gw - pad;
   const gy = o.y + o.h - gh - pad;
   const shaft =
     beamAlong === 'x'
-      ? `<line x1="${gx + 8}" y1="${gy + 36}" x2="${gx + gw - 22}" y2="${gy + 36}" stroke="#334155" stroke-width="1.75"/><polygon points="${gx + gw - 15},${gy + 36} ${gx + gw - 28},${gy + 28} ${gx + gw - 28},${gy + 44}" fill="#334155"/>`
-      : `<line x1="${gx + 34}" y1="${gy + gh - 12}" x2="${gx + 34}" y2="${gy + 14}" stroke="#334155" stroke-width="1.75"/><polygon points="${gx + 34},${gy + 8} ${gx + 26},${gy + 20} ${gx + 42},${gy + 20}" fill="#334155"/>`;
+      ? `<line x1="${gx + 8}" y1="${gy + 38}" x2="${gx + gw - 24}" y2="${gy + 38}" stroke="#0f172a" stroke-width="2.35"/><polygon points="${gx + gw - 16},${gy + 38} ${gx + gw - 30},${gy + 29} ${gx + gw - 30},${gy + 47}" fill="#0f172a"/>`
+      : `<line x1="${gx + 36}" y1="${gy + gh - 12}" x2="${gx + 36}" y2="${gy + 14}" stroke="#0f172a" stroke-width="2.35"/><polygon points="${gx + 36},${gy + 8} ${gx + 26},${gy + 22} ${gx + 46},${gy + 22}" fill="#0f172a"/>`;
   const sub =
     beamAlong === 'x'
       ? 'Linhas · paralelas ao comprimento do galpão'
       : 'Linhas · paralelas à largura do galpão';
   return `<g>
-    <rect x="${gx}" y="${gy}" width="${gw}" height="${gh}" rx="5" fill="#ffffff" fill-opacity="0.94" stroke="#cbd5e1" stroke-width="0.85"/>
-    <text x="${gx + 8}" y="${gy + 19}" font-size="14px" font-weight="600" fill="#0f172a" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">Sentido de entrada / operação</text>
-    <text x="${gx + 8}" y="${gy + 38}" font-size="11px" fill="#64748b" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">${escapeXml(sub)}</text>
+    <rect x="${gx}" y="${gy}" width="${gw}" height="${gh}" rx="6" fill="#f8fafc" fill-opacity="0.97" stroke="#1e40af" stroke-width="1.15"/>
+    <text x="${gx + 10}" y="${gy + 20}" font-size="15px" font-weight="700" fill="#0f172a" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">Sentido de entrada / operação</text>
+    <text x="${gx + 10}" y="${gy + 40}" font-size="11.5px" fill="#334155" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">${escapeXml(sub)}</text>
     ${shaft}
   </g>`;
 }
@@ -158,11 +158,11 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
     .fp-title { font: 700 40px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: ${COL_INK}; letter-spacing: 0.05em; }
     .fp-sub { font: 500 27px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #4b5563; }
     .fp-plan-hint { font: 400 15px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #4b5563; }
-    .fp-row-title { font: 700 21px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: ${ELEV_BEAM_EDGE}; stroke: #ffffff; stroke-width: 4px; paint-order: stroke fill; stroke-linejoin: round; }
-    .fp-circ-op { font: 800 17px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #0f172a; stroke: #ffffff; stroke-width: 4px; paint-order: stroke fill; stroke-linejoin: round; }
-    .fp-circ { font: 600 14px "Helvetica Neue", Helvetica, Arial, sans-serif; }
-    .fp-circ-res { font: 500 12px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #a8a29e; }
-    .fp-dim { font: 600 24px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: ${COL_DIM}; }
+    .fp-row-title { font: 700 23px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: ${ELEV_BEAM_EDGE}; stroke: #ffffff; stroke-width: 4px; paint-order: stroke fill; stroke-linejoin: round; }
+    .fp-circ-op { font: 800 18px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #0f172a; stroke: #ffffff; stroke-width: 4px; paint-order: stroke fill; stroke-linejoin: round; }
+    .fp-circ { font: 600 15px "Helvetica Neue", Helvetica, Arial, sans-serif; }
+    .fp-circ-res { font: 600 13px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #57534e; }
+    .fp-dim { font: 700 26px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: ${COL_DIM}; }
     .fp-mod-num { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; font-weight: 600; fill: #334155; }
   </style>`);
   parts.push('</defs>');
@@ -195,13 +195,13 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
     if (sem === 'tunnel') {
       fill = COL_TUNNEL_FILL;
       stroke = COL_TUNNEL_STROKE;
-      sw = 1.55;
+      sw = 2.15;
     } else if (sem === 'residual') {
       fill = COL_RESIDUAL_FILL;
       stroke = COL_RESIDUAL_STROKE;
-      sw = 0.75;
-      dash = '6 5';
-      op = 0.62;
+      sw = 1.15;
+      dash = '7 6';
+      op = 0.88;
     } else if (sem === 'cross_passage') {
       fill = COL_CROSS_FILL;
       stroke = COL_CROSS_STROKE;
@@ -243,7 +243,7 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
     const isTunnel = s.variant === 'tunnel';
     const fillMod = isTunnel ? COL_MOD_TUNNEL_FILL : COL_MOD_FILL;
     const strokeMod = isTunnel ? COL_MOD_TUNNEL_STROKE : COL_MOD_STROKE;
-    const sw = COL_MOD_STROKE_W;
+    const sw = isTunnel ? Math.max(COL_MOD_STROKE_W, 2.1) : COL_MOD_STROKE_W;
     if (isTunnel) {
       parts.push(
         `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="${fillMod}" stroke="${strokeMod}" stroke-width="${sw}"/>`

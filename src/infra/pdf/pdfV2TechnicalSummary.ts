@@ -96,6 +96,13 @@ export function formatNiveisArmazenagemForDocumentPt(
   return String(metadata.structuralLevels);
 }
 
+export type TechnicalSummaryRow = {
+  label: string;
+  value: string;
+  /** Valores principais do projeto — tipografia maior no PDF. */
+  emphasis?: boolean;
+};
+
 /**
  * Resumo técnico da capa do PDF V2 alinhado à {@link LayoutGeometry} (planta/elevações).
  * Não usa `answers.layout` nem `layoutEngine` legado.
@@ -103,7 +110,7 @@ export function formatNiveisArmazenagemForDocumentPt(
 export function technicalSummaryRowsFromLayoutGeometry(
   project: Record<string, unknown>,
   geometry: LayoutGeometry
-): { label: string; value: string }[] {
+): TechnicalSummaryRow[] {
   const { totals, metadata, warehouseLengthMm, warehouseWidthMm } = geometry;
 
   const modulos = formatModuleCountForDocumentPt(totals.moduleCount);
@@ -115,16 +122,40 @@ export function technicalSummaryRowsFromLayoutGeometry(
 
   const structure = project.structure as StructureResult | undefined;
 
-  const rows: { label: string; value: string }[] = [
-    { label: 'Comprimento:', value: formatMm(warehouseLengthMm) },
-    { label: 'Largura:', value: formatMm(warehouseWidthMm) },
+  const rows: TechnicalSummaryRow[] = [
+    {
+      label: 'Comprimento:',
+      value: formatMm(warehouseLengthMm),
+      emphasis: true,
+    },
+    {
+      label: 'Largura:',
+      value: formatMm(warehouseWidthMm),
+      emphasis: true,
+    },
     { label: 'Origem do projeto:', value: projectOriginLabel(project) },
-    ...heightModeSummaryRows(project),
-    { label: 'Altura do sistema:', value: formatPeDireitoAltura(project) },
-    { label: 'Níveis de armazenagem:', value: niveisDetail },
-    { label: 'Módulos:', value: modulos },
-    { label: 'Posições totais:', value: String(totals.positionCount) },
-    { label: 'Túnel:', value: metadata.hasTunnel ? 'Sim' : 'Não' },
+    ...heightModeSummaryRows(project).map(r => ({ ...r })),
+    {
+      label: 'Altura do sistema:',
+      value: formatPeDireitoAltura(project),
+      emphasis: true,
+    },
+    {
+      label: 'Níveis de armazenagem:',
+      value: niveisDetail,
+      emphasis: true,
+    },
+    { label: 'Módulos:', value: modulos, emphasis: true },
+    {
+      label: 'Posições totais:',
+      value: String(totals.positionCount),
+      emphasis: true,
+    },
+    {
+      label: 'Túnel:',
+      value: metadata.hasTunnel ? 'Sim' : 'Não',
+      emphasis: true,
+    },
     {
       label: 'Primeiro nível ao piso:',
       value: project.firstLevelOnGround !== false ? 'Sim' : 'Não',
@@ -147,6 +178,7 @@ export function technicalSummaryRowsFromLayoutGeometry(
     rows.push({
       label: 'Coluna selecionada:',
       value: structure.uprightType,
+      emphasis: true,
     });
   }
 

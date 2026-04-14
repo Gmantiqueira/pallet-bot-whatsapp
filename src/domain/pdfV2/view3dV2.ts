@@ -59,9 +59,9 @@ const STROKE: Record<
   ProjectedLine2D['kind'],
   { c: string; w: number; opacity: number }
 > = {
-  floor: { c: '#94a3b8', w: 1.05, opacity: 0.95 },
-  upright: { c: '#0f172a', w: 1.2, opacity: 1 },
-  beam: { c: '#ea580c', w: 0.9, opacity: 1 },
+  floor: { c: '#94a3b8', w: 1.2, opacity: 0.92 },
+  upright: { c: '#0f172a', w: 1.55, opacity: 1 },
+  beam: { c: '#ea580c', w: 1.25, opacity: 1 },
 };
 
 const DRAW_ORDER: ProjectedLine2D['kind'][] = ['floor', 'beam', 'upright'];
@@ -71,9 +71,9 @@ const DRAW_ORDER: ProjectedLine2D['kind'][] = ['floor', 'beam', 'upright'];
  * Ordem de desenho: piso → longarinas → montantes.
  */
 export function render3DViewV2(projected: Projected2D): SvgGroup {
-  const vbW = 1000;
-  const vbH = 560;
-  const pad = 40;
+  const vbW = 1100;
+  const vbH = 640;
+  const pad = 28;
   const { minX, maxX, minY, maxY } = projected.bounds;
   const spanX = Math.max(maxX - minX, 1);
   const spanY = Math.max(maxY - minY, 1);
@@ -90,7 +90,10 @@ export function render3DViewV2(projected: Projected2D): SvgGroup {
   parts.push(
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${vbW} ${vbH}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">`
   );
-  parts.push(`<rect width="${vbW}" height="${vbH}" fill="#ffffff"/>`);
+  parts.push(`<rect width="${vbW}" height="${vbH}" fill="#fafafa"/>`);
+  parts.push(
+    `<rect x="14" y="14" width="${vbW - 28}" height="${vbH - 28}" rx="4" fill="none" stroke="#e2e8f0" stroke-width="0.9"/>`
+  );
   parts.push('<g id="v2-3d-wireframe">');
 
   for (const kind of DRAW_ORDER) {

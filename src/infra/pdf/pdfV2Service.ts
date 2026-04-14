@@ -26,16 +26,21 @@ import {
   svgRasterToPng,
   type GenerateProjectPdfResult,
 } from './pdfService';
-import { technicalSummaryRowsFromLayoutGeometry } from './pdfV2TechnicalSummary';
+import {
+  technicalSummaryRowsFromLayoutGeometry,
+  type TechnicalSummaryRow,
+} from './pdfV2TechnicalSummary';
 import { buildPdfArtifactAfterWrite } from './pdfArtifact';
 
-const MARGIN_PT = 56;
+const MARGIN_PT = 50;
 const COL_INK = '#0f172a';
 const COL_MUTED = '#4b5563';
-const COL_RULE = '#e5e7eb';
+const COL_RULE = '#e2e8f0';
 const COL_ACCENT = '#1e40af';
 const COL_BOX = '#f1f5f9';
-const RASTER_DPI = 280;
+const COL_VALUE_EMPH = '#0f172a';
+/** DPI alinhado a {@link ./pdfService} (rasterização SVG). */
+const RASTER_DPI = 300;
 
 function ptToPx(pt: number): number {
   return Math.max(1, Math.round((pt * RASTER_DPI) / 72));
@@ -46,13 +51,14 @@ function drawingRasterPixelSize(): { pxW: number; pxH: number } {
   const pageH = 841.89;
   const usableW = pageW - 2 * MARGIN_PT;
   const pageBottom = pageH - MARGIN_PT;
-  const headerFromTop = 38;
+  /** Cabeçalho de folha compacto para maximizar área do desenho. */
+  const headerFromTop = 30;
   const imgTop = MARGIN_PT + headerFromTop;
-  const imgBottomPad = 10;
+  const imgBottomPad = 8;
   const imgBoxH = pageBottom - imgTop - imgBottomPad;
   return {
     pxW: ptToPx(usableW),
-    pxH: ptToPx(Math.max(96, imgBoxH * 1.14)),
+    pxH: ptToPx(Math.max(96, imgBoxH * 1.26)),
   };
 }
 
@@ -60,8 +66,8 @@ function drawingRasterPixelSize(): { pxW: number; pxH: number } {
 function elevationDrawingRasterPixelSize(): { pxW: number; pxH: number } {
   const base = drawingRasterPixelSize();
   return {
-    pxW: Math.round(base.pxW * 1.14),
-    pxH: Math.round(base.pxH * 1.34),
+    pxW: Math.round(base.pxW * 1.18),
+    pxH: Math.round(base.pxH * 1.42),
   };
 }
 
@@ -172,46 +178,61 @@ function drawKeyValueRow(
   usableW: number,
   label: string,
   value: string,
-  labelW: number
+  labelW: number,
+  opts?: { emphasis?: boolean }
 ): number {
   const valX = x + labelW;
   const valW = Math.max(80, usableW - labelW);
-  doc.font('Helvetica-Bold').fontSize(9).fillColor(COL_MUTED);
+  const emphasis = opts?.emphasis === true;
+  const labelSize = emphasis ? 9 : 8.5;
+  const valueSize = emphasis ? 11.5 : 9.5;
+  const labelColor = emphasis ? COL_MUTED : '#64748b';
+  doc.font('Helvetica-Bold').fontSize(labelSize).fillColor(labelColor);
   const hLabel = doc.heightOfString(label, { width: labelW - 4 });
-  doc.font('Helvetica').fontSize(10).fillColor(COL_INK);
+  doc
+    .font(emphasis ? 'Helvetica-Bold' : 'Helvetica')
+    .fontSize(valueSize)
+    .fillColor(emphasis ? COL_VALUE_EMPH : COL_INK);
   const hVal = doc.heightOfString(value, { width: valW });
-  const rowH = Math.max(hLabel, hVal, 13);
+  const rowH = Math.max(hLabel, hVal, emphasis ? 16 : 13);
 
   doc
     .font('Helvetica-Bold')
-    .fontSize(9)
-    .fillColor(COL_MUTED)
+    .fontSize(labelSize)
+    .fillColor(labelColor)
     .text(label, x, y, {
       width: labelW - 4,
       lineGap: 1,
     });
-  doc.font('Helvetica').fontSize(10).fillColor(COL_INK).text(value, valX, y, {
-    width: valW,
-    lineGap: 1,
-  });
-  return y + rowH + 6;
+  doc
+    .font(emphasis ? 'Helvetica-Bold' : 'Helvetica')
+    .fontSize(valueSize)
+    .fillColor(emphasis ? COL_VALUE_EMPH : COL_INK)
+    .text(value, valX, y, {
+      width: valW,
+      lineGap: emphasis ? 0.5 : 1,
+    });
+  return y + rowH + (emphasis ? 7 : 5);
 }
 
 function measureTechnicalSummaryHeight(
   doc: InstanceType<typeof PDFDocument>,
   usableW: number,
   labelColW: number,
-  rows: { label: string; value: string }[]
+  rows: TechnicalSummaryRow[]
 ): number {
-  doc.font('Helvetica-Bold').fontSize(11);
-  let h = doc.heightOfString('RESUMO TÉCNICO', { width: usableW }) + 14;
+  doc.font('Helvetica-Bold').fontSize(12.5);
+  let h = doc.heightOfString('RESUMO TÉCNICO', { width: usableW }) + 18;
   const valW = Math.max(80, usableW - labelColW);
   for (const row of rows) {
-    doc.font('Helvetica-Bold').fontSize(9);
+    const emphasis = row.emphasis === true;
+    const labelSize = emphasis ? 9 : 8.5;
+    const valueSize = emphasis ? 11.5 : 9.5;
+    doc.font('Helvetica-Bold').fontSize(labelSize);
     const hLabel = doc.heightOfString(row.label, { width: labelColW - 4 });
-    doc.font('Helvetica').fontSize(10);
+    doc.font(emphasis ? 'Helvetica-Bold' : 'Helvetica').fontSize(valueSize);
     const hVal = doc.heightOfString(row.value, { width: valW });
-    h += Math.max(hLabel, hVal, 13) + 6;
+    h += Math.max(hLabel, hVal, emphasis ? 16 : 13) + (emphasis ? 7 : 5);
   }
   return h + 12;
 }
@@ -318,7 +339,7 @@ export async function renderPdfV2(
   const usableW =
     doc.page.width - doc.page.margins.left - doc.page.margins.right;
   const pageBottom = doc.page.height - doc.page.margins.bottom;
-  const imgBottomPad = 20;
+  const imgBottomPad = 14;
 
   const drawCentered = (
     text: string,
@@ -376,17 +397,17 @@ export async function renderPdfV2(
     doc.image(raster.buffer, ix, yImg, { width: dw, height: dh });
   };
 
-  const labelColW = 132;
+  const labelColW = 142;
 
   doc.y = doc.page.margins.top;
-  doc.moveDown(0.32);
+  doc.moveDown(0.28);
 
   drawCentered('PROJETO DE PORTA-PALETES', {
-    size: 20,
+    size: 22,
     font: 'Helvetica-Bold',
     color: COL_INK,
     lineGap: 2,
-    moveDown: 0.4,
+    moveDown: 0.36,
   });
 
   const barY = doc.y + 2;
@@ -439,7 +460,7 @@ export async function renderPdfV2(
     input.layoutGeometry
   );
   const boxTop = doc.y;
-  const boxPad = 8;
+  const boxPad = 10;
   const innerH = measureTechnicalSummaryHeight(
     doc,
     usableW,
@@ -449,24 +470,28 @@ export async function renderPdfV2(
   const boxH = innerH + boxPad * 2;
 
   doc
-    .roundedRect(left - 2, boxTop - 4, usableW + 4, boxH, 3)
+    .roundedRect(left - 2, boxTop - 4, usableW + 4, boxH, 4)
     .fillColor(COL_BOX)
-    .fillOpacity(0.5)
+    .fillOpacity(0.55)
     .fill();
   doc.fillOpacity(1);
   doc
-    .roundedRect(left - 2, boxTop - 4, usableW + 4, boxH, 3)
+    .roundedRect(left - 2, boxTop - 4, usableW + 4, boxH, 4)
     .strokeColor(COL_RULE)
-    .lineWidth(0.65)
+    .lineWidth(0.85)
     .stroke();
 
   rowY = boxTop + boxPad;
+  doc.font('Helvetica-Bold').fontSize(12.5).fillColor(COL_INK);
+  doc.text('RESUMO TÉCNICO', left, rowY, { width: usableW });
+  const underY = doc.y + 3;
   doc
-    .font('Helvetica-Bold')
-    .fontSize(11)
-    .fillColor(COL_INK)
-    .text('RESUMO TÉCNICO', left, rowY, { width: usableW });
-  rowY = doc.y + 6;
+    .strokeColor(COL_ACCENT)
+    .lineWidth(1.15)
+    .moveTo(left, underY)
+    .lineTo(left + Math.min(142, usableW * 0.38), underY)
+    .stroke();
+  rowY = underY + 10;
   for (const row of techRows) {
     rowY = drawKeyValueRow(
       doc,
@@ -475,67 +500,58 @@ export async function renderPdfV2(
       usableW,
       row.label,
       row.value,
-      labelColW
+      labelColW,
+      { emphasis: row.emphasis }
     );
   }
   doc.y = boxTop + boxH + 14;
 
   doc.addPage();
-  doc.y = doc.page.margins.top + 6;
+  doc.y = doc.page.margins.top + 4;
   drawCentered('PLANTA DE IMPLANTAÇÃO', {
+    size: 14,
+    font: 'Helvetica-Bold',
+    color: COL_INK,
+    moveDown: 0.12,
+  });
+  horizontalRule(doc.y + 2, 0.08, COL_RULE);
+  doc.moveDown(0.22);
+  embedFullWidthDrawing(floorRaster, { bottomPadPt: 6 });
+
+  doc.addPage();
+  doc.y = doc.page.margins.top + 4;
+  drawCentered('Vista frontal — módulo padrão', {
     size: 13,
     font: 'Helvetica-Bold',
     color: COL_INK,
-    moveDown: 0.14,
+    moveDown: 0.12,
   });
-  drawCentered(
-    hasTunnel
-      ? 'Módulos, corredores e zona de túnel'
-      : 'Módulos, corredores e passagens transversais',
-    {
-      size: 9.5,
-      color: COL_MUTED,
-      moveDown: 0.22,
-    }
-  );
-  horizontalRule(doc.y + 3, 0.1, COL_RULE);
-  doc.moveDown(0.28);
-  embedFullWidthDrawing(floorRaster, { bottomPadPt: 8 });
-
-  doc.addPage();
-  doc.y = doc.page.margins.top + 6;
-  drawCentered('Vista frontal — módulo padrão', {
-    size: 12,
-    font: 'Helvetica-Bold',
-    color: COL_INK,
-    moveDown: 0.18,
-  });
-  drawCentered('Referência de armazenagem', {
-    size: 8.5,
+  drawCentered('Referência de armazenagem · cotas em mm', {
+    size: 9.5,
     color: COL_MUTED,
-    moveDown: 0.28,
+    moveDown: 0.22,
   });
-  horizontalRule(doc.y + 3, 0.1, COL_RULE);
-  doc.moveDown(0.38);
+  horizontalRule(doc.y + 2, 0.08, COL_RULE);
+  doc.moveDown(0.3);
   embedFullWidthDrawing(elevFrontStdRaster);
 
   if (hasTunnel) {
     doc.addPage();
-    doc.y = doc.page.margins.top + 6;
+    doc.y = doc.page.margins.top + 4;
     drawCentered('Vista frontal — módulo com túnel', {
-      size: 12,
+      size: 13,
       font: 'Helvetica-Bold',
       color: COL_INK,
-      moveDown: 0.18,
+      moveDown: 0.12,
     });
     if (elevFrontTunRaster) {
-      drawCentered('Abertura de passagem no nível inferior', {
-        size: 8.5,
+      drawCentered('Abertura de passagem no nível inferior · cotas em mm', {
+        size: 9.5,
         color: COL_MUTED,
-        moveDown: 0.28,
+        moveDown: 0.22,
       });
-      horizontalRule(doc.y + 3, 0.1, COL_RULE);
-      doc.moveDown(0.38);
+      horizontalRule(doc.y + 2, 0.08, COL_RULE);
+      doc.moveDown(0.3);
       embedFullWidthDrawing(elevFrontTunRaster);
     } else {
       drawCentered('Não aplicável neste projeto (sem módulo túnel).', {
@@ -547,39 +563,39 @@ export async function renderPdfV2(
   }
 
   doc.addPage();
-  doc.y = doc.page.margins.top + 6;
+  doc.y = doc.page.margins.top + 4;
   drawCentered('Vista lateral — estrutura do módulo', {
-    size: 12,
+    size: 13,
     font: 'Helvetica-Bold',
     color: COL_INK,
-    moveDown: 0.18,
+    moveDown: 0.12,
   });
-  drawCentered('Profundidade e níveis de armazenagem', {
-    size: 8.5,
+  drawCentered('Profundidade e níveis · cotas em mm', {
+    size: 9.5,
     color: COL_MUTED,
-    moveDown: 0.28,
+    moveDown: 0.22,
   });
-  horizontalRule(doc.y + 3, 0.1, COL_RULE);
-  doc.moveDown(0.38);
+  horizontalRule(doc.y + 2, 0.08, COL_RULE);
+  doc.moveDown(0.3);
   embedFullWidthDrawing(elevLateralRaster);
 
   if (hasTunnel) {
     doc.addPage();
-    doc.y = doc.page.margins.top + 6;
-    drawCentered('Vista lateral — estrutura do módulo', {
-      size: 12,
+    doc.y = doc.page.margins.top + 4;
+    drawCentered('Vista lateral — módulo com túnel', {
+      size: 13,
       font: 'Helvetica-Bold',
       color: COL_INK,
-      moveDown: 0.18,
+      moveDown: 0.12,
     });
     if (elevLateralTunRaster) {
-      drawCentered('Profundidade e níveis de armazenagem', {
-        size: 8.5,
+      drawCentered('Profundidade e níveis · cotas em mm', {
+        size: 9.5,
         color: COL_MUTED,
-        moveDown: 0.28,
+        moveDown: 0.22,
       });
-      horizontalRule(doc.y + 3, 0.1, COL_RULE);
-      doc.moveDown(0.38);
+      horizontalRule(doc.y + 2, 0.08, COL_RULE);
+      doc.moveDown(0.3);
       embedFullWidthDrawing(elevLateralTunRaster);
     } else {
       drawCentered('Não aplicável neste projeto (sem módulo túnel).', {
@@ -591,20 +607,23 @@ export async function renderPdfV2(
   }
 
   doc.addPage();
-  doc.y = doc.page.margins.top + 6;
+  doc.y = doc.page.margins.top + 4;
   drawCentered('Visualização 3D do layout', {
-    size: 12,
+    size: 13,
     font: 'Helvetica-Bold',
     color: COL_INK,
-    moveDown: 0.18,
+    moveDown: 0.12,
   });
-  drawCentered('Representação simplificada da estrutura', {
-    size: 8.5,
-    color: COL_MUTED,
-    moveDown: 0.28,
-  });
-  horizontalRule(doc.y + 3, 0.1, COL_RULE);
-  doc.moveDown(0.38);
+  drawCentered(
+    'Wireframe isométrico · montantes, longarinas e contorno do piso',
+    {
+      size: 9.5,
+      color: COL_MUTED,
+      moveDown: 0.22,
+    }
+  );
+  horizontalRule(doc.y + 2, 0.08, COL_RULE);
+  doc.moveDown(0.3);
   embedFullWidthDrawing(view3dRaster);
 
   doc.end();

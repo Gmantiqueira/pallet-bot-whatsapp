@@ -1135,10 +1135,10 @@ function drawLateral(
 }
 
 /** Escala de cotas / legendas em páginas PDF dedicadas (uma elevação por folha). */
-const ELEV_PAGE_LABEL_SCALE = 1.58;
+const ELEV_PAGE_LABEL_SCALE = 1.72;
 const ELEV_PAGE_W = 1260;
-const ELEV_PAGE_H_FRONT = 1040;
-const ELEV_PAGE_H_LATERAL = 1000;
+const ELEV_PAGE_H_FRONT = 1080;
+const ELEV_PAGE_H_LATERAL = 1040;
 
 export type ElevationPageSvgs = {
   frontWithoutTunnel: string;
@@ -1153,7 +1153,7 @@ function wrapElevationDrawingPage(
   height: number,
   footerLine: string
 ): string {
-  const fsFoot = Math.round(11 * ELEV_PAGE_LABEL_SCALE * 10) / 10;
+  const fsFoot = Math.round(12 * ELEV_PAGE_LABEL_SCALE * 10) / 10;
   const parts: string[] = [];
   parts.push(
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">`
@@ -1181,11 +1181,11 @@ export function serializeElevationPagesV2(
   const hF = ELEV_PAGE_H_FRONT;
   const hL = ELEV_PAGE_H_LATERAL;
   const ls = ELEV_PAGE_LABEL_SCALE;
-  const padX = 34;
-  const padTop = 32;
+  const padX = 26;
+  const padTop = 22;
   const innerW = w - padX * 2;
-  const innerHFront = hF - padTop - 84;
-  const innerHLat = hL - padTop - 80;
+  const innerHFront = hF - padTop - 68;
+  const innerHLat = hL - padTop - 62;
 
   const std = model.frontWithoutTunnel;
   const frontStdInner = drawFrontRack(

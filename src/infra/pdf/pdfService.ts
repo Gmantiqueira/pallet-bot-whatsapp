@@ -8,7 +8,7 @@ import { resolveStoragePath } from '../../config/storagePath';
 import type { GeneratedPdfArtifact } from '../../types/generatedPdf';
 
 /** DPI para rasterizar SVG antes de embutir no PDF (nitidez em impressão / PDF cliente). */
-const RASTER_DPI = 280;
+const RASTER_DPI = 300;
 
 export type GenerateProjectPdfResult = GeneratedPdfArtifact;
 
