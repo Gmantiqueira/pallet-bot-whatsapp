@@ -181,8 +181,8 @@
     <div class="messages" id="messages"></div>
     <div class="input-area">
       <input type="text" id="textInput" placeholder="Digite uma mensagem..." />
-      <button id="sendButton">Enviar</button>
-      <button id="imageButton" class="image-button">📷 Imagem</button>
+      <button type="button" id="sendButton">Enviar</button>
+      <button type="button" id="imageButton" class="image-button">📷 Imagem</button>
     </div>
   </div>
 
@@ -197,6 +197,17 @@
     const textInput = document.getElementById('textInput');
     const sendButton = document.getElementById('sendButton');
     const imageButton = document.getElementById('imageButton');
+
+    if (!messagesDiv || !textInput || !sendButton || !imageButton) {
+      console.error('[diag] sim:dom-missing', {
+        messagesDiv: !!messagesDiv,
+        textInput: !!textInput,
+        sendButton: !!sendButton,
+        imageButton: !!imageButton,
+      });
+    } else {
+      console.log('[diag] sim:dom-ok');
+    }
 
     function resolveUrl(url) {
       if (!url) return '';
@@ -281,6 +292,8 @@
     }
 
     async function sendMessage(text, buttonId = null) {
+      console.log('ENTER sendMessage', { text, buttonId, WEBHOOK_URL });
+
       const payload = {
         from: PHONE,
       };
@@ -291,10 +304,16 @@
         payload.text = text;
       }
 
+      if (!sendButton || !textInput) {
+        console.error('[diag] sim:send-abort-no-controls');
+        return;
+      }
+
       sendButton.disabled = true;
       textInput.disabled = true;
 
       try {
+        console.log('[diag] sim:fetch-start', WEBHOOK_URL);
         const response = await fetch(WEBHOOK_URL, {
           method: 'POST',
           headers: {
@@ -424,22 +443,25 @@
     }
 
     sendButton.onclick = () => {
+      console.log('CLICK SEND');
       const text = textInput.value.trim();
-      if (text) {
-        sendMessage(text);
+      if (!text) {
+        console.log('[diag] sim:send-skipped-empty-input');
+        return;
       }
+      sendMessage(text);
     };
 
     imageButton.onclick = sendImage;
 
-    textInput.onkeypress = (e) => {
+    textInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         const text = textInput.value.trim();
         if (text) {
           sendMessage(text);
         }
       }
-    };
+    });
 
     // Initial message
     addMessage('Olá! 👋\nDigite qualquer coisa para iniciar.', false);
