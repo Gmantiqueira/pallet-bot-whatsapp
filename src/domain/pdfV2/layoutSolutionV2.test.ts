@@ -39,7 +39,7 @@ describe('buildLayoutSolutionV2', () => {
     expect(s.rows[0].kind).toBe('double');
   });
 
-  it('APENAS_DUPLOS: se não couber dupla com corredor bilateral, usa fileira simples', () => {
+  it('APENAS_DUPLOS: sem fallback silencioso — rejeita se não couber dupla com corredor bilateral', () => {
     const a: ProjectAnswersV2 = {
       ...base(),
       lineStrategy: 'APENAS_DUPLOS',
@@ -48,9 +48,8 @@ describe('buildLayoutSolutionV2', () => {
       corridorMm: 3000,
       moduleDepthMm: 1000,
     };
-    const s = buildLayoutSolutionV2(a);
-    expect(s.rackDepthMode).toBe('single');
-    expect(s.rows.length).toBeGreaterThanOrEqual(1);
+    expect(() => buildLayoutSolutionV2(a)).toThrow(/layoutSolutionV2/);
+    expect(() => buildLayoutSolutionV2(a)).toThrow(/APENAS_DUPLOS/);
   });
 
   it('MELHOR_LAYOUT: compara candidatos (orientação × profundidade × túnel) e maximiza posições', () => {

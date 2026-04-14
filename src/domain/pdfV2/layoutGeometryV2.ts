@@ -195,6 +195,128 @@ export class LayoutGeometryValidationError extends Error {
 }
 
 /**
+ * Fileira dupla (costas opostas) sem corredor operacional bilateral no eixo transversal.
+ * Usada pelo solver para ignorar candidatos inválidos sem misturar com outras falhas de geometria.
+ */
+export class DoubleLineAccessValidationError extends LayoutGeometryValidationError {
+  readonly code = 'DOUBLE_LINE_ACCESS' as const;
+  constructor(message: string) {
+    super(message);
+    this.name = 'DoubleLineAccessValidationError';
+  }
+}
+
+/** Dados do armazém necessários para validar a faixa dupla no eixo transversal ao vão. */
+export type WarehouseDoubleLineCrossSection = {
+  orientation: LayoutOrientationV2;
+  /** Dimensão do compartimento no eixo transversal ao vão (mm). */
+  crossSpanMm: number;
+  /** Corredor operacional mínimo declarado (mm) — obrigatório em ambos os lados para dupla. */
+  corridorMm: number;
+};
+
+/** Projecção da fileira no eixo transversal (mm), após normalizar `lo` ≤ `hi`. */
+export type RowTransverseExtentsMm = {
+  lo: number;
+  hi: number;
+};
+
+export function rowTransverseExtentsFromSolutionRow(
+  row: RackRowSolution,
+  orientation: LayoutOrientationV2
+): RowTransverseExtentsMm {
+  const c0 = orientation === 'along_length' ? row.y0 : row.x0;
+  const c1 = orientation === 'along_length' ? row.y1 : row.x1;
+  return { lo: Math.min(c0, c1), hi: Math.max(c0, c1) };
+}
+
+export function warehouseDoubleLineSectionFromSolution(
+  sol: LayoutSolutionV2
+): WarehouseDoubleLineCrossSection {
+  return {
+    orientation: sol.orientation,
+    crossSpanMm: sol.crossSpanMm,
+    corridorMm: sol.corridorMm,
+  };
+}
+
+export function rowTransverseExtentsFromGeometryRow(
+  row: RackRow,
+  orientation: LayoutOrientationV2
+): RowTransverseExtentsMm {
+  const c0 = orientation === 'along_length' ? row.originY : row.originX;
+  const c1 = c0 + row.rowDepthMm;
+  return { lo: Math.min(c0, c1), hi: Math.max(c0, c1) };
+}
+
+export function warehouseDoubleLineSectionFromGeometry(
+  geo: LayoutGeometry
+): WarehouseDoubleLineCrossSection {
+  const crossSpan =
+    geo.orientation === 'along_length'
+      ? geo.warehouseWidthMm
+      : geo.warehouseLengthMm;
+  return {
+    orientation: geo.orientation,
+    crossSpanMm: crossSpan,
+    corridorMm: geo.metadata.corridorMm,
+  };
+}
+
+/**
+ * Invariante obrigatória: **fileira dupla** exige acesso operacional **bilateral**
+ * (distância até à parede transversal ≥ corredor mínimo em **ambos** os lados).
+ * Não admite substituição por faixa residual estreita.
+ *
+ * @param context.rowId — opcional; incluído na mensagem de erro (PDF / diagnóstico).
+ */
+export function validateDoubleLineAccess(
+  row: RowTransverseExtentsMm,
+  warehouse: WarehouseDoubleLineCrossSection,
+  context?: { rowId?: string }
+): void {
+  const { corridorMm, crossSpanMm } = warehouse;
+  const tol = OPERATIONAL_ACCESS_TOL_MM;
+  const pfx = context?.rowId
+    ? `Fileira dupla ${context.rowId}: `
+    : 'Fileira dupla: ';
+  if (corridorMm <= EPS) {
+    throw new DoubleLineAccessValidationError(
+      `${pfx}corredor declarado deve ser > 0 mm para modelar acesso bilateral mínimo.`
+    );
+  }
+  const lo = Math.min(row.lo, row.hi);
+  const hi = Math.max(row.lo, row.hi);
+  if (
+    !doubleBandHasBilateralOperationalAccess({
+      lo,
+      hi,
+      crossSpanMm,
+      corridorMm,
+      tolMm: tol,
+    })
+  ) {
+    const { gapLow, gapHigh } = doubleRowTransverseGapsMm({
+      lo,
+      hi,
+      crossSpanMm,
+    });
+    if (gapLow < corridorMm - tol) {
+      throw new DoubleLineAccessValidationError(
+        `${pfx}banda encostada ao perímetro sem faixa de acesso ≥ ${corridorMm} mm (corredor declarado; lado ~${Math.round(
+          gapLow
+        )} mm no eixo transversal).`
+      );
+    }
+    throw new DoubleLineAccessValidationError(
+      `${pfx}banda encostada ao perímetro oposto sem faixa ≥ ${corridorMm} mm (lado livre ~${Math.round(
+        gapHigh
+      )} mm no eixo transversal).`
+    );
+  }
+}
+
+/**
  * Lê `dx`/`dy` da pegada em planta e devolve extensões **semânticas** (vão vs profundidade de faixa).
  * - `along_length`: vão paralelo a **X** → longitudinal = `dx`, transversal = `dy`.
  * - `along_width`: vão paralelo a **Y** → longitudinal = `dy`, transversal = `dx`.
@@ -858,53 +980,13 @@ function doubleBandHasBilateralOperationalAccess(args: {
  * @param layout Geometria canónica da planta (mesma instância que o PDF) — {@link LayoutGeometry}.
  */
 export function validateOperationalAccess(layout: LayoutGeometry): void {
-  const cor = layout.metadata.corridorMm;
-  const tol = OPERATIONAL_ACCESS_TOL_MM;
   if (layout.metadata.rackDepthMode !== 'double') return;
 
-  if (cor <= EPS) {
-    throw new LayoutGeometryValidationError(
-      'Fileira dupla: corredor declarado deve ser > 0 mm para modelar acesso bilateral mínimo.'
-    );
-  }
-
-  const crossSpan =
-    layout.orientation === 'along_length'
-      ? layout.warehouseWidthMm
-      : layout.warehouseLengthMm;
-
+  const wh = warehouseDoubleLineSectionFromGeometry(layout);
   for (const row of layout.rows) {
     if (row.rowType !== 'backToBack') continue;
-
-    const c0 =
-      layout.orientation === 'along_length' ? row.originY : row.originX;
-    const c1 = c0 + row.rowDepthMm;
-    const lo = Math.min(c0, c1);
-    const hi = Math.max(c0, c1);
-
-    if (
-      !doubleBandHasBilateralOperationalAccess({
-        lo,
-        hi,
-        crossSpanMm: crossSpan,
-        corridorMm: cor,
-        tolMm: tol,
-      })
-    ) {
-      const { gapLow, gapHigh } = doubleRowTransverseGapsMm({
-        lo,
-        hi,
-        crossSpanMm: crossSpan,
-      });
-      if (gapLow < cor - tol) {
-        throw new LayoutGeometryValidationError(
-          `Fileira dupla ${row.id}: banda encostada ao perímetro sem faixa de acesso ≥ ${cor} mm (corredor declarado).`
-        );
-      }
-      throw new LayoutGeometryValidationError(
-        `Fileira dupla ${row.id}: banda encostada ao perímetro oposto sem faixa ≥ ${cor} mm (lado livre ~${Math.round(gapHigh)} mm).`
-      );
-    }
+    const ext = rowTransverseExtentsFromGeometryRow(row, layout.orientation);
+    validateDoubleLineAccess(ext, wh, { rowId: row.id });
   }
 }
 
@@ -961,10 +1043,11 @@ export function assertLayoutSolutionDoubleRowBilateralAccess(
 ): void {
   if (sol.rackDepthMode !== 'double') return;
   if (sol.rows.length === 0) return;
-  if (!layoutSolutionPassesOperationalAccess(sol)) {
-    throw new LayoutGeometryValidationError(
-      'Fileira dupla: layout sem corredor operacional bilateral mínimo (ambos os lados ≥ corredor declarado).'
-    );
+  const wh = warehouseDoubleLineSectionFromSolution(sol);
+  for (const row of sol.rows) {
+    if (row.kind !== 'double') continue;
+    const ext = rowTransverseExtentsFromSolutionRow(row, sol.orientation);
+    validateDoubleLineAccess(ext, wh, { rowId: row.id });
   }
 }
 

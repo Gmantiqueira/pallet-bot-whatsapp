@@ -15,6 +15,7 @@ import {
 } from './tunnelBeamSpan';
 import {
   assertLayoutSolutionDoubleRowBilateralAccess,
+  DoubleLineAccessValidationError,
   layoutSolutionPassesOperationalAccess,
   OPERATIONAL_ACCESS_TOL_MM,
 } from './layoutGeometryV2';
@@ -1004,11 +1005,13 @@ function pickBestLayoutSolution(
         ? { halfModuleOptimization: cand.halfModuleOptimization }
         : {}),
     };
-    const sol = buildLayoutSolutionV2Core(
-      merged,
-      cand.orientation,
-      cand.depthMode
-    );
+    let sol: LayoutSolutionV2;
+    try {
+      sol = buildLayoutSolutionV2Core(merged, cand.orientation, cand.depthMode);
+    } catch (e) {
+      if (e instanceof DoubleLineAccessValidationError) continue;
+      throw e;
+    }
     if (!layoutSolutionPassesOperationalAccess(sol)) continue;
     const sc = layoutSolutionScoreTuple(sol);
     if (!best || !bestScore || scoreTupleCompare(sc, bestScore) > 0) {
@@ -1025,8 +1028,8 @@ function pickBestLayoutSolution(
  * `MELHOR_LAYOUT` avalia até **24** variantes (orientação × profundidade × posição do vão × meio módulo),
  * com túnel apenas se `answers.hasTunnel` e níveis ≥ 2, com a mesma geometria que o PDF.
  *
- * `APENAS_DUPLOS`: se não couber dupla com corredor bilateral, tenta-se **fileira simples**
- * (mesmas orientações) antes de falhar.
+ * `APENAS_DUPLOS`: **sem fallback silencioso** para fileira simples — se não couber dupla com
+ * {@link validateDoubleLineAccess}, o layout falha explicitamente (ou use `MELHOR_LAYOUT` / `APENAS_SIMPLES`).
  */
 export function buildLayoutSolutionV2(
   answers: BuildLayoutSolutionV2Input
@@ -1034,23 +1037,16 @@ export function buildLayoutSolutionV2(
   const candidates = layoutSearchCandidates(answers);
   let best = pickBestLayoutSolution(answers, candidates);
 
-  if (!best && answers.lineStrategy === 'APENAS_DUPLOS') {
-    const tunnelFrom = answers.hasTunnel === true;
-    const fallback: LayoutCandidate[] = (
-      ['along_length', 'along_width'] as const
-    ).map(orientation => ({
-      orientation,
-      depthMode: 'single' as const,
-      hasTunnel: tunnelFrom,
-    }));
-    best = pickBestLayoutSolution(answers, fallback);
-  }
-
   if (!best) {
+    const dupOnly =
+      answers.lineStrategy === 'APENAS_DUPLOS'
+        ? ` Estratégia APENAS_DUPLOS: não há conversão automática para linha simples — use dimensões que permitam corredor ≥ ${answers.corridorMm} mm em ambos os lados no eixo transversal, ou escolha MELHOR_LAYOUT / APENAS_SIMPLES.`
+        : '';
     throw new Error(
       'layoutSolutionV2: nenhum candidato com acesso operacional válido ' +
         '(fileira dupla exige corredor bilateral ≥ corredor declarado em ambos os lados no eixo transversal; ' +
-        'alargue o compartimento, reduza corredor ou profundidade de posição, ou use estratégia MELHOR_LAYOUT).'
+        'alargue o compartimento, reduza corredor ou profundidade de posição, ou use estratégia MELHOR_LAYOUT).' +
+        dupOnly
     );
   }
   return best;

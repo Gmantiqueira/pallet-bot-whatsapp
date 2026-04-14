@@ -4,8 +4,10 @@ import {
   assertLayoutSolutionDoubleRowBilateralAccess,
   buildLayoutGeometry,
   doubleRowTransverseGapsMm,
+  DoubleLineAccessValidationError,
   LayoutGeometryValidationError,
   layoutSolutionPassesOperationalAccess,
+  validateDoubleLineAccess,
   validateLayoutGeometry,
   validateOperationalAccess,
 } from './layoutGeometryV2';
@@ -136,6 +138,33 @@ describe('buildLayoutGeometry + validateLayoutGeometry', () => {
     expect(() => validateOperationalAccess(geo)).toThrow(
       LayoutGeometryValidationError
     );
+  });
+
+  it('validateDoubleLineAccess: gaps < corredor → DoubleLineAccessValidationError', () => {
+    expect(() =>
+      validateDoubleLineAccess(
+        { lo: 0, hi: 4000 },
+        {
+          orientation: 'along_length',
+          crossSpanMm: 10_000,
+          corridorMm: 3000,
+        },
+        { rowId: 'r-test' }
+      )
+    ).toThrow(DoubleLineAccessValidationError);
+    try {
+      validateDoubleLineAccess(
+        { lo: 0, hi: 4000 },
+        {
+          orientation: 'along_length',
+          crossSpanMm: 10_000,
+          corridorMm: 3000,
+        },
+        { rowId: 'r-test' }
+      );
+    } catch (e) {
+      expect(e).toMatchObject({ code: 'DOUBLE_LINE_ACCESS' });
+    }
   });
 
   it('doubleRowTransverseGapsMm: gaps espelham corredor até às paredes', () => {
