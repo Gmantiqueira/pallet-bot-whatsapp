@@ -8,6 +8,7 @@ import {
   buildLayoutGeometry,
   validateLayoutGeometry,
 } from '../../domain/pdfV2/layoutGeometryV2';
+import { validatePdfRenderCoherence } from '../../domain/pdfV2/pdfRenderCoherenceV2';
 import { buildFloorPlanModelV2 } from '../../domain/pdfV2/floorPlanModelV2';
 import { serializeFloorPlanSvgV2 } from '../../domain/pdfV2/svgFloorPlanV2';
 import { buildElevationModelV2 } from '../../domain/pdfV2/elevationModelV2';
@@ -667,6 +668,7 @@ export async function generatePdfV2FromSession(
   const elevationModel = buildElevationModelV2(answers, layoutGeometry);
   const elevationPages = serializeElevationPagesV2(elevationModel);
   const rack3d = build3DModelV2(layoutGeometry);
+  validatePdfRenderCoherence(layoutGeometry, { rack3dModel: rack3d });
   const projected3d = projectToIsometric(rack3d);
   const view3dSvg = render3DViewV2(projected3d);
 

@@ -1,6 +1,8 @@
 /**
  * Modelo geométrico canónico para PDF V2: uma única fonte de verdade para planta,
  * elevações e 3D. Construído a partir de {@link LayoutSolutionV2} + respostas do projeto.
+ * Antes do raster/PDF, {@link validatePdfRenderCoherence} confirma que totais e desenho
+ * não divergem (incl. cruzamento com o modelo 3D).
  *
  * **Convenção de eixos no plano do galpão (mm):** `x` = comprimento do edifício, `y` = largura.
  * - **Ao longo da fileira / do vão (longitudinal da linha de armazenagem):** extensão da **face frontal**

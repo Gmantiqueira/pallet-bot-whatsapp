@@ -23,6 +23,7 @@ import {
   validateLayoutGeometry,
   type LayoutGeometry,
 } from '../domain/pdfV2/layoutGeometryV2';
+import { validatePdfRenderCoherence } from '../domain/pdfV2/pdfRenderCoherenceV2';
 import { buildFloorPlanModelV2 } from '../domain/pdfV2/floorPlanModelV2';
 import { serializeFloorPlanSvgV2 } from '../domain/pdfV2/svgFloorPlanV2';
 import { buildElevationModelV2 } from '../domain/pdfV2/elevationModelV2';
@@ -258,9 +259,9 @@ export const routeIncoming = async (
         const elevModel: ElevationModelV2 = buildElevationModelV2(ans, geo);
         const elevPages: ElevationPageSvgs =
           serializeElevationPagesV2(elevModel);
-        const view3dSvg = render3DViewV2(
-          projectToIsometric(build3DModelV2(geo))
-        );
+        const rack3d = build3DModelV2(geo);
+        validatePdfRenderCoherence(geo, { rack3dModel: rack3d });
+        const view3dSvg = render3DViewV2(projectToIsometric(rack3d));
         fs.writeFileSync(
           path.join(storageDir, `planta-${phone}-${ts}.svg`),
           floorSvg,
