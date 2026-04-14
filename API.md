@@ -262,7 +262,10 @@ Content-Type: application/pdf
 
 ### GET /simulator
 
-Endpoint para servir a interface web do simulador.
+Interface web do simulador (chat estilo WhatsApp para testar o `POST /webhook`).
+
+- **Local (`npm run dev`)**: servido pelo Fastify a partir de `public/simulator.html`.
+- **Vercel**: `vercel.json` reescreve `/simulator` para o ficheiro estático `/simulator.html` (sem passar pela função Node), para carregar rápido.
 
 #### Response
 

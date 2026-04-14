@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 function resolveSimulatorHtmlPath(): string | undefined {
-  const segments = ['public', 'index.html'] as const;
+  const segments = ['public', 'simulator.html'] as const;
   const candidates = [
     path.join(process.cwd(), ...segments),
     path.join(__dirname, '..', '..', ...segments),

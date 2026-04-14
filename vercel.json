@@ -5,14 +5,21 @@
   "trailingSlash": false,
   "rewrites": [
     {
+      "source": "/simulator",
+      "destination": "/simulator.html"
+    },
+    {
+      "source": "/simulator/",
+      "destination": "/simulator.html"
+    },
+    {
       "source": "/((?!api(?:\\/|$)).*)",
       "destination": "/api/$1"
     }
   ],
   "functions": {
     "api/[[...path]].js": {
-      "maxDuration": 300,
-      "includeFiles": "public/**"
+      "maxDuration": 300
     }
   }
 }
