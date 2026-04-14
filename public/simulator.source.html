@@ -189,7 +189,12 @@
   <script>
     /* Local: igual ao WEBHOOK_SECRET no .env. Produção (Vercel): npm run build injeta o valor das env vars. */
     const WEBHOOK_SECRET = 'd184805abc64e12c2211b08b4e544f59ac7dcf136b7f3095a59db06ca1bffdda';
-    const PHONE = '5511999999999';
+    /** Novo id a cada carregamento (F5 incluído) — sessão no servidor é sempre limpa. */
+    const PHONE =
+      '55119sim' +
+      (typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID().replace(/-/g, '')
+        : String(Date.now()) + Math.random().toString(36).slice(2, 12));
     const API_URL = window.location.origin;
     const WEBHOOK_URL = `${API_URL}/webhook`;
 
