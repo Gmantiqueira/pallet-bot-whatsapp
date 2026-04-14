@@ -24,6 +24,8 @@ interface IncomingWebhookPayload {
   /** Simulador: estado no browser; não usa Redis/memória no servidor. */
   simulator?: boolean;
   clientSession?: unknown;
+  /** Segundo pedido após `resumePdfGeneration` na resposta ao *Gerar projeto*. */
+  resumePdfGeneration?: boolean;
   media?: {
     type: 'image';
     id: string;
@@ -40,6 +42,8 @@ interface WebhookResponse {
   generatedPdf?: GeneratedPdfArtifact;
   /** Só com `simulator: true`: bytes do PDF em base64 (mesma invocação que grava em /tmp; evita 404 entre instâncias). */
   pdfBase64?: string;
+  /** Quando `true`, enviar de seguida outro POST com `resumePdfGeneration: true` para continuar a geração do PDF. */
+  resumePdfGeneration?: boolean;
 }
 
 const START_STATE = 'START';
@@ -157,6 +161,9 @@ export const webhookRoutes = async (
           ...(simulatorMode ? { clientSession: result.session } : {}),
           ...(result.generatedPdf ? { generatedPdf: result.generatedPdf } : {}),
           ...(pdfBase64 ? { pdfBase64 } : {}),
+          ...(result.resumePdfGeneration
+            ? { resumePdfGeneration: true }
+            : {}),
         });
       } catch (err) {
         console.error('[diag][webhook] route-err', err);

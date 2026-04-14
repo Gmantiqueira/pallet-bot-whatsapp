@@ -10,7 +10,8 @@ import type { LayoutSolutionV2 } from '../domain/pdfV2/types';
 import type { StructureResult } from '../domain/structureEngine';
 
 /** Mensagem enquanto a geração do PDF está em curso (router + estado). */
-export const GENERATING_DOC_WAIT_TEXT = 'A gerar o documento, aguarde...';
+export const GENERATING_DOC_WAIT_TEXT =
+  '⏳ A gerar o projeto (PDF e desenhos). Isto pode demorar um pouco — aguarde.';
 
 export interface MessageContext {
   lastError?: string;

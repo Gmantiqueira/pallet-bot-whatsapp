@@ -29,6 +29,8 @@ interface IncomingWebhookPayload {
     type: "image";
     id: string;              // ID da mídia
   };
+  /** Segundo pedido após o utilizador tocar em *Gerar projeto*: enviar `true` quando a resposta anterior trouxer `resumePdfGeneration: true` (geração do PDF em pedido separado para mostrar primeiro a mensagem de espera). */
+  resumePdfGeneration?: boolean;
 }
 ```
 
@@ -45,6 +47,8 @@ interface WebhookResponse {
   pdfBase64?: string;
   /** Opcional: presente quando o PDF é gerado neste pedido (integrador WhatsApp). */
   generatedPdf?: object;
+  /** Quando `true`, o integrador deve enviar de seguida outro POST com o mesmo `from` e `resumePdfGeneration: true` para continuar a geração do PDF. Omitir com `PALLET_BOT_INLINE_PDF=true` no servidor (PDF no mesmo pedido). */
+  resumePdfGeneration?: boolean;
 }
 
 interface OutgoingMessage {

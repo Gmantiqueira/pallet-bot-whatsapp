@@ -41,6 +41,18 @@ class MockSessionRepository implements SessionRepository {
 describe('MessageRouter', () => {
   let repository: MockSessionRepository;
 
+  const PREV_INLINE = process.env.PALLET_BOT_INLINE_PDF;
+  beforeAll(() => {
+    process.env.PALLET_BOT_INLINE_PDF = '1';
+  });
+  afterAll(() => {
+    if (PREV_INLINE === undefined) {
+      delete process.env.PALLET_BOT_INLINE_PDF;
+    } else {
+      process.env.PALLET_BOT_INLINE_PDF = PREV_INLINE;
+    }
+  });
+
   beforeEach(() => {
     repository = new MockSessionRepository();
   });
@@ -512,6 +524,62 @@ describe('MessageRouter', () => {
       expect(r.session.state).toBe('GENERATING_DOC');
       expect(r.session.answers).toEqual(busy.answers);
       expect(r.outgoingMessages[0].text).toBe(GENERATING_DOC_WAIT_TEXT);
+    });
+  });
+
+  describe('Deferred PDF (PALLET_BOT_INLINE_PDF off)', () => {
+    it('GERAR returns loading and resumePdfGeneration; resume completes PDF', async () => {
+      const prev = process.env.PALLET_BOT_INLINE_PDF;
+      delete process.env.PALLET_BOT_INLINE_PDF;
+      try {
+        const session = createSession(
+          'FINAL_CONFIRM',
+          finalizeSummaryAnswers({
+            lengthMm: 12000,
+            widthMm: 10000,
+            corridorMm: 3000,
+            moduleDepthMm: 2700,
+            beamLengthMm: 1100,
+            capacityKg: 2000,
+            heightMode: 'DIRECT',
+            heightMm: 5040,
+            levels: 4,
+            guardRailSimple: false,
+            guardRailDouble: false,
+          })
+        );
+
+        const r1 = await routeIncoming(
+          session,
+          { from: '5511999999999', buttonReply: 'GERAR' },
+          repository
+        );
+
+        expect(r1.resumePdfGeneration).toBe(true);
+        expect(r1.session.state).toBe('GENERATING_DOC');
+        expect(r1.outgoingMessages[0].text).toBe(GENERATING_DOC_WAIT_TEXT);
+
+        const r2 = await routeIncoming(
+          r1.session,
+          { from: '5511999999999', resumePdfGeneration: true },
+          repository
+        );
+
+        expect(r2.resumePdfGeneration).toBeFalsy();
+        expect(r2.session.state).toBe('DONE');
+        expect(r2.generatedPdf).toBeDefined();
+        expect(
+          r2.outgoingMessages.some(m =>
+            m.text?.includes('Projeto gerado com sucesso')
+          )
+        ).toBe(true);
+      } finally {
+        if (prev === undefined) {
+          process.env.PALLET_BOT_INLINE_PDF = '1';
+        } else {
+          process.env.PALLET_BOT_INLINE_PDF = prev;
+        }
+      }
     });
   });
 
