@@ -34,6 +34,11 @@ import {
   type TechnicalSummaryRow,
 } from './pdfV2TechnicalSummary';
 import { buildPdfArtifactAfterWrite } from './pdfArtifact';
+import {
+  PDFKIT_FONT_BOLD,
+  PDFKIT_FONT_REGULAR,
+  registerPdfKitFonts,
+} from '../../config/pdfFonts';
 
 /** Margens página A4 — equilíbrio entre aparência e área útil para desenhos. */
 const PAGE_MARGIN_PT = 24;
@@ -210,17 +215,17 @@ function drawKeyValueRow(
   const labelSize = emphasis ? 10 : 9.25;
   const valueSize = emphasis ? 13 : 10.75;
   const labelColor = emphasis ? COL_MUTED : '#475569';
-  doc.font('Helvetica-Bold').fontSize(labelSize).fillColor(labelColor);
+  doc.font(PDFKIT_FONT_BOLD).fontSize(labelSize).fillColor(labelColor);
   const hLabel = doc.heightOfString(label, { width: labelW - 4 });
   doc
-    .font(emphasis ? 'Helvetica-Bold' : 'Helvetica')
+    .font(emphasis ? PDFKIT_FONT_BOLD : PDFKIT_FONT_REGULAR)
     .fontSize(valueSize)
     .fillColor(emphasis ? COL_VALUE_EMPH : COL_INK);
   const hVal = doc.heightOfString(value, { width: valW });
   const rowH = Math.max(hLabel, hVal, emphasis ? 18 : 14);
 
   doc
-    .font('Helvetica-Bold')
+    .font(PDFKIT_FONT_BOLD)
     .fontSize(labelSize)
     .fillColor(labelColor)
     .text(label, x, y, {
@@ -228,7 +233,7 @@ function drawKeyValueRow(
       lineGap: 1,
     });
   doc
-    .font(emphasis ? 'Helvetica-Bold' : 'Helvetica')
+    .font(emphasis ? PDFKIT_FONT_BOLD : PDFKIT_FONT_REGULAR)
     .fontSize(valueSize)
     .fillColor(emphasis ? COL_VALUE_EMPH : COL_INK)
     .text(value, valX, y, {
@@ -244,16 +249,18 @@ function measureTechnicalSummaryHeight(
   labelColW: number,
   rows: TechnicalSummaryRow[]
 ): number {
-  doc.font('Helvetica-Bold').fontSize(14);
+  doc.font(PDFKIT_FONT_BOLD).fontSize(14);
   let h = doc.heightOfString('RESUMO TÉCNICO', { width: usableW }) + 20;
   const valW = Math.max(80, usableW - labelColW);
   for (const row of rows) {
     const emphasis = row.emphasis === true;
     const labelSize = emphasis ? 10 : 9.25;
     const valueSize = emphasis ? 13 : 10.75;
-    doc.font('Helvetica-Bold').fontSize(labelSize);
+    doc.font(PDFKIT_FONT_BOLD).fontSize(labelSize);
     const hLabel = doc.heightOfString(row.label, { width: labelColW - 4 });
-    doc.font(emphasis ? 'Helvetica-Bold' : 'Helvetica').fontSize(valueSize);
+    doc
+      .font(emphasis ? PDFKIT_FONT_BOLD : PDFKIT_FONT_REGULAR)
+      .fontSize(valueSize);
     const hVal = doc.heightOfString(row.value, { width: valW });
     h += Math.max(hLabel, hVal, emphasis ? 18 : 14) + (emphasis ? 8 : 5.5);
   }
@@ -356,6 +363,7 @@ export async function renderPdfV2(
       right: PAGE_MARGIN_PT,
     },
   });
+  registerPdfKitFonts(doc);
 
   const writeDone = attachPdfFileStream(doc, filePath);
 
@@ -379,7 +387,7 @@ export async function renderPdfV2(
     const {
       size,
       color = COL_INK,
-      font = 'Helvetica',
+      font = PDFKIT_FONT_REGULAR,
       lineGap = 0,
       moveDown: md = 0,
     } = opts;
@@ -437,12 +445,12 @@ export async function renderPdfV2(
   ): void => {
     const tSize = options?.titleSize ?? 11.5;
     let y = doc.page.margins.top + 2;
-    doc.font('Helvetica-Bold').fontSize(tSize).fillColor(COL_INK);
+    doc.font(PDFKIT_FONT_BOLD).fontSize(tSize).fillColor(COL_INK);
     const hTitle = doc.heightOfString(title, { width: usableW });
     doc.text(title, left, y, { width: usableW, align: 'left' });
     y += hTitle + (options?.subtitle ? 3 : 5);
     if (options?.subtitle) {
-      doc.font('Helvetica').fontSize(9).fillColor(COL_MUTED);
+      doc.font(PDFKIT_FONT_REGULAR).fontSize(9).fillColor(COL_MUTED);
       const hSub = doc.heightOfString(options.subtitle, { width: usableW });
       doc.text(options.subtitle, left, y, { width: usableW, align: 'left' });
       y += hSub + 4;
@@ -464,7 +472,7 @@ export async function renderPdfV2(
 
   drawCentered('PROJETO DE PORTA-PALETES', {
     size: 23,
-    font: 'Helvetica-Bold',
+    font: PDFKIT_FONT_BOLD,
     color: COL_INK,
     lineGap: 2,
     moveDown: 0.22,
@@ -554,7 +562,7 @@ export async function renderPdfV2(
     .stroke();
 
   rowY = boxTop + boxPad;
-  doc.font('Helvetica-Bold').fontSize(14).fillColor(COL_INK);
+  doc.font(PDFKIT_FONT_BOLD).fontSize(14).fillColor(COL_INK);
   doc.text('RESUMO TÉCNICO', left, rowY, { width: usableW });
   const underY = doc.y + 3;
   doc

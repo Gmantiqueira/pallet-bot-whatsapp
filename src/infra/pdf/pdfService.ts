@@ -5,6 +5,7 @@ import { Session } from '../../domain/session';
 import type { BudgetResult } from '../../domain/budgetEngine';
 import type { LayoutResult } from '../../domain/layoutEngine';
 import { resolveStoragePath } from '../../config/storagePath';
+import { embedSvgFontFaces } from '../../config/pdfFonts';
 import type { GeneratedPdfArtifact } from '../../types/generatedPdf';
 
 /** DPI para rasterizar SVG antes de embutir no PDF (nitidez em impressão / PDF cliente). */
@@ -28,7 +29,8 @@ export async function svgRasterToPng(
   maxWidthPx: number,
   maxHeightPx: number
 ): Promise<{ buffer: Buffer; widthPx: number; heightPx: number }> {
-  const buffer = await sharp(Buffer.from(svg, 'utf8'), {
+  const prepared = embedSvgFontFaces(svg);
+  const buffer = await sharp(Buffer.from(prepared, 'utf8'), {
     density: RASTER_DPI,
   })
     .resize({

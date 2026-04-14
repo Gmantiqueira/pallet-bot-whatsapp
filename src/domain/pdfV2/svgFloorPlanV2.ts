@@ -5,6 +5,10 @@ import type {
 } from './types';
 import { escapeXml } from './floorPlanModelV2';
 import { ELEV_PALLET_TIER_STROKE } from './elevationVisualTokens';
+import {
+  SVG_FONT_FAMILY,
+  SVG_FONT_FAMILY_BOLD,
+} from '../../config/pdfFonts';
 
 /** Ligação visual com a elevação (traços de baia = `ELEV_PALLET_TIER_STROKE`). */
 
@@ -222,7 +226,7 @@ function appendFloorPlanConfigurationLegend(
     `<rect x="${x0}" y="${y0}" width="${boxW}" height="${boxH}" rx="7" fill="#f8fafc" fill-opacity="0.97" stroke="#cbd5e1" stroke-width="0.95"/>`
   );
   parts.push(
-    `<text x="${x0 + 12}" y="${y0 + 18}" font-size="11px" font-weight="700" fill="#475569" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" letter-spacing="0.06em">CONFIGURAÇÃO (LEITURA GRÁFICA)</text>`
+    `<text x="${x0 + 12}" y="${y0 + 18}" font-size="11px" fill="#475569" font-family="${SVG_FONT_FAMILY_BOLD}" letter-spacing="0.06em">CONFIGURAÇÃO (LEITURA GRÁFICA)</text>`
   );
 
   const lx = x0 + 12;
@@ -262,31 +266,31 @@ function appendFloorPlanConfigurationLegend(
   };
 
   parts.push(
-    `<text x="${lx}" y="${ly}" font-size="10px" font-weight="600" fill="#64748b" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">1.º eixo de feixe (destaque = opção do projeto)</text>`
+    `<text x="${lx}" y="${ly}" font-size="10px" fill="#64748b" font-family="${SVG_FONT_FAMILY_BOLD}">1.º eixo de feixe (destaque = opção do projeto)</text>`
   );
   ly += 4;
   parts.push(miniGround(lx, ly - 4, false, onGround));
   parts.push(
-    `<text x="${lx + 60}" y="${ly + 14}" font-size="9.5px" fill="#0f766e" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">Ao piso · sem vão útil inferior</text>`
+    `<text x="${lx + 60}" y="${ly + 14}" font-size="9.5px" fill="#0f766e" font-family="${SVG_FONT_FAMILY}">Ao piso · sem vão útil inferior</text>`
   );
   parts.push(miniGround(lx + 228, ly - 4, true, !onGround));
   parts.push(
-    `<text x="${lx + 288}" y="${ly + 14}" font-size="9.5px" fill="#a16207" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">Elevado · folga sob o 1.º patamar</text>`
+    `<text x="${lx + 288}" y="${ly + 14}" font-size="9.5px" fill="#a16207" font-family="${SVG_FONT_FAMILY}">Elevado · folga sob o 1.º patamar</text>`
   );
   ly += 34;
 
   const hasGuard = a.guardRailSimple || a.guardRailDouble;
   if (hasGuard) {
     parts.push(
-      `<text x="${lx}" y="${ly}" font-size="10px" font-weight="600" fill="#64748b" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">Guardas ao longo do vão (extremidades do desenho)</text>`
+      `<text x="${lx}" y="${ly}" font-size="10px" fill="#64748b" font-family="${SVG_FONT_FAMILY_BOLD}">Guardas ao longo do vão (extremidades do desenho)</text>`
     );
     ly += 14;
     parts.push(
       `<line x1="${lx}" y1="${ly}" x2="${lx + 28}" y2="${ly}" stroke="#ca8a04" stroke-width="3.8" stroke-linecap="square"/>`,
-      `<text x="${lx + 36}" y="${ly + 4}" font-size="9.5px" fill="#713f12" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">Simples (1 rail)</text>`,
+      `<text x="${lx + 36}" y="${ly + 4}" font-size="9.5px" fill="#713f12" font-family="${SVG_FONT_FAMILY}">Simples (1 rail)</text>`,
       `<line x1="${lx + 148}" y1="${ly - 3}" x2="${lx + 176}" y2="${ly - 3}" stroke="#b91c1c" stroke-width="2.4" stroke-linecap="square"/>`,
       `<line x1="${lx + 148}" y1="${ly + 3}" x2="${lx + 176}" y2="${ly + 3}" stroke="#b91c1c" stroke-width="2.4" stroke-linecap="square"/>`,
-      `<text x="${lx + 184}" y="${ly + 4}" font-size="9.5px" fill="#7f1d1d" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">Dupla (2 rails)</text>`
+      `<text x="${lx + 184}" y="${ly + 4}" font-size="9.5px" fill="#7f1d1d" font-family="${SVG_FONT_FAMILY}">Dupla (2 rails)</text>`
     );
     ly += 22;
   }
@@ -294,13 +298,13 @@ function appendFloorPlanConfigurationLegend(
   if (a.columnProtector) {
     parts.push(
       `<rect x="${lx}" y="${ly - 8}" width="22" height="9" rx="1.5" fill="#ea580c" stroke="#9a3412" stroke-width="0.8"/>`,
-      `<text x="${lx + 30}" y="${ly}" font-size="9.5px" fill="#431407" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">Protetor de pilar (base dos montantes — cantos + faixas nas pegadas)</text>`
+      `<text x="${lx + 30}" y="${ly}" font-size="9.5px" fill="#431407" font-family="${SVG_FONT_FAMILY}">Protetor de pilar (base dos montantes — cantos + faixas nas pegadas)</text>`
     );
     ly += 18;
   }
 
   parts.push(
-    `<text x="${lx}" y="${y0 + boxH - 10}" font-size="9px" fill="#94a3b8" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">Mesma convenção que a vista frontal e o resumo técnico.</text>`
+    `<text x="${lx}" y="${y0 + boxH - 10}" font-size="9px" fill="#94a3b8" font-family="${SVG_FONT_FAMILY}">Mesma convenção que a vista frontal e o resumo técnico.</text>`
   );
 }
 
@@ -376,7 +380,7 @@ function appendFloorPlanAccessoryGraphics(
       const isLeftEdge = x0 < o.x + o.w / 2;
       const tx = isLeftEdge ? x0 - 16 : x0 + 16;
       parts.push(
-        `<text x="${tx}" y="${midY + 5}" text-anchor="${isLeftEdge ? 'end' : 'start'}" font-size="12.5px" font-weight="800" fill="${col}" stroke="#ffffff" stroke-width="0.45" paint-order="stroke fill" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">${escapeXml(tag)}</text>`
+        `<text x="${tx}" y="${midY + 5}" text-anchor="${isLeftEdge ? 'end' : 'start'}" font-size="12.5px" fill="${col}" stroke="#ffffff" stroke-width="0.45" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY_BOLD}">${escapeXml(tag)}</text>`
       );
     } else if (kind === 'double') {
       for (const dy of [-5.5, 5.5]) {
@@ -397,7 +401,7 @@ function appendFloorPlanAccessoryGraphics(
       }
       const ty = y0 + (y0 < o.y + o.h / 2 ? -14 : 16);
       parts.push(
-        `<text x="${(x0 + x1) / 2}" y="${ty}" text-anchor="middle" font-size="12.5px" font-weight="800" fill="${col}" stroke="#ffffff" stroke-width="0.45" paint-order="stroke fill" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">${escapeXml(tag)}</text>`
+        `<text x="${(x0 + x1) / 2}" y="${ty}" text-anchor="middle" font-size="12.5px" fill="${col}" stroke="#ffffff" stroke-width="0.45" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY_BOLD}">${escapeXml(tag)}</text>`
       );
     } else {
       parts.push(
@@ -416,7 +420,7 @@ function appendFloorPlanAccessoryGraphics(
       }
       const ty = y0 + (y0 < o.y + o.h / 2 ? -14 : 16);
       parts.push(
-        `<text x="${(x0 + x1) / 2}" y="${ty}" text-anchor="middle" font-size="12.5px" font-weight="800" fill="${col}" stroke="#ffffff" stroke-width="0.45" paint-order="stroke fill" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">${escapeXml(tag)}</text>`
+        `<text x="${(x0 + x1) / 2}" y="${ty}" text-anchor="middle" font-size="12.5px" fill="${col}" stroke="#ffffff" stroke-width="0.45" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY_BOLD}">${escapeXml(tag)}</text>`
       );
     }
   };
@@ -464,8 +468,8 @@ function orientationArrowSvg(
       : 'Linhas paralelas à largura do galpão';
   return `<g>
     <rect x="${gx}" y="${gy}" width="${gw}" height="${gh}" rx="5" fill="#f8fafc" fill-opacity="0.96" stroke="#cbd5e1" stroke-width="0.9"/>
-    <text x="${gx + 10}" y="${gy + 18}" font-size="11.5px" font-weight="600" fill="#334155" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">Sentido de entrada / operação</text>
-    <text x="${gx + 10}" y="${gy + 34}" font-size="10px" fill="#64748b" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">${escapeXml(sub)}</text>
+    <text x="${gx + 10}" y="${gy + 18}" font-size="11.5px" fill="#334155" font-family="${SVG_FONT_FAMILY_BOLD}">Sentido de entrada / operação</text>
+    <text x="${gx + 10}" y="${gy + 34}" font-size="10px" fill="#64748b" font-family="${SVG_FONT_FAMILY}">${escapeXml(sub)}</text>
     ${shaft}
   </g>`;
 }
@@ -482,16 +486,16 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
   parts.push('<defs>');
   parts.push(`<style>
     /** Bloco superior: metadado → desenho → cotas → legenda (hierarquia). */
-    .fp-drawing-meta { font: 600 14px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #334155; letter-spacing: 0.01em; }
-    .fp-plan-hint { font: 400 12.5px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #64748b; }
-    .fp-row-legend { font: 500 13px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #334155; letter-spacing: 0.01em; }
-    .fp-first-level { font: 500 12px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #0f766e; }
-    .fp-anno-heading { font: 600 11px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #64748b; letter-spacing: 0.06em; text-transform: uppercase; }
-    .fp-circ-op { font: 650 14px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #0f172a; }
-    .fp-circ { font: 600 14px "Helvetica Neue", Helvetica, Arial, sans-serif; }
-    .fp-circ-res { font: 600 12.5px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #44403c; }
-    .fp-dim { font: 600 18px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: ${COL_DIM}; }
-    .fp-mod-num { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; font-weight: 600; fill: #1e293b; }
+    .fp-drawing-meta { font: 400 14px ${SVG_FONT_FAMILY_BOLD}; fill: #334155; letter-spacing: 0.01em; }
+    .fp-plan-hint { font: 400 12.5px ${SVG_FONT_FAMILY}; fill: #64748b; }
+    .fp-row-legend { font: 400 13px ${SVG_FONT_FAMILY_BOLD}; fill: #334155; letter-spacing: 0.01em; }
+    .fp-first-level { font: 400 12px ${SVG_FONT_FAMILY}; fill: #0f766e; }
+    .fp-anno-heading { font: 400 11px ${SVG_FONT_FAMILY_BOLD}; fill: #64748b; letter-spacing: 0.06em; text-transform: uppercase; }
+    .fp-circ-op { font: 400 14px ${SVG_FONT_FAMILY_BOLD}; fill: #0f172a; }
+    .fp-circ { font: 400 14px ${SVG_FONT_FAMILY_BOLD}; }
+    .fp-circ-res { font: 400 12.5px ${SVG_FONT_FAMILY_BOLD}; fill: #44403c; }
+    .fp-dim { font: 400 18px ${SVG_FONT_FAMILY_BOLD}; fill: ${COL_DIM}; }
+    .fp-mod-num { font-family: ${SVG_FONT_FAMILY_BOLD}; font-weight: 400; fill: #1e293b; }
   </style>`);
   /** 1.º eixo elevado: leitura imediata na planta (sombreia o módulo). */
   parts.push(
@@ -633,7 +637,7 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
     const fill = firstOnGround ? '#0f766e' : '#9a3412';
     const yLab = s.y + fs + 3;
     parts.push(
-      `<text x="${s.x + s.w / 2}" y="${yLab}" text-anchor="middle" font-size="${fs}px" font-weight="800" fill="${fill}" stroke="#ffffff" stroke-width="0.4" paint-order="stroke fill" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">${escapeXml(txt)}</text>`
+      `<text x="${s.x + s.w / 2}" y="${yLab}" text-anchor="middle" font-size="${fs}px" fill="${fill}" stroke="#ffffff" stroke-width="0.4" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY_BOLD}">${escapeXml(txt)}</text>`
     );
   }
 
