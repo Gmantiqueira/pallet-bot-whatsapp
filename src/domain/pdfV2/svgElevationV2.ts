@@ -24,9 +24,8 @@ import {
 } from './elevationVisualTokens';
 import {
   SVG_FONT_FAMILY,
-  SVG_FONT_FAMILY_BOLD,
   SVG_FONT_MONO,
-  svgSansFamilyForWeight,
+  svgFontWeightForSvgAttr,
 } from '../../config/pdfFonts';
 
 /** Um módulo frontal = duas baias lado a lado (3 montantes), como desenho técnico tipo 2× vão. */
@@ -130,13 +129,13 @@ function drawFrontGuardRailMarkers(
   if (left !== 'none') {
     const col = left === 'double' ? '#991b1b' : '#a16207';
     parts.push(
-      `<text x="${faceSpanLeft - 24}" y="${(y1 + y2) / 2 + 3.2 * ls}" text-anchor="end" font-size="${9.2 * ls}px" fill="${col}" stroke="#ffffff" stroke-width="${0.42 * ls}" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY_BOLD}">${tag(left)}</text>`
+      `<text x="${faceSpanLeft - 24}" y="${(y1 + y2) / 2 + 3.2 * ls}" text-anchor="end" font-size="${9.2 * ls}px" fill="${col}" stroke="#ffffff" stroke-width="${0.42 * ls}" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="700">${tag(left)}</text>`
     );
   }
   if (right !== 'none') {
     const col = right === 'double' ? '#991b1b' : '#a16207';
     parts.push(
-      `<text x="${faceSpanRight + 24}" y="${(y1 + y2) / 2 + 3.2 * ls}" text-anchor="start" font-size="${9.2 * ls}px" fill="${col}" stroke="#ffffff" stroke-width="${0.42 * ls}" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY_BOLD}">${tag(right)}</text>`
+      `<text x="${faceSpanRight + 24}" y="${(y1 + y2) / 2 + 3.2 * ls}" text-anchor="start" font-size="${9.2 * ls}px" fill="${col}" stroke="#ffffff" stroke-width="${0.42 * ls}" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="700">${tag(right)}</text>`
     );
   }
   return parts.join('');
@@ -189,13 +188,13 @@ function drawLateralGuardRailMarkers(
   if (left !== 'none') {
     const col = left === 'double' ? '#991b1b' : '#a16207';
     parts.push(
-      `<text x="${xLeftOuter - 24}" y="${(y1 + y2) / 2 + 3.2 * ls}" text-anchor="end" font-size="${9.2 * ls}px" fill="${col}" stroke="#ffffff" stroke-width="${0.42 * ls}" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY_BOLD}">${tag(left)}</text>`
+      `<text x="${xLeftOuter - 24}" y="${(y1 + y2) / 2 + 3.2 * ls}" text-anchor="end" font-size="${9.2 * ls}px" fill="${col}" stroke="#ffffff" stroke-width="${0.42 * ls}" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="700">${tag(left)}</text>`
     );
   }
   if (right !== 'none') {
     const col = right === 'double' ? '#991b1b' : '#a16207';
     parts.push(
-      `<text x="${xRightOuter + 24}" y="${(y1 + y2) / 2 + 3.2 * ls}" text-anchor="start" font-size="${9.2 * ls}px" fill="${col}" stroke="#ffffff" stroke-width="${0.42 * ls}" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY_BOLD}">${tag(right)}</text>`
+      `<text x="${xRightOuter + 24}" y="${(y1 + y2) / 2 + 3.2 * ls}" text-anchor="start" font-size="${9.2 * ls}px" fill="${col}" stroke="#ffffff" stroke-width="${0.42 * ls}" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="700">${tag(right)}</text>`
     );
   }
   return parts.join('');
@@ -347,13 +346,7 @@ function textLines(
 ): string {
   const fs = attrs.fontSize;
   const lh = fs * 1.12;
-  const fam = svgSansFamilyForWeight(attrs.fontWeight);
-  const fwText =
-    fam === SVG_FONT_FAMILY_BOLD
-      ? ''
-      : attrs.fontWeight
-        ? ` font-weight="${attrs.fontWeight}"`
-        : '';
+  const weight = svgFontWeightForSvgAttr(attrs.fontWeight);
   const inner = lines
     .map((line, i) => {
       if (i === 0) {
@@ -362,7 +355,7 @@ function textLines(
       return `<tspan x="${x}" dy="${lh}">${escapeXml(line)}</tspan>`;
     })
     .join('');
-  return `<text x="${x}" y="${yStart}" fill="${attrs.fill}" font-size="${fs}px" font-family="${fam}"${fwText}>${inner}</text>`;
+  return `<text x="${x}" y="${yStart}" fill="${attrs.fill}" font-size="${fs}px" font-family="${SVG_FONT_FAMILY}" font-weight="${weight}">${inner}</text>`;
 }
 
 /**
@@ -896,7 +889,7 @@ function drawFrontRack(
     `<line x1="${rx - floorPad}" y1="${floorTop}" x2="${rx + totalW + floorPad}" y2="${floorTop}" stroke="${COL_FLOOR}" stroke-width="2.2"/>`
   );
   parts.push(
-    `<text x="${rx + totalW / 2}" y="${floorTop + 8.5 * ls}" text-anchor="middle" font-size="${9.25 * ls}px" fill="${COL_FLOOR}" font-family="${SVG_FONT_FAMILY_BOLD}">PISO</text>`
+    `<text x="${rx + totalW / 2}" y="${floorTop + 8.5 * ls}" text-anchor="middle" font-size="${9.25 * ls}px" fill="${COL_FLOOR}" font-family="${SVG_FONT_FAMILY}" font-weight="700">PISO</text>`
   );
 
   const clearanceMm =
@@ -1003,7 +996,7 @@ function drawFrontRack(
       (Math.min(yBeam0Elev, rackBottom) + Math.max(yBeam0Elev, rackBottom)) /
       2;
     parts.push(
-      `<text x="${cx}" y="${cyMid - 4.5 * ls}" text-anchor="middle" font-size="${8.6 * ls}px" fill="#9a3412" stroke="#ffffff" stroke-width="${0.35 * ls}" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY_BOLD}">1.º eixo elevado (folga sob o patamar)</text>`
+      `<text x="${cx}" y="${cyMid - 4.5 * ls}" text-anchor="middle" font-size="${8.6 * ls}px" fill="#9a3412" stroke="#ffffff" stroke-width="${0.35 * ls}" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="700">1.º eixo elevado (folga sob o patamar)</text>`
     );
   } else if (
     data.firstLevelOnGround === true &&
@@ -1031,7 +1024,7 @@ function drawFrontRack(
     }
     const cx = (faceSpanLeft + faceSpanRight) / 2;
     parts.push(
-      `<text x="${cx}" y="${yBeam0Elev - 5.8 * ls}" text-anchor="middle" font-size="${8.4 * ls}px" fill="#0f766e" stroke="#ffffff" stroke-width="${0.35 * ls}" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY_BOLD}">1.º feixe ao piso (sem vão útil abaixo)</text>`
+      `<text x="${cx}" y="${yBeam0Elev - 5.8 * ls}" text-anchor="middle" font-size="${8.4 * ls}px" fill="#0f766e" stroke="#ffffff" stroke-width="${0.35 * ls}" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="700">1.º feixe ao piso (sem vão útil abaixo)</text>`
     );
   }
 
@@ -1109,7 +1102,7 @@ function drawFrontRack(
         const bay = bays[bi]!;
         const cx = (bay.left + bay.right) / 2;
         parts.push(
-          `<text x="${cx}" y="${ty}" text-anchor="middle" font-size="${capFs}px" fill="#047857" font-family="${SVG_FONT_FAMILY_BOLD}">${escapeXml(
+          `<text x="${cx}" y="${ty}" text-anchor="middle" font-size="${capFs}px" fill="#047857" font-family="${SVG_FONT_FAMILY}" font-weight="700">${escapeXml(
             capText
           )}</text>`
         );
@@ -1126,7 +1119,7 @@ function drawFrontRack(
         const ty = yy - bh / 2 - 4.5 * ls;
         const cx = (bay.left + bay.right) / 2;
         parts.push(
-          `<text x="${cx}" y="${ty}" text-anchor="middle" font-size="${capFs}px" fill="#111827" font-family="${SVG_FONT_FAMILY_BOLD}">${escapeXml(
+          `<text x="${cx}" y="${ty}" text-anchor="middle" font-size="${capFs}px" fill="#111827" font-family="${SVG_FONT_FAMILY}" font-weight="700">${escapeXml(
             capText
           )}</text>`
         );
@@ -1155,7 +1148,7 @@ function drawFrontRack(
     formatMmPtBr(Math.round(beamL))
   )} mm/baia · face de armazenagem`;
   parts.push(
-    `<text x="${ox + pw / 2}" y="${dimTopY - 6 * ls}" text-anchor="middle" font-size="${10.5 * ls}px" fill="${DIM_MAJOR}" font-family="${SVG_FONT_FAMILY_BOLD}">${faceTitle}</text>`
+    `<text x="${ox + pw / 2}" y="${dimTopY - 6 * ls}" text-anchor="middle" font-size="${10.5 * ls}px" fill="${DIM_MAJOR}" font-family="${SVG_FONT_FAMILY}" font-weight="700">${faceTitle}</text>`
   );
 
   parts.push(
@@ -1193,7 +1186,7 @@ function drawFrontRack(
 
   if (sectionTitle) {
     parts.push(
-      `<text x="${ox + pw / 2}" y="${oy + 16 * ls}" text-anchor="middle" font-size="${15 * ls}px" fill="#0f172a" font-family="${SVG_FONT_FAMILY_BOLD}">${escapeXml(sectionTitle)}</text>`
+      `<text x="${ox + pw / 2}" y="${oy + 16 * ls}" text-anchor="middle" font-size="${15 * ls}px" fill="#0f172a" font-family="${SVG_FONT_FAMILY}" font-weight="700">${escapeXml(sectionTitle)}</text>`
     );
   }
   if (subtitle) {
@@ -1227,7 +1220,7 @@ function drawFrontRack(
     }
     if (showTunnelOpening) {
       parts.push(
-        `<text x="${rx + totalW * 0.5}" y="${yPassTop - 6 * ls}" text-anchor="middle" font-size="7.5" fill="#b45309" font-family="${SVG_FONT_FAMILY_BOLD}">zona túnel · pé livre ${Math.round(clearanceMm)} mm</text>`
+        `<text x="${rx + totalW * 0.5}" y="${yPassTop - 6 * ls}" text-anchor="middle" font-size="7.5" fill="#b45309" font-family="${SVG_FONT_FAMILY}" font-weight="700">zona túnel · pé livre ${Math.round(clearanceMm)} mm</text>`
       );
     }
     parts.push('</g>');
@@ -1313,7 +1306,7 @@ function drawLateral(
   const parts: string[] = [];
   if (!hideHeader) {
     parts.push(
-      `<text x="${ox + pw / 2}" y="${oy + 16 * ls}" text-anchor="middle" font-size="${15 * ls}px" fill="#0f172a" font-family="${SVG_FONT_FAMILY_BOLD}">Vista lateral</text>`
+      `<text x="${ox + pw / 2}" y="${oy + 16 * ls}" text-anchor="middle" font-size="${15 * ls}px" fill="#0f172a" font-family="${SVG_FONT_FAMILY}" font-weight="700">Vista lateral</text>`
     );
     parts.push(
       `<text x="${ox + pw / 2}" y="${oy + 34 * ls}" text-anchor="middle" font-size="${9 * ls}px" fill="#64748b" font-family="${SVG_FONT_FAMILY}">${escapeXml(
@@ -1331,7 +1324,7 @@ function drawLateral(
     `<line x1="${x0 - 6}" y1="${floorTopLat}" x2="${x0 + dw + 6}" y2="${floorTopLat}" stroke="${COL_FLOOR}" stroke-width="2"/>`
   );
   parts.push(
-    `<text x="${x0 + dw / 2}" y="${floorTopLat + 8 * ls}" text-anchor="middle" font-size="${9 * ls}px" fill="${COL_FLOOR}" font-family="${SVG_FONT_FAMILY_BOLD}">PISO</text>`
+    `<text x="${x0 + dw / 2}" y="${floorTopLat + 8 * ls}" text-anchor="middle" font-size="${9 * ls}px" fill="${COL_FLOOR}" font-family="${SVG_FONT_FAMILY}" font-weight="700">PISO</text>`
   );
 
   const uSide = Math.max(5.5, uprightWidthsPx[0]! * 0.42);

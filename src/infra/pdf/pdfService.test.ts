@@ -94,13 +94,27 @@ describe('PdfService', () => {
 });
 
 describe('embedSvgFontFaces', () => {
-  it('injeta TTF em data: base64 (não file://), para librsvg em serverless', () => {
-    const out = embedSvgFontFaces(
-      '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>'
-    );
-    expect(out).toContain('data:font/ttf;base64,');
-    expect(out.match(/data:font\/ttf;base64,/g)?.length).toBe(3);
-    expect(out.toLowerCase()).not.toContain('file:');
+  it('define FONTCONFIG_FILE para o diretório bundled (librsvg resolve DejaVu Sans)', () => {
+    const prev = process.env.FONTCONFIG_FILE;
+    delete process.env.FONTCONFIG_FILE;
+    try {
+      embedSvgFontFaces(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>'
+      );
+      const fc = process.env.FONTCONFIG_FILE;
+      expect(fc).toBeDefined();
+      expect(fs.existsSync(fc!)).toBe(true);
+      const conf = fs.readFileSync(fc!, 'utf8');
+      expect(conf).toContain(
+        path.join(process.cwd(), 'assets', 'fonts')
+      );
+    } finally {
+      if (prev !== undefined) {
+        process.env.FONTCONFIG_FILE = prev;
+      } else {
+        delete process.env.FONTCONFIG_FILE;
+      }
+    }
   });
 });
 
@@ -117,7 +131,7 @@ describe('svgRasterToPng', () => {
 
   it('rasteriza texto pt-BR com fonte embutida (sem depender do SO)', async () => {
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="40">
- <text x="4" y="26" font-size="18" font-family="DejaVuPdf" fill="#000">Cota · 1.º eixo — 12.000 mm</text>
+ <text x="4" y="26" font-size="18" font-family="DejaVu Sans" fill="#000">Cota · 1.º eixo — 12.000 mm</text>
     </svg>`;
     const { buffer, widthPx, heightPx } = await svgRasterToPng(svg, 400, 80);
     expect(widthPx).toBeGreaterThan(0);
