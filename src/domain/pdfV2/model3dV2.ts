@@ -16,11 +16,17 @@ function pushLine(
   x2: number,
   y2: number,
   z2: number,
-  debugTint?: Rack3DLine3D['debugTint']
+  opts?: {
+    debugTint?: Rack3DLine3D['debugTint'];
+    lineRole?: Rack3DLine3D['lineRole'];
+  }
 ): void {
   const seg: Rack3DLine3D = { kind, x1, y1, z1, x2, y2, z2 };
-  if (debugTint !== undefined) {
-    seg.debugTint = debugTint;
+  if (opts?.debugTint !== undefined) {
+    seg.debugTint = opts.debugTint;
+  }
+  if (opts?.lineRole !== undefined) {
+    seg.lineRole = opts.lineRole;
   }
   lines.push(seg);
 }
@@ -53,7 +59,9 @@ export function splitModuleFootprintsFor3d(
   }
 
   const split = trySplitBackToBackFootprint(fp, rackDepthMm, layoutOrientation);
-  return split ?? [fp];
+  if (split) return split;
+  const fb = splitBackToBackFallback(fp, rackDepthMm, layoutOrientation);
+  return fb ?? [fp];
 }
 
 /**
@@ -111,12 +119,55 @@ function trySplitBackToBackFootprint(
   ];
 }
 
+/**
+ * Corte relaxado quando a pegada é globalmente dupla costas mas as faces não fecham
+ * com a tolerância estrita de {@link trySplitBackToBackFootprint}.
+ */
+function splitBackToBackFallback(
+  fp: ModuleFootprint3d,
+  rackDepthMm: number,
+  layoutOrientation: LayoutOrientationV2
+): ModuleFootprint3d[] | null {
+  const xLo = Math.min(fp.x0, fp.x1);
+  const xHi = Math.max(fp.x0, fp.x1);
+  const yLo = Math.min(fp.y0, fp.y1);
+  const yHi = Math.max(fp.y0, fp.y1);
+  const expected = 2 * rackDepthMm + SPINE_BACK_TO_BACK_MM;
+  const looseTol = Math.max(120, 0.12 * rackDepthMm);
+
+  if (layoutOrientation === 'along_length') {
+    const trans = yHi - yLo;
+    if (Math.abs(trans - expected) > looseTol) return null;
+    const ySplitFront = yLo + rackDepthMm;
+    const ySplitBack = ySplitFront + SPINE_BACK_TO_BACK_MM;
+    if (ySplitBack >= yHi - EPS) return null;
+    return [
+      { x0: xLo, x1: xHi, y0: yLo, y1: ySplitFront },
+      { x0: xLo, x1: xHi, y0: ySplitBack, y1: yHi },
+    ];
+  }
+
+  const trans = xHi - xLo;
+  if (Math.abs(trans - expected) > looseTol) return null;
+  const xSplitFront = xLo + rackDepthMm;
+  const xSplitBack = xSplitFront + SPINE_BACK_TO_BACK_MM;
+  if (xSplitBack >= xHi - EPS) return null;
+  return [
+    { x0: xLo, x1: xSplitFront, y0: yLo, y1: yHi },
+    { x0: xSplitBack, x1: xHi, y0: yLo, y1: yHi },
+  ];
+}
+
 /** Remove segmentos coincidentes (mesmos extremos) para arestas partilhadas entre módulos. */
 function dedupeWireframeLines(lines: Rack3DLine3D[]): Rack3DLine3D[] {
   const seen = new Set<string>();
   const out: Rack3DLine3D[] = [];
   const r = (n: number) => Math.round(n * 10) / 10;
   for (const ln of lines) {
+    if (ln.kind === 'module_outline') {
+      out.push(ln);
+      continue;
+    }
     const a = [r(ln.x1), r(ln.y1), r(ln.z1), r(ln.x2), r(ln.y2), r(ln.z2)].join(
       ','
     );
@@ -177,6 +228,31 @@ function spineGapFootprintMm(
   return { x0: xEndA, x1: xStartB, y0: yLo, y1: yHi };
 }
 
+/** Contorno ao nível Z (tipicamente 0) — não entra no dedupe; marca cada prisma em planta. */
+function emitModuleFootprintOutline(
+  lines: Rack3DLine3D[],
+  footprint: ModuleFootprint3d,
+  z: number,
+  debugTint?: Rack3DLine3D['debugTint']
+): void {
+  const x0 = Math.min(footprint.x0, footprint.x1);
+  const x1 = Math.max(footprint.x0, footprint.x1);
+  const y0 = Math.min(footprint.y0, footprint.y1);
+  const y1 = Math.max(footprint.y0, footprint.y1);
+  if (x1 - x0 <= EPS || y1 - y0 <= EPS) return;
+  const o: {
+    lineRole: 'module_footprint';
+    debugTint?: Rack3DLine3D['debugTint'];
+  } = { lineRole: 'module_footprint' };
+  if (debugTint !== undefined) {
+    o.debugTint = debugTint;
+  }
+  pushLine(lines, 'module_outline', x0, y0, z, x1, y0, z, o);
+  pushLine(lines, 'module_outline', x1, y0, z, x1, y1, z, o);
+  pushLine(lines, 'module_outline', x1, y1, z, x0, y1, z, o);
+  pushLine(lines, 'module_outline', x0, y1, z, x0, y0, z, o);
+}
+
 function emitPalletRackPrism(
   lines: Rack3DLine3D[],
   mod: RackModule,
@@ -208,73 +284,29 @@ function emitPalletRackPrism(
     const key = uprightKey(cx, cy);
     if (uprightSeen.has(key)) continue;
     uprightSeen.add(key);
-    pushLine(
-      lines,
-      'upright',
-      cx,
-      cy,
-      0,
-      cx,
-      cy,
-      mod.heightMm,
-      debugModuleTint
-    );
+    const dt =
+      debugModuleTint !== undefined ? { debugTint: debugModuleTint } : undefined;
+    pushLine(lines, 'upright', cx, cy, 0, cx, cy, mod.heightMm, dt);
   }
 
   if (isTunnel && clearanceMm > EPS) {
     const zOpen = Math.min(mod.heightMm, Math.max(0, clearanceMm));
-    pushLine(
-      lines,
-      'floor',
-      x0,
-      y0,
-      zOpen,
-      x1,
-      y0,
-      zOpen,
-      debugModuleTint
-    );
-    pushLine(
-      lines,
-      'floor',
-      x1,
-      y0,
-      zOpen,
-      x1,
-      y1,
-      zOpen,
-      debugModuleTint
-    );
-    pushLine(
-      lines,
-      'floor',
-      x1,
-      y1,
-      zOpen,
-      x0,
-      y1,
-      zOpen,
-      debugModuleTint
-    );
-    pushLine(
-      lines,
-      'floor',
-      x0,
-      y1,
-      zOpen,
-      x0,
-      y0,
-      zOpen,
-      debugModuleTint
-    );
+    const dt =
+      debugModuleTint !== undefined ? { debugTint: debugModuleTint } : undefined;
+    pushLine(lines, 'floor', x0, y0, zOpen, x1, y0, zOpen, dt);
+    pushLine(lines, 'floor', x1, y0, zOpen, x1, y1, zOpen, dt);
+    pushLine(lines, 'floor', x1, y1, zOpen, x0, y1, zOpen, dt);
+    pushLine(lines, 'floor', x0, y1, zOpen, x0, y0, zOpen, dt);
   }
 
   for (const z of beamZs) {
     if (isTunnel && z < clearanceMm - EPS) continue;
-    pushLine(lines, 'beam', x0, y0, z, x1, y0, z, debugModuleTint);
-    pushLine(lines, 'beam', x1, y0, z, x1, y1, z, debugModuleTint);
-    pushLine(lines, 'beam', x1, y1, z, x0, y1, z, debugModuleTint);
-    pushLine(lines, 'beam', x0, y1, z, x0, y0, z, debugModuleTint);
+    const dt =
+      debugModuleTint !== undefined ? { debugTint: debugModuleTint } : undefined;
+    pushLine(lines, 'beam', x0, y0, z, x1, y0, z, dt);
+    pushLine(lines, 'beam', x1, y0, z, x1, y1, z, dt);
+    pushLine(lines, 'beam', x1, y1, z, x0, y1, z, dt);
+    pushLine(lines, 'beam', x0, y1, z, x0, y0, z, dt);
   }
 }
 
@@ -294,13 +326,17 @@ function maxUprightHeightAndTiers(geometry: LayoutGeometry): {
 }
 
 /**
- * Gera segmentos 3D (wireframe) a partir do modelo geométrico canónico.
- * Cada módulo usa as cotas verticais de {@link RackModule.beamGeometry}.
- * Dupla costas: dois prismas por módulo + contorno da espinha ao nível do piso.
+ * Gera segmentos 3D (wireframe) a partir de {@link LayoutGeometry} (já derivado do
+ * {@link LayoutSolutionV2} em {@link buildLayoutGeometry}) — não há grelha nem dimensões
+ * default: pegadas vêm de {@link RackModule.footprint} (vão, profundidade, meio módulo).
  *
- * Montantes são deduplicados **por prisma** (cantos do retângulo); no fim,
- * {@link dedupeWireframeLines} remove arestas coincidentes entre módulos adjacentes
- * (mesmo segmento 3D), alinhando o wireframe à planta sem linhas duplas sobrepostas.
+ * Cada módulo usa as cotas verticais de {@link RackModule.beamGeometry}.
+ * Dupla costas: dois prismas por módulo quando {@link splitModuleFootprintsFor3d} parte
+ * a pegada; contorno de espinha ao nível do piso + `module_outline` em Z=0 por prisma
+ * (não deduplicado) para leitura da planta no 3D.
+ *
+ * Montantes são deduplicados **por prisma**; no fim, {@link dedupeWireframeLines} remove
+ * arestas coincidentes entre módulos adjacentes (exceto `module_outline`).
  */
 export function build3DModelV2(
   geometry: LayoutGeometry,
@@ -314,29 +350,39 @@ export function build3DModelV2(
 
   const z0 = 0;
   const bTint = debug ? ('boundary' as const) : undefined;
-  pushLine(lines, 'floor', 0, 0, z0, L, 0, z0, bTint);
-  pushLine(lines, 'floor', L, 0, z0, L, W, z0, bTint);
-  pushLine(lines, 'floor', L, W, z0, 0, W, z0, bTint);
-  pushLine(lines, 'floor', 0, W, z0, 0, 0, z0, bTint);
+  const whOpts = {
+    ...(bTint !== undefined ? { debugTint: bTint } : {}),
+    lineRole: 'warehouse_slab' as const,
+  };
+  pushLine(lines, 'floor', 0, 0, z0, L, 0, z0, whOpts);
+  pushLine(lines, 'floor', L, 0, z0, L, W, z0, whOpts);
+  pushLine(lines, 'floor', L, W, z0, 0, W, z0, whOpts);
+  pushLine(lines, 'floor', 0, W, z0, 0, 0, z0, whOpts);
 
   const rackDepthMm = geometry.metadata.rackDepthMm;
   const layoutOrientation = geometry.orientation;
 
+  let moduleEquivEmitted = 0;
+  let footprintPrismCount = 0;
+
   for (const row of geometry.rows) {
     for (const mod of row.modules) {
-      const uprightSeen = new Set<string>();
+      moduleEquivEmitted += mod.segmentType === 'half' ? 0.5 : 1;
       const fps = splitModuleFootprintsFor3d(
         row,
         mod,
         rackDepthMm,
         layoutOrientation
       );
+      footprintPrismCount += fps.length;
       const modTint: Rack3DLine3D['debugTint'] | undefined = debug
         ? mod.type === 'tunnel'
           ? 'tunnel'
           : 'normal'
         : undefined;
       for (const fp of fps) {
+        const uprightSeen = new Set<string>();
+        emitModuleFootprintOutline(lines, fp, z0, modTint);
         emitPalletRackPrism(lines, mod, fp, uprightSeen, modTint);
       }
       if (
@@ -363,5 +409,7 @@ export function build3DModelV2(
     uprightHeightMm: H,
     levels,
     lines: linesDeduped,
+    moduleEquivEmitted,
+    footprintPrismCount,
   };
 }

@@ -276,13 +276,15 @@ export type ElevationModelV2 = {
 
 /** Segmento 3D em mm: X/Y = planta do galpão, Z = altura. */
 export type Rack3DLine3D = {
-  kind: 'upright' | 'beam' | 'floor';
+  kind: 'upright' | 'beam' | 'floor' | 'module_outline';
   x1: number;
   y1: number;
   z1: number;
   x2: number;
   y2: number;
   z2: number;
+  /** Contorno do galpão ao nível Z=0 — excluído do zoom automático para enquadrar os racks. */
+  lineRole?: 'warehouse_slab' | 'module_footprint';
   /** Só preenchido em modo debug — evita dedupe para colorir por módulo. */
   debugTint?: 'tunnel' | 'normal' | 'boundary';
 };
@@ -293,6 +295,10 @@ export type Rack3DModel = {
   uprightHeightMm: number;
   levels: number;
   lines: Rack3DLine3D[];
+  /** Módulos-equivalente representados (meio módulo = 0,5). */
+  moduleEquivEmitted: number;
+  /** Prismas de pega em planta (1 por costa em dupla costas após split). */
+  footprintPrismCount: number;
 };
 
 export type ProjectedLine2D = {
@@ -300,7 +306,8 @@ export type ProjectedLine2D = {
   y1: number;
   x2: number;
   y2: number;
-  kind: 'upright' | 'beam' | 'floor';
+  kind: 'upright' | 'beam' | 'floor' | 'module_outline';
+  lineRole?: 'warehouse_slab' | 'module_footprint';
   debugTint?: 'tunnel' | 'normal' | 'boundary';
 };
 

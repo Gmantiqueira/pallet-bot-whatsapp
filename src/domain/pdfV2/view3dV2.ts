@@ -31,16 +31,29 @@ export function projectToIsometric(model: Rack3DModel): Projected2D {
   for (const L of model.lines) {
     const p1 = proj(L.x1, L.y1, L.z1);
     const p2 = proj(L.x2, L.y2, L.z2);
-    bump(p1.px, p1.py);
-    bump(p2.px, p2.py);
+    const useForBounds = L.lineRole !== 'warehouse_slab';
+    if (useForBounds) {
+      bump(p1.px, p1.py);
+      bump(p2.px, p2.py);
+    }
     lines.push({
       x1: p1.px,
       y1: p1.py,
       x2: p2.px,
       y2: p2.py,
       kind: L.kind,
+      ...(L.lineRole !== undefined ? { lineRole: L.lineRole } : {}),
       ...(L.debugTint !== undefined ? { debugTint: L.debugTint } : {}),
     });
+  }
+
+  if (!Number.isFinite(minX)) {
+    for (const L of model.lines) {
+      const p1 = proj(L.x1, L.y1, L.z1);
+      const p2 = proj(L.x2, L.y2, L.z2);
+      bump(p1.px, p1.py);
+      bump(p2.px, p2.py);
+    }
   }
 
   if (!Number.isFinite(minX)) {
@@ -63,9 +76,13 @@ const STROKE: Record<
   floor: { c: '#64748b', w: 1.45, opacity: 0.94 },
   upright: { c: '#0f172a', w: 1.85, opacity: 1 },
   beam: { c: '#c2410c', w: 1.55, opacity: 1 },
+  /** Sill de cada prisma em planta (Z=0) — lê-se mesmo após dedupe de estrutura. */
+  module_outline: { c: '#1e3a8a', w: 1.35, opacity: 0.92 },
 };
 
 /** Modo DEBUG_PDF: cores por tipo de módulo / contorno do galpão. */
+const OUTLINE_DEBUG = { c: '#4338ca', w: 1.25, opacity: 0.9 };
+
 const STROKE_DEBUG: Record<
   NonNullable<ProjectedLine2D['debugTint']>,
   Record<ProjectedLine2D['kind'], { c: string; w: number; opacity: number }>
@@ -74,26 +91,34 @@ const STROKE_DEBUG: Record<
     floor: { c: '#0f766e', w: 2.1, opacity: 0.95 },
     upright: { c: '#0f766e', w: 1.2, opacity: 0.5 },
     beam: { c: '#0f766e', w: 1.2, opacity: 0.5 },
+    module_outline: OUTLINE_DEBUG,
   },
   normal: {
     floor: { c: '#64748b', w: 1.35, opacity: 0.9 },
     upright: { c: '#1d4ed8', w: 1.95, opacity: 1 },
     beam: { c: '#ea580c', w: 1.65, opacity: 1 },
+    module_outline: OUTLINE_DEBUG,
   },
   tunnel: {
     floor: { c: '#a855f7', w: 1.55, opacity: 0.95 },
     upright: { c: '#7c3aed', w: 2.05, opacity: 1 },
     beam: { c: '#f97316', w: 1.75, opacity: 1 },
+    module_outline: OUTLINE_DEBUG,
   },
 };
 
-const DRAW_ORDER: ProjectedLine2D['kind'][] = ['floor', 'beam', 'upright'];
+const DRAW_ORDER: ProjectedLine2D['kind'][] = [
+  'floor',
+  'beam',
+  'upright',
+  'module_outline',
+];
 
 function strokeForLine(
   ln: ProjectedLine2D,
   debug: boolean
 ): { c: string; w: number; opacity: number } {
-  if (debug && ln.debugTint !== undefined) {
+  if (debug && ln.debugTint !== undefined && ln.kind !== 'module_outline') {
     return STROKE_DEBUG[ln.debugTint][ln.kind];
   }
   return STROKE[ln.kind];

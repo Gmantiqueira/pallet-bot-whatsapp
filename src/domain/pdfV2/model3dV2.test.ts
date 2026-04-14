@@ -41,6 +41,8 @@ describe('build3DModelV2 + projeção isométrica', () => {
       warehouse: { lengthMm: 10_000, widthMm: 8_000 },
       uprightHeightMm: 6_000,
       levels: 3,
+      moduleEquivEmitted: 0,
+      footprintPrismCount: 0,
       lines: [
         {
           kind: 'upright',
@@ -81,7 +83,10 @@ describe('build3DModelV2 + projeção isométrica', () => {
 
   it('1: layout simples — gera wireframe e SVG', () => {
     const a = { ...base(), lineStrategy: 'APENAS_SIMPLES' as const };
+    const sol = buildLayoutSolutionV2(a);
     const model = build3DModelV2(geomFromAnswers(a));
+    expect(model.moduleEquivEmitted).toBeCloseTo(sol.totals.modules, 5);
+    expect(model.footprintPrismCount).toBeGreaterThan(0);
     expect(model.lines.length).toBeGreaterThan(10);
     const projected = projectToIsometric(model);
     expect(projected.bounds.maxX - projected.bounds.minX).toBeGreaterThan(0);
@@ -129,8 +134,14 @@ describe('build3DModelV2 + projeção isométrica', () => {
 
   it('4: profundidade dupla — banda dupla gera retângulos profundos', () => {
     const a = { ...base(), lineStrategy: 'APENAS_DUPLOS' as const };
-    expect(buildLayoutSolutionV2(a).rackDepthMode).toBe('double');
+    const sol = buildLayoutSolutionV2(a);
+    expect(sol.rackDepthMode).toBe('double');
     const model = build3DModelV2(geomFromAnswers(a));
+    expect(model.moduleEquivEmitted).toBeCloseTo(sol.totals.modules, 5);
+    expect(model.footprintPrismCount).toBeGreaterThanOrEqual(
+      Math.ceil(sol.totals.modules)
+    );
+    expect(model.lines.some(l => l.kind === 'module_outline')).toBe(true);
     expect(model.lines.some(l => l.kind === 'beam')).toBe(true);
   });
 

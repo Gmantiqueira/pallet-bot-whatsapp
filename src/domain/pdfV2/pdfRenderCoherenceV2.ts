@@ -163,7 +163,20 @@ export function validatePdfRenderCoherence(
 
   validateFootprintsWithinWarehouse(geometry, errors);
 
-  const audit = audit3dModelCoherence(geometry, options.rack3dModel);
+  const m3d = options.rack3dModel;
+  if (Math.abs(m3d.moduleEquivEmitted - geometry.totals.moduleCount) > EPS) {
+    errors.push(
+      `Modelo 3D: moduleEquivEmitted (${m3d.moduleEquivEmitted}) ≠ totals.moduleCount (${geometry.totals.moduleCount})`
+    );
+  }
+
+  const audit = audit3dModelCoherence(geometry, m3d);
+  if (audit.expectedPrismCount !== m3d.footprintPrismCount) {
+    errors.push(
+      `Modelo 3D: footprintPrismCount (${m3d.footprintPrismCount}) ≠ prismas esperados pela pega (${audit.expectedPrismCount})`
+    );
+  }
+
   for (const w of audit.warnings) {
     const dupModuleTotal =
       w.includes('Inconsistência layout:') &&
