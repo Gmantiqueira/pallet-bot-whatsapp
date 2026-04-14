@@ -1,14 +1,10 @@
 'use strict';
 
-const Fastify = require('fastify');
-void Fastify;
-
-const serverless = require('serverless-http');
+const { getServerlessHandler } = require('./serverlessBootstrap');
 
 /**
- * vercel.json reescreve /webhook → /api/webhook; as rotas Fastify são /webhook (sem /api).
- * Normalizar só aqui (antes do Fastify) evita misturar headers da edge com o URL real —
- * isso era uma fonte provável de redirects em loop na Vercel.
+ * Catch-all for /api/* not handled by a dedicated file (e.g. /api/files/...).
+ * Webhook traffic should use api/webhook.js only (rewrite /webhook → /api/webhook).
  */
 function stripLeadingApiPrefix(url) {
   if (url == null || url === '') {
@@ -24,35 +20,10 @@ function stripLeadingApiPrefix(url) {
   return url;
 }
 
-let cachedHandler;
-let pending;
-
-async function getHandler() {
-  if (cachedHandler) {
-    return cachedHandler;
-  }
-  if (!pending) {
-    pending = (async () => {
-      const { createApp } = require('../dist/fastifyApp');
-      const app = await createApp();
-      await app.ready();
-      return serverless(app.server);
-    })();
-  }
-  try {
-    cachedHandler = await pending;
-    return cachedHandler;
-  } catch (err) {
-    pending = undefined;
-    cachedHandler = undefined;
-    throw err;
-  }
-}
-
 module.exports = async (req, res) => {
   if (process.env.VERCEL) {
     req.url = stripLeadingApiPrefix(req.url);
   }
-  const handler = await getHandler();
+  const handler = await getServerlessHandler();
   return handler(req, res);
 };
