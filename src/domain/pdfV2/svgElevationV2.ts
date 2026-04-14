@@ -89,7 +89,7 @@ function drawFrontGuardRailMarkers(
   const left = guardKindAtFrontEdge(data, 'start');
   const right = guardKindAtFrontEdge(data, 'end');
   if (left === 'none' && right === 'none') return '';
-  const y1 = rackBottom - 30 * ls;
+  const y1 = rackBottom - 38 * ls;
   const y2 = rackBottom + 1;
   const parts: string[] = [];
   const post = (x: number, kind: 'simple' | 'double') => {
@@ -121,6 +121,55 @@ function drawFrontGuardRailMarkers(
     const col = right === 'double' ? '#b91c1c' : '#ca8a04';
     parts.push(
       `<text x="${faceSpanRight + 22}" y="${(y1 + y2) / 2 + 3 * ls}" text-anchor="start" font-size="${7.8 * ls}px" font-weight="800" fill="${col}" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">${tag(right)}</text>`
+    );
+  }
+  return parts.join('');
+}
+
+/** Extremidades do vão na vista lateral (paridade com a face frontal). */
+function drawLateralGuardRailMarkers(
+  xLeftOuter: number,
+  xRightOuter: number,
+  rackTop: number,
+  rackBottom: number,
+  data: ElevationPanelPayload,
+  ls: number
+): string {
+  const left = guardKindAtFrontEdge(data, 'start');
+  const right = guardKindAtFrontEdge(data, 'end');
+  if (left === 'none' && right === 'none') return '';
+  const y1 = rackTop + 26 * ls;
+  const y2 = rackBottom + 1;
+  const parts: string[] = [];
+  const post = (x: number, kind: 'simple' | 'double') => {
+    const col = kind === 'double' ? '#b91c1c' : '#ca8a04';
+    if (kind === 'double') {
+      parts.push(
+        `<line x1="${x - 3}" y1="${y1}" x2="${x - 3}" y2="${y2}" stroke="${col}" stroke-width="2.8" stroke-linecap="square" opacity="0.95"/>`,
+        `<line x1="${x + 3}" y1="${y1}" x2="${x + 3}" y2="${y2}" stroke="${col}" stroke-width="2.8" stroke-linecap="square" opacity="0.95"/>`
+      );
+    } else {
+      parts.push(
+        `<line x1="${x}" y1="${y1}" x2="${x}" y2="${y2}" stroke="${col}" stroke-width="3.6" stroke-linecap="square" opacity="0.95"/>`
+      );
+    }
+    parts.push(
+      `<line x1="${x - 9}" y1="${y1 + 4 * ls}" x2="${x + 9}" y2="${y1 + 4 * ls}" stroke="${col}" stroke-width="2" stroke-linecap="square" opacity="0.88"/>`
+    );
+  };
+  if (left !== 'none') post(xLeftOuter - 5, left);
+  if (right !== 'none') post(xRightOuter + 5, right);
+  const tag = (kind: 'simple' | 'double') => (kind === 'double' ? 'G2' : 'G1');
+  if (left !== 'none') {
+    const col = left === 'double' ? '#b91c1c' : '#ca8a04';
+    parts.push(
+      `<text x="${xLeftOuter - 22}" y="${(y1 + y2) / 2 + 3 * ls}" text-anchor="end" font-size="${7.8 * ls}px" font-weight="800" fill="${col}" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">${tag(left)}</text>`
+    );
+  }
+  if (right !== 'none') {
+    const col = right === 'double' ? '#b91c1c' : '#ca8a04';
+    parts.push(
+      `<text x="${xRightOuter + 22}" y="${(y1 + y2) / 2 + 3 * ls}" text-anchor="start" font-size="${7.8 * ls}px" font-weight="800" fill="${col}" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">${tag(right)}</text>`
     );
   }
   return parts.join('');
@@ -838,8 +887,8 @@ function drawFrontRack(
       `<rect x="${ux + uw * 0.06}" y="${ry}" width="${uw * 0.2}" height="${innerH}" fill="${FV_UPRIGHT_FACE}" opacity="0.35"/>`
     );
     const prot = data.columnProtector === true;
-    const baseH = prot ? 5.2 : 3.2;
-    const padXP = prot ? 0.75 : 0.35;
+    const baseH = prot ? 7.2 : 3.2;
+    const padXP = prot ? 0.85 : 0.35;
     parts.push(
       `<rect x="${ux - padXP}" y="${floorTop - baseH}" width="${uw + 2 * padXP}" height="${baseH}" fill="${prot ? '#ea580c' : '#334155'}" stroke="${FV_UPRIGHT_STROKE}" stroke-width="${prot ? 0.58 : 0.45}" opacity="${prot ? 0.96 : 1}"/>`
     );
@@ -1262,13 +1311,17 @@ function drawLateral(
   );
 
   if (data.columnProtector === true) {
-    const bh = 5.2;
-    const padB = 0.8;
+    const bh = 7.4;
+    const padB = 0.85;
     parts.push(
-      `<rect x="${xLeftU - padB}" y="${floorTopLat - bh}" width="${uSide + 2 * padB}" height="${bh}" fill="#ea580c" stroke="${FV_UPRIGHT_STROKE}" stroke-width="0.55" opacity="0.96"/>`
+      `<rect x="${xLeftU - padB}" y="${floorTopLat - bh}" width="${uSide + 2 * padB}" height="${bh}" fill="#ea580c" stroke="${FV_UPRIGHT_STROKE}" stroke-width="0.72" opacity="0.97"/>`
     );
     parts.push(
-      `<rect x="${xRightU - padB}" y="${floorTopLat - bh}" width="${uSide + 2 * padB}" height="${bh}" fill="#ea580c" stroke="${FV_UPRIGHT_STROKE}" stroke-width="0.55" opacity="0.96"/>`
+      `<rect x="${xRightU - padB}" y="${floorTopLat - bh}" width="${uSide + 2 * padB}" height="${bh}" fill="#ea580c" stroke="${FV_UPRIGHT_STROKE}" stroke-width="0.72" opacity="0.97"/>`
+    );
+    parts.push(
+      `<line x1="${xLeftU + uSide * 0.1}" y1="${floorTopLat - bh * 0.42}" x2="${xLeftU + uSide * 0.9}" y2="${floorTopLat - bh * 0.42}" stroke="#ffedd5" stroke-width="0.72" opacity="0.92"/>`,
+      `<line x1="${xRightU + uSide * 0.1}" y1="${floorTopLat - bh * 0.42}" x2="${xRightU + uSide * 0.9}" y2="${floorTopLat - bh * 0.42}" stroke="#ffedd5" stroke-width="0.72" opacity="0.92"/>`
     );
   }
 
@@ -1332,6 +1385,17 @@ function drawLateral(
       `<line x1="${bayLeft}" y1="${yB0Lat}" x2="${bayRight}" y2="${yB0Lat}" stroke="#0d9488" stroke-width="1.2" opacity="0.78"/>`
     );
   }
+
+  parts.push(
+    drawLateralGuardRailMarkers(
+      xLeftU,
+      xRightU,
+      y0,
+      floorTopLat,
+      data,
+      ls
+    )
+  );
 
   const nLatBeams = Math.max(0, nBeamAxes - 1);
   const bhLat = Math.max(2, 2.2 * scaleY);

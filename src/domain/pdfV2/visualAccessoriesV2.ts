@@ -12,6 +12,15 @@ export function parseGuardPosition(
   return undefined;
 }
 
+/** Com guarda ativa mas sem posição nas respostas, assume-se toda a extensão do vão (mesma leitura que o resumo “Sim”). */
+function guardPositionOrDefault(
+  enabled: boolean,
+  pos: GuardRailPositionCode | undefined
+): GuardRailPositionCode | undefined {
+  if (!enabled) return undefined;
+  return pos ?? 'AMBOS';
+}
+
 /** Campos visuais comuns à elevação e à planta (protetores, guardas, 1.º nível). */
 export function accessoryFieldsFromAnswers(
   answers: Record<string, unknown>
@@ -23,15 +32,19 @@ export function accessoryFieldsFromAnswers(
   | 'guardRailDouble'
   | 'guardRailDoublePosition'
 > {
+  const simpleOn = answers.guardRailSimple === true;
+  const doubleOn = answers.guardRailDouble === true;
   return {
     columnProtector: answers.columnProtector === true,
-    guardRailSimple: answers.guardRailSimple === true,
-    guardRailSimplePosition: parseGuardPosition(
-      answers.guardRailSimplePosition
+    guardRailSimple: simpleOn,
+    guardRailSimplePosition: guardPositionOrDefault(
+      simpleOn,
+      parseGuardPosition(answers.guardRailSimplePosition)
     ),
-    guardRailDouble: answers.guardRailDouble === true,
-    guardRailDoublePosition: parseGuardPosition(
-      answers.guardRailDoublePosition
+    guardRailDouble: doubleOn,
+    guardRailDoublePosition: guardPositionOrDefault(
+      doubleOn,
+      parseGuardPosition(answers.guardRailDoublePosition)
     ),
   };
 }
@@ -41,12 +54,20 @@ export function buildFloorPlanAccessories(
   geometry: LayoutGeometry
 ): FloorPlanAccessoriesV2 {
   const a = answers ?? {};
+  const simpleOn = a.guardRailSimple === true;
+  const doubleOn = a.guardRailDouble === true;
   return {
     columnProtector: a.columnProtector === true,
-    guardRailSimple: a.guardRailSimple === true,
-    guardRailSimplePosition: parseGuardPosition(a.guardRailSimplePosition),
-    guardRailDouble: a.guardRailDouble === true,
-    guardRailDoublePosition: parseGuardPosition(a.guardRailDoublePosition),
+    guardRailSimple: simpleOn,
+    guardRailSimplePosition: guardPositionOrDefault(
+      simpleOn,
+      parseGuardPosition(a.guardRailSimplePosition)
+    ),
+    guardRailDouble: doubleOn,
+    guardRailDoublePosition: guardPositionOrDefault(
+      doubleOn,
+      parseGuardPosition(a.guardRailDoublePosition)
+    ),
     firstLevelOnGround: geometry.metadata.firstLevelOnGround,
   };
 }

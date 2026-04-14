@@ -176,15 +176,24 @@ function appendColumnProtectorAlongModules(
     if (n >= maxMarks) break;
     n += 1;
     const bw = Math.max(14, s.w * 0.58);
-    const bh = 5.5;
+    const bh = 7.8;
     const bx = s.x + (s.w - bw) / 2;
     const by = s.y + s.h - bh - 0.5;
     parts.push(
-      `<rect x="${bx}" y="${by}" width="${bw}" height="${bh}" rx="1.2" fill="#ea580c" stroke="#9a3412" stroke-width="0.85" opacity="0.96"/>`
+      `<rect x="${bx}" y="${by}" width="${bw}" height="${bh}" rx="1.4" fill="#ea580c" stroke="#9a3412" stroke-width="1.05" opacity="0.97"/>`
     );
     parts.push(
-      `<line x1="${bx + bw * 0.12}" y1="${by + bh * 0.55}" x2="${bx + bw * 0.88}" y2="${by + bh * 0.55}" stroke="#ffedd5" stroke-width="0.75" opacity="0.9"/>`
+      `<line x1="${bx + bw * 0.12}" y1="${by + bh * 0.55}" x2="${bx + bw * 0.88}" y2="${by + bh * 0.55}" stroke="#ffedd5" stroke-width="0.85" opacity="0.92"/>`
     );
+    const padW = Math.max(3.4, s.w * 0.038);
+    const padH = Math.min(bh + 3.2, s.h * 0.11);
+    const yPad = s.y + s.h - padH;
+    for (const fx of [0.14, 0.5, 0.86] as const) {
+      const cx = s.x + s.w * fx - padW / 2;
+      parts.push(
+        `<rect x="${cx}" y="${yPad}" width="${padW}" height="${padH}" rx="0.6" fill="#c2410c" stroke="#7c2d12" stroke-width="0.55" opacity="0.94"/>`
+      );
+    }
   }
 }
 
@@ -327,15 +336,15 @@ function appendFloorPlanAccessoryGraphics(
   ) => {
     if (kind === 'none') return;
     const col = kind === 'double' ? '#b91c1c' : '#ca8a04';
-    const wMain = kind === 'double' ? 3 : 4.2;
+    const wMain = kind === 'double' ? 3.85 : 5.1;
     const span = y1 - y0;
     const markY1 = y0 + span * 0.12;
     const markY2 = y0 + span * 0.88;
     if (vertical) {
       if (kind === 'double') {
         parts.push(
-          `<line x1="${x0 - 4}" y1="${y0}" x2="${x0 - 4}" y2="${y1}" stroke="${col}" stroke-width="${wMain}" stroke-linecap="square" opacity="0.94"/>`,
-          `<line x1="${x0 + 4}" y1="${y0}" x2="${x0 + 4}" y2="${y1}" stroke="${col}" stroke-width="${wMain}" stroke-linecap="square" opacity="0.94"/>`
+          `<line x1="${x0 - 5.5}" y1="${y0}" x2="${x0 - 5.5}" y2="${y1}" stroke="${col}" stroke-width="${wMain}" stroke-linecap="square" opacity="0.94"/>`,
+          `<line x1="${x0 + 5.5}" y1="${y0}" x2="${x0 + 5.5}" y2="${y1}" stroke="${col}" stroke-width="${wMain}" stroke-linecap="square" opacity="0.94"/>`
         );
         parts.push(
           `<line x1="${x0 - 11}" y1="${markY1}" x2="${x0 + 11}" y2="${markY1}" stroke="${col}" stroke-width="1.35" opacity="0.78"/>`,
@@ -358,8 +367,8 @@ function appendFloorPlanAccessoryGraphics(
       );
     } else if (kind === 'double') {
       parts.push(
-        `<line x1="${x0}" y1="${y0 - 4}" x2="${x1}" y2="${y1 - 4}" stroke="${col}" stroke-width="${wMain}" stroke-linecap="square" opacity="0.94"/>`,
-        `<line x1="${x0}" y1="${y0 + 4}" x2="${x1}" y2="${y1 + 4}" stroke="${col}" stroke-width="${wMain}" stroke-linecap="square" opacity="0.94"/>`
+        `<line x1="${x0}" y1="${y0 - 5.5}" x2="${x1}" y2="${y1 - 5.5}" stroke="${col}" stroke-width="${wMain}" stroke-linecap="square" opacity="0.94"/>`,
+        `<line x1="${x0}" y1="${y0 + 5.5}" x2="${x1}" y2="${y1 + 5.5}" stroke="${col}" stroke-width="${wMain}" stroke-linecap="square" opacity="0.94"/>`
       );
       const markX1 = x0 + (x1 - x0) * 0.12;
       const markX2 = x0 + (x1 - x0) * 0.88;
@@ -397,13 +406,13 @@ function appendFloorPlanAccessoryGraphics(
   const startK = guardKindAtPlanEdge(a, 'start');
   const endK = guardKindAtPlanEdge(a, 'end');
   if (along === 'x') {
-    const xl = o.x - 5;
-    const xr = o.x + o.w + 5;
+    const xl = o.x - 12;
+    const xr = o.x + o.w + 12;
     strokeRail(startK, true, xl, o.y, xl, o.y + o.h, railTag(startK));
     strokeRail(endK, true, xr, o.y, xr, o.y + o.h, railTag(endK));
   } else {
-    const yt = o.y - 5;
-    const yb = o.y + o.h + 5;
+    const yt = o.y - 12;
+    const yb = o.y + o.h + 12;
     strokeRail(startK, false, o.x, yt, o.x + o.w, yt, railTag(startK));
     strokeRail(endK, false, o.x, yb, o.x + o.w, yb, railTag(endK));
   }
@@ -460,6 +469,12 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
     .fp-dim { font: 600 18px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: ${COL_DIM}; }
     .fp-mod-num { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; font-weight: 600; fill: #1e293b; }
   </style>`);
+  /** 1.º eixo elevado: leitura imediata na planta (sombreia o módulo). */
+  parts.push(
+    `<pattern id="fp-first-level-elevated" patternUnits="userSpaceOnUse" width="12" height="12" patternTransform="rotate(35)">` +
+      `<path d="M-3,15 l18,-18 M-3,3 l6,-6 M9,15 l10,-10" stroke="#d97706" stroke-width="1.35" opacity="0.5"/>` +
+      `</pattern>`
+  );
   parts.push('</defs>');
   parts.push(`<rect width="${w}" height="${h}" fill="${COL_BG}"/>`);
   const fpPad = 14;
@@ -535,6 +550,7 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
 
   const levelTint = model.moduleLevelTint;
   const moduleCount = model.structureRects.length;
+  const firstOnGround = model.planAccessories.firstLevelOnGround !== false;
   for (const s of model.structureRects) {
     const isTunnel = s.variant === 'tunnel';
     const fillMod = isTunnel ? COL_MOD_TUNNEL_FILL : COL_MOD_FILL;
@@ -551,6 +567,22 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
       parts.push(
         `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="${levelTint.fill}" fill-opacity="${levelTint.opacity}" stroke="none"/>`
       );
+      if (firstOnGround) {
+        const band = Math.max(5, s.h * 0.065);
+        parts.push(
+          `<rect x="${s.x + 1}" y="${s.y + s.h - band - 1}" width="${s.w - 2}" height="${band}" fill="#5eead4" fill-opacity="0.38" stroke="none" rx="0.8"/>`
+        );
+        parts.push(
+          `<line x1="${s.x}" y1="${s.y + s.h}" x2="${s.x + s.w}" y2="${s.y + s.h}" stroke="#0d9488" stroke-width="2.85" stroke-linecap="square" opacity="0.88"/>`
+        );
+      } else {
+        parts.push(
+          `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="url(#fp-first-level-elevated)" stroke="none" opacity="0.72"/>`
+        );
+        parts.push(
+          `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="none" stroke="#f59e0b" stroke-width="1.15" stroke-dasharray="5 4" opacity="0.75"/>`
+        );
+      }
       parts.push(
         `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="none" stroke="${strokeMod}" stroke-width="${sw}"/>`
       );
@@ -578,9 +610,6 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
       `<text x="${tcx}" y="${tcy}" text-anchor="middle" dominant-baseline="middle" class="fp-mod-num" font-size="${fontPx}px" opacity="${opacity}">${s.displayIndex}</text>`
     );
   }
-
-  appendFloorPlanAccessoryGraphics(model, parts);
-  appendFloorPlanConfigurationLegend(model, parts);
 
   parts.push(orientationArrowSvg(o, model.beamSpanAlong));
 
@@ -639,6 +668,9 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
       );
     }
   }
+
+  appendFloorPlanAccessoryGraphics(model, parts);
+  appendFloorPlanConfigurationLegend(model, parts);
 
   for (const lb of model.labels) {
     const cls = lb.className ?? 'fp-drawing-meta';
