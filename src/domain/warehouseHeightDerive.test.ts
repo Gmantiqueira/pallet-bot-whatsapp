@@ -6,6 +6,7 @@ import {
   HEIGHT_MODE_WAREHOUSE_HEIGHT,
   maxStructuralLevelsForModuleHeight,
   moduleHeightMmFromWarehouseClearHeightCeiling,
+  pickBestWarehouseRackFromCeilingMm,
 } from './warehouseHeightDerive';
 
 describe('warehouseHeightDerive', () => {
@@ -78,5 +79,61 @@ describe('warehouseHeightDerive', () => {
       firstLevelOnGround: true,
     });
     expect(b.totalLevels).toBe(b.levels);
+  });
+
+  it('pickBestWarehouseRackFromCeilingMm: maior pé-direito tende a permitir mais níveis estruturais', () => {
+    const low = pickBestWarehouseRackFromCeilingMm({
+      ceilingMm: 6000,
+      minGapBetweenConsecutiveBeamsMm: 800,
+      hasGroundLevel: true,
+      firstLevelOnGround: true,
+    });
+    const high = pickBestWarehouseRackFromCeilingMm({
+      ceilingMm: 16_000,
+      minGapBetweenConsecutiveBeamsMm: 800,
+      hasGroundLevel: true,
+      firstLevelOnGround: true,
+    });
+    expect(low).not.toBeNull();
+    expect(high).not.toBeNull();
+    expect(high!.levels).toBeGreaterThan(low!.levels);
+  });
+
+  it('pickBestWarehouseRackFromCeilingMm: minGap menor entre eixos permite pelo menos tantos níveis quanto minGap maior', () => {
+    const minGap800 = pickBestWarehouseRackFromCeilingMm({
+      ceilingMm: 12_000,
+      minGapBetweenConsecutiveBeamsMm: 800,
+      hasGroundLevel: true,
+      firstLevelOnGround: true,
+    });
+    const minGap2200 = pickBestWarehouseRackFromCeilingMm({
+      ceilingMm: 12_000,
+      minGapBetweenConsecutiveBeamsMm: 2200,
+      hasGroundLevel: true,
+      firstLevelOnGround: true,
+    });
+    expect(minGap800!.levels).toBeGreaterThanOrEqual(minGap2200!.levels);
+  });
+
+  it('variações de teto próximas podem alterar altura de perfil ou níveis (sensibilidade)', () => {
+    const a = pickBestWarehouseRackFromCeilingMm({
+      ceilingMm: 9880,
+      minGapBetweenConsecutiveBeamsMm: 800,
+      hasGroundLevel: true,
+      firstLevelOnGround: true,
+    });
+    const b = pickBestWarehouseRackFromCeilingMm({
+      ceilingMm: 10_080,
+      minGapBetweenConsecutiveBeamsMm: 800,
+      hasGroundLevel: true,
+      firstLevelOnGround: true,
+    });
+    expect(a).not.toBeNull();
+    expect(b).not.toBeNull();
+    const changed =
+      a!.levels !== b!.levels ||
+      a!.alturaFinalMm !== b!.alturaFinalMm ||
+      a!.storageTierCount !== b!.storageTierCount;
+    expect(changed).toBe(true);
   });
 });

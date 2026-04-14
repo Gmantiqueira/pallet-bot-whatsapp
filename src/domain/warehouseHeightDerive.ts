@@ -1,7 +1,11 @@
 /**
  * Modo pé-direito do galpão: deriva altura de módulo (passo 80 mm, ≤ pé-direito) e níveis
- * estruturais (maximizados) com base na geometria real de {@link computeBeamElevations}
+ * estruturais com base na geometria real de {@link computeBeamElevations}
  * (folga superior 216 mm incluída no modelo).
+ *
+ * A escolha não é só “teto ao passo de 80 + máximo L num único perfil”: enumera-se vários
+ * pares (altura de montante × níveis) admissíveis e escolhe-se o melhor por patamares de
+ * armazenagem (proxy de posições), depois aproveitamento de altura, depois espaçamento médio.
  */
 
 import {
@@ -94,6 +98,95 @@ export function maxStructuralLevelsForModuleHeight(params: {
   return best;
 }
 
+export type WarehouseRackPickResult = {
+  /** Altura de montante (mm), múltipla de 80, ≤ teto declarado. */
+  alturaFinalMm: number;
+  /** Níveis estruturais com longarina (1…12). */
+  levels: number;
+  /** Patamares de carga: níveis estruturais + piso quando aplicável. */
+  storageTierCount: number;
+  /** `alturaFinalMm / teto` — quanto do pé-direito é usado pelo perfil. */
+  heightUtilization: number;
+  /** Espaçamento médio entre eixos (mm) na solução escolhida. */
+  meanGapMm: number;
+};
+
+/**
+ * Enumera pares (altura de montante × níveis) admissíveis com {@link computeBeamElevations}
+ * (sem compressão forçada de vãos) e intervalo mínimo entre eixos ≥ `minGap`,
+ * e escolhe a melhor solução:
+ * 1) maximizar patamares de armazenagem (proxy de posições no layout);
+ * 2) maximizar uso do pé-direito (`altura/teto`);
+ * 3) maximizar espaçamento médio entre longarinas (desempate).
+ *
+ * Isto evita o comportamento “sempre teto 80 mm + só um L” em que pequenas variações
+ * de entrada não alteravam níveis nem altura de módulo.
+ */
+export function pickBestWarehouseRackFromCeilingMm(params: {
+  /** Teto vertical disponível para o perfil (pé-direito total ou útil, conforme o fluxo). */
+  ceilingMm: number;
+  minGapBetweenConsecutiveBeamsMm: number;
+  hasGroundLevel: boolean;
+  firstLevelOnGround: boolean;
+  loadHeightMm?: number;
+}): WarehouseRackPickResult | null {
+  const Hwh = Math.min(MAX_MM, Math.max(MIN_MM, params.ceilingMm));
+  const minGap = Math.max(
+    400,
+    Math.min(5000, params.minGapBetweenConsecutiveBeamsMm)
+  );
+  const step = RACK_UPRIGHT_HEIGHT_STEP_MM;
+  const maxHmod = Math.floor(Hwh / step) * step;
+  const minHmod = Math.ceil(MIN_MM / step) * step;
+
+  type Cand = WarehouseRackPickResult;
+  const feasible: Cand[] = [];
+
+  for (let Hmod = maxHmod; Hmod >= minHmod; Hmod -= step) {
+    for (let L = MIN_LEVELS; L <= MAX_LEVELS; L++) {
+      const r = computeBeamElevations({
+        uprightHeightMm: Hmod,
+        levels: L,
+        hasGroundLevel: params.hasGroundLevel,
+        firstLevelOnGround: params.firstLevelOnGround,
+        loadHeightMm: params.loadHeightMm,
+      });
+      if (r.gapsScaledToFit) {
+        continue;
+      }
+      const mg = minIntervalMmInBeamRun(r.beamElevationsMm);
+      if (mg < minGap - EPS) {
+        continue;
+      }
+      const storageTierCount =
+        L + (params.hasGroundLevel !== false ? 1 : 0);
+      feasible.push({
+        alturaFinalMm: Hmod,
+        levels: L,
+        storageTierCount,
+        heightUtilization: Hmod / Hwh,
+        meanGapMm: r.meanGapMm,
+      });
+    }
+  }
+
+  if (feasible.length === 0) {
+    return null;
+  }
+
+  feasible.sort((a, b) => {
+    if (b.storageTierCount !== a.storageTierCount) {
+      return b.storageTierCount - a.storageTierCount;
+    }
+    if (b.alturaFinalMm !== a.alturaFinalMm) {
+      return b.alturaFinalMm - a.alturaFinalMm;
+    }
+    return b.meanGapMm - a.meanGapMm;
+  });
+
+  return feasible[0]!;
+}
+
 export function deriveModuleFromWarehouseClearHeight(params: {
   warehouseClearHeightMm: number;
   minGapBetweenConsecutiveBeamsMm: number;
@@ -105,6 +198,20 @@ export function deriveModuleFromWarehouseClearHeight(params: {
   structuralLevels: number;
   warehouseClearHeightMm: number;
 } {
+  const picked = pickBestWarehouseRackFromCeilingMm({
+    ceilingMm: params.warehouseClearHeightMm,
+    minGapBetweenConsecutiveBeamsMm: params.minGapBetweenConsecutiveBeamsMm,
+    hasGroundLevel: params.hasGroundLevel,
+    firstLevelOnGround: params.firstLevelOnGround,
+    loadHeightMm: params.loadHeightMm,
+  });
+  if (picked) {
+    return {
+      moduleHeightMm: picked.alturaFinalMm,
+      structuralLevels: picked.levels,
+      warehouseClearHeightMm: params.warehouseClearHeightMm,
+    };
+  }
   const moduleHeightMm = moduleHeightMmFromWarehouseClearHeightCeiling(
     params.warehouseClearHeightMm
   );
@@ -143,6 +250,23 @@ export function deriveRackFromWarehouseHeightMm(params: {
   totalLevels: number;
   warehouseHeightMm: number;
 } {
+  const picked = pickBestWarehouseRackFromCeilingMm({
+    ceilingMm: params.warehouseHeightMm,
+    minGapBetweenConsecutiveBeamsMm: params.minGapBetweenConsecutiveBeamsMm,
+    hasGroundLevel: params.hasGroundLevel,
+    firstLevelOnGround: params.firstLevelOnGround,
+    loadHeightMm: params.loadHeightMm,
+  });
+  if (picked) {
+    const totalLevels =
+      picked.levels + (params.hasGroundLevel ? 1 : 0);
+    return {
+      alturaFinalMm: picked.alturaFinalMm,
+      levels: picked.levels,
+      totalLevels,
+      warehouseHeightMm: params.warehouseHeightMm,
+    };
+  }
   const d = deriveModuleFromWarehouseClearHeight({
     warehouseClearHeightMm: params.warehouseHeightMm,
     minGapBetweenConsecutiveBeamsMm: params.minGapBetweenConsecutiveBeamsMm,
