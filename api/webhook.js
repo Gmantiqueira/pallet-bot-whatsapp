@@ -4,9 +4,7 @@ const { getServerlessHandler } = require('./serverlessBootstrap');
 
 /**
  * Dedicated handler for POST /webhook (rewrite: /webhook → /api/webhook).
- *
- * Vercel may pass req.url as "/" or a path that does not include "webhook" after routing
- * to this function. Fastify registers POST /webhook — force the path before serverless-http.
+ * Vercel may pass req.url without the /webhook segment; Fastify registers POST /webhook.
  */
 module.exports = async (req, res) => {
   if (process.env.VERCEL) {
