@@ -1,6 +1,5 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { pathToFileURL } from 'url';
 import PDFDocument from 'pdfkit';
 
 /**
@@ -42,20 +41,46 @@ export function registerPdfKitFonts(doc: InstanceType<typeof PDFDocument>): void
   doc.registerFont(PDFKIT_FONT_BOLD, fontAbsolutePath(FONT_FILES.bold));
 }
 
+/** Data-URI TTFs for @font-face (librsvg often ignores file:// on serverless). */
+let svgFontDataUris: {
+  regular: string;
+  bold: string;
+  mono: string;
+} | null = null;
+
+function svgFontFaceSrcDataUris(): {
+  regular: string;
+  bold: string;
+  mono: string;
+} {
+  if (svgFontDataUris) {
+    return svgFontDataUris;
+  }
+  assertBundledPdfFontsExist();
+  const toData = (filename: string): string => {
+    const b64 = fs.readFileSync(fontAbsolutePath(filename)).toString('base64');
+    return `data:font/ttf;base64,${b64}`;
+  };
+  svgFontDataUris = {
+    regular: toData(FONT_FILES.regular),
+    bold: toData(FONT_FILES.bold),
+    mono: toData(FONT_FILES.mono),
+  };
+  return svgFontDataUris;
+}
+
 /**
- * Injeta @font-face com URLs file:// para o Sharp/librsvg rasterizar texto
- * sem fontes de sistema. Sem lista de fallback (sem Helvetica/sans-serif).
+ * Injeta @font-face com TTF em data: (base64) para o Sharp/librsvg rasterizar texto
+ * sem fontes de sistema e sem depender de file:// (que falha em muitos deploys).
+ * Sem lista de fallback (sem Helvetica/sans-serif).
  */
 export function embedSvgFontFaces(svg: string): string {
-  assertBundledPdfFontsExist();
-  const uRegular = pathToFileURL(fontAbsolutePath(FONT_FILES.regular)).href;
-  const uBold = pathToFileURL(fontAbsolutePath(FONT_FILES.bold)).href;
-  const uMono = pathToFileURL(fontAbsolutePath(FONT_FILES.mono)).href;
+  const { regular, bold, mono } = svgFontFaceSrcDataUris();
 
   const style = `<defs><style type="text/css"><![CDATA[
-@font-face { font-family: '${SVG_FONT_FAMILY}'; src: url('${uRegular}') format('truetype'); font-weight: 400; font-style: normal; }
-@font-face { font-family: '${SVG_FONT_FAMILY_BOLD}'; src: url('${uBold}') format('truetype'); font-weight: 400; font-style: normal; }
-@font-face { font-family: '${SVG_FONT_MONO}'; src: url('${uMono}') format('truetype'); font-weight: 400; font-style: normal; }
+@font-face { font-family: '${SVG_FONT_FAMILY}'; src: url('${regular}') format('truetype'); font-weight: 400; font-style: normal; }
+@font-face { font-family: '${SVG_FONT_FAMILY_BOLD}'; src: url('${bold}') format('truetype'); font-weight: 400; font-style: normal; }
+@font-face { font-family: '${SVG_FONT_MONO}'; src: url('${mono}') format('truetype'); font-weight: 400; font-style: normal; }
 ]]></style></defs>`;
 
   const close = svg.indexOf('>');

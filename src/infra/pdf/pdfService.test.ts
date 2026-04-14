@@ -1,4 +1,5 @@
 import { PDFDocument } from 'pdf-lib';
+import { embedSvgFontFaces } from '../../config/pdfFonts';
 import { PdfService, svgRasterToPng } from './pdfService';
 import { Session } from '../../domain/session';
 import { finalizeSummaryAnswers } from '../../domain/projectEngines';
@@ -92,6 +93,17 @@ describe('PdfService', () => {
   });
 });
 
+describe('embedSvgFontFaces', () => {
+  it('injeta TTF em data: base64 (não file://), para librsvg em serverless', () => {
+    const out = embedSvgFontFaces(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>'
+    );
+    expect(out).toContain('data:font/ttf;base64,');
+    expect(out.match(/data:font\/ttf;base64,/g)?.length).toBe(3);
+    expect(out.toLowerCase()).not.toContain('file:');
+  });
+});
+
 describe('svgRasterToPng', () => {
   it('deve converter SVG em PNG', async () => {
     const svg =
@@ -101,5 +113,15 @@ describe('svgRasterToPng', () => {
     expect(heightPx).toBeGreaterThan(0);
     expect(buffer.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a');
     expect(buffer.length).toBeGreaterThan(80);
+  });
+
+  it('rasteriza texto pt-BR com fonte embutida (sem depender do SO)', async () => {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="40">
+ <text x="4" y="26" font-size="18" font-family="DejaVuPdf" fill="#000">Cota · 1.º eixo — 12.000 mm</text>
+    </svg>`;
+    const { buffer, widthPx, heightPx } = await svgRasterToPng(svg, 400, 80);
+    expect(widthPx).toBeGreaterThan(0);
+    expect(heightPx).toBeGreaterThan(0);
+    expect(buffer.length).toBeGreaterThan(500);
   });
 });
