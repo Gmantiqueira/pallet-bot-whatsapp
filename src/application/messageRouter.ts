@@ -25,6 +25,7 @@ import {
 } from '../domain/pdfV2/layoutGeometryV2';
 import { isDebugPdf, logLayoutSolutionDebug } from '../domain/pdfV2/pdfDebugV2';
 import { validatePdfRenderCoherence } from '../domain/pdfV2/pdfRenderCoherenceV2';
+import { validatePdfV2FinalConsistency } from '../domain/pdfV2/pdfV2FinalConsistency';
 import { buildFloorPlanModelV2 } from '../domain/pdfV2/floorPlanModelV2';
 import { serializeFloorPlanSvgV2 } from '../domain/pdfV2/svgFloorPlanV2';
 import { buildElevationModelV2 } from '../domain/pdfV2/elevationModelV2';
@@ -272,6 +273,12 @@ export const routeIncoming = async (
         validatePdfRenderCoherence(geo, {
           rack3dModel: rack3d,
           layoutSolution: sol,
+        });
+        validatePdfV2FinalConsistency({
+          answers: ans,
+          v2answers: v2a,
+          layoutSolution: sol,
+          geometry: geo,
         });
         const rack3dView = dbg ? build3DModelV2(geo, { debug: true }) : rack3d;
         const view3dSvg = render3DViewV2(projectToIsometric(rack3dView), {

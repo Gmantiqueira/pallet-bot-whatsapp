@@ -10,6 +10,7 @@ import {
 } from '../../domain/pdfV2/layoutGeometryV2';
 import { isDebugPdf, logLayoutSolutionDebug } from '../../domain/pdfV2/pdfDebugV2';
 import { validatePdfRenderCoherence } from '../../domain/pdfV2/pdfRenderCoherenceV2';
+import { validatePdfV2FinalConsistency } from '../../domain/pdfV2/pdfV2FinalConsistency';
 import { buildFloorPlanModelV2 } from '../../domain/pdfV2/floorPlanModelV2';
 import { serializeFloorPlanSvgV2 } from '../../domain/pdfV2/svgFloorPlanV2';
 import { buildElevationModelV2 } from '../../domain/pdfV2/elevationModelV2';
@@ -688,6 +689,12 @@ export async function generatePdfV2FromSession(
   validatePdfRenderCoherence(layoutGeometry, {
     rack3dModel: rack3d,
     layoutSolution,
+  });
+  validatePdfV2FinalConsistency({
+    answers,
+    v2answers,
+    layoutSolution,
+    geometry: layoutGeometry,
   });
   const rack3dForView = debugPdf
     ? build3DModelV2(layoutGeometry, { debug: true })

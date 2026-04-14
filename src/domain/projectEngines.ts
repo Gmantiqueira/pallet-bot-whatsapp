@@ -62,7 +62,8 @@ function deriveWarehouseHeightMmFromAnswers(
   };
 }
 
-function uprightHeightMmFromAnswers(
+/** Altura de montante explícita nas respostas (sem fallback `níveis × 1500`). */
+export function uprightHeightMmFromAnswers(
   answers: Record<string, unknown>
 ): number | null {
   const wh = deriveWarehouseHeightMmFromAnswers(answers);
