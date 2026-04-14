@@ -126,11 +126,11 @@ describe('State Machine', () => {
   });
 
   describe('START state', () => {
-    it('should go to MENU on any text without validating content', () => {
+    it('should go to MENU on ordinary text (not a menu branch)', () => {
       const session = createSession('START', { lengthMm: 9999 }, [
         'WAIT_LENGTH',
       ]);
-      const result = transition(session, { type: 'TEXT', value: '1' });
+      const result = transition(session, { type: 'TEXT', value: 'ola' });
 
       expect(result.session.state).toBe('MENU');
       expect(result.session.answers).toEqual({});
@@ -138,9 +138,20 @@ describe('State Machine', () => {
       expect(result.effects).toContainEqual({ type: 'SEND' });
     });
 
-    it('should go to MENU on any button id', () => {
+    it('should apply menu branch when START receives digit/keyword (lost session + button)', () => {
       const session = createSession('START');
-      const result = transition(session, { type: 'BUTTON', value: '1' });
+      const r1 = transition(session, { type: 'BUTTON', value: '1' });
+      expect(r1.session.state).toBe('WAIT_PLANT_IMAGE');
+      expect(r1.session.answers.projectType).toBe('PLANTA_REAL');
+
+      const s2 = createSession('START');
+      const r2 = transition(s2, { type: 'TEXT', value: '2' });
+      expect(r2.session.state).toBe('WAIT_LENGTH');
+    });
+
+    it('should go to MENU on unknown button id', () => {
+      const session = createSession('START');
+      const result = transition(session, { type: 'BUTTON', value: 'X' });
 
       expect(result.session.state).toBe('MENU');
       expect(result.effects).toContainEqual({ type: 'SEND' });

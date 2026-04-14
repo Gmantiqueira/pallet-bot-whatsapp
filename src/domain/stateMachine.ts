@@ -125,6 +125,18 @@ export function parseMenuBranch(raw: string): '1' | '2' | null {
   return null;
 }
 
+function transitionMenuChoice(session: Session, branch: '1' | '2'): Session {
+  const projectType = branch === '1' ? 'PLANTA_REAL' : 'MEDIDAS_DIGITADAS';
+  const nextState: State = branch === '1' ? 'WAIT_PLANT_IMAGE' : 'WAIT_LENGTH';
+  return {
+    ...session,
+    state: nextState,
+    answers: { ...session.answers, projectType },
+    stack: [...session.stack, session.state],
+    updatedAt: Date.now(),
+  };
+}
+
 function goNext(
   session: Session,
   patch: Record<string, unknown>,
@@ -190,6 +202,15 @@ export const transition = (
 
   switch (newSession.state) {
     case 'START': {
+      const rawChoiceStart =
+        input.type === 'BUTTON' || input.type === 'TEXT' ? input.value : null;
+      const branchStart =
+        rawChoiceStart != null ? parseMenuBranch(rawChoiceStart) : null;
+      if (branchStart) {
+        newSession = transitionMenuChoice(newSession, branchStart);
+        effects.push({ type: 'SEND' });
+        return { session: newSession, effects };
+      }
       newSession = transitionToCleanMenu(newSession);
       effects.push({ type: 'SEND' });
       return { session: newSession, effects };
@@ -200,17 +221,7 @@ export const transition = (
         input.type === 'BUTTON' || input.type === 'TEXT' ? input.value : null;
       const branch = rawChoice != null ? parseMenuBranch(rawChoice) : null;
       if (branch) {
-        const projectType =
-          branch === '1' ? 'PLANTA_REAL' : 'MEDIDAS_DIGITADAS';
-        const nextState: State =
-          branch === '1' ? 'WAIT_PLANT_IMAGE' : 'WAIT_LENGTH';
-        newSession = {
-          ...newSession,
-          state: nextState,
-          answers: { ...newSession.answers, projectType },
-          stack: [...newSession.stack, newSession.state],
-          updatedAt: Date.now(),
-        };
+        newSession = transitionMenuChoice(newSession, branch);
         effects.push({ type: 'SEND' });
       }
       return { session: newSession, effects };

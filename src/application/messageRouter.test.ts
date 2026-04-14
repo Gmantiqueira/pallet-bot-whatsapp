@@ -97,6 +97,18 @@ describe('MessageRouter', () => {
       expect(result.session.answers).toEqual({});
     });
 
+    it('START: buttonReply applies menu branch (session at START after cold start / lost store)', async () => {
+      const session = createSession('START');
+      const incoming: IncomingPayload = {
+        from: '5511999999999',
+        buttonReply: '2',
+      };
+
+      const result = await routeIncoming(session, incoming, repository);
+
+      expect(result.session.state).toBe('WAIT_LENGTH');
+    });
+
     it('FINAL_CONFIRM: free text restarts to MENU', async () => {
       const session = createSession('FINAL_CONFIRM', {
         layout: {},

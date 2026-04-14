@@ -114,7 +114,7 @@ const convertToInput = (
       return { type: 'MEDIA_IMAGE', id: incoming.media.id };
     }
     if (incoming.buttonReply) {
-      return { type: 'TEXT', value: incoming.buttonReply };
+      return { type: 'BUTTON', value: incoming.buttonReply };
     }
     return null;
   }
