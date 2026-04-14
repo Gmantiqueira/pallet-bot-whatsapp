@@ -145,8 +145,9 @@ export type LayoutGeometryMetadata = {
   structuralLevels: number;
   hasGroundLevel: boolean;
   /**
-   * `true` apenas se o layout calculado contém pelo menos um módulo túnel real
-   * (`totals.tunnelCount > 0`), não o pedido inicial do utilizador.
+   * Túnel no documento: **pedido explícito** (`answers.hasTunnel === true`) **e**
+   * pelo menos um módulo túnel na solução (`tunnelCount > 0`).
+   * Se `hasTunnel=false` nas respostas, este campo é sempre `false` (e não pode haver módulos túnel).
    */
   hasTunnel: boolean;
   rackDepthMode: RackDepthModeV2;
@@ -464,7 +465,16 @@ export function buildLayoutGeometry(
     (n, r) => n + r.modules.filter(x => x.type === 'tunnel').length,
     0
   );
+  const userRequestedTunnel = answers.hasTunnel === true;
   const hasTunnelRealized = tunnelCount > 0;
+
+  if (!userRequestedTunnel && hasTunnelRealized) {
+    throw new LayoutGeometryValidationError(
+      'Inconsistência: hasTunnel=false nas respostas mas o layout contém módulo(s) túnel.'
+    );
+  }
+
+  const hasTunnelDocument = userRequestedTunnel && hasTunnelRealized;
 
   const orientation = solution.orientation;
   const beamSpanDirection: 'x' | 'y' =
@@ -493,7 +503,7 @@ export function buildLayoutGeometry(
       firstLevelOnGround: solution.metadata.firstLevelOnGround,
       structuralLevels: solution.metadata.structuralLevels,
       hasGroundLevel: solution.metadata.hasGroundLevel,
-      hasTunnel: hasTunnelRealized,
+      hasTunnel: hasTunnelDocument,
       rackDepthMode: solution.rackDepthMode,
       moduleWidthMm: solution.moduleWidthMm,
       moduleDepthMm: solution.moduleDepthMm,

@@ -643,6 +643,12 @@ export async function generatePdfV2FromSession(
   options: { storagePath: string }
 ): Promise<GenerateProjectPdfResult> {
   const answers = session.answers;
+  if (process.env.PDF_TUNNEL_DEBUG === '1') {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[pdf-v2 tunnel] start answers.hasTunnel=${String(answers.hasTunnel)}`
+    );
+  }
   const v2answers = buildProjectAnswersV2(answers);
   if (!v2answers) {
     throw new Error('Respostas incompletas para gerar o PDF');
@@ -650,6 +656,12 @@ export async function generatePdfV2FromSession(
   const layoutSolution = buildLayoutSolutionV2(v2answers);
   const layoutGeometry = buildLayoutGeometry(layoutSolution, answers);
   validateLayoutGeometry(layoutGeometry);
+  if (process.env.PDF_TUNNEL_DEBUG === '1') {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[pdf-v2 tunnel] final metadata.hasTunnel=${layoutGeometry.metadata.hasTunnel} tunnelCount=${layoutGeometry.totals.tunnelCount} v2answers.hasTunnel=${v2answers.hasTunnel}`
+    );
+  }
   const floorModel = buildFloorPlanModelV2(layoutGeometry);
   const floorPlanSvg = serializeFloorPlanSvgV2(floorModel);
   const elevationModel = buildElevationModelV2(answers, layoutGeometry);

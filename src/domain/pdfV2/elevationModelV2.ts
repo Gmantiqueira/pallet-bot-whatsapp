@@ -293,9 +293,12 @@ export function buildElevationModelV2(
 ): ElevationModelV2 {
   const frontWithoutTunnel = buildFrontWithoutTunnelPayload(answers, geometry);
 
-  const tunnelMod = findTunnelModuleGeometry(geometry);
+  const userWantsTunnel = answers.hasTunnel === true;
+  const tunnelMod = userWantsTunnel
+    ? findTunnelModuleGeometry(geometry)
+    : undefined;
   const frontWithTunnel =
-    geometry.metadata.hasTunnel && tunnelMod
+    userWantsTunnel && geometry.metadata.hasTunnel && tunnelMod
       ? panelFromRackModule(answers, geometry, tunnelMod, {
           tunnelVisual: true,
         })
@@ -310,6 +313,7 @@ export function buildElevationModelV2(
     `${formatModuleCountForDocumentPt(geometry.totals.moduleCount)} (equiv.) · posições ${geometry.totals.positionCount} · ${geometry.metadata.rackDepthMode === 'double' ? 'dupla costas' : 'simples'} · planta: fileiras ponta com ponta (vão automático)`,
   ];
   if (
+    userWantsTunnel &&
     geometry.metadata.hasTunnel &&
     tunnelMod?.tunnelClearanceHeightMm != null
   ) {
