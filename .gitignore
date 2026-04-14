@@ -11,3 +11,4 @@ storage/
 data/
 # Gerado por scripts/sync-simulator-static.cjs (injeta WEBHOOK_SECRET); template em public/simulator.source.html
 /public/simulator.html
+.vercel

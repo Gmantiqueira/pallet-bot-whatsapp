@@ -15,10 +15,6 @@
     {
       "source": "/webhook",
       "destination": "/api/webhook"
-    },
-    {
-      "source": "/files/:name",
-      "destination": "/api/files/:name"
     }
   ],
   "functions": {
