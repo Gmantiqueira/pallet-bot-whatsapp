@@ -111,6 +111,42 @@ describe('buildLayoutSolutionV2', () => {
     expect(trailing?.label).toContain('inferior ao corredor declarado');
   });
 
+  it('dupla costas: reserva transversal perimetral — fileira não começa em 0 nem encosta à parede sem faixa', () => {
+    const corridorMm = 3000;
+    const bandDepth = 2 * 2700 + 100;
+    const r = fillWarehouseCross({
+      orientation: 'along_length',
+      lengthMm: 40_000,
+      widthMm: 16_000,
+      beamSpan: 40_000,
+      crossSpan: 16_000,
+      bandDepth,
+      corridorMm,
+      depthMode: 'double',
+      hasTunnel: false,
+    });
+    expect(r.rowBands.length).toBeGreaterThan(0);
+    expect(r.rowBands[0]!.c0).toBeGreaterThanOrEqual(corridorMm - 1);
+    const leading = r.corridors.find(c => c.id.endsWith('cor-leading'));
+    expect(leading).toBeDefined();
+    expect(leading!.label).toContain('perímetro');
+  });
+
+  it('fileira simples: empacotamento pode iniciar em 0 no eixo transversal (sem reserva perimetral obrigatória)', () => {
+    const r = fillWarehouseCross({
+      orientation: 'along_length',
+      lengthMm: 40_000,
+      widthMm: 8000,
+      beamSpan: 40_000,
+      crossSpan: 8000,
+      bandDepth: 2700,
+      corridorMm: 3000,
+      depthMode: 'single',
+      hasTunnel: false,
+    });
+    expect(r.rowBands[0]!.c0).toBeLessThan(50);
+  });
+
   it('posições = módulos (equiv.) × 2 baias × costas × patamares (sem túnel nem meio módulo)', () => {
     const a = {
       ...base(),

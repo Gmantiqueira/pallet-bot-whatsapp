@@ -170,7 +170,11 @@ function transverseUsedMm(s: LayoutSolutionV2): number {
   const n = s.rows.length;
   const cor = s.corridorMm;
   if (n <= 0) return 0;
-  return n * band + Math.max(0, n - 1) * cor;
+  const stack = n * band + Math.max(0, n - 1) * cor;
+  /** Fileira dupla: faixas de acesso obrigatórias junto às duas paredes transversais. */
+  const perimeter =
+    s.rackDepthMode === 'double' ? 2 * cor : 0;
+  return stack + perimeter;
 }
 
 /** Faixa transversal não ocupada por fileiras+corredores (mm) — menor é melhor em empate. */
@@ -269,20 +273,31 @@ function maxRowsInZone(
 }
 
 /**
- * Comprimento transversal útil para empacotar fileiras.
+ * Reserva transversal junto às paredes do compartimento (eixo **perpendicular** ao vão).
  *
- * Não subtrair automaticamente `2×corridorMm` nos bordos do edifício: isso duplicava a noção de
- * “corredor operacional” (já aplicado **entre** fileiras) e reduzia fileiras sem regra física explícita.
- * Circulação perimetral pode existir no projeto, mas não é modelada como segunda faixa = largura total
- * do corredor principal — isso era conservadorismo excessivo e grandes vazios.
+ * - **Simples (uma costa):** o acesso à face de picking faz-se a partir do corredor **entre** fileiras
+ *   (e eventualmente da faixa remanescente); uma face pode estar junto à parede sem corredor dedicado
+ *   nesse lado — operação típica de um único lado.
+ * - **Dupla (costas voltadas):** cada banda tem **duas** faces exteriores de picking; para operação
+ *   realista com empilhador, ambas precisam de faixa livre com largura ≥ `corridorMm` (corredor
+ *   declarado) antes da parede. Por isso subtraímos `2×corridorMm` ao comprimento transversal útil
+ *   antes de contar fileiras — ver `LAYOUT_OPERATIONAL_RULES.md` neste pacote.
  */
-function crossAxisPerimeterReserve(zoneLen: number): {
-  innerLen: number;
-  leadingG: number;
-  trailingG: number;
-} {
+function crossAxisPerimeterReserve(
+  zoneLen: number,
+  depthMode: RackDepthModeV2,
+  corridorMm: number
+): { innerLen: number; leadingG: number; trailingG: number } {
+  if (zoneLen <= 0) {
+    return { innerLen: 0, leadingG: 0, trailingG: 0 };
+  }
+  if (depthMode === 'double') {
+    const g = Math.max(0, corridorMm);
+    const innerLen = Math.max(0, zoneLen - 2 * g);
+    return { innerLen, leadingG: g, trailingG: g };
+  }
   return {
-    innerLen: Math.max(0, zoneLen),
+    innerLen: zoneLen,
     leadingG: 0,
     trailingG: 0,
   };
@@ -316,15 +331,46 @@ function fillCrossZone(
   idPrefix: string,
   orientation: LayoutOrientationV2,
   lengthMm: number,
-  widthMm: number
+  widthMm: number,
+  depthMode: RackDepthModeV2
 ): { rows: RowBandCross[]; corridors: CirculationZone[] } {
   const zoneLen = zone.z1 - zone.z0;
-  const { innerLen } = crossAxisPerimeterReserve(zoneLen);
+  const { innerLen, leadingG } = crossAxisPerimeterReserve(
+    zoneLen,
+    depthMode,
+    corridorMm
+  );
   const n = maxRowsInZone(innerLen, bandDepth, corridorMm);
-  let y = zone.z0;
+  let y = zone.z0 + leadingG;
 
   const rows: RowBandCross[] = [];
   const corridors: CirculationZone[] = [];
+
+  if (leadingG > EPS) {
+    const y0 = zone.z0;
+    const y1 = zone.z0 + leadingG;
+    if (orientation === 'along_length') {
+      corridors.push({
+        id: `${idPrefix}-cor-leading`,
+        kind: 'corridor',
+        x0: 0,
+        x1: lengthMm,
+        y0,
+        y1,
+        label: 'Corredor operacional (acesso — perímetro)',
+      });
+    } else {
+      corridors.push({
+        id: `${idPrefix}-cor-leading`,
+        kind: 'corridor',
+        x0: y0,
+        x1: y1,
+        y0: 0,
+        y1: widthMm,
+        label: 'Corredor operacional (acesso — perímetro)',
+      });
+    }
+  }
 
   for (let i = 0; i < n; i++) {
     const c0 = y;
@@ -369,7 +415,9 @@ function fillCrossZone(
   if (remainder > EPS) {
     const label =
       remainder + EPS >= corridorMm
-        ? 'Corredor operacional (faixa transversal)'
+        ? depthMode === 'double'
+          ? 'Corredor operacional (faixa transversal — após última fileira dupla)'
+          : 'Corredor operacional (faixa transversal)'
         : 'Faixa transversal residual (largura inferior ao corredor declarado)';
     if (orientation === 'along_length') {
       corridors.push({
@@ -431,7 +479,8 @@ export function fillWarehouseCross(ctx: FillContext): {
       z.id,
       ctx.orientation,
       ctx.lengthMm,
-      ctx.widthMm
+      ctx.widthMm,
+      ctx.depthMode
     );
     rowBands.push(...rows);
     corridors.push(...corrs);

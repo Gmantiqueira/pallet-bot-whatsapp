@@ -800,6 +800,44 @@ export function validateLayoutGeometry(geo: LayoutGeometry): void {
       }
     }
   }
+
+  validateDoubleRowPerimeterAccess(geo);
+}
+
+/**
+ * Fileira **dupla costas**: exige faixa livre ≥ `corridorMm` em **ambos** os lados transversais
+ * ao vão (faces exteriores da banda), alinhado ao motor `fillCrossZone` / `fillWarehouseCross`.
+ */
+function validateDoubleRowPerimeterAccess(geo: LayoutGeometry): void {
+  const cor = geo.metadata.corridorMm;
+  const tol = 2.5;
+  if (geo.metadata.rackDepthMode !== 'double') return;
+
+  const crossSpan =
+    geo.orientation === 'along_length'
+      ? geo.warehouseWidthMm
+      : geo.warehouseLengthMm;
+
+  for (const row of geo.rows) {
+    if (row.rowType !== 'backToBack') continue;
+
+    const c0 =
+      geo.orientation === 'along_length' ? row.originY : row.originX;
+    const c1 = c0 + row.rowDepthMm;
+    const lo = Math.min(c0, c1);
+    const hi = Math.max(c0, c1);
+
+    if (lo < cor - tol) {
+      throw new LayoutGeometryValidationError(
+        `Fileira dupla ${row.id}: banda encostada ao perímetro sem faixa de acesso ≥ ${cor} mm (corredor declarado).`
+      );
+    }
+    if (hi > crossSpan - cor + tol) {
+      throw new LayoutGeometryValidationError(
+        `Fileira dupla ${row.id}: banda encostada ao perímetro oposto sem faixa ≥ ${cor} mm.`
+      );
+    }
+  }
 }
 
 /** Primeiro módulo túnel, se existir. */
