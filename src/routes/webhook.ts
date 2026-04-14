@@ -9,6 +9,7 @@ import {
 } from '../infra/repositories/createSessionRepository';
 import { routeIncoming, IncomingPayload } from '../application/messageRouter';
 import type { GeneratedPdfArtifact } from '../types/generatedPdf';
+import { normalizeWebhookFrom } from '../infra/http/normalizeWebhookFrom';
 
 interface IncomingWebhookPayload {
   from: string;
@@ -62,17 +63,27 @@ export const webhookRoutes = async (
     ) => {
       console.log('[diag][webhook] route-handler-enter');
       console.log('[diag][webhook] after-auth');
-      const incoming: IncomingPayload = request.body;
+      const rawBody = request.body ?? {};
+      const from = normalizeWebhookFrom(
+        (rawBody as { from?: unknown }).from
+      );
+      if (!from) {
+        return reply.code(400).send({ error: 'Missing or invalid from' });
+      }
+      const incoming: IncomingPayload = {
+        ...(rawBody as IncomingPayload),
+        from,
+      };
 
       try {
         console.log('[diag][webhook] before-session-get');
-        let session = await sessionRepository.get(incoming.from);
+        let session = await sessionRepository.get(from);
         console.log('[diag][webhook] after-session-get');
 
         if (!session) {
           console.log('[diag][webhook] before-initial-upsert');
           session = {
-            phone: incoming.from,
+            phone: from,
             state: START_STATE,
             answers: {},
             stack: [],
@@ -80,6 +91,8 @@ export const webhookRoutes = async (
           };
           await sessionRepository.upsert(session);
           console.log('[diag][webhook] after-initial-upsert');
+        } else if (session.phone !== from) {
+          session = { ...session, phone: from };
         }
 
         console.log('[diag][webhook] before-routeIncoming');

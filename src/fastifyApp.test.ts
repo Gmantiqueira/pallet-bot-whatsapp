@@ -38,6 +38,49 @@ describe('App Smoke Test', () => {
     expect(body.sessionBackend).toBe('memory');
   });
 
+  it('should respond 400 when from is missing', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/webhook',
+      headers: {
+        authorization: `Bearer ${TEST_WEBHOOK_SECRET}`,
+        'content-type': 'application/json',
+      },
+      payload: {},
+    });
+
+    expect(response.statusCode).toBe(400);
+    const body = JSON.parse(response.body);
+    expect(body).toMatchObject({ error: expect.stringContaining('from') });
+  });
+
+  it('should normalize +prefix on from for same session key', async () => {
+    const phone = '5511888777666';
+    const r1 = await app.inject({
+      method: 'POST',
+      url: '/webhook',
+      headers: {
+        authorization: `Bearer ${TEST_WEBHOOK_SECRET}`,
+        'content-type': 'application/json',
+      },
+      payload: { from: `+${phone}`, text: 'oi' },
+    });
+    expect(r1.statusCode).toBe(200);
+    const r2 = await app.inject({
+      method: 'POST',
+      url: '/webhook',
+      headers: {
+        authorization: `Bearer ${TEST_WEBHOOK_SECRET}`,
+        'content-type': 'application/json',
+      },
+      payload: { from: phone, text: 'novo' },
+    });
+    expect(r2.statusCode).toBe(200);
+    const body2 = JSON.parse(r2.body);
+    const texts = body2.messages.map((m: { text?: string }) => m.text).join('\n');
+    expect(texts).not.toMatch(/Olá!.*Digite qualquer coisa/s);
+  });
+
   it('should respond 401 to POST /webhook without Authorization', async () => {
     const response = await app.inject({
       method: 'POST',

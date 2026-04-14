@@ -18,7 +18,7 @@ Endpoint principal para receber mensagens do WhatsApp.
 
 ```typescript
 interface IncomingWebhookPayload {
-  from: string;              // Número do telefone (ex: "5511999999999")
+  from: string;              // Número (E.164); o servidor normaliza: trim, remove espaços e prefixo "+"
   text?: string;             // Texto da mensagem
   buttonReply?: string;      // ID do botão clicado
   media?: {
