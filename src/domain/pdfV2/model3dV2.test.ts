@@ -192,10 +192,12 @@ describe('build3DModelV2 + projeção isométrica', () => {
   it('8: coerência — contagem de prismas bate com a soma dos splits por módulo', () => {
     const a = { ...base(), lineStrategy: 'APENAS_SIMPLES' as const };
     const g = geomFromAnswers(a);
-    let expected = 0;
+    let prismSum = 0;
+    let segmentCount = 0;
     for (const row of g.rows) {
       for (const mod of row.modules) {
-        expected += splitModuleFootprintsFor3d(
+        segmentCount += 1;
+        prismSum += splitModuleFootprintsFor3d(
           row,
           mod,
           g.metadata.rackDepthMm,
@@ -203,8 +205,12 @@ describe('build3DModelV2 + projeção isométrica', () => {
         ).length;
       }
     }
-    const audit = audit3dModelCoherence(g, build3DModelV2(g));
-    expect(audit.expectedPrismCount).toBe(expected);
+    const model = build3DModelV2(g);
+    const audit = audit3dModelCoherence(g, model);
+    expect(audit.expectedPrismCount).toBe(prismSum);
+    expect(audit.layoutModuleSegmentCount).toBe(segmentCount);
+    expect(audit.moduleEquivMatchesTotals).toBe(true);
+    expect(audit.moduleEquivFromRows).toBeCloseTo(g.totals.moduleCount, 5);
     expect(audit.ok).toBe(true);
   });
 });

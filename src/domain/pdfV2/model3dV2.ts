@@ -4,8 +4,8 @@ import type { LayoutOrientationV2, Rack3DLine3D, Rack3DModel } from './types';
 const EPS = 0.5;
 /** Espinha entre costas em dupla — alinhado a layoutSolutionV2 / layoutGeometryV2. */
 const SPINE_BACK_TO_BACK_MM = 100;
-/** Tolerância (mm) para reconhecer banda dupla; 3 mm era demasiado e colapsava o 3D num bloco único. */
-const DOUBLE_BAND_TOL_MM = 20;
+/** Tolerância ao comparar profundidade de cada costa com `rackDepthMm` (mm). */
+const DOUBLE_DEPTH_MATCH_TOL_MM = 80;
 
 function pushLine(
   lines: Rack3DLine3D[],
@@ -31,6 +31,9 @@ export type ModuleFootprint3d = { x0: number; y0: number; x1: number; y1: number
  * Dupla costas em planta: um retângulo por módulo cobre 2×prof. + espinha.
  * Em 3D geramos **duas** pegadas separadas pela espinha (sem volume contínuo entre costas).
  *
+ * O corte usa a pegada real (c0/c1) e `rackDepthMm`, não só `footprintTransversalMm`,
+ * para evitar colapsar num único prisma por tolerâncias apertadas.
+ *
  * Exportado para testes e {@link audit3dModelCoherence}.
  */
 export function splitModuleFootprintsFor3d(
@@ -44,26 +47,39 @@ export function splitModuleFootprintsFor3d(
     return [fp];
   }
 
-  const expectedBand = 2 * rackDepthMm + SPINE_BACK_TO_BACK_MM;
-  const tv = mod.footprintTransversalMm;
-  if (Math.abs(tv - expectedBand) > DOUBLE_BAND_TOL_MM) {
-    return [fp];
-  }
+  const split = trySplitBackToBackFootprint(fp, rackDepthMm, layoutOrientation);
+  return split ?? [fp];
+}
 
+/**
+ * Corta a pegada em duas costas + espinha quando a profundidade transversal bate com
+ * `2×rackDepthMm + espinha` (com tolerância nas duas faces).
+ */
+function trySplitBackToBackFootprint(
+  fp: ModuleFootprint3d,
+  rackDepthMm: number,
+  layoutOrientation: LayoutOrientationV2
+): ModuleFootprint3d[] | null {
   const xLo = Math.min(fp.x0, fp.x1);
   const xHi = Math.max(fp.x0, fp.x1);
   const yLo = Math.min(fp.y0, fp.y1);
   const yHi = Math.max(fp.y0, fp.y1);
 
+  const tol = Math.max(DOUBLE_DEPTH_MATCH_TOL_MM, 0.04 * rackDepthMm);
+
   if (layoutOrientation === 'along_length') {
-    const crossSpan = yHi - yLo;
-    if (Math.abs(crossSpan - expectedBand) > DOUBLE_BAND_TOL_MM) {
-      return [fp];
-    }
     const ySplitFront = yLo + rackDepthMm;
     const ySplitBack = ySplitFront + SPINE_BACK_TO_BACK_MM;
-    if (Math.abs(yHi - (ySplitBack + rackDepthMm)) > DOUBLE_BAND_TOL_MM) {
-      return [fp];
+    const frontDepth = ySplitFront - yLo;
+    const backDepth = yHi - ySplitBack;
+    if (frontDepth <= EPS || backDepth <= EPS) {
+      return null;
+    }
+    if (Math.abs(frontDepth - rackDepthMm) > tol) {
+      return null;
+    }
+    if (Math.abs(backDepth - rackDepthMm) > tol) {
+      return null;
     }
     return [
       { x0: xLo, x1: xHi, y0: yLo, y1: ySplitFront },
@@ -71,19 +87,45 @@ export function splitModuleFootprintsFor3d(
     ];
   }
 
-  const crossSpan = xHi - xLo;
-  if (Math.abs(crossSpan - expectedBand) > DOUBLE_BAND_TOL_MM) {
-    return [fp];
-  }
   const xSplitFront = xLo + rackDepthMm;
   const xSplitBack = xSplitFront + SPINE_BACK_TO_BACK_MM;
-  if (Math.abs(xHi - (xSplitBack + rackDepthMm)) > DOUBLE_BAND_TOL_MM) {
-    return [fp];
+  const frontDepth = xSplitFront - xLo;
+  const backDepth = xHi - xSplitBack;
+  if (frontDepth <= EPS || backDepth <= EPS) {
+    return null;
+  }
+  if (Math.abs(frontDepth - rackDepthMm) > tol) {
+    return null;
+  }
+  if (Math.abs(backDepth - rackDepthMm) > tol) {
+    return null;
   }
   return [
     { x0: xLo, x1: xSplitFront, y0: yLo, y1: yHi },
     { x0: xSplitBack, x1: xHi, y0: yLo, y1: yHi },
   ];
+}
+
+/** Remove segmentos coincidentes (mesmos extremos) para arestas partilhadas entre módulos. */
+function dedupeWireframeLines(lines: Rack3DLine3D[]): Rack3DLine3D[] {
+  const seen = new Set<string>();
+  const out: Rack3DLine3D[] = [];
+  const r = (n: number) => Math.round(n * 10) / 10;
+  for (const ln of lines) {
+    const a = [r(ln.x1), r(ln.y1), r(ln.z1), r(ln.x2), r(ln.y2), r(ln.z2)].join(
+      ','
+    );
+    const b = [r(ln.x2), r(ln.y2), r(ln.z2), r(ln.x1), r(ln.y1), r(ln.z1)].join(
+      ','
+    );
+    const key = `${ln.kind}|${a < b ? a : b}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    out.push(ln);
+  }
+  return out;
 }
 
 /** Contorno no piso (Z) da faixa da espinha entre duas pegadas de costa. */
@@ -200,8 +242,9 @@ function maxUprightHeightAndTiers(geometry: LayoutGeometry): {
  * Cada módulo usa as cotas verticais de {@link RackModule.beamGeometry}.
  * Dupla costas: dois prismas por módulo + contorno da espinha ao nível do piso.
  *
- * Montantes são deduplicados **por módulo** (não globalmente), para manter arestas
- * visíveis entre módulos adjacentes ao longo do vão.
+ * Montantes são deduplicados **por prisma** (cantos do retângulo); no fim,
+ * {@link dedupeWireframeLines} remove arestas coincidentes entre módulos adjacentes
+ * (mesmo segmento 3D), alinhando o wireframe à planta sem linhas duplas sobrepostas.
  */
 export function build3DModelV2(geometry: LayoutGeometry): Rack3DModel {
   const { uprightHeightMm: H, tiers: levels } =
@@ -247,10 +290,12 @@ export function build3DModelV2(geometry: LayoutGeometry): Rack3DModel {
     }
   }
 
+  const linesDeduped = dedupeWireframeLines(lines);
+
   return {
     warehouse: { lengthMm: L, widthMm: W },
     uprightHeightMm: H,
     levels,
-    lines,
+    lines: linesDeduped,
   };
 }
