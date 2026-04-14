@@ -187,10 +187,11 @@
   </div>
 
   <script>
-    /* Must match WEBHOOK_SECRET when starting the server (e.g. WEBHOOK_SECRET=dev-webhook-secret npm run dev). */
-    const WEBHOOK_SECRET = 'dev-webhook-secret';
+    /* Local: igual ao WEBHOOK_SECRET no .env. Produção (Vercel): npm run build injeta o valor das env vars. */
+    const WEBHOOK_SECRET = 'd184805abc64e12c2211b08b4e544f59ac7dcf136b7f3095a59db06ca1bffdda';
     const PHONE = '5511999999999';
     const API_URL = window.location.origin;
+    const WEBHOOK_URL = `${API_URL}/webhook`;
 
     const messagesDiv = document.getElementById('messages');
     const textInput = document.getElementById('textInput');
@@ -265,6 +266,20 @@
       sendMessage(null, buttonId);
     }
 
+    async function parseJsonSafe(response) {
+      const ct = response.headers.get('content-type') || '';
+      if (!ct.includes('application/json')) {
+        const t = await response.text();
+        throw new Error(
+          response.status +
+            ' — resposta não é JSON (' +
+            (t ? t.slice(0, 120) : 'corpo vazio') +
+            ')'
+        );
+      }
+      return response.json();
+    }
+
     async function sendMessage(text, buttonId = null) {
       const payload = {
         from: PHONE,
@@ -280,7 +295,7 @@
       textInput.disabled = true;
 
       try {
-        const response = await fetch(`${API_URL}/webhook`, {
+        const response = await fetch(WEBHOOK_URL, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -289,8 +304,28 @@
           body: JSON.stringify(payload),
         });
 
-        const data = await response.json();
-        
+        if (response.status === 401) {
+          addMessage(
+            '❌ 401: WEBHOOK_SECRET não coincide com o servidor. Em produção define WEBHOOK_SECRET na Vercel e faz redeploy (o build injeta no HTML).',
+            false
+          );
+          return;
+        }
+
+        if (!response.ok) {
+          const errText = await response.text();
+          addMessage(
+            '❌ Erro HTTP ' +
+              response.status +
+              ': ' +
+              (errText ? errText.slice(0, 200) : 'sem corpo'),
+            false
+          );
+          return;
+        }
+
+        const data = await parseJsonSafe(response);
+
         if (text) {
           addMessage(text, true);
         } else if (buttonId) {
@@ -309,7 +344,10 @@
         }
       } catch (error) {
         console.error('Error:', error);
-        addMessage('❌ Erro ao enviar mensagem', false);
+        addMessage(
+          '❌ Falha ao contactar /webhook: ' + (error && error.message ? error.message : String(error)),
+          false
+        );
       } finally {
         sendButton.disabled = false;
         textInput.disabled = false;
@@ -332,7 +370,7 @@
       textInput.disabled = true;
 
       try {
-        const response = await fetch(`${API_URL}/webhook`, {
+        const response = await fetch(WEBHOOK_URL, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -341,7 +379,24 @@
           body: JSON.stringify(payload),
         });
 
-        const data = await response.json();
+        if (response.status === 401) {
+          addMessage(
+            '❌ 401: WEBHOOK_SECRET incorreto (Vercel env + rebuild).',
+            false
+          );
+          return;
+        }
+
+        if (!response.ok) {
+          const errText = await response.text();
+          addMessage(
+            '❌ HTTP ' + response.status + ': ' + (errText ? errText.slice(0, 200) : ''),
+            false
+          );
+          return;
+        }
+
+        const data = await parseJsonSafe(response);
         addMessage('📷 [Imagem enviada]', true);
 
         renderWebhookMessages(data.messages);
@@ -356,7 +411,10 @@
         }
       } catch (error) {
         console.error('Error:', error);
-        addMessage('❌ Erro ao enviar imagem', false);
+        addMessage(
+          '❌ Imagem: ' + (error && error.message ? error.message : String(error)),
+          false
+        );
       } finally {
         sendButton.disabled = false;
         imageButton.disabled = false;

@@ -9,3 +9,5 @@ coverage/
 *~
 storage/
 data/
+# Gerado por scripts/sync-simulator-static.cjs (cópia de public/ + secret de build)
+/simulator.html

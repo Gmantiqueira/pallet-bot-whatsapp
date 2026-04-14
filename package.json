@@ -4,7 +4,7 @@
   "description": "Bot de WhatsApp para Projeto Porta-Paletes baseado em state machine",
   "main": "dist/server.js",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node scripts/sync-simulator-static.cjs",
     "start": "node dist/server.js",
     "dev": "tsx watch src/server.ts",
     "vercel:dev": "npx vercel dev",
