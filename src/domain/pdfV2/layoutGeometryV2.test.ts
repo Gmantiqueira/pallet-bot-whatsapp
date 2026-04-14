@@ -1,6 +1,7 @@
 import { buildLayoutSolutionV2 } from './layoutSolutionV2';
 import { tunnelActiveStorageLevelsFromGlobal } from './elevationLevelGeometryV2';
 import {
+  assertLayoutSolutionDoubleRowBilateralAccess,
   buildLayoutGeometry,
   doubleRowTransverseGapsMm,
   LayoutGeometryValidationError,
@@ -160,6 +161,25 @@ describe('buildLayoutGeometry + validateLayoutGeometry', () => {
       ),
     };
     expect(layoutSolutionPassesOperationalAccess(bad)).toBe(false);
+  });
+
+  it('assertLayoutSolutionDoubleRowBilateralAccess: dupla sem bilateral → erro', () => {
+    const a: ProjectAnswersV2 = {
+      ...minimal(),
+      lineStrategy: 'APENAS_DUPLOS',
+    };
+    const sol = buildLayoutSolutionV2(a);
+    const r0 = sol.rows[0]!;
+    const d = r0.y1 - r0.y0;
+    const bad = {
+      ...sol,
+      rows: sol.rows.map((r, i) =>
+        i === 0 ? { ...r, y0: 0, y1: d } : r
+      ),
+    };
+    expect(() => assertLayoutSolutionDoubleRowBilateralAccess(bad)).toThrow(
+      LayoutGeometryValidationError
+    );
   });
 
   it('validateLayoutGeometry falha se montante normal ≠ 75 mm', () => {

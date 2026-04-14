@@ -13,7 +13,11 @@ import {
   shouldReserveCrossPassageForSpan,
   type TunnelSpanPlacement,
 } from './tunnelBeamSpan';
-import { layoutSolutionPassesOperationalAccess } from './layoutGeometryV2';
+import {
+  assertLayoutSolutionDoubleRowBilateralAccess,
+  layoutSolutionPassesOperationalAccess,
+  OPERATIONAL_ACCESS_TOL_MM,
+} from './layoutGeometryV2';
 import type {
   CirculationZone,
   LayoutOrientationV2,
@@ -341,7 +345,26 @@ function fillCrossZone(
     depthMode,
     corridorMm
   );
-  const n = maxRowsInZone(innerLen, bandDepth, corridorMm);
+  let n = maxRowsInZone(innerLen, bandDepth, corridorMm);
+  /**
+   * Dupla costas: além de n·banda + (n−1)·cor ≤ faixa interior, o remanescente após a última
+   * fileira tem de ser ≥ corredor (face exterior + circulação até à parede). Caso contrário
+   * reduz-se n até ser seguro (evita “só um lado” com faixa residual a fingir corredor).
+   */
+  if (depthMode === 'double' && n > 0) {
+    const g = Math.max(0, corridorMm);
+    const tol = OPERATIONAL_ACCESS_TOL_MM;
+    while (n > 0) {
+      const usedEnd =
+        zone.z0 +
+        leadingG +
+        n * bandDepth +
+        Math.max(0, n - 1) * corridorMm;
+      const remainder = zone.z1 - usedEnd;
+      if (remainder + tol >= g) break;
+      n -= 1;
+    }
+  }
   let y = zone.z0 + leadingG;
 
   const rows: RowBandCross[] = [];
@@ -919,7 +942,7 @@ function buildLayoutSolutionV2Core(
     hasGroundLevel
   );
 
-  return {
+  const sol: LayoutSolutionV2 = {
     warehouse: { lengthMm, widthMm },
     orientation,
     rackDepthMode: depthMode,
@@ -958,18 +981,14 @@ function buildLayoutSolutionV2Core(
       ),
     },
   };
+  assertLayoutSolutionDoubleRowBilateralAccess(sol);
+  return sol;
 }
 
-/**
- * Escolhe a melhor combinação por capacidade real (lexicográfica, ver {@link layoutSolutionScoreTuple}).
- *
- * `MELHOR_LAYOUT` avalia até **24** variantes (orientação × profundidade × posição do vão × meio módulo),
- * com túnel apenas se `answers.hasTunnel` e níveis ≥ 2, com a mesma geometria que o PDF.
- */
-export function buildLayoutSolutionV2(
-  answers: BuildLayoutSolutionV2Input
-): LayoutSolutionV2 {
-  const candidates = layoutSearchCandidates(answers);
+function pickBestLayoutSolution(
+  answers: BuildLayoutSolutionV2Input,
+  candidates: LayoutCandidate[]
+): LayoutSolutionV2 | null {
   let best: LayoutSolutionV2 | null = null;
   let bestScore: readonly number[] | null = null;
 
@@ -997,13 +1016,41 @@ export function buildLayoutSolutionV2(
       bestScore = sc;
     }
   }
+  return best;
+}
+
+/**
+ * Escolhe a melhor combinação por capacidade real (lexicográfica, ver {@link layoutSolutionScoreTuple}).
+ *
+ * `MELHOR_LAYOUT` avalia até **24** variantes (orientação × profundidade × posição do vão × meio módulo),
+ * com túnel apenas se `answers.hasTunnel` e níveis ≥ 2, com a mesma geometria que o PDF.
+ *
+ * `APENAS_DUPLOS`: se não couber dupla com corredor bilateral, tenta-se **fileira simples**
+ * (mesmas orientações) antes de falhar.
+ */
+export function buildLayoutSolutionV2(
+  answers: BuildLayoutSolutionV2Input
+): LayoutSolutionV2 {
+  const candidates = layoutSearchCandidates(answers);
+  let best = pickBestLayoutSolution(answers, candidates);
+
+  if (!best && answers.lineStrategy === 'APENAS_DUPLOS') {
+    const tunnelFrom = answers.hasTunnel === true;
+    const fallback: LayoutCandidate[] = (
+      ['along_length', 'along_width'] as const
+    ).map(orientation => ({
+      orientation,
+      depthMode: 'single' as const,
+      hasTunnel: tunnelFrom,
+    }));
+    best = pickBestLayoutSolution(answers, fallback);
+  }
 
   if (!best) {
     throw new Error(
       'layoutSolutionV2: nenhum candidato com acesso operacional válido ' +
-        '(ex.: fileira dupla exige corredor bilateral ≥ corredor declarado em ambos os lados ' +
-        'do eixo transversal — alargue o compartimento, reduza corredor/profundidade, ou use ' +
-        'fileira simples / estratégia MELHOR_LAYOUT).'
+        '(fileira dupla exige corredor bilateral ≥ corredor declarado em ambos os lados no eixo transversal; ' +
+        'alargue o compartimento, reduza corredor ou profundidade de posição, ou use estratégia MELHOR_LAYOUT).'
     );
   }
   return best;

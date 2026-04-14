@@ -39,6 +39,20 @@ describe('buildLayoutSolutionV2', () => {
     expect(s.rows[0].kind).toBe('double');
   });
 
+  it('APENAS_DUPLOS: se não couber dupla com corredor bilateral, usa fileira simples', () => {
+    const a: ProjectAnswersV2 = {
+      ...base(),
+      lineStrategy: 'APENAS_DUPLOS',
+      lengthMm: 6000,
+      widthMm: 6000,
+      corridorMm: 3000,
+      moduleDepthMm: 1000,
+    };
+    const s = buildLayoutSolutionV2(a);
+    expect(s.rackDepthMode).toBe('single');
+    expect(s.rows.length).toBeGreaterThanOrEqual(1);
+  });
+
   it('MELHOR_LAYOUT: compara candidatos (orientação × profundidade × túnel) e maximiza posições', () => {
     const s = buildLayoutSolutionV2(base());
     expect(s.totals.positions).toBeGreaterThan(0);

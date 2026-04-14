@@ -951,6 +951,23 @@ export function layoutSolutionPassesOperationalAccess(
   return true;
 }
 
+/**
+ * Garantia de programação defensiva: fileira dupla **sempre** com acesso bilateral
+ * (não encostar à parede; corredor ≥ declarado em ambos os lados no eixo transversal).
+ * Usar no solver após construir {@link LayoutSolutionV2}.
+ */
+export function assertLayoutSolutionDoubleRowBilateralAccess(
+  sol: LayoutSolutionV2
+): void {
+  if (sol.rackDepthMode !== 'double') return;
+  if (sol.rows.length === 0) return;
+  if (!layoutSolutionPassesOperationalAccess(sol)) {
+    throw new LayoutGeometryValidationError(
+      'Fileira dupla: layout sem corredor operacional bilateral mínimo (ambos os lados ≥ corredor declarado).'
+    );
+  }
+}
+
 /** Primeiro módulo túnel, se existir. */
 export function findTunnelModuleGeometry(
   geo: LayoutGeometry
