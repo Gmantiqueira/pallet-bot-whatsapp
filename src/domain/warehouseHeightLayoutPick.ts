@@ -4,7 +4,12 @@
  * perfil por ordenação interna (evita “sempre o mesmo layout” para entradas próximas).
  */
 
-import { MIN_LEVEL_GAP_MM, MAX_LEVEL_GAP_MM } from './conversationHelpers';
+import {
+  MAX_LEVELS,
+  MAX_LEVEL_GAP_MM,
+  MIN_LEVEL_GAP_MM,
+  MIN_LEVELS,
+} from './conversationHelpers';
 import {
   DEFAULT_MODULE_DEPTH_MM,
   DEFAULT_MODULE_WIDTH_MM,
@@ -31,13 +36,19 @@ function clampGapMm(g: number): number {
   return Math.max(400, Math.min(MAX_LEVEL_GAP_MM, g));
 }
 
-/** Variações de espaçamento mínimo entre eixos (mm) em torno do valor declarado. */
+/**
+ * Variações de espaçamento mínimo entre eixos (mm): degraus absolutos + frações do valor base,
+ * para o mesmo pé-direito produzir perfis distintos (níveis × altura de montante × layout).
+ */
 function gapVariantsMm(baseGap: number): number[] {
   const b = clampGapMm(baseGap);
-  const deltas = [-100, -50, 0, 50, 100];
   const out = new Set<number>();
-  for (const d of deltas) {
+  const absDeltas = [-300, -250, -200, -150, -100, -50, 0, 50, 100, 150, 200, 250, 300];
+  for (const d of absDeltas) {
     out.add(clampGapMm(b + d));
+  }
+  for (const frac of [-0.2, -0.15, -0.1, -0.05, 0, 0.05, 0.1, 0.15, 0.2]) {
+    out.add(clampGapMm(Math.round(b * (1 + frac))));
   }
   return [...out].sort((x, y) => x - y);
 }
@@ -148,23 +159,106 @@ function scoreTuple(
   return [positions, heightUtilization, meanGapMm];
 }
 
-function compareTuples(
-  a: readonly [number, number, number],
-  b: readonly [number, number, number]
+/**
+ * Compara dois scores de escolha global: posições primeiro; se diferença relativa ≤ 1%,
+ * desempata por aproveitamento de altura e depois vão médio (inputs próximos podem assim
+ * divergir no perfil escolhido).
+ * Retorno > 0 ⇒ `candidate` é melhor que `reference`.
+ */
+export function compareWarehouseLayoutPickScores(
+  candidate: readonly [number, number, number],
+  reference: readonly [number, number, number] | null
 ): number {
-  for (let i = 0; i < 3; i++) {
-    const d = b[i]! - a[i]!;
-    if (Math.abs(d) > EPS) return d > 0 ? 1 : -1;
+  if (!reference) return 1;
+  const [pc, hc, mc] = candidate;
+  const [pr, hr, mr] = reference;
+  const denom = Math.max(pc, pr, 1);
+  const rel = Math.abs(pc - pr) / denom;
+  if (rel <= 0.01) {
+    if (Math.abs(hc - hr) > 1e-9) return hc - hr;
+    if (Math.abs(mc - mr) > EPS) return mc - mr;
+    if (Math.abs(pc - pr) > EPS) return pc - pr;
+    return 0;
   }
+  if (Math.abs(pc - pr) > EPS) return pc - pr;
+  if (Math.abs(hc - hr) > 1e-9) return hc - hr;
+  if (Math.abs(mc - mr) > EPS) return mc - mr;
   return 0;
 }
 
-const MAX_CANDIDATES_PER_GAP = 8;
-const MAX_TOTAL_EVALUATIONS = 40;
+const TOP_PROFILE_SLICE_PER_GAP = 28;
+
+/** Melhor perfil (altura × vão) para um dado número de níveis estruturais, a um gap fixo. */
+function bestProfileForStructuralLevels(
+  feasible: WarehouseRackPickWithGap[],
+  levels: number
+): WarehouseRackPickWithGap | undefined {
+  const sub = feasible.filter(f => f.levels === levels);
+  if (sub.length === 0) return undefined;
+  sub.sort(sortRackCandidates);
+  return sub[0];
+}
 
 /**
- * Enumera perfis admissíveis com vários espaçamentos, avalia com {@link buildLayoutSolutionV2}
- * e devolve o melhor por: posições totais → aproveitamento de altura → vão médio entre eixos.
+ * Conjunto rico: topo global por ordenação de perfil + **pelo menos uma** combinação por L∈[1,12]
+ * quando existe solução admissível — evita avaliar só os mesmos 8 perfis por gap.
+ */
+function stratifiedCandidatesForGap(
+  feasible: WarehouseRackPickWithGap[]
+): WarehouseRackPickWithGap[] {
+  if (feasible.length === 0) return [];
+  feasible.sort(sortRackCandidates);
+  const out: WarehouseRackPickWithGap[] = [];
+  for (const f of feasible.slice(0, TOP_PROFILE_SLICE_PER_GAP)) {
+    out.push(f);
+  }
+  for (let L = MIN_LEVELS; L <= MAX_LEVELS; L++) {
+    const pick = bestProfileForStructuralLevels(feasible, L);
+    if (pick) out.push(pick);
+  }
+  return out;
+}
+
+function dedupeWarehouseCandidates(
+  pool: WarehouseRackPickWithGap[]
+): WarehouseRackPickWithGap[] {
+  const seen = new Set<string>();
+  const unique: WarehouseRackPickWithGap[] = [];
+  for (const p of pool) {
+    const key = `${p.levels}|${p.alturaFinalMm}|${p.minGapBetweenConsecutiveBeamsMm}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(p);
+  }
+  return unique;
+}
+
+/** Prioriza avaliações mais “distantes” no espaço níveis × gap antes de variantes quase iguais. */
+function orderCandidatesForLayoutEvaluation(
+  cands: WarehouseRackPickWithGap[]
+): WarehouseRackPickWithGap[] {
+  return [...cands].sort((a, b) => {
+    if (b.levels !== a.levels) return b.levels - a.levels;
+    if (
+      b.minGapBetweenConsecutiveBeamsMm !== a.minGapBetweenConsecutiveBeamsMm
+    ) {
+      return (
+        b.minGapBetweenConsecutiveBeamsMm - a.minGapBetweenConsecutiveBeamsMm
+      );
+    }
+    return b.heightUtilization - a.heightUtilization;
+  });
+}
+
+const MAX_TOTAL_EVALUATIONS = 120;
+
+/**
+ * Enumera perfis admissíveis com **vários** espaçamentos (absolutos + % do valor base), para cada gap
+ * inclui o topo por perfil **e** o melhor (altura × vão) por cada número de níveis 1…12, depois
+ * avalia com {@link buildLayoutSolutionV2} até 120 combinações distintas (teto configurável no código).
+ *
+ * Escolha global: posições totais → aproveitamento de altura → vão médio; empates de capacidade
+ * (~1%) desempatam por uso de altura ({@link compareWarehouseLayoutPickScores}).
  */
 export function pickOptimalWarehouseRackWithLayout(
   answers: Record<string, unknown>
@@ -195,24 +289,19 @@ export function pickOptimalWarehouseRackWithLayout(
       firstLevelOnGround,
       loadHeightMm,
     });
-    feasible.sort(sortRackCandidates);
-    pool.push(...feasible.slice(0, MAX_CANDIDATES_PER_GAP));
+    pool.push(...stratifiedCandidatesForGap(feasible));
   }
 
-  const seen = new Set<string>();
-  const unique: WarehouseRackPickWithGap[] = [];
-  for (const p of pool) {
-    const key = `${p.levels}|${p.alturaFinalMm}|${p.minGapBetweenConsecutiveBeamsMm}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    unique.push(p);
-    if (unique.length >= MAX_TOTAL_EVALUATIONS) break;
-  }
+  const unique = dedupeWarehouseCandidates(pool);
+  const evalList = orderCandidatesForLayoutEvaluation(unique).slice(
+    0,
+    MAX_TOTAL_EVALUATIONS
+  );
 
   let bestPick: WarehouseRackPickWithGap | null = null;
   let bestScore: readonly [number, number, number] | null = null;
 
-  for (const cand of unique) {
+  for (const cand of evalList) {
     const v2 = projectAnswersForWarehouseCandidate(answers, cand);
     if (!v2) continue;
     let positions: number;
@@ -223,7 +312,7 @@ export function pickOptimalWarehouseRackWithLayout(
       continue;
     }
     const sc = scoreTuple(positions, cand.heightUtilization, cand.meanGapMm);
-    if (!bestScore || compareTuples(sc, bestScore) > 0) {
+    if (compareWarehouseLayoutPickScores(sc, bestScore) > 0) {
       bestScore = sc;
       bestPick = cand;
     }
