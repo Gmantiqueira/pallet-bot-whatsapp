@@ -248,6 +248,120 @@ function scoreTupleCompare(
 }
 
 /**
+ * Ganho relativo de posições (%) do layout com meio(s) módulo(s) face à variante só com módulos completos.
+ * Valores ≤ 0 significam empate ou que a variante completa já é melhor em capacidade.
+ */
+export function halfModuleRelativePositionGainPercent(
+  positionsWithHalf: number,
+  positionsFullModulesOnly: number
+): number {
+  const b = Math.max(1, positionsFullModulesOnly);
+  return ((positionsWithHalf - positionsFullModulesOnly) / b) * 100;
+}
+
+/**
+ * Limiar mínimo de ganho de **posições** (em %) para manter meio(s) módulo(s) no layout final.
+ * Abaixo disto, prefere-se só módulos completos (menos “estranho” para o cliente), desde que a
+ * variante sem meio módulo seja válida (acesso operacional).
+ */
+export const HALF_MODULE_MIN_RELATIVE_GAIN_PERCENT = 4;
+
+function solutionUsesHalfModule(s: LayoutSolutionV2): boolean {
+  return s.rows.some(row => row.modules.some(m => m.type === 'half'));
+}
+
+/**
+ * Replica os parâmetros efetivos da solução escolhida (túnel / posição do vão) para construir a
+ * variante só com módulos completos e comparar capacidade e simetria.
+ */
+function mergedAnswersReplicatingSolution(
+  base: BuildLayoutSolutionV2Input,
+  best: LayoutSolutionV2,
+  halfModuleOptimization: boolean
+): BuildLayoutSolutionV2Input {
+  return {
+    ...base,
+    hasTunnel: best.metadata.hasTunnel,
+    halfModuleOptimization,
+    ...(typeof base.tunnelOffsetMm !== 'number' &&
+    best.metadata.tunnelPosition !== undefined
+      ? { tunnelPosition: best.metadata.tunnelPosition }
+      : {}),
+  };
+}
+
+/**
+ * Após escolher o melhor candidato: se ele usa meio módulo mas o ganho de posições face à **mesma**
+ * configuração (orientação, profundidade, túnel, posição do vão) sem meio módulo for inferior a
+ * {@link HALF_MODULE_MIN_RELATIVE_GAIN_PERCENT}, devolve a variante só com módulos completos.
+ *
+ * Critério principal: posições. Desempates implícitos: a variante sem meio tem variância entre
+ * fileiras mais previsível (sem segmentos 0,5) e menos complexidade visual.
+ */
+function applyHalfModuleLowGainPolicy(
+  best: LayoutSolutionV2,
+  answers: BuildLayoutSolutionV2Input
+): LayoutSolutionV2 {
+  if (!solutionUsesHalfModule(best)) {
+    return best;
+  }
+
+  const mergedNoHalf = mergedAnswersReplicatingSolution(
+    answers,
+    best,
+    false
+  );
+  let alt: LayoutSolutionV2;
+  try {
+    alt = buildLayoutSolutionV2Core(
+      mergedNoHalf,
+      best.orientation,
+      best.rackDepthMode
+    );
+  } catch (e) {
+    if (e instanceof DoubleLineAccessValidationError) return best;
+    throw e;
+  }
+  if (!layoutSolutionPassesOperationalAccess(alt)) {
+    return best;
+  }
+
+  const posBest = best.totals.positions;
+  const posAlt = alt.totals.positions;
+
+  const gainPct =
+    posBest > posAlt
+      ? halfModuleRelativePositionGainPercent(posBest, posAlt)
+      : 0;
+
+  if (
+    posBest > posAlt &&
+    gainPct >= HALF_MODULE_MIN_RELATIVE_GAIN_PERCENT
+  ) {
+    return best;
+  }
+
+  const varBest = rowModuleEquivVariance(best);
+  const varAlt = rowModuleEquivVariance(alt);
+  let reason: string;
+  if (posAlt > posBest) {
+    reason = `Meio módulo omitido: a variante só com módulos completos tem mais posições (${posAlt} > ${posBest}).`;
+  } else if (posAlt === posBest) {
+    reason = `Meio módulo omitido: mesma capacidade (${posBest} posições) — preferência por só módulos completos (variância entre fileiras ${varAlt.toFixed(2)} vs ${varBest.toFixed(2)}).`;
+  } else {
+    reason = `Meio módulo omitido: ganho de posições com meio módulo (${gainPct.toFixed(1)}%, ${posBest} vs ${posAlt}) abaixo do mínimo ${HALF_MODULE_MIN_RELATIVE_GAIN_PERCENT}% — preferência por só módulos completos.`;
+  }
+
+  return {
+    ...alt,
+    metadata: {
+      ...alt.metadata,
+      halfModuleRejectedReason: reason,
+    },
+  };
+}
+
+/**
  * Pé livre mínimo sob o 1.º nível de carga no módulo túnel (mm) — passagem de empilhador.
  * Deriva do corredor; não inventa valores fora desta fórmula.
  */
@@ -1028,6 +1142,11 @@ function pickBestLayoutSolution(
  * `MELHOR_LAYOUT` avalia até **24** variantes (orientação × profundidade × posição do vão × meio módulo),
  * com túnel apenas se `answers.hasTunnel` e níveis ≥ 2, com a mesma geometria que o PDF.
  *
+ * Depois do melhor candidato, aplica-se {@link applyHalfModuleLowGainPolicy}: se o resultado
+ * contiver meio(s) módulo(s) mas o ganho de posições face à mesma configuração só com módulos
+ * completos for inferior a {@link HALF_MODULE_MIN_RELATIVE_GAIN_PERCENT}%, substitui-se pela
+ * variante sem meio módulo (menos layouts “estranhos” para o cliente).
+ *
  * `APENAS_DUPLOS`: **sem fallback silencioso** para fileira simples — se não couber dupla com
  * {@link validateDoubleLineAccess}, o layout falha explicitamente (ou use `MELHOR_LAYOUT` / `APENAS_SIMPLES`).
  */
@@ -1049,7 +1168,7 @@ export function buildLayoutSolutionV2(
         dupOnly
     );
   }
-  return best;
+  return applyHalfModuleLowGainPolicy(best, answers);
 }
 
 function rowRect(

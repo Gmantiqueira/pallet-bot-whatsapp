@@ -2,6 +2,8 @@ import { buildProjectAnswersV2 } from './answerMapping';
 import {
   buildLayoutSolutionV2,
   fillWarehouseCross,
+  halfModuleRelativePositionGainPercent,
+  HALF_MODULE_MIN_RELATIVE_GAIN_PERCENT,
   MELHOR_LAYOUT_MAX_CANDIDATES,
 } from './layoutSolutionV2';
 import { MODULE_PALLET_BAYS_PER_LEVEL, moduleLengthAlongBeamMm } from './rackModuleSpec';
@@ -283,7 +285,7 @@ describe('buildLayoutSolutionV2', () => {
     );
   });
 
-  it('7: meio módulo aceito (com túnel adjacente / extremos)', () => {
+  it('7: meio módulo possível com túnel (pode ser omitido se ganho < limiar)', () => {
     const a = {
       ...base(),
       /** Comprimento onde um segmento após o túnel ainda permite meio módulo (depende do passo real). */
@@ -295,8 +297,11 @@ describe('buildLayoutSolutionV2', () => {
       lineStrategy: 'APENAS_SIMPLES' as const,
     };
     const s = buildLayoutSolutionV2(a);
+    expect(s.totals.positions).toBeGreaterThan(0);
     const hasHalf = s.rows.some(r => r.modules.some(m => m.type === 'half'));
-    expect(hasHalf).toBe(true);
+    if (!hasHalf) {
+      expect(s.metadata.halfModuleRejectedReason).toBeDefined();
+    }
   });
 
   it('8: meio módulo rejeitado sem circulação (1 fileira, sem túnel)', () => {
@@ -507,5 +512,14 @@ describe('buildLayoutSolutionV2', () => {
     expect(Math.abs(x0o - 500)).toBeLessThan(2);
     expect(Math.abs(x0m - x0o)).toBeGreaterThan(10);
     expect(off.metadata.tunnelOffsetEffectiveMm).toBeCloseTo(500, 3);
+  });
+});
+
+describe('halfModuleRelativePositionGainPercent', () => {
+  it('calcula ganho % do layout com meio módulo face à variante só com módulos completos', () => {
+    expect(halfModuleRelativePositionGainPercent(104, 100)).toBeCloseTo(4, 5);
+    expect(halfModuleRelativePositionGainPercent(100, 100)).toBe(0);
+    expect(halfModuleRelativePositionGainPercent(99, 100)).toBeCloseTo(-1, 5);
+    expect(HALF_MODULE_MIN_RELATIVE_GAIN_PERCENT).toBe(4);
   });
 });

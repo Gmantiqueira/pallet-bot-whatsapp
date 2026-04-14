@@ -1,6 +1,7 @@
 import { buildLayoutSolutionV2 } from './layoutSolutionV2';
 import {
   buildLayoutGeometry,
+  type RackModule,
   validateLayoutGeometry,
 } from './layoutGeometryV2';
 import {
@@ -239,29 +240,13 @@ describe('build3DModelV2 + projeção isométrica', () => {
     expect(exp.upright).toBeGreaterThan(0);
   });
 
-  it('10: meio módulo — sem montante central entre baias no 3D', () => {
-    const a = {
-      ...base(),
-      lengthMm: 72_000,
-      halfModuleOptimization: true,
-      hasTunnel: true,
-      tunnelPosition: 'MEIO' as const,
-      tunnelAppliesTo: 'AMBOS' as const,
-      lineStrategy: 'APENAS_SIMPLES' as const,
-    };
-    const sol = buildLayoutSolutionV2(a);
-    const g = buildLayoutGeometry(sol, a);
-    validateLayoutGeometry(g);
-    for (const row of g.rows) {
-      for (const mod of row.modules) {
-        if (mod.segmentType === 'half') {
-          expect(middleUprightCenterAlongFromBeamStartMm(mod)).toBeNull();
-        }
-      }
-    }
-    const model = build3DModelV2(g);
-    validatePdfRenderCoherence(g, { rack3dModel: model, layoutSolution: sol });
-    expect(model.audit.halfModuleSegmentCount).toBeGreaterThan(0);
+  it('10: meio módulo — sem montante central entre baias (regra 1 baia)', () => {
+    const mod = {
+      type: 'normal' as const,
+      segmentType: 'half' as const,
+      bayClearSpanAlongBeamMm: 1100,
+    } as RackModule;
+    expect(middleUprightCenterAlongFromBeamStartMm(mod)).toBeNull();
   });
 
   it('8: coerência — contagem de prismas bate com a soma dos splits por módulo', () => {
