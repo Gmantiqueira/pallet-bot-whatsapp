@@ -20,8 +20,14 @@ async function getHandler() {
       return serverless(app.server);
     })();
   }
-  cachedHandler = await pending;
-  return cachedHandler;
+  try {
+    cachedHandler = await pending;
+    return cachedHandler;
+  } catch (err) {
+    pending = undefined;
+    cachedHandler = undefined;
+    throw err;
+  }
 }
 
 module.exports = async (req, res) => {

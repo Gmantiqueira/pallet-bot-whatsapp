@@ -34,7 +34,7 @@ O projeto segue uma arquitetura em camadas (layered architecture) com separaçã
 - **`vercel.json`**: `rewrites` mapeiam `/*` para `/api/$1` (sem duplicar rotas que já começam por `/api`); em `VERCEL=1` um hook repõe o path (headers ou removendo o prefixo `/api`).
 - **`includeFiles`: `public/**`**: o simulador serve `public/index.html` por `fs`; sem isto o ficheiro não entra no bundle serverless na Vercel.
 - **`npm start` / `src/server.ts`**: continuam a servir para VPS ou `docker run` local; não são usados pelo runtime serverless da Vercel.
-- Limites de tempo e CPU aplicam-se às [Vercel Functions](https://vercel.com/docs/functions/limitations) (geração de PDF pode exigir plano com `maxDuration` maior).
+- Limites de tempo e CPU aplicam-se às [Vercel Functions](https://vercel.com/docs/functions/limitations). A geração de PDF + cold start pode ultrapassar 1 minuto; `vercel.json` usa `maxDuration: 300` para não cortar com 504. Se o dashboard do projeto tiver um **Default Max Duration** mais baixo, alinha com isto ou aumenta nas definições.
 
 ## Camadas
 
