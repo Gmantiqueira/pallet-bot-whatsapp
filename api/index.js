@@ -1,5 +1,8 @@
 'use strict';
 
+const Fastify = require('fastify');
+void Fastify;
+
 const serverless = require('serverless-http');
 
 let cachedHandler;
