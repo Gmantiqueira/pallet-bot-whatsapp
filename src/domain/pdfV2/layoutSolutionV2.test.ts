@@ -45,10 +45,25 @@ describe('buildLayoutSolutionV2', () => {
     expect(typeof s.metadata.hasTunnel).toBe('boolean');
   });
 
-  it('MELHOR_LAYOUT: até 48 variantes quando túnel é geometricamente possível (níveis ≥ 2)', () => {
-    expect(MELHOR_LAYOUT_MAX_CANDIDATES).toBe(48);
+  it('MELHOR_LAYOUT: até 24 variantes (túnel só se pedido; posição × meio módulo)', () => {
+    expect(MELHOR_LAYOUT_MAX_CANDIDATES).toBe(24);
     const s = buildLayoutSolutionV2({ ...base(), levels: 4 });
     expect(s.totals.positions).toBeGreaterThan(0);
+  });
+
+  it('MELHOR_LAYOUT com hasTunnel false nunca coloca módulo túnel (não otimizar contra o pedido)', () => {
+    const s = buildLayoutSolutionV2({
+      ...base(),
+      lengthMm: 30_000,
+      widthMm: 30_000,
+      corridorMm: 3000,
+      tunnelPosition: 'MEIO',
+      hasTunnel: false,
+    });
+    expect(s.metadata.hasTunnel).toBe(false);
+    expect(
+      s.rows.every(r => r.modules.every(m => m.variant !== 'tunnel'))
+    ).toBe(true);
   });
 
   it('MELHOR_LAYOUT com 1 nível não inclui túnel (incompatível com validação de geometria)', () => {

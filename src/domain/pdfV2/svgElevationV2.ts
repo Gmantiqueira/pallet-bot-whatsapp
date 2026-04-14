@@ -1135,7 +1135,7 @@ function drawLateral(
 }
 
 /** Escala de cotas / legendas em páginas PDF dedicadas (uma elevação por folha). */
-const ELEV_PAGE_LABEL_SCALE = 1.45;
+const ELEV_PAGE_LABEL_SCALE = 1.58;
 const ELEV_PAGE_W = 1260;
 const ELEV_PAGE_H_FRONT = 1040;
 const ELEV_PAGE_H_LATERAL = 1000;

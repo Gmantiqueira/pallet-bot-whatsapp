@@ -92,15 +92,17 @@ type LayoutCandidate = {
 };
 
 /**
- * Nº máximo de candidatos MELHOR_LAYOUT com variação INICIO/MEIO/FIM: 2×2×2×3×2 = **48**.
- * Com `tunnelOffsetMm` nas respostas (fixo), a variação de posição desliga-se → **16** candidatos.
+ * Nº máximo de candidatos MELHOR_LAYOUT: 2 orientações × 2 profundidades × 1 opção de túnel
+ * (alinhada ao pedido) × 3 posições de vão × 2 meio módulo = **24**.
+ * Com `tunnelOffsetMm` fixo na resposta → **8** (posição deixa de variar).
  */
-export const MELHOR_LAYOUT_MAX_CANDIDATES = 48;
+export const MELHOR_LAYOUT_MAX_CANDIDATES = 24;
 
 /**
  * Enumera combinações para `lineStrategy`:
  * - APENAS_*: 2 (orientação) × modo de profundidade fixo, túnel = respostas.
- * - MELHOR_LAYOUT: orientação × profundidade × túnel × posição do vão (INICIO/MEIO/FIM) × meio módulo (off/on)
+ * - MELHOR_LAYOUT: orientação × profundidade × posição do vão (INICIO/MEIO/FIM) × meio módulo (off/on);
+ *   **túnel só entra na pesquisa se o utilizador pediu túnel** (não otimizar contra a escolha do cliente).
  *   = até {@link MELHOR_LAYOUT_MAX_CANDIDATES} candidatos (não pára no primeiro válido).
  */
 function layoutSearchCandidates(
@@ -136,14 +138,14 @@ function layoutSearchCandidates(
   const structuralLevels = Math.max(1, Math.floor(answers.levels));
   /** Módulo túnel exige níveis ativos < total ({@link validateLayoutGeometry}) — com 1 nível não é válido. */
   const tunnelGeometryAllowed = structuralLevels >= 2;
+  /** Só avalia `hasTunnel: true` quando o pedido e a geometria o permitem; caso contrário só `false`. */
+  const wantsTunnel = tunnelFromAnswers && tunnelGeometryAllowed;
+  const tunnelOptions: readonly boolean[] = wantsTunnel ? [true] : [false];
 
   const out: LayoutCandidate[] = [];
   for (const orientation of orientations) {
     for (const depthMode of ['single', 'double'] as const) {
-      for (const hasTunnel of [false, true] as const) {
-        if (hasTunnel && !tunnelGeometryAllowed) {
-          continue;
-        }
+      for (const hasTunnel of tunnelOptions) {
         for (const tunnelPosition of tunnelPositionSlots) {
           for (const halfModuleOptimization of [false, true] as const) {
             out.push({
@@ -911,8 +913,8 @@ function buildLayoutSolutionV2Core(
 /**
  * Escolhe a melhor combinação por capacidade real (lexicográfica, ver {@link layoutSolutionScoreTuple}).
  *
- * `MELHOR_LAYOUT` avalia até **48** variantes (orientação × profundidade × túnel × posição do vão × meio módulo)
- * com a mesma geometria que o PDF; não para na primeira solução válida.
+ * `MELHOR_LAYOUT` avalia até **24** variantes (orientação × profundidade × posição do vão × meio módulo),
+ * com túnel apenas se `answers.hasTunnel` e níveis ≥ 2, com a mesma geometria que o PDF.
  */
 export function buildLayoutSolutionV2(
   answers: BuildLayoutSolutionV2Input

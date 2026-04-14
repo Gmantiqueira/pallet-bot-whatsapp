@@ -95,11 +95,11 @@ function moduleDisplayFontOpacity(
 ): { fontPx: number; opacity: number; nudgeX: number; nudgeY: number } {
   const minSide = Math.min(s.w, s.h);
   const fromCount =
-    totalModules > 48 ? 10 : totalModules > 32 ? 11.5 : totalModules > 20 ? 13 : totalModules > 12 ? 14.5 : 16;
-  const fromBox = minSide * 0.185;
-  const fontPx = Math.max(8.5, Math.min(fromCount, fromBox));
+    totalModules > 48 ? 12 : totalModules > 32 ? 13.5 : totalModules > 20 ? 15 : totalModules > 12 ? 16.5 : 18;
+  const fromBox = minSide * 0.2;
+  const fontPx = Math.max(10, Math.min(fromCount, fromBox));
   let opacity =
-    totalModules > 45 ? 0.58 : totalModules > 28 ? 0.66 : totalModules > 16 ? 0.72 : 0.78;
+    totalModules > 45 ? 0.62 : totalModules > 28 ? 0.7 : totalModules > 16 ? 0.76 : 0.82;
   if (fontPx < 10) opacity *= 0.94;
   const nudgeY = -Math.min(5, s.h * 0.055);
   const nudgeX = s.w >= s.h ? Math.min(4, s.w * 0.018) : 0;
@@ -123,23 +123,23 @@ function orientationArrowSvg(
   o: FloorPlanModelV2['warehouseOutline'],
   beamAlong: 'x' | 'y'
 ): string {
-  const pad = 12;
-  const gw = 152;
-  const gh = 46;
+  const pad = 10;
+  const gw = 188;
+  const gh = 54;
   const gx = o.x + o.w - gw - pad;
   const gy = o.y + o.h - gh - pad;
   const shaft =
     beamAlong === 'x'
-      ? `<line x1="${gx + 8}" y1="${gy + 30}" x2="${gx + gw - 20}" y2="${gy + 30}" stroke="#334155" stroke-width="1.4"/><polygon points="${gx + gw - 14},${gy + 30} ${gx + gw - 24},${gy + 24} ${gx + gw - 24},${gy + 36}" fill="#334155"/>`
-      : `<line x1="${gx + 30}" y1="${gy + gh - 10}" x2="${gx + 30}" y2="${gy + 12}" stroke="#334155" stroke-width="1.4"/><polygon points="${gx + 30},${gy + 6} ${gx + 24},${gy + 16} ${gx + 36},${gy + 16}" fill="#334155"/>`;
+      ? `<line x1="${gx + 8}" y1="${gy + 36}" x2="${gx + gw - 22}" y2="${gy + 36}" stroke="#334155" stroke-width="1.75"/><polygon points="${gx + gw - 15},${gy + 36} ${gx + gw - 28},${gy + 28} ${gx + gw - 28},${gy + 44}" fill="#334155"/>`
+      : `<line x1="${gx + 34}" y1="${gy + gh - 12}" x2="${gx + 34}" y2="${gy + 14}" stroke="#334155" stroke-width="1.75"/><polygon points="${gx + 34},${gy + 8} ${gx + 26},${gy + 20} ${gx + 42},${gy + 20}" fill="#334155"/>`;
   const sub =
     beamAlong === 'x'
       ? 'Linhas · paralelas ao comprimento do galpão'
       : 'Linhas · paralelas à largura do galpão';
   return `<g>
-    <rect x="${gx}" y="${gy}" width="${gw}" height="${gh}" rx="5" fill="#ffffff" fill-opacity="0.94" stroke="#cbd5e1" stroke-width="0.75"/>
-    <text x="${gx + 8}" y="${gy + 16}" font-size="11px" font-weight="600" fill="#0f172a" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">Sentido de entrada / operação</text>
-    <text x="${gx + 8}" y="${gy + 32}" font-size="9px" fill="#64748b" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">${escapeXml(sub)}</text>
+    <rect x="${gx}" y="${gy}" width="${gw}" height="${gh}" rx="5" fill="#ffffff" fill-opacity="0.94" stroke="#cbd5e1" stroke-width="0.85"/>
+    <text x="${gx + 8}" y="${gy + 19}" font-size="14px" font-weight="600" fill="#0f172a" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">Sentido de entrada / operação</text>
+    <text x="${gx + 8}" y="${gy + 38}" font-size="11px" fill="#64748b" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">${escapeXml(sub)}</text>
     ${shaft}
   </g>`;
 }
@@ -156,13 +156,13 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
   parts.push('<defs>');
   parts.push(`<style>
     .fp-title { font: 700 40px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: ${COL_INK}; letter-spacing: 0.05em; }
-    .fp-sub { font: 500 25px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #4b5563; }
-    .fp-plan-hint { font: 400 13px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #4b5563; }
-    .fp-row-title { font: 700 17px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: ${ELEV_BEAM_EDGE}; stroke: #ffffff; stroke-width: 3.5px; paint-order: stroke fill; stroke-linejoin: round; }
-    .fp-circ-op { font: 800 14px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #0f172a; stroke: #ffffff; stroke-width: 3.5px; paint-order: stroke fill; stroke-linejoin: round; }
-    .fp-circ { font: 600 12px "Helvetica Neue", Helvetica, Arial, sans-serif; }
-    .fp-circ-res { font: 500 10px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #a8a29e; }
-    .fp-dim { font: 600 20px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: ${COL_DIM}; }
+    .fp-sub { font: 500 27px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #4b5563; }
+    .fp-plan-hint { font: 400 15px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #4b5563; }
+    .fp-row-title { font: 700 21px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: ${ELEV_BEAM_EDGE}; stroke: #ffffff; stroke-width: 4px; paint-order: stroke fill; stroke-linejoin: round; }
+    .fp-circ-op { font: 800 17px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #0f172a; stroke: #ffffff; stroke-width: 4px; paint-order: stroke fill; stroke-linejoin: round; }
+    .fp-circ { font: 600 14px "Helvetica Neue", Helvetica, Arial, sans-serif; }
+    .fp-circ-res { font: 500 12px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #a8a29e; }
+    .fp-dim { font: 600 24px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: ${COL_DIM}; }
     .fp-mod-num { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; font-weight: 600; fill: #334155; }
   </style>`);
   parts.push('</defs>');

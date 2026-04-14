@@ -24,7 +24,8 @@ import { ELEV_BEAM_FILL } from './elevationVisualTokens';
 const VB_W = 1360;
 const VB_H = 1900;
 const PAD = 22;
-const HEADER = 50;
+/** Espaço superior sem título duplicado (o PDF traz o cabeçalho da folha). */
+const HEADER = 34;
 const DIM_OUT = 24;
 
 function escapeXml(text: string): string {
@@ -337,23 +338,9 @@ export function buildFloorPlanModelV2(
 
   const labels: FloorPlanLabel[] = [
     {
-      id: 'title',
-      x: VB_W / 2,
-      y: PAD + 24,
-      text: 'PLANTA DE IMPLANTAÇÃO',
-      className: 'fp-title',
-    },
-    {
-      id: 'sub',
-      x: VB_W / 2,
-      y: PAD + 54,
-      text: 'Layout dos módulos, corredores e túnel',
-      className: 'fp-sub',
-    },
-    {
       id: 'sub-dims',
       x: VB_W / 2,
-      y: PAD + 82,
+      y: PAD + 22,
       text: `${formatMm(L)} × ${formatMm(W)}`,
       className: 'fp-sub',
     },
@@ -378,7 +365,7 @@ function planCaptionLabels(geometry: LayoutGeometry): FloorPlanLabel[] {
   const line: FloorPlanLabel = {
     id: 'cap-module-line',
     x: VB_W / 2,
-    y: PAD + 110,
+    y: PAD + 48,
     text: planModuleSingleCaption(geometry),
     className: 'fp-plan-hint',
   };

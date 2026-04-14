@@ -55,4 +55,32 @@ describe('buildElevationModelV2 axis mapping', () => {
     );
     validateElevationAxesAgainstGeometry(model, geo);
   });
+
+  it('caso altura direta baixa sem túnel (fluxo validação 10-direct-height-low): PDF geométrico sem erro', () => {
+    const a: ProjectAnswersV2 = {
+      lengthMm: 12_000,
+      widthMm: 10_000,
+      corridorMm: 3000,
+      moduleDepthMm: 1100,
+      moduleWidthMm: 1100,
+      levels: 2,
+      capacityKg: 1200,
+      lineStrategy: 'MELHOR_LAYOUT',
+      hasTunnel: false,
+      halfModuleOptimization: false,
+      firstLevelOnGround: true,
+      heightMode: 'DIRECT',
+      heightMm: 3840,
+    };
+    const layout = buildLayoutSolutionV2(a);
+    const session = answersToSession(a);
+    const geo = buildLayoutGeometry(layout, session);
+    validateLayoutGeometry(geo);
+    expect(geo.metadata.hasTunnel).toBe(false);
+    expect(geo.totals.tunnelCount).toBe(0);
+
+    const model = buildElevationModelV2(session, geo);
+    expect(model.frontWithTunnel).toBeUndefined();
+    validateElevationAxesAgainstGeometry(model, geo);
+  });
 });

@@ -46,13 +46,13 @@ function drawingRasterPixelSize(): { pxW: number; pxH: number } {
   const pageH = 841.89;
   const usableW = pageW - 2 * MARGIN_PT;
   const pageBottom = pageH - MARGIN_PT;
-  const headerFromTop = 46;
+  const headerFromTop = 38;
   const imgTop = MARGIN_PT + headerFromTop;
-  const imgBottomPad = 14;
+  const imgBottomPad = 10;
   const imgBoxH = pageBottom - imgTop - imgBottomPad;
   return {
     pxW: ptToPx(usableW),
-    pxH: ptToPx(Math.max(96, imgBoxH * 1.06)),
+    pxH: ptToPx(Math.max(96, imgBoxH * 1.14)),
   };
 }
 
@@ -60,8 +60,8 @@ function drawingRasterPixelSize(): { pxW: number; pxH: number } {
 function elevationDrawingRasterPixelSize(): { pxW: number; pxH: number } {
   const base = drawingRasterPixelSize();
   return {
-    pxW: Math.round(base.pxW * 1.1),
-    pxH: Math.round(base.pxH * 1.28),
+    pxW: Math.round(base.pxW * 1.14),
+    pxH: Math.round(base.pxH * 1.34),
   };
 }
 
@@ -259,10 +259,11 @@ export async function renderPdfV2(
   const filename = buildPdfV2Filename(input.project, timestamp);
   const filePath = path.join(storagePath, filename);
 
-  const { pxW, pxH } = drawingRasterPixelSize();
-  const { pxW: elW, pxH: elH } = elevationDrawingRasterPixelSize();
   /** Só páginas de elevação “com túnel” quando o layout tem módulo túnel real (alinhado ao resumo técnico). */
   const hasTunnel = input.layoutGeometry.metadata.hasTunnel === true;
+
+  const { pxW, pxH } = drawingRasterPixelSize();
+  const { pxW: elW, pxH: elH } = elevationDrawingRasterPixelSize();
 
   let floorRaster: { buffer: Buffer; widthPx: number; heightPx: number };
   let elevFrontStdRaster: { buffer: Buffer; widthPx: number; heightPx: number };
@@ -482,16 +483,21 @@ export async function renderPdfV2(
   doc.addPage();
   doc.y = doc.page.margins.top + 6;
   drawCentered('PLANTA DE IMPLANTAÇÃO', {
-    size: 12,
+    size: 13,
     font: 'Helvetica-Bold',
     color: COL_INK,
     moveDown: 0.14,
   });
-  drawCentered('Layout dos módulos, corredores e túnel', {
-    size: 8.5,
-    color: COL_MUTED,
-    moveDown: 0.22,
-  });
+  drawCentered(
+    hasTunnel
+      ? 'Módulos, corredores e zona de túnel'
+      : 'Módulos, corredores e passagens transversais',
+    {
+      size: 9.5,
+      color: COL_MUTED,
+      moveDown: 0.22,
+    }
+  );
   horizontalRule(doc.y + 3, 0.1, COL_RULE);
   doc.moveDown(0.28);
   embedFullWidthDrawing(floorRaster, { bottomPadPt: 8 });
