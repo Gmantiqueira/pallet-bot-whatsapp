@@ -7,6 +7,8 @@ const { getServerlessHandler } = require('./serverlessBootstrap');
  * Vercel may pass req.url without the /webhook segment; Fastify registers POST /webhook.
  */
 module.exports = async (req, res) => {
+  console.log('[api/webhook.js] hit', { method: req.method, url: req.url });
+
   if (process.env.VERCEL) {
     const raw = req.url == null || req.url === '' ? '/' : String(req.url);
     const q = raw.includes('?') ? raw.slice(raw.indexOf('?')) : '';
