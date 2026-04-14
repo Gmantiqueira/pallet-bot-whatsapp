@@ -13,8 +13,12 @@
       "destination": "/simulator.html"
     },
     {
-      "source": "/((?!api(?:\\/|$)).*)",
-      "destination": "/api/$1"
+      "source": "/webhook",
+      "destination": "/api/webhook"
+    },
+    {
+      "source": "/files/:name",
+      "destination": "/api/files/:name"
     }
   ],
   "functions": {
