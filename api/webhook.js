@@ -1,22 +1,48 @@
 'use strict';
 
-const { getServerlessHandler } = require('./serverlessBootstrap');
+let appPromise;
 
-/**
- * Dedicated handler for POST /webhook (rewrite: /webhook → /api/webhook).
- * Vercel may pass req.url without the /webhook segment; Fastify registers POST /webhook.
- */
-module.exports = async (req, res) => {
-  console.log('[api/webhook.js] hit', { method: req.method, url: req.url });
-
-  if (process.env.VERCEL) {
-    const raw = req.url == null || req.url === '' ? '/' : String(req.url);
-    const q = raw.includes('?') ? raw.slice(raw.indexOf('?')) : '';
-    req.url = '/webhook' + q;
+async function getApp() {
+  if (!appPromise) {
+    appPromise = (async () => {
+      const { createApp } = require('../dist/fastifyApp');
+      const app = await createApp();
+      await app.ready();
+      return app;
+    })();
   }
-  console.log('[diag][api-webhook] before-getServerlessHandler');
-  const handler = await getServerlessHandler();
-  console.log('[diag][api-webhook] after-getServerlessHandler');
-  console.log('[diag][api-webhook] before-handler-invoke');
-  return handler(req, res);
+  return appPromise;
+}
+
+module.exports = async (req, res) => {
+  console.log('[api/webhook] raw', { method: req.method, url: req.url });
+
+  const app = await getApp();
+
+  // força rota correta
+  const url = '/webhook';
+
+  const chunks = [];
+  for await (const chunk of req) {
+    chunks.push(chunk);
+  }
+
+  const body = chunks.length
+    ? JSON.parse(Buffer.concat(chunks).toString())
+    : undefined;
+
+  const response = await app.inject({
+    method: req.method,
+    url,
+    headers: req.headers,
+    payload: body,
+  });
+
+  res.statusCode = response.statusCode;
+
+  for (const [key, value] of Object.entries(response.headers)) {
+    res.setHeader(key, value);
+  }
+
+  res.end(response.body);
 };
