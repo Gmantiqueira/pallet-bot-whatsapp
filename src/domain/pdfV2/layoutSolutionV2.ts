@@ -13,6 +13,7 @@ import {
   shouldReserveCrossPassageForSpan,
   type TunnelSpanPlacement,
 } from './tunnelBeamSpan';
+import { layoutSolutionPassesOperationalAccess } from './layoutGeometryV2';
 import type {
   CirculationZone,
   LayoutOrientationV2,
@@ -989,6 +990,7 @@ export function buildLayoutSolutionV2(
       cand.orientation,
       cand.depthMode
     );
+    if (!layoutSolutionPassesOperationalAccess(sol)) continue;
     const sc = layoutSolutionScoreTuple(sol);
     if (!best || !bestScore || scoreTupleCompare(sc, bestScore) > 0) {
       best = sol;
@@ -997,7 +999,12 @@ export function buildLayoutSolutionV2(
   }
 
   if (!best) {
-    throw new Error('layoutSolutionV2: nenhum candidato de layout');
+    throw new Error(
+      'layoutSolutionV2: nenhum candidato com acesso operacional válido ' +
+        '(ex.: fileira dupla exige corredor bilateral ≥ corredor declarado em ambos os lados ' +
+        'do eixo transversal — alargue o compartimento, reduza corredor/profundidade, ou use ' +
+        'fileira simples / estratégia MELHOR_LAYOUT).'
+    );
   }
   return best;
 }

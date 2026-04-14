@@ -55,5 +55,10 @@ coerente com uso de empilhador em corredor.
 
 ## Validação
 
-- `validateLayoutGeometry` rejeita fileiras `backToBack` cuja profundidade toque as paredes
-  transversais sem margem ≥ `corridorMm` (coerente com o motor de preenchimento).
+- **`validateOperationalAccess(geo)`** — função explícita (em `layoutGeometryV2.ts`) que aplica o
+  modelo de acesso acima sobre o `LayoutGeometry` usado na planta. Fileiras `backToBack` sem faixa
+  bilateral ≥ `corridorMm` falham (área residual estreita **não** satisfaz o requisito).
+- **`validateLayoutGeometry`** chama `validateOperationalAccess` no fim (após invariantes de pegada).
+- **`layoutSolutionPassesOperationalAccess(sol)`** — mesmo critério sobre `LayoutSolutionV2`, para o
+  motor rejeitar candidatos inviáveis antes da pontuação (`MELHOR_LAYOUT` pode preferir outra
+  orientação, fileira simples, ou menos fileiras quando o duplo não cabe com acesso bilateral).

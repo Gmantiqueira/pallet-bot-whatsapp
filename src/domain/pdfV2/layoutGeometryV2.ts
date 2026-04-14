@@ -801,16 +801,27 @@ export function validateLayoutGeometry(geo: LayoutGeometry): void {
     }
   }
 
-  validateDoubleRowPerimeterAccess(geo);
+  validateOperationalAccess(geo);
 }
 
+/** Tolerância (mm) para cotas de perímetro vs corredor declarado. */
+export const OPERATIONAL_ACCESS_TOL_MM = 2.5;
+
 /**
- * Fileira **dupla costas**: exige faixa livre ≥ `corridorMm` em **ambos** os lados transversais
- * ao vão (faces exteriores da banda), alinhado ao motor `fillCrossZone` / `fillWarehouseCross`.
+ * Valida **acesso operacional** no eixo transversal ao vão (não confunde com área residual).
+ *
+ * Modelo assumido:
+ * - **Fileira simples** — acesso tipicamente **unilateral**: uma face pode encostar à parede
+ *   sem corredor dedicado nesse lado.
+ * - **Fileira dupla (back-to-back)** — **bilateral** por omissão: cada banda precisa de faixa
+ *   com largura **≥ `corridorMm`** antes de **ambas** as paredes do compartimento nesse eixo;
+ *   faixa residual estreita **não** conta como corredor operacional para esse fim.
+ *
+ * Deve ser invocado sobre o mesmo {@link LayoutGeometry} usado na planta/PDF (coerência).
  */
-function validateDoubleRowPerimeterAccess(geo: LayoutGeometry): void {
+export function validateOperationalAccess(geo: LayoutGeometry): void {
   const cor = geo.metadata.corridorMm;
-  const tol = 2.5;
+  const tol = OPERATIONAL_ACCESS_TOL_MM;
   if (geo.metadata.rackDepthMode !== 'double') return;
 
   const crossSpan =
@@ -838,6 +849,38 @@ function validateDoubleRowPerimeterAccess(geo: LayoutGeometry): void {
       );
     }
   }
+}
+
+/**
+ * Verificação rápida (sobre {@link LayoutSolutionV2}) alinhada a {@link validateOperationalAccess}
+ * após `buildLayoutGeometry`. Usada para **rejeitar candidatos** inviáveis antes da pontuação
+ * (ex.: `MELHOR_LAYOUT` prefere outra orientação / fileira simples).
+ *
+ * Layout sem fileiras ou dupla sem faixa bilateral mínima → `false`.
+ */
+export function layoutSolutionPassesOperationalAccess(
+  sol: LayoutSolutionV2
+): boolean {
+  const cor = sol.corridorMm;
+  const tol = OPERATIONAL_ACCESS_TOL_MM;
+  const crossSpan = sol.crossSpanMm;
+
+  if (sol.rows.length === 0) return false;
+
+  if (sol.rackDepthMode !== 'double') return true;
+
+  for (const row of sol.rows) {
+    if (row.kind !== 'double') continue;
+    const c0 =
+      sol.orientation === 'along_length' ? row.y0 : row.x0;
+    const c1 =
+      sol.orientation === 'along_length' ? row.y1 : row.x1;
+    const lo = Math.min(c0, c1);
+    const hi = Math.max(c0, c1);
+    if (lo < cor - tol) return false;
+    if (hi > crossSpan - cor + tol) return false;
+  }
+  return true;
 }
 
 /** Primeiro módulo túnel, se existir. */

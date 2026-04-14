@@ -3,7 +3,9 @@ import { tunnelActiveStorageLevelsFromGlobal } from './elevationLevelGeometryV2'
 import {
   buildLayoutGeometry,
   LayoutGeometryValidationError,
+  layoutSolutionPassesOperationalAccess,
   validateLayoutGeometry,
+  validateOperationalAccess,
 } from './layoutGeometryV2';
 import type { ProjectAnswersV2 } from './answerMapping';
 
@@ -86,6 +88,40 @@ describe('buildLayoutGeometry + validateLayoutGeometry', () => {
     const geo = buildLayoutGeometry(sol, a);
     validateLayoutGeometry(geo);
     expect(geo.rows[0]!.rowType).toBe('backToBack');
+    validateOperationalAccess(geo);
+    expect(layoutSolutionPassesOperationalAccess(sol)).toBe(true);
+  });
+
+  it('validateOperationalAccess: dupla encostada à parede transversal → rejeita', () => {
+    const a: ProjectAnswersV2 = {
+      ...minimal(),
+      lineStrategy: 'APENAS_DUPLOS',
+    };
+    const sol = buildLayoutSolutionV2(a);
+    const geo = buildLayoutGeometry(sol, a);
+    validateLayoutGeometry(geo);
+    geo.rows[0]!.originY = 0;
+    expect(() => validateOperationalAccess(geo)).toThrow(
+      LayoutGeometryValidationError
+    );
+  });
+
+  it('layoutSolutionPassesOperationalAccess: dupla sem faixa bilateral → false', () => {
+    const a: ProjectAnswersV2 = {
+      ...minimal(),
+      lineStrategy: 'APENAS_DUPLOS',
+    };
+    const sol = buildLayoutSolutionV2(a);
+    expect(layoutSolutionPassesOperationalAccess(sol)).toBe(true);
+    const r0 = sol.rows[0]!;
+    const d = r0.y1 - r0.y0;
+    const bad = {
+      ...sol,
+      rows: sol.rows.map((r, i) =>
+        i === 0 ? { ...r, y0: 0, y1: d } : r
+      ),
+    };
+    expect(layoutSolutionPassesOperationalAccess(bad)).toBe(false);
   });
 
   it('validateLayoutGeometry falha se montante normal ≠ 75 mm', () => {
