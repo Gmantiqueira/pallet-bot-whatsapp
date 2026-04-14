@@ -309,8 +309,14 @@ export type Rack3DLine3D = {
    * `module_footprint` — contorno Z=0 de cada prisma.
    * `spine_divider` — arestas verticais do vão da espinha (dupla costas), para não colapsar visualmente as duas pegadas.
    * `bay_divider` — montante e longarina interiores entre as 2 baias (módulo completo; omitido em meio-módulo).
+   * `module_outline_half` — contorno Z=0 de segmento meio-módulo (1 baia), traço distinto no 3D.
    */
-  lineRole?: 'warehouse_slab' | 'module_footprint' | 'spine_divider' | 'bay_divider';
+  lineRole?:
+    | 'warehouse_slab'
+    | 'module_footprint'
+    | 'module_outline_half'
+    | 'spine_divider'
+    | 'bay_divider';
   /** Só preenchido em modo debug — evita dedupe para colorir por módulo. */
   debugTint?: 'tunnel' | 'normal' | 'boundary';
 };
@@ -366,7 +372,12 @@ export type ProjectedLine2D = {
   x2: number;
   y2: number;
   kind: 'upright' | 'beam' | 'floor' | 'module_outline';
-  lineRole?: 'warehouse_slab' | 'module_footprint' | 'spine_divider' | 'bay_divider';
+  lineRole?:
+    | 'warehouse_slab'
+    | 'module_footprint'
+    | 'module_outline_half'
+    | 'spine_divider'
+    | 'bay_divider';
   debugTint?: 'tunnel' | 'normal' | 'boundary';
 };
 

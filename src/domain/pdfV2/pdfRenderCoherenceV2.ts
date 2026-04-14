@@ -241,6 +241,31 @@ export function validatePdfRenderCoherence(
         `Fileira [${i}]: layoutSolution tem ${sol.rows[i]!.modules.length} segmento(s), geometria tem ${geometry.rows[i]!.modules.length}`
       );
     }
+    const nMod = Math.min(
+      sol.rows[i]!.modules.length,
+      geometry.rows[i]!.modules.length
+    );
+    for (let j = 0; j < nMod; j++) {
+      const solMod = sol.rows[i]!.modules[j]!;
+      const geoMod = geometry.rows[i]!.modules[j]!;
+      if (solMod.id !== geoMod.id) {
+        errors.push(
+          `Fileira [${i}] segmento [${j}]: layoutSolution.id (${solMod.id}) ≠ geometria.id (${geoMod.id})`
+        );
+      }
+      if (solMod.type !== geoMod.segmentType) {
+        errors.push(
+          `Fileira [${i}] segmento [${j}] (${geoMod.id}): layoutSolution.type (${solMod.type}) ≠ geometria.segmentType (${geoMod.segmentType})`
+        );
+      }
+      const solVar = solMod.variant ?? 'normal';
+      const geoVar = geoMod.type === 'tunnel' ? 'tunnel' : 'normal';
+      if (solVar !== geoVar) {
+        errors.push(
+          `Fileira [${i}] segmento [${j}] (${geoMod.id}): variante solução (${solVar}) ≠ geometria (${geoVar})`
+        );
+      }
+    }
   }
 
   const m3d = options.rack3dModel;

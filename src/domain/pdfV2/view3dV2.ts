@@ -127,6 +127,10 @@ function strokeForLine(
     }
     return { c: '#475569', w: 1.28, opacity: 0.86 };
   }
+  /** Meio-módulo (1 baia): mesmo wireframe, traço distinto para não confundir com módulo completo. */
+  if (ln.lineRole === 'module_outline_half') {
+    return { c: '#047857', w: 2, opacity: 0.97 };
+  }
   if (debug && ln.debugTint !== undefined && ln.kind !== 'module_outline') {
     return STROKE_DEBUG[ln.debugTint][ln.kind];
   }
@@ -181,8 +185,13 @@ export function render3DViewV2(
       const a = toSvg(ln.x1, ln.y1);
       const b = toSvg(ln.x2, ln.y2);
       const st = strokeForLine(ln, debug);
+      const halfOutlineDash =
+        ln.kind === 'module_outline' &&
+        ln.lineRole === 'module_outline_half'
+          ? ` stroke-dasharray="5.5 4"`
+          : '';
       parts.push(
-        `<line x1="${a.x.toFixed(2)}" y1="${a.y.toFixed(2)}" x2="${b.x.toFixed(2)}" y2="${b.y.toFixed(2)}" stroke="${st.c}" stroke-width="${st.w}" stroke-opacity="${st.opacity}" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`
+        `<line x1="${a.x.toFixed(2)}" y1="${a.y.toFixed(2)}" x2="${b.x.toFixed(2)}" y2="${b.y.toFixed(2)}" stroke="${st.c}" stroke-width="${st.w}" stroke-opacity="${st.opacity}"${halfOutlineDash} stroke-linecap="round" stroke-linejoin="round" fill="none"/>`
       );
     }
   }

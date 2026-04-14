@@ -283,7 +283,8 @@ function emitModuleFootprintOutline(
   lines: Rack3DLine3D[],
   footprint: ModuleFootprint3d,
   z: number,
-  debugTint?: Rack3DLine3D['debugTint']
+  debugTint: Rack3DLine3D['debugTint'] | undefined,
+  isHalfModuleSegment: boolean
 ): void {
   const x0 = Math.min(footprint.x0, footprint.x1);
   const x1 = Math.max(footprint.x0, footprint.x1);
@@ -291,9 +292,13 @@ function emitModuleFootprintOutline(
   const y1 = Math.max(footprint.y0, footprint.y1);
   if (x1 - x0 <= EPS || y1 - y0 <= EPS) return;
   const o: {
-    lineRole: 'module_footprint';
+    lineRole: NonNullable<Rack3DLine3D['lineRole']>;
     debugTint?: Rack3DLine3D['debugTint'];
-  } = { lineRole: 'module_footprint' };
+  } = {
+    lineRole: isHalfModuleSegment
+      ? 'module_outline_half'
+      : 'module_footprint',
+  };
   if (debugTint !== undefined) {
     o.debugTint = debugTint;
   }
@@ -553,7 +558,13 @@ export function build3DModelV2(
           : undefined;
       for (const fp of fps) {
         const uprightSeen = new Set<string>();
-        emitModuleFootprintOutline(lines, fp, z0, modTint);
+        emitModuleFootprintOutline(
+          lines,
+          fp,
+          z0,
+          modTint,
+          mod.segmentType === 'half'
+        );
         emitPalletRackPrism(
           lines,
           mod,
