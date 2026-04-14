@@ -108,6 +108,23 @@ function transitionToCleanMenu(session: Session): Session {
   };
 }
 
+/**
+ * Some WhatsApp integrators send the button title ("PLANTA"/"MEDIDAS") in `buttonReply`
+ * instead of the configured id ("1"/"2"). Plain text "1"/"2" should work too.
+ * We only treat as digits isolated values (not "12000" starting with 1).
+ */
+export function parseMenuBranch(raw: string): '1' | '2' | null {
+  const v = raw.trim();
+  if (!v) return null;
+  const lower = v.toLowerCase();
+  if (lower === 'planta') return '1';
+  if (lower === 'medidas') return '2';
+  const collapsed = v.replace(/[\uFE0F\u20E3]/g, '');
+  if (collapsed === '1') return '1';
+  if (collapsed === '2') return '2';
+  return null;
+}
+
 function goNext(
   session: Session,
   patch: Record<string, unknown>,
@@ -178,20 +195,15 @@ export const transition = (
       return { session: newSession, effects };
     }
 
-    case 'MENU':
-      if (input.type === 'BUTTON') {
-        const choice = input.value;
-        let projectType: string;
-        let nextState: State;
-        if (choice === '1') {
-          projectType = 'PLANTA_REAL';
-          nextState = 'WAIT_PLANT_IMAGE';
-        } else if (choice === '2') {
-          projectType = 'MEDIDAS_DIGITADAS';
-          nextState = 'WAIT_LENGTH';
-        } else {
-          return { session: newSession, effects };
-        }
+    case 'MENU': {
+      const rawChoice =
+        input.type === 'BUTTON' || input.type === 'TEXT' ? input.value : null;
+      const branch = rawChoice != null ? parseMenuBranch(rawChoice) : null;
+      if (branch) {
+        const projectType =
+          branch === '1' ? 'PLANTA_REAL' : 'MEDIDAS_DIGITADAS';
+        const nextState: State =
+          branch === '1' ? 'WAIT_PLANT_IMAGE' : 'WAIT_LENGTH';
         newSession = {
           ...newSession,
           state: nextState,
@@ -202,6 +214,7 @@ export const transition = (
         effects.push({ type: 'SEND' });
       }
       return { session: newSession, effects };
+    }
 
     case 'WAIT_PLANT_IMAGE':
       if (input.type === 'MEDIA_IMAGE') {

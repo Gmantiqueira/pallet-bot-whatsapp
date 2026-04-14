@@ -1,4 +1,4 @@
-import { transition, Input } from './stateMachine';
+import { transition, Input, parseMenuBranch } from './stateMachine';
 import { Session } from './session';
 import {
   DEFAULT_BEAM_LENGTH_MM,
@@ -20,6 +20,41 @@ const createSession = (
 };
 
 describe('State Machine', () => {
+  describe('parseMenuBranch', () => {
+    it('maps ids, titles, and isolated digits', () => {
+      expect(parseMenuBranch('1')).toBe('1');
+      expect(parseMenuBranch('2')).toBe('2');
+      expect(parseMenuBranch('PLANTA')).toBe('1');
+      expect(parseMenuBranch('medidas')).toBe('2');
+    });
+
+    it('does not treat multi-digit measures as menu choice', () => {
+      expect(parseMenuBranch('12000')).toBeNull();
+      expect(parseMenuBranch('12')).toBeNull();
+    });
+  });
+
+  describe('MENU', () => {
+    it('accepts BUTTON with title strings from WhatsApp', () => {
+      const session = createSession('MENU');
+      const r1 = transition(session, { type: 'BUTTON', value: 'PLANTA' });
+      expect(r1.session.state).toBe('WAIT_PLANT_IMAGE');
+      const r2 = transition(session, { type: 'BUTTON', value: 'MEDIDAS' });
+      expect(r2.session.state).toBe('WAIT_LENGTH');
+    });
+
+    it('accepts TEXT with same keywords or digits', () => {
+      const s0 = createSession('MENU');
+      expect(
+        transition(s0, { type: 'TEXT', value: 'planta' }).session.state
+      ).toBe('WAIT_PLANT_IMAGE');
+      const s1 = createSession('MENU');
+      expect(
+        transition(s1, { type: 'TEXT', value: '2' }).session.state
+      ).toBe('WAIT_LENGTH');
+    });
+  });
+
   describe('Global commands', () => {
     it('should handle "novo" command and go to MENU', () => {
       const session = createSession('WAIT_LENGTH', { lengthMm: 1000 });

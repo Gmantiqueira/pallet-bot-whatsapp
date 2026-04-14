@@ -71,6 +71,18 @@ describe('MessageRouter', () => {
       expect(result.session.state).toBe('WAIT_LENGTH');
     });
 
+    it('MENU: accepts button title as buttonReply (integrator sends label not id)', async () => {
+      const session = createSession('MENU');
+      const incoming: IncomingPayload = {
+        from: '5511999999999',
+        buttonReply: 'PLANTA',
+      };
+
+      const result = await routeIncoming(session, incoming, repository);
+
+      expect(result.session.state).toBe('WAIT_PLANT_IMAGE');
+    });
+
     it('START: prefers text over stale buttonReply (no jump to late flow)', async () => {
       const session = createSession('START');
       const incoming: IncomingPayload = {
