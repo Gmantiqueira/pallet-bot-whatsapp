@@ -8,14 +8,32 @@ function sessionKey(phone: string): string {
   return `${KEY_PREFIX}${phone}`;
 }
 
+function parseTimeoutMs(): number {
+  const raw = process.env.UPSTASH_REDIS_TIMEOUT_MS?.trim();
+  const n = raw ? Number.parseInt(raw, 10) : NaN;
+  if (Number.isFinite(n) && n >= 500) {
+    return n;
+  }
+  return 15_000;
+}
+
 /**
  * Sessões via Upstash Redis (REST) — adequado a serverless / várias instâncias.
+ *
+ * Cada comando HTTP usa `AbortSignal.timeout` (via factory `signal`) para evitar
+ * pedidos que ficam pendentes indefinidamente quando a rede ou o upstream não respondem.
  */
 export class UpstashSessionRepository implements SessionRepository {
   private readonly redis: Redis;
 
   constructor(url: string, token: string) {
-    this.redis = new Redis({ url, token });
+    const timeoutMs = parseTimeoutMs();
+    this.redis = new Redis({
+      url,
+      token,
+      // HttpClient chama `signal()` em cada pedido — um timeout novo por comando.
+      signal: () => AbortSignal.timeout(timeoutMs),
+    });
   }
 
   async get(phone: string): Promise<Session | null> {

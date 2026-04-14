@@ -24,6 +24,12 @@ interface WebhookResponse {
 
 const START_STATE = 'START';
 
+function traceWebhook(msg: string): void {
+  if (process.env.PALLET_TRACE_WEBHOOK === '1') {
+    console.info(`[pallet-trace] ${msg}`);
+  }
+}
+
 export const webhookRoutes = async (
   fastify: FastifyInstance
 ): Promise<void> => {
@@ -49,7 +55,11 @@ export const webhookRoutes = async (
       const incoming: IncomingPayload = request.body;
 
       // Load or create session
+      traceWebhook(`before sessionRepository.get from=${incoming.from}`);
       let session = await sessionRepository.get(incoming.from);
+      traceWebhook(
+        `after sessionRepository.get found=${session != null ? 'yes' : 'no'}`
+      );
       if (!session) {
         session = {
           phone: incoming.from,
@@ -58,11 +68,17 @@ export const webhookRoutes = async (
           stack: [],
           updatedAt: Date.now(),
         };
+        traceWebhook('before sessionRepository.upsert (new session)');
         await sessionRepository.upsert(session);
+        traceWebhook('after sessionRepository.upsert (new session)');
       }
 
       // Core devolve mensagens ao utilizador; o integrador junta `generatedPdf` ao pipeline de envio.
+      traceWebhook(
+        `before routeIncoming state=${session.state} phone=${session.phone}`
+      );
       const result = await routeIncoming(session, incoming, sessionRepository);
+      traceWebhook('after routeIncoming');
 
       return reply.code(200).send({
         messages: result.outgoingMessages,
