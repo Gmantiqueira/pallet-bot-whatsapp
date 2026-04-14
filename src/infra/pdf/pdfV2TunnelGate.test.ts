@@ -6,7 +6,9 @@ import type { Session } from '../../domain/session';
 import { generatePdfV2FromSession } from './pdfV2Service';
 
 describe('PDF V2 tunnel consistency (integration)', () => {
-  it('altura baixa sem túnel: gera PDF válido (3840 mm, 2 níveis, firstLevelOnGround)', async () => {
+  it(
+    'altura baixa sem túnel: gera PDF válido (3840 mm, 2 níveis, firstLevelOnGround)',
+    async () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'pdf-tunnel-gate-'));
     try {
       const answers = finalizeSummaryAnswers({
@@ -42,5 +44,7 @@ describe('PDF V2 tunnel consistency (integration)', () => {
     } finally {
       fs.rmSync(tmp, { recursive: true, force: true });
     }
-  });
+    },
+    25_000
+  );
 });

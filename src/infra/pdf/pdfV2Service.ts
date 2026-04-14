@@ -32,7 +32,8 @@ import {
 } from './pdfV2TechnicalSummary';
 import { buildPdfArtifactAfterWrite } from './pdfArtifact';
 
-const MARGIN_PT = 50;
+/** Margens página A4: mais estreitas nas folhas de desenho para maximizar área útil (sem distorcer bitmaps). */
+const PAGE_MARGIN_PT = 36;
 const COL_INK = '#0f172a';
 const COL_MUTED = '#4b5563';
 const COL_RULE = '#e2e8f0';
@@ -46,28 +47,33 @@ function ptToPx(pt: number): number {
   return Math.max(1, Math.round((pt * RASTER_DPI) / 72));
 }
 
+/**
+ * Orçamento vertical do cabeçalho (título + linha) em pt — alinhado ao layout compacto
+ * de {@link beginDrawingSheetHeader} para a proporção do PNG ≈ caixa real no PDF.
+ */
+const DRAWING_SHEET_HEADER_BUDGET_PT = 46;
+const DRAWING_SHEET_BOTTOM_PAD_PT = 5;
+
 function drawingRasterPixelSize(): { pxW: number; pxH: number } {
   const pageW = 595.28;
   const pageH = 841.89;
-  const usableW = pageW - 2 * MARGIN_PT;
-  const pageBottom = pageH - MARGIN_PT;
-  /** Cabeçalho de folha compacto para maximizar área do desenho. */
-  const headerFromTop = 30;
-  const imgTop = MARGIN_PT + headerFromTop;
-  const imgBottomPad = 8;
-  const imgBoxH = pageBottom - imgTop - imgBottomPad;
+  const usableW = pageW - 2 * PAGE_MARGIN_PT;
+  const pageBottom = pageH - PAGE_MARGIN_PT;
+  const imgTop = PAGE_MARGIN_PT + DRAWING_SHEET_HEADER_BUDGET_PT;
+  const imgBoxH = pageBottom - imgTop - DRAWING_SHEET_BOTTOM_PAD_PT;
   return {
     pxW: ptToPx(usableW),
-    pxH: ptToPx(Math.max(96, imgBoxH * 1.26)),
+    /** Ligeiro oversampling vertical para nitidez; base ≈ altura útil real. */
+    pxH: ptToPx(Math.max(120, imgBoxH * 1.12)),
   };
 }
 
-/** Raster mais denso para páginas só com elevação (um desenho por folha). */
+/** Raster mais denso para elevações (detalhe de cotas). */
 function elevationDrawingRasterPixelSize(): { pxW: number; pxH: number } {
   const base = drawingRasterPixelSize();
   return {
-    pxW: Math.round(base.pxW * 1.18),
-    pxH: Math.round(base.pxH * 1.42),
+    pxW: Math.round(base.pxW * 1.12),
+    pxH: Math.round(base.pxH * 1.18),
   };
 }
 
@@ -326,10 +332,10 @@ export async function renderPdfV2(
   const doc = new PDFDocument({
     size: 'A4',
     margins: {
-      top: MARGIN_PT,
-      bottom: MARGIN_PT,
-      left: MARGIN_PT,
-      right: MARGIN_PT,
+      top: PAGE_MARGIN_PT,
+      bottom: PAGE_MARGIN_PT,
+      left: PAGE_MARGIN_PT,
+      right: PAGE_MARGIN_PT,
     },
   });
 
@@ -339,7 +345,8 @@ export async function renderPdfV2(
   const usableW =
     doc.page.width - doc.page.margins.left - doc.page.margins.right;
   const pageBottom = doc.page.height - doc.page.margins.bottom;
-  const imgBottomPad = 14;
+  /** Espaço mínimo sob o desenho até ao fim da página. */
+  const imgBottomPad = 6;
 
   const drawCentered = (
     text: string,
@@ -383,8 +390,7 @@ export async function renderPdfV2(
     },
     opts?: { bottomPadPt?: number }
   ): void => {
-    doc.moveDown(0.12);
-    const yImg = doc.y + 6;
+    const yImg = doc.y + 2;
     const bottomPad = opts?.bottomPadPt ?? imgBottomPad;
     const availH = pageBottom - yImg - bottomPad;
     const { dw, dh } = fitRasterInBox(
@@ -395,6 +401,32 @@ export async function renderPdfV2(
     );
     const ix = left + (usableW - dw) / 2;
     doc.image(raster.buffer, ix, yImg, { width: dw, height: dh });
+    doc.y = yImg + dh;
+  };
+
+  /** Cabeçalho baixo para folhas de desenho — maximiza altura útil do bitmap. */
+  const beginDrawingSheetHeader = (
+    title: string,
+    options?: { subtitle?: string; titleSize?: number }
+  ): void => {
+    doc.y = doc.page.margins.top + 2;
+    const tSize = options?.titleSize ?? 15;
+    drawCentered(title, {
+      size: tSize,
+      font: 'Helvetica-Bold',
+      color: COL_INK,
+      lineGap: 0,
+      moveDown: options?.subtitle ? 0.05 : 0.08,
+    });
+    if (options?.subtitle) {
+      drawCentered(options.subtitle, {
+        size: 10,
+        color: COL_MUTED,
+        moveDown: 0.06,
+      });
+    }
+    horizontalRule(doc.y + 1.5, 0.05, COL_RULE);
+    doc.moveDown(0.1);
   };
 
   const labelColW = 154;
@@ -507,51 +539,23 @@ export async function renderPdfV2(
   doc.y = boxTop + boxH + 14;
 
   doc.addPage();
-  doc.y = doc.page.margins.top + 4;
-  drawCentered('PLANTA DE IMPLANTAÇÃO', {
-    size: 16,
-    font: 'Helvetica-Bold',
-    color: COL_INK,
-    moveDown: 0.12,
-  });
-  horizontalRule(doc.y + 2, 0.08, COL_RULE);
-  doc.moveDown(0.22);
-  embedFullWidthDrawing(floorRaster, { bottomPadPt: 6 });
+  beginDrawingSheetHeader('PLANTA DE IMPLANTAÇÃO', { titleSize: 16 });
+  embedFullWidthDrawing(floorRaster, { bottomPadPt: 4 });
 
   doc.addPage();
-  doc.y = doc.page.margins.top + 4;
-  drawCentered('Vista frontal — módulo padrão', {
-    size: 15,
-    font: 'Helvetica-Bold',
-    color: COL_INK,
-    moveDown: 0.12,
+  beginDrawingSheetHeader('Vista frontal — módulo padrão', {
+    subtitle: 'Referência de armazenagem · cotas em mm',
   });
-  drawCentered('Referência de armazenagem · cotas em mm', {
-    size: 11,
-    color: COL_MUTED,
-    moveDown: 0.22,
-  });
-  horizontalRule(doc.y + 2, 0.08, COL_RULE);
-  doc.moveDown(0.3);
   embedFullWidthDrawing(elevFrontStdRaster);
 
   if (hasTunnel) {
     doc.addPage();
-    doc.y = doc.page.margins.top + 4;
-    drawCentered('Vista frontal — módulo com túnel', {
-      size: 15,
-      font: 'Helvetica-Bold',
-      color: COL_INK,
-      moveDown: 0.12,
+    beginDrawingSheetHeader('Vista frontal — módulo com túnel', {
+      subtitle: elevFrontTunRaster
+        ? 'Abertura de passagem no nível inferior · cotas em mm'
+        : undefined,
     });
     if (elevFrontTunRaster) {
-      drawCentered('Abertura de passagem no nível inferior · cotas em mm', {
-        size: 11,
-        color: COL_MUTED,
-        moveDown: 0.22,
-      });
-      horizontalRule(doc.y + 2, 0.08, COL_RULE);
-      doc.moveDown(0.3);
       embedFullWidthDrawing(elevFrontTunRaster);
     } else {
       drawCentered('Não aplicável neste projeto (sem módulo túnel).', {
@@ -563,39 +567,19 @@ export async function renderPdfV2(
   }
 
   doc.addPage();
-  doc.y = doc.page.margins.top + 4;
-  drawCentered('Vista lateral — estrutura do módulo', {
-    size: 15,
-    font: 'Helvetica-Bold',
-    color: COL_INK,
-    moveDown: 0.12,
+  beginDrawingSheetHeader('Vista lateral — estrutura do módulo', {
+    subtitle: 'Profundidade e níveis · cotas em mm',
   });
-  drawCentered('Profundidade e níveis · cotas em mm', {
-    size: 11,
-    color: COL_MUTED,
-    moveDown: 0.22,
-  });
-  horizontalRule(doc.y + 2, 0.08, COL_RULE);
-  doc.moveDown(0.3);
   embedFullWidthDrawing(elevLateralRaster);
 
   if (hasTunnel) {
     doc.addPage();
-    doc.y = doc.page.margins.top + 4;
-    drawCentered('Vista lateral — módulo com túnel', {
-      size: 15,
-      font: 'Helvetica-Bold',
-      color: COL_INK,
-      moveDown: 0.12,
+    beginDrawingSheetHeader('Vista lateral — módulo com túnel', {
+      subtitle: elevLateralTunRaster
+        ? 'Profundidade e níveis · cotas em mm'
+        : undefined,
     });
     if (elevLateralTunRaster) {
-      drawCentered('Profundidade e níveis · cotas em mm', {
-        size: 11,
-        color: COL_MUTED,
-        moveDown: 0.22,
-      });
-      horizontalRule(doc.y + 2, 0.08, COL_RULE);
-      doc.moveDown(0.3);
       embedFullWidthDrawing(elevLateralTunRaster);
     } else {
       drawCentered('Não aplicável neste projeto (sem módulo túnel).', {
@@ -607,23 +591,10 @@ export async function renderPdfV2(
   }
 
   doc.addPage();
-  doc.y = doc.page.margins.top + 4;
-  drawCentered('Visualização 3D do layout', {
-    size: 15,
-    font: 'Helvetica-Bold',
-    color: COL_INK,
-    moveDown: 0.12,
+  beginDrawingSheetHeader('Visualização 3D do layout', {
+    subtitle:
+      'Wireframe isométrico · montantes, longarinas e contorno do piso',
   });
-  drawCentered(
-    'Wireframe isométrico · montantes, longarinas e contorno do piso',
-    {
-      size: 11,
-      color: COL_MUTED,
-      moveDown: 0.22,
-    }
-  );
-  horizontalRule(doc.y + 2, 0.08, COL_RULE);
-  doc.moveDown(0.3);
   embedFullWidthDrawing(view3dRaster);
 
   doc.end();
