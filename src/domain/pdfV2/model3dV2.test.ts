@@ -3,7 +3,11 @@ import {
   buildLayoutGeometry,
   validateLayoutGeometry,
 } from './layoutGeometryV2';
-import { build3DModelV2 } from './model3dV2';
+import {
+  build3DModelV2,
+  splitModuleFootprintsFor3d,
+} from './model3dV2';
+import { audit3dModelCoherence } from './model3dV2Coherence';
 import { projectToIsometric, render3DViewV2 } from './view3dV2';
 import type { ProjectAnswersV2 } from './answerMapping';
 import type { Rack3DModel } from './types';
@@ -153,5 +157,54 @@ describe('build3DModelV2 + projeção isométrica', () => {
     const bS = mS.lines.filter(l => l.kind === 'beam').length;
     expect(uD).toBeGreaterThan(uS);
     expect(bD).toBeGreaterThan(bS);
+  });
+
+  it('7: dupla costas — cada módulo normal vira 2 prismas no 3D (não um bloco único)', () => {
+    const a = { ...base(), lineStrategy: 'APENAS_DUPLOS' as const };
+    const g = geomFromAnswers(a);
+    const rackDepthMm = g.metadata.rackDepthMm;
+    let splitPairs = 0;
+    for (const row of g.rows) {
+      for (const mod of row.modules) {
+        if (mod.type === 'tunnel') continue;
+        const fps = splitModuleFootprintsFor3d(
+          row,
+          mod,
+          rackDepthMm,
+          g.orientation
+        );
+        if (row.rowType === 'backToBack') {
+          expect(fps.length).toBe(2);
+          splitPairs += 1;
+        }
+      }
+    }
+    expect(splitPairs).toBeGreaterThan(0);
+    const model = build3DModelV2(g);
+    const audit = audit3dModelCoherence(g, model);
+    expect(audit.ok).toBe(true);
+    expect(audit.warnings).toHaveLength(0);
+    expect(audit.expectedPrismCount).toBeGreaterThan(
+      g.totals.moduleCount - 0.5
+    );
+  });
+
+  it('8: coerência — contagem de prismas bate com a soma dos splits por módulo', () => {
+    const a = { ...base(), lineStrategy: 'APENAS_SIMPLES' as const };
+    const g = geomFromAnswers(a);
+    let expected = 0;
+    for (const row of g.rows) {
+      for (const mod of row.modules) {
+        expected += splitModuleFootprintsFor3d(
+          row,
+          mod,
+          g.metadata.rackDepthMm,
+          g.orientation
+        ).length;
+      }
+    }
+    const audit = audit3dModelCoherence(g, build3DModelV2(g));
+    expect(audit.expectedPrismCount).toBe(expected);
+    expect(audit.ok).toBe(true);
   });
 });

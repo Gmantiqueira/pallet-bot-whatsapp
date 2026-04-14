@@ -2,8 +2,10 @@ import type { LayoutGeometry, RackModule, RackRow } from './layoutGeometryV2';
 import type { LayoutOrientationV2, Rack3DLine3D, Rack3DModel } from './types';
 
 const EPS = 0.5;
-/** Espinha entre filas costas com costas — alinhado a layoutSolutionV2 / layoutGeometryV2. */
+/** Espinha entre costas em dupla — alinhado a layoutSolutionV2 / layoutGeometryV2. */
 const SPINE_BACK_TO_BACK_MM = 100;
+/** Tolerância (mm) para reconhecer banda dupla; 3 mm era demasiado e colapsava o 3D num bloco único. */
+const DOUBLE_BAND_TOL_MM = 20;
 
 function pushLine(
   lines: Rack3DLine3D[],
@@ -18,25 +20,33 @@ function pushLine(
   lines.push({ kind, x1, y1, z1, x2, y2, z2 });
 }
 
-/** Dedupe montantes no mesmo pilar (módulos adjacentes). */
+/** Dedupe montantes só **dentro** do mesmo prisma (cantos do retângulo). */
 function uprightKey(x: number, y: number): string {
   return `${Math.round(x * 10) / 10}:${Math.round(y * 10) / 10}`;
 }
 
-type Footprint = { x0: number; y0: number; x1: number; y1: number };
+export type ModuleFootprint3d = { x0: number; y0: number; x1: number; y1: number };
 
 /**
  * Dupla costas em planta: um retângulo por módulo cobre 2×prof. + espinha.
- * Em 3D geramos **duas** filas separadas pela folga da espinha (sem corredor).
+ * Em 3D geramos **duas** pegadas separadas pela espinha (sem volume contínuo entre costas).
+ *
+ * Exportado para testes e {@link audit3dModelCoherence}.
  */
-function footprintsForBackToBackModule(
+export function splitModuleFootprintsFor3d(
   row: RackRow,
   mod: RackModule,
   rackDepthMm: number,
   layoutOrientation: LayoutOrientationV2
-): Footprint[] {
+): ModuleFootprint3d[] {
   const fp = mod.footprint;
-  if (row.rowType !== 'backToBack' || mod.type === 'tunnel') {
+  if (row.rowType !== 'backToBack') {
+    return [fp];
+  }
+
+  const expectedBand = 2 * rackDepthMm + SPINE_BACK_TO_BACK_MM;
+  const tv = mod.footprintTransversalMm;
+  if (Math.abs(tv - expectedBand) > DOUBLE_BAND_TOL_MM) {
     return [fp];
   }
 
@@ -47,12 +57,14 @@ function footprintsForBackToBackModule(
 
   if (layoutOrientation === 'along_length') {
     const crossSpan = yHi - yLo;
-    const expected = 2 * rackDepthMm + SPINE_BACK_TO_BACK_MM;
-    if (Math.abs(crossSpan - expected) > 3) {
+    if (Math.abs(crossSpan - expectedBand) > DOUBLE_BAND_TOL_MM) {
       return [fp];
     }
     const ySplitFront = yLo + rackDepthMm;
     const ySplitBack = ySplitFront + SPINE_BACK_TO_BACK_MM;
+    if (Math.abs(yHi - (ySplitBack + rackDepthMm)) > DOUBLE_BAND_TOL_MM) {
+      return [fp];
+    }
     return [
       { x0: xLo, x1: xHi, y0: yLo, y1: ySplitFront },
       { x0: xLo, x1: xHi, y0: ySplitBack, y1: yHi },
@@ -60,22 +72,68 @@ function footprintsForBackToBackModule(
   }
 
   const crossSpan = xHi - xLo;
-  const expected = 2 * rackDepthMm + SPINE_BACK_TO_BACK_MM;
-  if (Math.abs(crossSpan - expected) > 3) {
+  if (Math.abs(crossSpan - expectedBand) > DOUBLE_BAND_TOL_MM) {
     return [fp];
   }
   const xSplitFront = xLo + rackDepthMm;
   const xSplitBack = xSplitFront + SPINE_BACK_TO_BACK_MM;
+  if (Math.abs(xHi - (xSplitBack + rackDepthMm)) > DOUBLE_BAND_TOL_MM) {
+    return [fp];
+  }
   return [
     { x0: xLo, x1: xSplitFront, y0: yLo, y1: yHi },
     { x0: xSplitBack, x1: xHi, y0: yLo, y1: yHi },
   ];
 }
 
+/** Contorno no piso (Z) da faixa da espinha entre duas pegadas de costa. */
+function emitSpineGapFloorRect(
+  lines: Rack3DLine3D[],
+  fpA: ModuleFootprint3d,
+  fpB: ModuleFootprint3d,
+  layoutOrientation: LayoutOrientationV2,
+  z: number
+): void {
+  const gap = spineGapFootprintMm(fpA, fpB, layoutOrientation);
+  if (!gap) return;
+  const { x0, y0, x1, y1 } = gap;
+  const xa = Math.min(x0, x1);
+  const xb = Math.max(x0, x1);
+  const ya = Math.min(y0, y1);
+  const yb = Math.max(y0, y1);
+  if (xb - xa <= EPS || yb - ya <= EPS) return;
+  pushLine(lines, 'floor', xa, ya, z, xb, ya, z);
+  pushLine(lines, 'floor', xb, ya, z, xb, yb, z);
+  pushLine(lines, 'floor', xb, yb, z, xa, yb, z);
+  pushLine(lines, 'floor', xa, yb, z, xa, ya, z);
+}
+
+/** Retângulo da espinha em mm (planta), entre a costa frontal e a traseira. */
+function spineGapFootprintMm(
+  fpA: ModuleFootprint3d,
+  fpB: ModuleFootprint3d,
+  layoutOrientation: LayoutOrientationV2
+): { x0: number; y0: number; x1: number; y1: number } | null {
+  const xLo = Math.min(fpA.x0, fpA.x1, fpB.x0, fpB.x1);
+  const xHi = Math.max(fpA.x0, fpA.x1, fpB.x0, fpB.x1);
+  if (layoutOrientation === 'along_length') {
+    const yEndA = Math.max(fpA.y0, fpA.y1);
+    const yStartB = Math.min(fpB.y0, fpB.y1);
+    if (yStartB <= yEndA + EPS) return null;
+    return { x0: xLo, x1: xHi, y0: yEndA, y1: yStartB };
+  }
+  const xEndA = Math.max(fpA.x0, fpA.x1);
+  const xStartB = Math.min(fpB.x0, fpB.x1);
+  if (xStartB <= xEndA + EPS) return null;
+  const yLo = Math.min(fpA.y0, fpA.y1, fpB.y0, fpB.y1);
+  const yHi = Math.max(fpA.y0, fpA.y1, fpB.y0, fpB.y1);
+  return { x0: xEndA, x1: xStartB, y0: yLo, y1: yHi };
+}
+
 function emitPalletRackPrism(
   lines: Rack3DLine3D[],
   mod: RackModule,
-  footprint: Footprint,
+  footprint: ModuleFootprint3d,
   uprightSeen: Set<string>
 ): void {
   const x0 = Math.min(footprint.x0, footprint.x1);
@@ -89,7 +147,6 @@ function emitPalletRackPrism(
   const beamZsAll = mod.beamGeometry.beamElevationsMm.filter(
     z => z >= EPS && z <= mod.heightMm + EPS
   );
-  /** Última elevação = limite estrutural; não fechar quadrilátero de longarina (alinha com elevação frontal). */
   const beamZs = beamZsAll.length >= 2 ? beamZsAll.slice(0, -1) : beamZsAll;
 
   const corners: [number, number][] = [
@@ -123,35 +180,48 @@ function emitPalletRackPrism(
   }
 }
 
+function maxUprightHeightAndTiers(geometry: LayoutGeometry): {
+  uprightHeightMm: number;
+  tiers: number;
+} {
+  let h = EPS;
+  let tiers = 1;
+  for (const row of geometry.rows) {
+    for (const mod of row.modules) {
+      h = Math.max(h, mod.heightMm);
+      tiers = Math.max(tiers, mod.storageTierCount);
+    }
+  }
+  return { uprightHeightMm: h, tiers };
+}
+
 /**
  * Gera segmentos 3D (wireframe) a partir do modelo geométrico canónico.
- * Cada módulo usa as mesmas cotas verticais que a elevação ({@link RackModule.beamGeometry}).
- * Dupla costas: dois blocos por módulo, separados pela espinha (sem corredor entre eles).
+ * Cada módulo usa as cotas verticais de {@link RackModule.beamGeometry}.
+ * Dupla costas: dois prismas por módulo + contorno da espinha ao nível do piso.
+ *
+ * Montantes são deduplicados **por módulo** (não globalmente), para manter arestas
+ * visíveis entre módulos adjacentes ao longo do vão.
  */
 export function build3DModelV2(geometry: LayoutGeometry): Rack3DModel {
-  const firstMod = geometry.rows[0]?.modules[0];
-  const H = Math.max(EPS, firstMod?.heightMm ?? 1);
-  const levels = Math.max(
-    1,
-    firstMod?.storageTierCount ?? firstMod?.globalLevels ?? 1
-  );
+  const { uprightHeightMm: H, tiers: levels } =
+    maxUprightHeightAndTiers(geometry);
   const lines: Rack3DLine3D[] = [];
   const { warehouseLengthMm: L, warehouseWidthMm: W } = geometry;
 
-  /** Contorno do piso do galpão (Z=0) — contexto da implantação. */
   const z0 = 0;
   pushLine(lines, 'floor', 0, 0, z0, L, 0, z0);
   pushLine(lines, 'floor', L, 0, z0, L, W, z0);
   pushLine(lines, 'floor', L, W, z0, 0, W, z0);
   pushLine(lines, 'floor', 0, W, z0, 0, 0, z0);
 
-  const uprightSeen = new Set<string>();
   const rackDepthMm = geometry.metadata.rackDepthMm;
   const layoutOrientation = geometry.orientation;
 
   for (const row of geometry.rows) {
     for (const mod of row.modules) {
-      const fps = footprintsForBackToBackModule(
+      const uprightSeen = new Set<string>();
+      const fps = splitModuleFootprintsFor3d(
         row,
         mod,
         rackDepthMm,
@@ -159,6 +229,20 @@ export function build3DModelV2(geometry: LayoutGeometry): Rack3DModel {
       );
       for (const fp of fps) {
         emitPalletRackPrism(lines, mod, fp, uprightSeen);
+      }
+      if (
+        fps.length === 2 &&
+        row.rowType === 'backToBack' &&
+        fps[0] &&
+        fps[1]
+      ) {
+        emitSpineGapFloorRect(
+          lines,
+          fps[0]!,
+          fps[1]!,
+          layoutOrientation,
+          z0
+        );
       }
     }
   }
