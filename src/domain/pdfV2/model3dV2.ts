@@ -158,42 +158,17 @@ function splitBackToBackFallback(
   ];
 }
 
-/** Remove segmentos coincidentes (mesmos extremos) para arestas partilhadas entre módulos. */
-function dedupeWireframeLines(lines: Rack3DLine3D[]): Rack3DLine3D[] {
-  const seen = new Set<string>();
-  const out: Rack3DLine3D[] = [];
-  const r = (n: number) => Math.round(n * 10) / 10;
-  for (const ln of lines) {
-    if (ln.kind === 'module_outline') {
-      out.push(ln);
-      continue;
-    }
-    const a = [r(ln.x1), r(ln.y1), r(ln.z1), r(ln.x2), r(ln.y2), r(ln.z2)].join(
-      ','
-    );
-    const b = [r(ln.x2), r(ln.y2), r(ln.z2), r(ln.x1), r(ln.y1), r(ln.z1)].join(
-      ','
-    );
-    const key = `${ln.kind}|${a < b ? a : b}`;
-    if (seen.has(key)) {
-      continue;
-    }
-    seen.add(key);
-    out.push(ln);
-  }
-  return out;
-}
+/**
+ * Não deduplicar arestas do wireframe: fundir segmentos coincidentes fazia desaparecer
+ * fronteiras entre módulos adjacentes e podia ler-se como volume único. Cada prisma
+ * mantém as suas arestas (sobreposição em SVG = mesma linha visual nas faces comuns).
+ */
 
-/** Contorno no piso (Z) da faixa da espinha entre duas pegadas de costa. */
-function emitSpineGapFloorRect(
+function emitSpineGapFloorRectFromBox(
   lines: Rack3DLine3D[],
-  fpA: ModuleFootprint3d,
-  fpB: ModuleFootprint3d,
-  layoutOrientation: LayoutOrientationV2,
+  gap: { x0: number; y0: number; x1: number; y1: number },
   z: number
 ): void {
-  const gap = spineGapFootprintMm(fpA, fpB, layoutOrientation);
-  if (!gap) return;
   const { x0, y0, x1, y1 } = gap;
   const xa = Math.min(x0, x1);
   const xb = Math.max(x0, x1);
@@ -204,6 +179,26 @@ function emitSpineGapFloorRect(
   pushLine(lines, 'floor', xb, ya, z, xb, yb, z);
   pushLine(lines, 'floor', xb, yb, z, xa, yb, z);
   pushLine(lines, 'floor', xa, yb, z, xa, ya, z);
+}
+
+/** Arestas verticais do perímetro da espinha (vão entre costas) — leitura 3D fiel à dupla. */
+function emitSpineGapVerticalUprights(
+  lines: Rack3DLine3D[],
+  gap: { x0: number; y0: number; x1: number; y1: number },
+  z0: number,
+  zTop: number
+): void {
+  const { x0, y0, x1, y1 } = gap;
+  const xa = Math.min(x0, x1);
+  const xb = Math.max(x0, x1);
+  const ya = Math.min(y0, y1);
+  const yb = Math.max(y0, y1);
+  if (xb - xa <= EPS || yb - ya <= EPS) return;
+  const spineOpts = { lineRole: 'spine_divider' as const };
+  pushLine(lines, 'upright', xa, ya, z0, xa, ya, zTop, spineOpts);
+  pushLine(lines, 'upright', xb, ya, z0, xb, ya, zTop, spineOpts);
+  pushLine(lines, 'upright', xb, yb, z0, xb, yb, zTop, spineOpts);
+  pushLine(lines, 'upright', xa, yb, z0, xa, yb, zTop, spineOpts);
 }
 
 /** Retângulo da espinha em mm (planta), entre a costa frontal e a traseira. */
@@ -335,21 +330,21 @@ function maxUprightHeightAndTiers(geometry: LayoutGeometry): {
  * a pegada; contorno de espinha ao nível do piso + `module_outline` em Z=0 por prisma
  * (não deduplicado) para leitura da planta no 3D.
  *
- * Montantes são deduplicados **por prisma**; no fim, {@link dedupeWireframeLines} remove
- * arestas coincidentes entre módulos adjacentes (exceto `module_outline`).
+ * Montantes são deduplicados **por prisma** (cantos); não há dedupe global — evita colapsar
+ * subdivisões entre módulos. Espinha dupla: contorno ao piso + montantes do vão até à altura do módulo.
  */
 export function build3DModelV2(
   geometry: LayoutGeometry,
   options?: { debug?: boolean }
 ): Rack3DModel {
-  const debug = options?.debug === true;
   const { uprightHeightMm: H, tiers: levels } =
     maxUprightHeightAndTiers(geometry);
   const lines: Rack3DLine3D[] = [];
   const { warehouseLengthMm: L, warehouseWidthMm: W } = geometry;
 
   const z0 = 0;
-  const bTint = debug ? ('boundary' as const) : undefined;
+  const bTint =
+    options?.debug === true ? ('boundary' as const) : undefined;
   const whOpts = {
     ...(bTint !== undefined ? { debugTint: bTint } : {}),
     lineRole: 'warehouse_slab' as const,
@@ -368,6 +363,7 @@ export function build3DModelV2(
   let tunnelModuleSegmentCount = 0;
   let halfModuleSegmentCount = 0;
   let backToBackCollapsedCount = 0;
+  let spineDividerSegmentCount = 0;
 
   for (const row of geometry.rows) {
     for (const mod of row.modules) {
@@ -392,11 +388,12 @@ export function build3DModelV2(
         backToBackCollapsedCount += 1;
       }
 
-      const modTint: Rack3DLine3D['debugTint'] | undefined = debug
-        ? mod.type === 'tunnel'
-          ? 'tunnel'
-          : 'normal'
-        : undefined;
+      const modTint: Rack3DLine3D['debugTint'] | undefined =
+        options?.debug === true
+          ? mod.type === 'tunnel'
+            ? 'tunnel'
+            : 'normal'
+          : undefined;
       for (const fp of fps) {
         const uprightSeen = new Set<string>();
         emitModuleFootprintOutline(lines, fp, z0, modTint);
@@ -408,18 +405,21 @@ export function build3DModelV2(
         fps[0] &&
         fps[1]
       ) {
-        emitSpineGapFloorRect(
-          lines,
+        const gap = spineGapFootprintMm(
           fps[0]!,
           fps[1]!,
-          layoutOrientation,
-          z0
+          layoutOrientation
         );
+        if (gap) {
+          emitSpineGapFloorRectFromBox(lines, gap, z0);
+          emitSpineGapVerticalUprights(lines, gap, z0, mod.heightMm);
+          spineDividerSegmentCount += 4;
+        }
       }
     }
   }
 
-  const linesDeduped = debug ? lines : dedupeWireframeLines(lines);
+  const linesDeduped = lines;
 
   const moduleOutlineLineCount = linesDeduped.filter(
     l => l.kind === 'module_outline'
@@ -450,6 +450,7 @@ export function build3DModelV2(
       backToBackCollapsedCount,
       moduleOutlineLineCount,
       tunnelOpeningFloorSegmentCount,
+      spineDividerSegmentCount,
     },
   };
 }

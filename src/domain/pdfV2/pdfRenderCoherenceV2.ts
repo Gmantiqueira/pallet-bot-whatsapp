@@ -61,6 +61,20 @@ function halfModuleSegmentCount(geo: LayoutGeometry): number {
 }
 
 /** 4 segmentos horizontais por prisma de túnel com pé livre > 0 (abertura desenhada em Z). */
+/** 4 segmentos verticais por módulo quando fileira dupla e o split gera duas pegadas (incl. túnel). */
+function expectedSpineDividerSegments(geo: LayoutGeometry): number {
+  const rackDepthMm = geo.metadata.rackDepthMm;
+  const ori = geo.orientation;
+  let n = 0;
+  for (const row of geo.rows) {
+    for (const mod of row.modules) {
+      const fps = splitModuleFootprintsFor3d(row, mod, rackDepthMm, ori);
+      if (row.rowType === 'backToBack' && fps.length === 2) n += 4;
+    }
+  }
+  return n;
+}
+
 function expectedTunnelOpeningFloorSegments(geo: LayoutGeometry): number {
   const rackDepthMm = geo.metadata.rackDepthMm;
   const ori = geo.orientation;
@@ -268,6 +282,13 @@ export function validatePdfRenderCoherence(
   if (a.tunnelOpeningFloorSegmentCount !== expTunnelFloor) {
     errors.push(
       `Modelo 3D: segmentos de abertura de túnel (${a.tunnelOpeningFloorSegmentCount}) ≠ esperado (${expTunnelFloor}) para módulos túnel com pé livre.`
+    );
+  }
+
+  const expSpine = expectedSpineDividerSegments(geometry);
+  if (a.spineDividerSegmentCount !== expSpine) {
+    errors.push(
+      `Modelo 3D: segmentos spine_divider (${a.spineDividerSegmentCount}) ≠ esperado (${expSpine}) (espinha dupla costas em altura).`
     );
   }
 

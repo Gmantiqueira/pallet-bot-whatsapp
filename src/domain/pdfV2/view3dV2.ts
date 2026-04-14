@@ -76,8 +76,8 @@ const STROKE: Record<
   floor: { c: '#64748b', w: 1.45, opacity: 0.94 },
   upright: { c: '#0f172a', w: 1.85, opacity: 1 },
   beam: { c: '#c2410c', w: 1.55, opacity: 1 },
-  /** Sill de cada prisma em planta (Z=0) — lê-se mesmo após dedupe de estrutura. */
-  module_outline: { c: '#1e3a8a', w: 1.35, opacity: 0.92 },
+  /** Contorno de cada prisma em planta (Z=0) — subdivisão explícita entre módulos. */
+  module_outline: { c: '#172554', w: 1.85, opacity: 0.94 },
 };
 
 /** Modo DEBUG_PDF: cores por tipo de módulo / contorno do galpão. */
@@ -118,6 +118,9 @@ function strokeForLine(
   ln: ProjectedLine2D,
   debug: boolean
 ): { c: string; w: number; opacity: number } {
+  if (ln.lineRole === 'spine_divider') {
+    return { c: '#0369a1', w: 1.5, opacity: 0.93 };
+  }
   if (debug && ln.debugTint !== undefined && ln.kind !== 'module_outline') {
     return STROKE_DEBUG[ln.debugTint][ln.kind];
   }
@@ -167,6 +170,7 @@ export function render3DViewV2(
   for (const kind of DRAW_ORDER) {
     for (const ln of projected.lines) {
       if (ln.kind !== kind) continue;
+      if (kind === 'upright' && ln.lineRole === 'spine_divider') continue;
       const a = toSvg(ln.x1, ln.y1);
       const b = toSvg(ln.x2, ln.y2);
       const st = strokeForLine(ln, debug);
@@ -174,6 +178,16 @@ export function render3DViewV2(
         `<line x1="${a.x.toFixed(2)}" y1="${a.y.toFixed(2)}" x2="${b.x.toFixed(2)}" y2="${b.y.toFixed(2)}" stroke="${st.c}" stroke-width="${st.w}" stroke-opacity="${st.opacity}" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`
       );
     }
+  }
+
+  for (const ln of projected.lines) {
+    if (ln.kind !== 'upright' || ln.lineRole !== 'spine_divider') continue;
+    const a = toSvg(ln.x1, ln.y1);
+    const b = toSvg(ln.x2, ln.y2);
+    const st = strokeForLine(ln, debug);
+    parts.push(
+      `<line x1="${a.x.toFixed(2)}" y1="${a.y.toFixed(2)}" x2="${b.x.toFixed(2)}" y2="${b.y.toFixed(2)}" stroke="${st.c}" stroke-width="${st.w}" stroke-opacity="${st.opacity}" stroke-dasharray="5 4" stroke-linecap="square" fill="none"/>`
+    );
   }
 
   parts.push('</g></svg>');

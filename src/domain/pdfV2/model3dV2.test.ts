@@ -8,6 +8,7 @@ import {
   splitModuleFootprintsFor3d,
 } from './model3dV2';
 import { audit3dModelCoherence } from './model3dV2Coherence';
+import { validatePdfRenderCoherence } from './pdfRenderCoherenceV2';
 import { projectToIsometric, render3DViewV2 } from './view3dV2';
 import type { ProjectAnswersV2 } from './answerMapping';
 import type { Rack3DModel } from './types';
@@ -51,6 +52,7 @@ describe('build3DModelV2 + projeção isométrica', () => {
         backToBackCollapsedCount: 0,
         moduleOutlineLineCount: 0,
         tunnelOpeningFloorSegmentCount: 0,
+        spineDividerSegmentCount: 0,
       },
       lines: [
         {
@@ -205,6 +207,22 @@ describe('build3DModelV2 + projeção isométrica', () => {
     expect(audit.expectedPrismCount).toBeGreaterThan(
       g.totals.moduleCount - 0.5
     );
+  });
+
+  it('8b: dupla costas — espinha em altura e validatePdfRenderCoherence', () => {
+    const a = { ...base(), lineStrategy: 'APENAS_DUPLOS' as const };
+    const sol = buildLayoutSolutionV2(a);
+    const g = geomFromAnswers(a);
+    const model = build3DModelV2(g);
+    expect(model.audit.spineDividerSegmentCount).toBeGreaterThan(0);
+    expect(
+      model.lines.some(
+        l => l.lineRole === 'spine_divider' && l.kind === 'upright'
+      )
+    ).toBe(true);
+    expect(() =>
+      validatePdfRenderCoherence(g, { rack3dModel: model, layoutSolution: sol })
+    ).not.toThrow();
   });
 
   it('8: coerência — contagem de prismas bate com a soma dos splits por módulo', () => {
