@@ -110,6 +110,19 @@ function drawFrontGuardRailMarkers(
   };
   if (left !== 'none') post(faceSpanLeft - 5, left);
   if (right !== 'none') post(faceSpanRight + 5, right);
+  const tag = (kind: 'simple' | 'double') => (kind === 'double' ? 'G2' : 'G1');
+  if (left !== 'none') {
+    const col = left === 'double' ? '#b91c1c' : '#ca8a04';
+    parts.push(
+      `<text x="${faceSpanLeft - 22}" y="${(y1 + y2) / 2 + 3 * ls}" text-anchor="end" font-size="${7.8 * ls}px" font-weight="800" fill="${col}" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">${tag(left)}</text>`
+    );
+  }
+  if (right !== 'none') {
+    const col = right === 'double' ? '#b91c1c' : '#ca8a04';
+    parts.push(
+      `<text x="${faceSpanRight + 22}" y="${(y1 + y2) / 2 + 3 * ls}" text-anchor="start" font-size="${7.8 * ls}px" font-weight="800" fill="${col}" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">${tag(right)}</text>`
+    );
+  }
   return parts.join('');
 }
 
@@ -830,6 +843,12 @@ function drawFrontRack(
     parts.push(
       `<rect x="${ux - padXP}" y="${floorTop - baseH}" width="${uw + 2 * padXP}" height="${baseH}" fill="${prot ? '#ea580c' : '#334155'}" stroke="${FV_UPRIGHT_STROKE}" stroke-width="${prot ? 0.58 : 0.45}" opacity="${prot ? 0.96 : 1}"/>`
     );
+    if (prot) {
+      parts.push(
+        `<line x1="${ux + uw * 0.08}" y1="${floorTop - baseH * 0.45}" x2="${ux + uw * 0.92}" y2="${floorTop - baseH * 0.45}" stroke="#ffedd5" stroke-width="0.65" opacity="0.95"/>`,
+        `<line x1="${ux + uw * 0.15}" y1="${floorTop - 1.1}" x2="${ux + uw * 0.85}" y2="${floorTop - 1.1}" stroke="#9a3412" stroke-width="0.5" opacity="0.88"/>`
+      );
+    }
   }
 
   if (showTunnelOpening && yPassTop < floorTop - 2.5) {
@@ -904,7 +923,7 @@ function drawFrontRack(
     data.firstLevelOnGround === true &&
     typeof yBeam0Elev === 'number' &&
     !showTunnelOpening &&
-    Math.abs(yBeam0Elev - rackBottom) > 5
+    Math.abs(yBeam0Elev - rackBottom) > 8
   ) {
     for (let bi = 0; bi < bays.length; bi++) {
       const bay = bays[bi]!;
@@ -912,6 +931,22 @@ function drawFrontRack(
         `<line x1="${bay.left}" y1="${yBeam0Elev}" x2="${bay.right}" y2="${yBeam0Elev}" stroke="#0d9488" stroke-width="1.35" opacity="0.78"/>`
       );
     }
+  } else if (
+    data.firstLevelOnGround !== false &&
+    typeof yBeam0Elev === 'number' &&
+    !showTunnelOpening &&
+    Math.abs(yBeam0Elev - rackBottom) <= 8
+  ) {
+    for (let bi = 0; bi < bays.length; bi++) {
+      const bay = bays[bi]!;
+      parts.push(
+        `<line x1="${bay.left}" y1="${yBeam0Elev}" x2="${bay.right}" y2="${yBeam0Elev}" stroke="#0d9488" stroke-width="2.75" stroke-linecap="square" opacity="0.92"/>`
+      );
+    }
+    const cx = (faceSpanLeft + faceSpanRight) / 2;
+    parts.push(
+      `<text x="${cx}" y="${yBeam0Elev - 5.5 * ls}" text-anchor="middle" font-size="${7.5 * ls}px" font-weight="700" fill="#0f766e" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif">1.º feixe ao piso · sem vão útil abaixo</text>`
+    );
   }
 
   const yBeam0 = beamYsPx[0];

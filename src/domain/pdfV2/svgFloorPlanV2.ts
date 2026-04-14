@@ -163,6 +163,131 @@ function guardKindAtPlanEdge(
   return 'none';
 }
 
+/** Faixa na base da pegada (vista em planta) — alinha com protetor na face frontal da elevação. */
+function appendColumnProtectorAlongModules(
+  model: FloorPlanModelV2,
+  parts: string[]
+): void {
+  if (!model.planAccessories.columnProtector) return;
+  const maxMarks = 64;
+  let n = 0;
+  for (const s of model.structureRects) {
+    if (s.variant === 'tunnel') continue;
+    if (n >= maxMarks) break;
+    n += 1;
+    const bw = Math.max(14, s.w * 0.58);
+    const bh = 5.5;
+    const bx = s.x + (s.w - bw) / 2;
+    const by = s.y + s.h - bh - 0.5;
+    parts.push(
+      `<rect x="${bx}" y="${by}" width="${bw}" height="${bh}" rx="1.2" fill="#ea580c" stroke="#9a3412" stroke-width="0.85" opacity="0.96"/>`
+    );
+    parts.push(
+      `<line x1="${bx + bw * 0.12}" y1="${by + bh * 0.55}" x2="${bx + bw * 0.88}" y2="${by + bh * 0.55}" stroke="#ffedd5" stroke-width="0.75" opacity="0.9"/>`
+    );
+  }
+}
+
+/**
+ * Legenda compacta: 1.º nível, guardas (simples/dupla), protetor — mesma semântica do resumo técnico.
+ */
+function appendFloorPlanConfigurationLegend(
+  model: FloorPlanModelV2,
+  parts: string[]
+): void {
+  const { w, h } = model.viewBox;
+  const a = model.planAccessories;
+  const pad = 14;
+  const boxW = Math.min(468, w - 2 * pad - 8);
+  const boxH = 156;
+  const x0 = pad;
+  const y0 = h - pad - boxH;
+  parts.push(
+    `<rect x="${x0}" y="${y0}" width="${boxW}" height="${boxH}" rx="7" fill="#f8fafc" fill-opacity="0.97" stroke="#cbd5e1" stroke-width="0.95"/>`
+  );
+  parts.push(
+    `<text x="${x0 + 12}" y="${y0 + 18}" font-size="11px" font-weight="700" fill="#475569" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" letter-spacing="0.06em">CONFIGURAÇÃO (LEITURA GRÁFICA)</text>`
+  );
+
+  const lx = x0 + 12;
+  let ly = y0 + 36;
+  const onGround = a.firstLevelOnGround !== false;
+  /** Mini esquema: linha do piso + 1.º feixe. */
+  const miniGround = (
+    gx: number,
+    gy: number,
+    elevated: boolean,
+    highlight: boolean
+  ): string => {
+    const floorY = gy + 22;
+    const beamY = elevated ? gy + 8 : floorY;
+    const bits: string[] = [];
+    if (highlight) {
+      bits.push(
+        `<rect x="${gx - 3}" y="${gy - 2}" width="58" height="30" rx="5" fill="none" stroke="${
+          elevated ? '#ca8a04' : '#0d9488'
+        }" stroke-width="1.65" opacity="0.95"/>`
+      );
+    }
+    bits.push(
+      `<line x1="${gx}" y1="${floorY}" x2="${gx + 52}" y2="${floorY}" stroke="#334155" stroke-width="1.6" stroke-linecap="square"/>`
+    );
+    if (elevated) {
+      bits.push(
+        `<rect x="${gx + 2}" y="${beamY}" width="48" height="${floorY - beamY}" fill="#fef9c3" fill-opacity="0.55" stroke="none"/>`,
+        `<line x1="${gx}" y1="${beamY}" x2="${gx + 52}" y2="${beamY}" stroke="#ca8a04" stroke-width="1.35" stroke-dasharray="4 3" opacity="0.9"/>`
+      );
+    } else {
+      bits.push(
+        `<line x1="${gx}" y1="${beamY}" x2="${gx + 52}" y2="${beamY}" stroke="#0d9488" stroke-width="2.1" stroke-linecap="square" opacity="0.88"/>`
+      );
+    }
+    return bits.join('');
+  };
+
+  parts.push(
+    `<text x="${lx}" y="${ly}" font-size="10px" font-weight="600" fill="#64748b" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">1.º eixo de feixe (destaque = opção do projeto)</text>`
+  );
+  ly += 4;
+  parts.push(miniGround(lx, ly - 4, false, onGround));
+  parts.push(
+    `<text x="${lx + 60}" y="${ly + 14}" font-size="9.5px" fill="#0f766e" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">Ao piso · sem vão útil inferior</text>`
+  );
+  parts.push(miniGround(lx + 228, ly - 4, true, !onGround));
+  parts.push(
+    `<text x="${lx + 288}" y="${ly + 14}" font-size="9.5px" fill="#a16207" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">Elevado · folga sob o 1.º patamar</text>`
+  );
+  ly += 34;
+
+  const hasGuard = a.guardRailSimple || a.guardRailDouble;
+  if (hasGuard) {
+    parts.push(
+      `<text x="${lx}" y="${ly}" font-size="10px" font-weight="600" fill="#64748b" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">Guardas ao longo do vão (extremidades do desenho)</text>`
+    );
+    ly += 14;
+    parts.push(
+      `<line x1="${lx}" y1="${ly}" x2="${lx + 28}" y2="${ly}" stroke="#ca8a04" stroke-width="3.8" stroke-linecap="square"/>`,
+      `<text x="${lx + 36}" y="${ly + 4}" font-size="9.5px" fill="#713f12" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">Simples (1 rail)</text>`,
+      `<line x1="${lx + 148}" y1="${ly - 3}" x2="${lx + 176}" y2="${ly - 3}" stroke="#b91c1c" stroke-width="2.4" stroke-linecap="square"/>`,
+      `<line x1="${lx + 148}" y1="${ly + 3}" x2="${lx + 176}" y2="${ly + 3}" stroke="#b91c1c" stroke-width="2.4" stroke-linecap="square"/>`,
+      `<text x="${lx + 184}" y="${ly + 4}" font-size="9.5px" fill="#7f1d1d" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">Dupla (2 rails)</text>`
+    );
+    ly += 22;
+  }
+
+  if (a.columnProtector) {
+    parts.push(
+      `<rect x="${lx}" y="${ly - 8}" width="22" height="9" rx="1.5" fill="#ea580c" stroke="#9a3412" stroke-width="0.8"/>`,
+      `<text x="${lx + 30}" y="${ly}" font-size="9.5px" fill="#431407" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">Protetor de pilar (base dos montantes — cantos + faixas nas pegadas)</text>`
+    );
+    ly += 18;
+  }
+
+  parts.push(
+    `<text x="${lx}" y="${y0 + boxH - 10}" font-size="9px" fill="#94a3b8" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">Mesma convenção que a vista frontal e o resumo técnico.</text>`
+  );
+}
+
 /** Protetores nos cantos + guardas nas extremidades ao longo do vão (símbolo). */
 function appendFloorPlanAccessoryGraphics(
   model: FloorPlanModelV2,
@@ -173,20 +298,20 @@ function appendFloorPlanAccessoryGraphics(
   const along = model.beamSpanAlong;
 
   if (a.columnProtector) {
-    const pw = 13;
-    const ph = 9;
+    const pw = 16;
+    const ph = 11;
     const corners: [number, number][] = [
-      [o.x - 2, o.y - 2],
-      [o.x + o.w - pw + 2, o.y - 2],
-      [o.x - 2, o.y + o.h - ph + 2],
-      [o.x + o.w - pw + 2, o.y + o.h - ph + 2],
+      [o.x - 3, o.y - 3],
+      [o.x + o.w - pw + 3, o.y - 3],
+      [o.x - 3, o.y + o.h - ph + 3],
+      [o.x + o.w - pw + 3, o.y + o.h - ph + 3],
     ];
     for (const [cx, cy] of corners) {
       parts.push(
-        `<rect x="${cx}" y="${cy}" width="${pw}" height="${ph}" rx="1.4" fill="#fed7aa" stroke="#c2410c" stroke-width="1.15" opacity="0.98"/>`
+        `<rect x="${cx}" y="${cy}" width="${pw}" height="${ph}" rx="1.6" fill="#fed7aa" stroke="#c2410c" stroke-width="1.25" opacity="0.98"/>`
       );
       parts.push(
-        `<line x1="${cx + 2}" y1="${cy + ph - 2.5}" x2="${cx + pw - 2}" y2="${cy + ph - 2.5}" stroke="#9a3412" stroke-width="0.9" opacity="0.85"/>`
+        `<line x1="${cx + 2.5}" y1="${cy + ph - 3}" x2="${cx + pw - 2.5}" y2="${cy + ph - 3}" stroke="#9a3412" stroke-width="1" opacity="0.88"/>`
       );
     }
   }
@@ -197,47 +322,93 @@ function appendFloorPlanAccessoryGraphics(
     x0: number,
     y0: number,
     x1: number,
-    y1: number
+    y1: number,
+    tag: string
   ) => {
     if (kind === 'none') return;
     const col = kind === 'double' ? '#b91c1c' : '#ca8a04';
-    const w = kind === 'double' ? 2.5 : 3.5;
+    const wMain = kind === 'double' ? 3 : 4.2;
+    const span = y1 - y0;
+    const markY1 = y0 + span * 0.12;
+    const markY2 = y0 + span * 0.88;
     if (vertical) {
       if (kind === 'double') {
         parts.push(
-          `<line x1="${x0 - 3.5}" y1="${y0}" x2="${x0 - 3.5}" y2="${y1}" stroke="${col}" stroke-width="${w}" stroke-linecap="square" opacity="0.92"/>`,
-          `<line x1="${x0 + 3.5}" y1="${y0}" x2="${x0 + 3.5}" y2="${y1}" stroke="${col}" stroke-width="${w}" stroke-linecap="square" opacity="0.92"/>`
+          `<line x1="${x0 - 4}" y1="${y0}" x2="${x0 - 4}" y2="${y1}" stroke="${col}" stroke-width="${wMain}" stroke-linecap="square" opacity="0.94"/>`,
+          `<line x1="${x0 + 4}" y1="${y0}" x2="${x0 + 4}" y2="${y1}" stroke="${col}" stroke-width="${wMain}" stroke-linecap="square" opacity="0.94"/>`
+        );
+        parts.push(
+          `<line x1="${x0 - 11}" y1="${markY1}" x2="${x0 + 11}" y2="${markY1}" stroke="${col}" stroke-width="1.35" opacity="0.78"/>`,
+          `<line x1="${x0 - 11}" y1="${markY2}" x2="${x0 + 11}" y2="${markY2}" stroke="${col}" stroke-width="1.35" opacity="0.78"/>`
         );
       } else {
         parts.push(
-          `<line x1="${x0}" y1="${y0}" x2="${x0}" y2="${y1}" stroke="${col}" stroke-width="${w}" stroke-linecap="square" opacity="0.95"/>`
+          `<line x1="${x0}" y1="${y0}" x2="${x0}" y2="${y1}" stroke="${col}" stroke-width="${wMain}" stroke-linecap="square" opacity="0.96"/>`
+        );
+        parts.push(
+          `<line x1="${x0 - 9}" y1="${markY1}" x2="${x0 + 9}" y2="${markY1}" stroke="${col}" stroke-width="1.45" opacity="0.82"/>`,
+          `<line x1="${x0 - 9}" y1="${markY2}" x2="${x0 + 9}" y2="${markY2}" stroke="${col}" stroke-width="1.45" opacity="0.82"/>`
         );
       }
+      const midY = (y0 + y1) / 2;
+      const isLeftEdge = x0 < o.x + o.w / 2;
+      const tx = isLeftEdge ? x0 - 12 : x0 + 12;
+      parts.push(
+        `<text x="${tx}" y="${midY + 4}" text-anchor="${isLeftEdge ? 'end' : 'start'}" font-size="10px" font-weight="700" fill="${col}" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">${escapeXml(tag)}</text>`
+      );
     } else if (kind === 'double') {
       parts.push(
-        `<line x1="${x0}" y1="${y0 - 3.5}" x2="${x1}" y2="${y1 - 3.5}" stroke="${col}" stroke-width="${w}" stroke-linecap="square" opacity="0.92"/>`,
-        `<line x1="${x0}" y1="${y0 + 3.5}" x2="${x1}" y2="${y1 + 3.5}" stroke="${col}" stroke-width="${w}" stroke-linecap="square" opacity="0.92"/>`
+        `<line x1="${x0}" y1="${y0 - 4}" x2="${x1}" y2="${y1 - 4}" stroke="${col}" stroke-width="${wMain}" stroke-linecap="square" opacity="0.94"/>`,
+        `<line x1="${x0}" y1="${y0 + 4}" x2="${x1}" y2="${y1 + 4}" stroke="${col}" stroke-width="${wMain}" stroke-linecap="square" opacity="0.94"/>`
+      );
+      const markX1 = x0 + (x1 - x0) * 0.12;
+      const markX2 = x0 + (x1 - x0) * 0.88;
+      parts.push(
+        `<line x1="${markX1}" y1="${y0 - 11}" x2="${markX1}" y2="${y0 + 11}" stroke="${col}" stroke-width="1.35" opacity="0.78"/>`,
+        `<line x1="${markX2}" y1="${y0 - 11}" x2="${markX2}" y2="${y0 + 11}" stroke="${col}" stroke-width="1.35" opacity="0.78"/>`
+      );
+      const ty = y0 + (y0 < o.y + o.h / 2 ? -12 : 14);
+      parts.push(
+        `<text x="${(x0 + x1) / 2}" y="${ty}" text-anchor="middle" font-size="10px" font-weight="700" fill="${col}" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">${escapeXml(tag)}</text>`
       );
     } else {
       parts.push(
-        `<line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" stroke="${col}" stroke-width="${w}" stroke-linecap="square" opacity="0.95"/>`
+        `<line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" stroke="${col}" stroke-width="${wMain}" stroke-linecap="square" opacity="0.96"/>`
+      );
+      const markX1 = x0 + (x1 - x0) * 0.12;
+      const markX2 = x0 + (x1 - x0) * 0.88;
+      parts.push(
+        `<line x1="${markX1}" y1="${y0 - 9}" x2="${markX1}" y2="${y0 + 9}" stroke="${col}" stroke-width="1.45" opacity="0.82"/>`,
+        `<line x1="${markX2}" y1="${y0 - 9}" x2="${markX2}" y2="${y0 + 9}" stroke="${col}" stroke-width="1.45" opacity="0.82"/>`
+      );
+      const ty = y0 + (y0 < o.y + o.h / 2 ? -12 : 14);
+      parts.push(
+        `<text x="${(x0 + x1) / 2}" y="${ty}" text-anchor="middle" font-size="10px" font-weight="700" fill="${col}" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">${escapeXml(tag)}</text>`
       );
     }
+  };
+
+  const railTag = (kind: 'none' | 'simple' | 'double'): string => {
+    if (kind === 'double') return 'G2';
+    if (kind === 'simple') return 'G1';
+    return '';
   };
 
   const startK = guardKindAtPlanEdge(a, 'start');
   const endK = guardKindAtPlanEdge(a, 'end');
   if (along === 'x') {
-    const xl = o.x - 3;
-    const xr = o.x + o.w + 3;
-    strokeRail(startK, true, xl, o.y, xl, o.y + o.h);
-    strokeRail(endK, true, xr, o.y, xr, o.y + o.h);
+    const xl = o.x - 5;
+    const xr = o.x + o.w + 5;
+    strokeRail(startK, true, xl, o.y, xl, o.y + o.h, railTag(startK));
+    strokeRail(endK, true, xr, o.y, xr, o.y + o.h, railTag(endK));
   } else {
-    const yt = o.y - 3;
-    const yb = o.y + o.h + 3;
-    strokeRail(startK, false, o.x, yt, o.x + o.w, yt);
-    strokeRail(endK, false, o.x, yb, o.x + o.w, yb);
+    const yt = o.y - 5;
+    const yb = o.y + o.h + 5;
+    strokeRail(startK, false, o.x, yt, o.x + o.w, yt, railTag(startK));
+    strokeRail(endK, false, o.x, yb, o.x + o.w, yb, railTag(endK));
   }
+
+  appendColumnProtectorAlongModules(model, parts);
 }
 
 function orientationArrowSvg(
@@ -409,6 +580,7 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
   }
 
   appendFloorPlanAccessoryGraphics(model, parts);
+  appendFloorPlanConfigurationLegend(model, parts);
 
   parts.push(orientationArrowSvg(o, model.beamSpanAlong));
 
