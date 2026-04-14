@@ -33,6 +33,10 @@ interface IncomingWebhookPayload {
 ```typescript
 interface WebhookResponse {
   messages: OutgoingMessage[];
+  /** `upstash` = Redis (sessão partilhada). `memory` = só no processo (em serverless multi-pedido pode falhar). */
+  sessionBackend: "memory" | "upstash";
+  /** Opcional: presente quando o PDF é gerado neste pedido (integrador WhatsApp). */
+  generatedPdf?: object;
 }
 
 interface OutgoingMessage {

@@ -96,6 +96,7 @@ O projeto segue uma arquitetura em camadas (layered architecture) com separaçã
 
 - **`repositories/createSessionRepository.ts`**
   - Escolhe `UpstashSessionRepository` (Redis HTTPS) ou `MemorySessionRepository` (dev)
+  - `getSessionBackend()` alimenta o campo `sessionBackend` em cada resposta `POST /webhook` (simulador e integradores)
 
 - **`repositories/upstashSessionRepository.ts` / `memorySessionRepository.ts`**
   - Implementações de `SessionRepository` (JSON em Redis ou Map em memória)

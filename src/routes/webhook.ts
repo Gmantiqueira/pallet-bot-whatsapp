@@ -2,7 +2,11 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { loadEnv } from '../config/env';
 import { verifyBearerToken } from '../infra/http/bearerAuth';
 import { OutgoingMessage } from '../types/messages';
-import { createSessionRepository } from '../infra/repositories/createSessionRepository';
+import {
+  createSessionRepository,
+  getSessionBackend,
+  type SessionBackend,
+} from '../infra/repositories/createSessionRepository';
 import { routeIncoming, IncomingPayload } from '../application/messageRouter';
 import type { GeneratedPdfArtifact } from '../types/generatedPdf';
 
@@ -18,6 +22,8 @@ interface IncomingWebhookPayload {
 
 interface WebhookResponse {
   messages: OutgoingMessage[];
+  /** `upstash`: sessão partilhada entre instâncias. `memory`: só no processo atual (fluxos longos podem falhar em serverless). */
+  sessionBackend: SessionBackend;
   /** Metadados do PDF quando gerado neste pedido — para o integrador anexar ao WhatsApp. */
   generatedPdf?: GeneratedPdfArtifact;
 }
@@ -83,6 +89,7 @@ export const webhookRoutes = async (
         console.log('[diag][webhook] before-reply-send');
         return reply.code(200).send({
           messages: result.outgoingMessages,
+          sessionBackend: getSessionBackend(),
           ...(result.generatedPdf ? { generatedPdf: result.generatedPdf } : {}),
         });
       } catch (err) {

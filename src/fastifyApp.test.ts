@@ -35,6 +35,7 @@ describe('App Smoke Test', () => {
     const body = JSON.parse(response.body);
     expect(body).toHaveProperty('messages');
     expect(Array.isArray(body.messages)).toBe(true);
+    expect(body.sessionBackend).toBe('memory');
   });
 
   it('should respond 401 to POST /webhook without Authorization', async () => {

@@ -177,12 +177,11 @@
       <div style="font-size:12px;font-weight:400;opacity:0.95;margin-top:4px">
         Simulador web — mesmo fluxo que no WhatsApp (via /webhook)
       </div>
-      <div style="font-size:11px;font-weight:400;opacity:0.88;margin-top:8px;line-height:1.4;max-width:42em;margin-left:auto;margin-right:auto">
-        <strong>Produção (Vercel):</strong> configura
-        <code style="font-size:10px">UPSTASH_REDIS_REST_URL</code> +
-        <code style="font-size:10px">UPSTASH_REDIS_REST_TOKEN</code>
-        no projeto. Sem Redis, cada pedido pode ir a outra instância e o fluxo
-        volta ao menu (sessão em memória não é partilhada).
+      <div
+        id="sessionBackendHint"
+        style="font-size:11px;font-weight:400;opacity:0.88;margin-top:8px;line-height:1.4;max-width:44em;margin-left:auto;margin-right:auto"
+      >
+        Sessão: aguardando resposta do servidor…
       </div>
     </div>
     <div class="messages" id="messages"></div>
@@ -277,6 +276,42 @@
           addMessage(msg.text, false, msg.buttons);
         }
       });
+    }
+
+    function applySessionBackendHint(data) {
+      var el = document.getElementById('sessionBackendHint');
+      if (!el || !data) return;
+      var b = data.sessionBackend;
+      if (b === 'upstash') {
+        el.innerHTML =
+          '<strong>Sessão:</strong> Redis (Upstash) — estado partilhado entre pedidos e instâncias. Fluxos longos ok.';
+        el.style.color = 'rgba(255,255,255,0.95)';
+      } else if (b === 'memory') {
+        el.innerHTML =
+          '<strong>Sessão:</strong> só em memória neste processo. Em Vercel/serverless, ' +
+          'configura <code style="font-size:10px">UPSTASH_REDIS_REST_URL</code> + ' +
+          '<code style="font-size:10px">UPSTASH_REDIS_REST_TOKEN</code> — senão o fluxo pode ' +
+          'voltar ao menu no meio (cada pedido pode ser outra instância).';
+        el.style.color = '#fff9c4';
+      } else {
+        el.textContent =
+          'Sessão: resposta sem sessionBackend (servidor antigo). Atualiza o deploy.';
+        el.style.color = 'rgba(255,255,255,0.85)';
+      }
+    }
+
+    function handleWebhookPayload(data) {
+      applySessionBackendHint(data);
+      renderWebhookMessages(data.messages);
+      if (data.generatedPdf && data.generatedPdf.absolutePath) {
+        addMessage(
+          '[Integrador] PDF: ' +
+            data.generatedPdf.filename +
+            ' — ' +
+            data.generatedPdf.absolutePath,
+          false
+        );
+      }
     }
 
     function addMessage(text, isUser = false, buttons = null) {
@@ -381,16 +416,7 @@
           addMessage(`[Botão: ${buttonId}]`, true);
         }
 
-        renderWebhookMessages(data.messages);
-        if (data.generatedPdf && data.generatedPdf.absolutePath) {
-          addMessage(
-            '[Integrador] PDF: ' +
-              data.generatedPdf.filename +
-              ' — ' +
-              data.generatedPdf.absolutePath,
-            false
-          );
-        }
+        handleWebhookPayload(data);
       } catch (error) {
         console.error('Error:', error);
         addMessage(
@@ -448,16 +474,7 @@
         const data = await parseJsonSafe(response);
         addMessage('📷 [Imagem enviada]', true);
 
-        renderWebhookMessages(data.messages);
-        if (data.generatedPdf && data.generatedPdf.absolutePath) {
-          addMessage(
-            '[Integrador] PDF: ' +
-              data.generatedPdf.filename +
-              ' — ' +
-              data.generatedPdf.absolutePath,
-            false
-          );
-        }
+        handleWebhookPayload(data);
       } catch (error) {
         console.error('Error:', error);
         addMessage(
