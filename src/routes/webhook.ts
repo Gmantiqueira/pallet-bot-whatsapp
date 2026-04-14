@@ -1,3 +1,4 @@
+import * as fs from 'fs';
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { loadEnv } from '../config/env';
 import { verifyBearerToken } from '../infra/http/bearerAuth';
@@ -37,6 +38,8 @@ interface WebhookResponse {
   clientSession?: Session;
   /** Metadados do PDF quando gerado neste pedido — para o integrador anexar ao WhatsApp. */
   generatedPdf?: GeneratedPdfArtifact;
+  /** Só com `simulator: true`: bytes do PDF em base64 (mesma invocação que grava em /tmp; evita 404 entre instâncias). */
+  pdfBase64?: string;
 }
 
 const START_STATE = 'START';
@@ -138,11 +141,22 @@ export const webhookRoutes = async (
         console.log('[diag][webhook] after-routeIncoming');
 
         console.log('[diag][webhook] before-reply-send');
+        let pdfBase64: string | undefined;
+        if (simulatorMode && result.generatedPdf?.absolutePath) {
+          try {
+            pdfBase64 = fs
+              .readFileSync(result.generatedPdf.absolutePath)
+              .toString('base64');
+          } catch (e) {
+            console.error('[webhook] simulator pdfBase64 read failed', e);
+          }
+        }
         return reply.code(200).send({
           messages: result.outgoingMessages,
           sessionBackend: getSessionBackend(),
           ...(simulatorMode ? { clientSession: result.session } : {}),
           ...(result.generatedPdf ? { generatedPdf: result.generatedPdf } : {}),
+          ...(pdfBase64 ? { pdfBase64 } : {}),
         });
       } catch (err) {
         console.error('[diag][webhook] route-err', err);

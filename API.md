@@ -41,6 +41,8 @@ interface WebhookResponse {
   sessionBackend: "memory" | "upstash";
   /** Com `simulator: true` na request: sessão completa para o cliente manter em memória (ex.: simulador; F5 recomeça). */
   clientSession?: object;
+  /** Com `simulator: true` e PDF gerado neste pedido: ficheiro em base64 (download no simulador sem depender de `/files` entre instâncias). */
+  pdfBase64?: string;
   /** Opcional: presente quando o PDF é gerado neste pedido (integrador WhatsApp). */
   generatedPdf?: object;
 }
