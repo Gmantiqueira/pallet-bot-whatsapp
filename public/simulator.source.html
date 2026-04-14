@@ -195,47 +195,24 @@
   <script>
     /* Local: igual ao WEBHOOK_SECRET no .env. Produção (Vercel): npm run build injeta o valor das env vars. */
     const WEBHOOK_SECRET = 'd184805abc64e12c2211b08b4e544f59ac7dcf136b7f3095a59db06ca1bffdda';
-    /** Mesmo `from` durante a vida da aba (sessionStorage); com Upstash no servidor a conversa sobrevive a F5. */
-    function getOrCreateSimPhone() {
-      var storageKey = 'palletBotSimFrom';
-      try {
-        var existing = sessionStorage.getItem(storageKey);
-        if (existing && existing.length >= 12) {
-          return existing;
-        }
-      } catch (e) {
-        /* sessionStorage indisponível */
-      }
+    /** Novo em cada carregamento (F5 = conversa nova). Não persistimos em storage. */
+    function createSimPhone() {
       var suffix =
         typeof crypto !== 'undefined' && crypto.randomUUID
           ? crypto.randomUUID().replace(/-/g, '')
           : String(Date.now()) + Math.random().toString(36).slice(2, 12);
-      var phone = '55119sim' + suffix;
-      try {
-        sessionStorage.setItem(storageKey, phone);
-      } catch (e2) {
-        /* ignore */
-      }
-      return phone;
+      return '55119sim' + suffix;
     }
-    const PHONE = getOrCreateSimPhone();
-    /** Estado da conversa — devolvido pelo servidor em modo simulador; não usa Redis. */
-    var CLIENT_SESSION_KEY = 'palletBotClientSession';
+    const PHONE = createSimPhone();
+    /** Estado só em memória: sobrevive a mensagens na mesma página; F5 limpa tudo. */
+    var simClientSession = null;
 
     function loadClientSession() {
-      try {
-        var raw = sessionStorage.getItem(CLIENT_SESSION_KEY);
-        if (!raw) return undefined;
-        var o = JSON.parse(raw);
-        if (o && typeof o === 'object' && o.phone === PHONE) return o;
-      } catch (e) {}
-      return undefined;
+      return simClientSession || undefined;
     }
 
     function saveClientSession(s) {
-      try {
-        if (s) sessionStorage.setItem(CLIENT_SESSION_KEY, JSON.stringify(s));
-      } catch (e) {}
+      simClientSession = s || null;
     }
 
     const API_URL = window.location.origin;
@@ -302,7 +279,7 @@
       if (!el || !data) return;
       if (data.clientSession) {
         el.innerHTML =
-          '<strong>Sessão:</strong> guardada neste browser (sessionStorage). Fluxo independente de Redis no servidor.';
+          '<strong>Sessão:</strong> só nesta página (memória). <strong>F5</strong> recomeça do zero; não usa Redis.';
         el.style.color = '#e8f5e9';
         return;
       }

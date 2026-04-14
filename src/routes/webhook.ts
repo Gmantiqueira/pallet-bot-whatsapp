@@ -33,7 +33,7 @@ interface WebhookResponse {
   messages: OutgoingMessage[];
   /** `upstash`: sessão partilhada entre instâncias. `memory`: só no processo atual (fluxos longos podem falhar em serverless). */
   sessionBackend: SessionBackend;
-  /** Só com `simulator: true` na request: estado completo para o simulador guardar em sessionStorage. */
+  /** Só com `simulator: true` na request: estado completo para o simulador (memória na página; F5 limpa). */
   clientSession?: Session;
   /** Metadados do PDF quando gerado neste pedido — para o integrador anexar ao WhatsApp. */
   generatedPdf?: GeneratedPdfArtifact;

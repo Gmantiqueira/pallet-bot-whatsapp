@@ -39,7 +39,7 @@ interface WebhookResponse {
   messages: OutgoingMessage[];
   /** `upstash` = Redis (sessão partilhada). `memory` = só no processo (em serverless multi-pedido pode falhar). */
   sessionBackend: "memory" | "upstash";
-  /** Com `simulator: true` na request: sessão completa para o cliente guardar (ex.: sessionStorage). */
+  /** Com `simulator: true` na request: sessão completa para o cliente manter em memória (ex.: simulador; F5 recomeça). */
   clientSession?: object;
   /** Opcional: presente quando o PDF é gerado neste pedido (integrador WhatsApp). */
   generatedPdf?: object;
