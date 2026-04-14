@@ -206,6 +206,8 @@
     const PHONE = createSimPhone();
     /** Estado só em memória: sobrevive a mensagens na mesma página; F5 limpa tudo. */
     var simClientSession = null;
+    /** Último PDF gerado — usado para Baixar PDF sem novo POST /webhook. */
+    var lastPdfFilename = null;
 
     function loadClientSession() {
       return simClientSession || undefined;
@@ -308,6 +310,9 @@
       }
       applySessionBackendHint(data);
       renderWebhookMessages(data.messages);
+      if (data.generatedPdf && data.generatedPdf.filename) {
+        lastPdfFilename = String(data.generatedPdf.filename).trim();
+      }
       if (data.generatedPdf && data.generatedPdf.absolutePath) {
         addMessage(
           '[Integrador] PDF: ' +
@@ -343,7 +348,43 @@
       messagesDiv.scrollTop = messagesDiv.scrollHeight;
     }
 
+    async function downloadPdfViaFilesApi(filename) {
+      var url = resolveUrl('/files/' + encodeURIComponent(filename));
+      try {
+        var res = await fetch(url, {
+          headers: { Authorization: 'Bearer ' + WEBHOOK_SECRET },
+        });
+        if (!res.ok) {
+          addMessage(
+            '❌ Não foi possível descarregar o PDF (' +
+              res.status +
+              '). Tenta outra vez ou usa o integrador WhatsApp.',
+            false
+          );
+          return;
+        }
+        var blob = await res.blob();
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(a.href);
+        addMessage('📥 PDF descarregado: ' + filename, true);
+      } catch (err) {
+        addMessage(
+          '❌ Download: ' + (err && err.message ? err.message : String(err)),
+          false
+        );
+      }
+    }
+
     function sendButtonClick(buttonId) {
+      if (buttonId === 'BAIXAR_PDF' && lastPdfFilename) {
+        void downloadPdfViaFilesApi(lastPdfFilename);
+        return;
+      }
       sendMessage(null, buttonId);
     }
 

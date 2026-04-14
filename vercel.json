@@ -15,11 +15,18 @@
     {
       "source": "/webhook",
       "destination": "/api/webhook"
+    },
+    {
+      "source": "/files/:name",
+      "destination": "/api/files?name=:name"
     }
   ],
   "functions": {
     "api/webhook.js": {
       "maxDuration": 300
+    },
+    "api/files.js": {
+      "maxDuration": 60
     }
   }
 }
