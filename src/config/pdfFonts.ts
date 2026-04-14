@@ -11,20 +11,17 @@ export const PDFKIT_FONT_REGULAR = 'DejaVuPdf';
 export const PDFKIT_FONT_BOLD = 'DejaVuPdfBold';
 
 /**
- * Nomes das famílias tal como o Fontconfig resolve a partir dos TTF em `assets/fonts/`.
- * O Sharp/librsvg não aplica bem @font-face; precisa destes nomes + FONTCONFIG_FILE.
+ * Uma só família nas SVG (alinhado ao resumo técnico do PDFKit: DejaVu).
+ * Fontconfig + FONTCONFIG_FILE resolve a partir de `assets/fonts/`.
  */
 export const SVG_FONT_FAMILY = 'DejaVu Sans';
-export const SVG_FONT_MONO = 'DejaVu Sans Mono';
 
 /** Para `font:` em CSS (família com espaço). */
 export const SVG_FONT_FAMILY_CSS = "'DejaVu Sans'";
-export const SVG_FONT_MONO_CSS = "'DejaVu Sans Mono'";
 
 const FONT_FILES = {
   regular: 'DejaVuSans.ttf',
   bold: 'DejaVuSans-Bold.ttf',
-  mono: 'DejaVuSansMono.ttf',
 } as const;
 
 function bundledFontsDir(): string {

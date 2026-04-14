@@ -22,11 +22,7 @@ import {
   ELEV_UPRIGHT_FILL as FV_UPRIGHT_FILL,
   ELEV_UPRIGHT_STROKE as FV_UPRIGHT_STROKE,
 } from './elevationVisualTokens';
-import {
-  SVG_FONT_FAMILY,
-  SVG_FONT_MONO,
-  svgFontWeightForSvgAttr,
-} from '../../config/pdfFonts';
+import { SVG_FONT_FAMILY, svgFontWeightForSvgAttr } from '../../config/pdfFonts';
 
 /** Um módulo frontal = duas baias lado a lado (3 montantes), como desenho técnico tipo 2× vão. */
 const FV_FRONT_BAY_COUNT = 2;
@@ -1197,10 +1193,10 @@ function drawFrontRack(
 
   if (options?.debug === true) {
     parts.push(
-      `<g id="el-debug-front" font-family="${SVG_FONT_MONO}" pointer-events="none">`
+      `<g id="el-debug-front" font-family="${SVG_FONT_FAMILY}" pointer-events="none">`
     );
     parts.push(
-      `<text x="${ox + 10}" y="${oy + ph - 10}" font-size="7.5" fill="#7c3aed" font-family="${SVG_FONT_MONO}">DEBUG · eixos longarina (mm do piso)</text>`
+      `<text x="${ox + 10}" y="${oy + ph - 10}" font-size="7.5" fill="#7c3aed" font-family="${SVG_FONT_FAMILY}">DEBUG · eixos longarina (mm do piso)</text>`
     );
     let ty = oy + ph - 22;
     for (let i = 0; i < data.beamElevationsMm.length; i++) {
@@ -1209,7 +1205,7 @@ function drawFrontRack(
       const yStr =
         typeof yPx === 'number' ? `${yPx.toFixed(1)} px` : '—';
       parts.push(
-        `<text x="${ox + 10}" y="${ty}" font-size="7" fill="#6b21a8" font-family="${SVG_FONT_MONO}">beam[${i}] z=${Math.round(mm)} mm · ${yStr}</text>`
+        `<text x="${ox + 10}" y="${ty}" font-size="7" fill="#6b21a8" font-family="${SVG_FONT_FAMILY}">beam[${i}] z=${Math.round(mm)} mm · ${yStr}</text>`
       );
       ty -= 10;
       if (typeof yPx === 'number') {
@@ -1478,23 +1474,23 @@ function drawLateral(
 
   if (opts?.debug === true) {
     parts.push(
-      `<g id="el-debug-lat" font-family="${SVG_FONT_MONO}" pointer-events="none">`
+      `<g id="el-debug-lat" font-family="${SVG_FONT_FAMILY}" pointer-events="none">`
     );
     let tyDbg = oy + ph - 10;
     parts.push(
-      `<text x="${ox + 8}" y="${tyDbg}" font-size="7" fill="#7c3aed" font-family="${SVG_FONT_MONO}">DEBUG lateral · eixos z (mm)</text>`
+      `<text x="${ox + 8}" y="${tyDbg}" font-size="7" fill="#7c3aed" font-family="${SVG_FONT_FAMILY}">DEBUG lateral · eixos z (mm)</text>`
     );
     tyDbg -= 10;
     for (let i = 0; i < data.beamElevationsMm.length; i++) {
       const mm = data.beamElevationsMm[i]!;
       parts.push(
-        `<text x="${ox + 8}" y="${tyDbg}" font-size="6.5" fill="#6b21a8" font-family="${SVG_FONT_MONO}">beam[${i}] ${Math.round(mm)} mm</text>`
+        `<text x="${ox + 8}" y="${tyDbg}" font-size="6.5" fill="#6b21a8" font-family="${SVG_FONT_FAMILY}">beam[${i}] ${Math.round(mm)} mm</text>`
       );
       tyDbg -= 9;
     }
     if (showTunnelOpening) {
       parts.push(
-        `<text x="${ox + 8}" y="${tyDbg}" font-size="6.5" fill="#b45309" font-family="${SVG_FONT_MONO}">restrição túnel · ${Math.round(clearanceLatMm)} mm</text>`
+        `<text x="${ox + 8}" y="${tyDbg}" font-size="6.5" fill="#b45309" font-family="${SVG_FONT_FAMILY}">restrição túnel · ${Math.round(clearanceLatMm)} mm</text>`
       );
     }
     parts.push('</g>');

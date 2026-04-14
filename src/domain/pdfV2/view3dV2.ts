@@ -4,7 +4,7 @@ import type {
   Rack3DModel,
   SvgGroup,
 } from './types';
-import { SVG_FONT_MONO } from '../../config/pdfFonts';
+import { SVG_FONT_FAMILY } from '../../config/pdfFonts';
 
 /**
  * Projeção isométrica (cabinet-style) para 2D:
@@ -173,7 +173,7 @@ export function render3DViewV2(
   );
   if (debug) {
     parts.push(
-      `<text x="22" y="28" font-size="11" fill="#7c3aed" font-family="${SVG_FONT_MONO}">DEBUG 3D · normal=azul/laranja · túnel=roxo · contorno=teal</text>`
+      `<text x="22" y="28" font-size="11" fill="#7c3aed" font-family="${SVG_FONT_FAMILY}">DEBUG 3D · normal=azul/laranja · túnel=roxo · contorno=teal</text>`
     );
   }
   parts.push('<g id="v2-3d-wireframe">');
