@@ -87,12 +87,6 @@ const isGlobalCommand = (text: string): boolean => {
   return GLOBAL_COMMANDS.includes(normalized);
 };
 
-function traceRouter(msg: string): void {
-  if (process.env.PALLET_TRACE_WEBHOOK === '1') {
-    console.info(`[pallet-trace] ${msg}`);
-  }
-}
-
 const convertToInput = (
   incoming: IncomingPayload,
   session: Session
@@ -166,12 +160,8 @@ export const routeIncoming = async (
   incoming: IncomingPayload,
   sessionRepository: SessionRepository
 ): Promise<RouterResult> => {
-  traceRouter(
-    `routeIncoming enter state=${session.state} phone=${session.phone}`
-  );
-
   if (session.state === 'GENERATING_DOC') {
-    traceRouter('routeIncoming early return GENERATING_DOC (no transition)');
+    console.log('[diag] rt:x0-generating-doc-short');
     return {
       session,
       outgoingMessages: [
@@ -185,25 +175,23 @@ export const routeIncoming = async (
     };
   }
 
-  traceRouter('before convertToInput');
+  console.log('[diag] rt:1-pre-convert');
   const input = convertToInput(incoming, session);
-  traceRouter(
-    `after convertToInput input=${input == null ? 'null' : input.type}`
-  );
+  console.log('[diag] rt:2-post-convert');
 
   // If no valid input, return current state message
   if (!input) {
-    traceRouter('before buildMessages (no input)');
+    console.log('[diag] rt:5-pre-build');
     const messages = buildMessages(session);
-    traceRouter('after buildMessages (no input)');
+    console.log('[diag] rt:6-post-build');
     return { session, outgoingMessages: messages, generatedPdf: undefined };
   }
 
   // Handle status command specially
   if (input.type === 'GLOBAL' && input.command === 'status') {
-    traceRouter('before buildMessages (status)');
+    console.log('[diag] rt:5-pre-build');
     const messages = buildMessages(session, { statusOnly: true });
-    traceRouter('after buildMessages (status)');
+    console.log('[diag] rt:6-post-build');
     return { session, outgoingMessages: messages, generatedPdf: undefined };
   }
 
@@ -211,19 +199,17 @@ export const routeIncoming = async (
   const previousState = session.state as State;
 
   // Call state machine transition
-  traceRouter('before transition');
+  console.log('[diag] rt:3-pre-transition');
   const transitionResult = transition(session, input);
-  traceRouter(
-    `after transition newState=${transitionResult.session.state} err=${transitionResult.error != null ? 'yes' : 'no'}`
-  );
+  console.log('[diag] rt:4-post-transition');
 
   // If there's an error, don't advance state but show error message
   if (transitionResult.error) {
-    traceRouter('before buildMessages (transition error)');
+    console.log('[diag] rt:5-pre-build');
     const messages = buildMessages(session, {
       lastError: transitionResult.error,
     });
-    traceRouter('after buildMessages (transition error)');
+    console.log('[diag] rt:6-post-build');
     return { session, outgoingMessages: messages, generatedPdf: undefined };
   }
 
@@ -249,12 +235,10 @@ export const routeIncoming = async (
       answers: finalizeSummaryAnswers({ ...updatedSession.answers }),
     };
 
-    traceRouter('before sessionRepository.upsert (GENERATING_DOC snapshot)');
     await sessionRepository.upsert({
       ...genSession,
       updatedAt: Date.now(),
     });
-    traceRouter('after sessionRepository.upsert (GENERATING_DOC snapshot)');
 
     try {
       const ts = Date.now();
@@ -335,7 +319,8 @@ export const routeIncoming = async (
           pdfPath: pdfResult.absolutePath,
         },
       };
-    } catch {
+    } catch (pdfErr) {
+      console.error('[diag] rt:pdf-gen-err', pdfErr);
       const cleanAnswers = { ...genSession.answers };
       delete cleanAnswers.pdfFilename;
       delete cleanAnswers.pdfPath;
@@ -384,15 +369,15 @@ export const routeIncoming = async (
     ctx.pdfFilename = updatedSession.answers.pdfFilename.trim();
   }
 
-  traceRouter('before buildMessages (main)');
+  console.log('[diag] rt:5-pre-build');
   const messages = buildMessages(updatedSession, ctx);
-  traceRouter(`after buildMessages (main) count=${messages.length}`);
+  console.log('[diag] rt:6-post-build');
 
   // Persist session
   updatedSession.updatedAt = Date.now();
-  traceRouter('before sessionRepository.upsert (final)');
+  console.log('[diag] rt:7-pre-final-upsert');
   await sessionRepository.upsert(updatedSession);
-  traceRouter('after sessionRepository.upsert (final)');
+  console.log('[diag] rt:8-post-final-upsert');
 
   return {
     session: updatedSession,

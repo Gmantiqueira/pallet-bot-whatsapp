@@ -24,12 +24,6 @@ interface WebhookResponse {
 
 const START_STATE = 'START';
 
-function traceWebhook(msg: string): void {
-  if (process.env.PALLET_TRACE_WEBHOOK === '1') {
-    console.info(`[pallet-trace] ${msg}`);
-  }
-}
-
 export const webhookRoutes = async (
   fastify: FastifyInstance
 ): Promise<void> => {
@@ -40,11 +34,20 @@ export const webhookRoutes = async (
     '/webhook',
     {
       preHandler: async (request: FastifyRequest, reply: FastifyReply) => {
-        if (!WEBHOOK_SECRET) {
-          return;
-        }
-        if (!verifyBearerToken(request.headers.authorization, WEBHOOK_SECRET)) {
-          return reply.code(401).send({ error: 'Unauthorized' });
+        console.log('[diag] wb:v1-enter');
+        try {
+          if (!WEBHOOK_SECRET) {
+            console.log('[diag] wb:v2-auth-skip');
+            return;
+          }
+          if (!verifyBearerToken(request.headers.authorization, WEBHOOK_SECRET)) {
+            console.error('[diag] wb:v2-auth-fail');
+            return reply.code(401).send({ error: 'Unauthorized' });
+          }
+          console.log('[diag] wb:v2-auth-ok');
+        } catch (err) {
+          console.error('[diag] wb:v2-auth-err', err);
+          throw err;
         }
       },
     },
@@ -54,36 +57,36 @@ export const webhookRoutes = async (
     ) => {
       const incoming: IncomingPayload = request.body;
 
-      // Load or create session
-      traceWebhook(`before sessionRepository.get from=${incoming.from}`);
-      let session = await sessionRepository.get(incoming.from);
-      traceWebhook(
-        `after sessionRepository.get found=${session != null ? 'yes' : 'no'}`
-      );
-      if (!session) {
-        session = {
-          phone: incoming.from,
-          state: START_STATE,
-          answers: {},
-          stack: [],
-          updatedAt: Date.now(),
-        };
-        traceWebhook('before sessionRepository.upsert (new session)');
-        await sessionRepository.upsert(session);
-        traceWebhook('after sessionRepository.upsert (new session)');
+      try {
+        // Load or create session
+        console.log('[diag] wb:v3-pre-get');
+        let session = await sessionRepository.get(incoming.from);
+        console.log('[diag] wb:v4-post-get');
+
+        if (!session) {
+          console.log('[diag] wb:v5-pre-create-upsert');
+          session = {
+            phone: incoming.from,
+            state: START_STATE,
+            answers: {},
+            stack: [],
+            updatedAt: Date.now(),
+          };
+          await sessionRepository.upsert(session);
+          console.log('[diag] wb:v6-post-create-upsert');
+        }
+
+        const result = await routeIncoming(session, incoming, sessionRepository);
+
+        console.log('[diag] wb:v7-pre-reply');
+        return reply.code(200).send({
+          messages: result.outgoingMessages,
+          ...(result.generatedPdf ? { generatedPdf: result.generatedPdf } : {}),
+        });
+      } catch (err) {
+        console.error('[diag] wb:err', err);
+        throw err;
       }
-
-      // Core devolve mensagens ao utilizador; o integrador junta `generatedPdf` ao pipeline de envio.
-      traceWebhook(
-        `before routeIncoming state=${session.state} phone=${session.phone}`
-      );
-      const result = await routeIncoming(session, incoming, sessionRepository);
-      traceWebhook('after routeIncoming');
-
-      return reply.code(200).send({
-        messages: result.outgoingMessages,
-        ...(result.generatedPdf ? { generatedPdf: result.generatedPdf } : {}),
-      });
     }
   );
 };
