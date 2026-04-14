@@ -165,12 +165,20 @@ function buildFrontWithoutTunnelPayload(
   };
 }
 
-export function validateElevationModelV2(model: ElevationModelV2): void {
+export function validateElevationModelV2(
+  model: ElevationModelV2,
+  answers: Record<string, unknown>
+): void {
   const std = model.frontWithoutTunnel;
   if (std.tunnel) {
     throw new ElevationModelValidationError(
       'Elevação sem túnel: payload não deve estar em modo túnel (tunnel=false).'
     );
+  }
+
+  /** Validação de túnel só aplica com pedido explícito; caso contrário ignora-se por completo. */
+  if (answers.hasTunnel !== true) {
+    return;
   }
 
   const tun = model.frontWithTunnel;
@@ -213,7 +221,8 @@ const ELEV_AXIS_TOL_MM = 2.5;
 /** Garante que frontal usa o vão por baia (2 baias desenhadas na face) e profundidade = eixo transversal na planta. */
 export function validateElevationAxesAgainstGeometry(
   model: ElevationModelV2,
-  geometry: LayoutGeometry
+  geometry: LayoutGeometry,
+  answers: Record<string, unknown>
 ): void {
   const rep = representativeModuleForElevation(geometry);
   const front = model.frontWithoutTunnel;
@@ -265,7 +274,7 @@ export function validateElevationAxesAgainstGeometry(
     );
   }
 
-  if (model.frontWithTunnel) {
+  if (answers.hasTunnel === true && model.frontWithTunnel) {
     const tun = model.frontWithTunnel;
     const tunMod = findTunnelModuleGeometry(geometry);
     if (!tunMod) {
@@ -332,7 +341,7 @@ export function buildElevationModelV2(
     summaryLines,
   };
 
-  validateElevationModelV2(model);
-  validateElevationAxesAgainstGeometry(model, geometry);
+  validateElevationModelV2(model, answers);
+  validateElevationAxesAgainstGeometry(model, geometry, answers);
   return model;
 }

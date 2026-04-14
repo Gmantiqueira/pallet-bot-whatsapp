@@ -6,7 +6,9 @@ import {
 import {
   buildElevationModelV2,
   validateElevationAxesAgainstGeometry,
+  validateElevationModelV2,
 } from './elevationModelV2';
+import type { ElevationModelV2, ElevationPanelPayload } from './types';
 import type { ProjectAnswersV2 } from './answerMapping';
 
 const answersToSession = (a: ProjectAnswersV2): Record<string, unknown> => ({
@@ -53,7 +55,50 @@ describe('buildElevationModelV2 axis mapping', () => {
     expect(model.frontWithoutTunnel.beamLengthMm).not.toBe(
       model.frontWithoutTunnel.moduleDepthMm
     );
-    validateElevationAxesAgainstGeometry(model, geo);
+    validateElevationAxesAgainstGeometry(model, geo, session);
+  });
+
+  it('com hasTunnel false não aplica validação de túnel (ignora payload frontal túnel espúrio)', () => {
+    const std: ElevationPanelPayload = {
+      levels: 2,
+      uprightHeightMm: 3840,
+      beamLengthMm: 2700,
+      moduleDepthMm: 1100,
+      bandDepthMm: 1100,
+      lateralProfileDepthMm: 1100,
+      rackDepthMode: 'single',
+      corridorMm: 3000,
+      capacityKgPerLevel: 1200,
+      tunnel: false,
+      firstLevelOnGround: true,
+      hasGroundLevel: true,
+      totalStorageTiers: 3,
+      beamElevationsMm: [0, 1280, 2560, 3840],
+      structuralBottomMm: 0,
+      structuralTopMm: 3840,
+      usableHeightMm: 3600,
+      meanGapMm: 1200,
+    };
+    const bogusTunnel: ElevationPanelPayload = {
+      ...std,
+      levels: 1,
+      tunnel: true,
+      tunnelClearanceMm: 2800,
+      /** Eixos dentro da zona de passagem — falhariam se a validação de túnel corresse. */
+      beamElevationsMm: [0, 500, 3000],
+    };
+    const model: ElevationModelV2 = {
+      viewBoxW: 1000,
+      viewBoxH: 1280,
+      frontWithoutTunnel: std,
+      frontWithTunnel: bogusTunnel,
+      lateral: std,
+      lateralWithTunnel: bogusTunnel,
+      summaryLines: [],
+    };
+    expect(() =>
+      validateElevationModelV2(model, { hasTunnel: false })
+    ).not.toThrow();
   });
 
   it('caso altura direta baixa sem túnel (fluxo validação 10-direct-height-low): PDF geométrico sem erro', () => {
@@ -81,6 +126,6 @@ describe('buildElevationModelV2 axis mapping', () => {
 
     const model = buildElevationModelV2(session, geo);
     expect(model.frontWithTunnel).toBeUndefined();
-    validateElevationAxesAgainstGeometry(model, geo);
+    validateElevationAxesAgainstGeometry(model, geo, session);
   });
 });
