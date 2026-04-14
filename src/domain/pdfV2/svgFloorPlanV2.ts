@@ -43,7 +43,6 @@ const COL_TUNNEL_STROKE = '#b45309';
 const COL_RESIDUAL_FILL = '#f4f4f5';
 const COL_RESIDUAL_STROKE = '#a1a1aa';
 const COL_DIM = '#111827';
-const COL_INK = '#111827';
 /** Contorno da **faixa da linha** (unidade contínua), desenhado por cima dos módulos. */
 const COL_ROW_ENVELOPE_STROKE = '#334155';
 const ROW_ENVELOPE_SW = 2.92;
@@ -145,9 +144,9 @@ function orientationArrowSvg(
       ? 'Linhas · paralelas ao comprimento do galpão'
       : 'Linhas · paralelas à largura do galpão';
   return `<g>
-    <rect x="${gx}" y="${gy}" width="${gw}" height="${gh}" rx="7" fill="#f1f5f9" fill-opacity="0.98" stroke="#1e3a8a" stroke-width="1.45"/>
-    <text x="${gx + 12}" y="${gy + 24}" font-size="17px" font-weight="700" fill="#0f172a" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">Sentido de entrada / operação</text>
-    <text x="${gx + 12}" y="${gy + 46}" font-size="13px" fill="#1e293b" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">${escapeXml(sub)}</text>
+    <rect x="${gx}" y="${gy}" width="${gw}" height="${gh}" rx="6" fill="#f8fafc" fill-opacity="0.98" stroke="#64748b" stroke-width="1.1"/>
+    <text x="${gx + 12}" y="${gy + 22}" font-size="14px" font-weight="700" fill="#0f172a" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">Sentido de entrada / operação</text>
+    <text x="${gx + 12}" y="${gy + 42}" font-size="11.5px" fill="#475569" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">${escapeXml(sub)}</text>
     ${shaft}
   </g>`;
 }
@@ -163,9 +162,9 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
   );
   parts.push('<defs>');
   parts.push(`<style>
-    .fp-title { font: 700 44px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: ${COL_INK}; letter-spacing: 0.04em; }
-    .fp-sub { font: 500 30px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #374151; }
-    .fp-plan-hint { font: 400 17px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #4b5563; }
+    /** Legenda global (não compete com o cabeçalho da folha no PDF). */
+    .fp-drawing-meta { font: 500 13.5px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #64748b; letter-spacing: 0.01em; }
+    .fp-plan-hint { font: 400 14px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #64748b; }
     .fp-row-title { font: 700 28px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: ${ELEV_BEAM_EDGE}; stroke: #ffffff; stroke-width: 5px; paint-order: stroke fill; stroke-linejoin: round; }
     .fp-circ-op { font: 800 22px "Helvetica Neue", Helvetica, Arial, sans-serif; fill: #0f172a; stroke: #ffffff; stroke-width: 5px; paint-order: stroke fill; stroke-linejoin: round; }
     .fp-circ { font: 600 18px "Helvetica Neue", Helvetica, Arial, sans-serif; }
@@ -177,7 +176,7 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
   parts.push(`<rect width="${w}" height="${h}" fill="${COL_BG}"/>`);
   const fpPad = 20;
   parts.push(
-    `<rect x="${fpPad}" y="${fpPad}" width="${w - 2 * fpPad}" height="${h - 2 * fpPad}" fill="none" stroke="${COL_FRAME}" stroke-width="0.55"/>`
+    `<rect x="${fpPad}" y="${fpPad}" width="${w - 2 * fpPad}" height="${h - 2 * fpPad}" fill="none" stroke="${COL_FRAME}" stroke-width="0.65"/>`
   );
 
   const o = model.warehouseOutline;
@@ -358,7 +357,7 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
   }
 
   for (const lb of model.labels) {
-    const cls = lb.className ?? 'fp-sub';
+    const cls = lb.className ?? 'fp-drawing-meta';
     parts.push(
       `<text x="${lb.x}" y="${lb.y}" text-anchor="middle" class="${cls}">${escapeXml(lb.text)}</text>`
     );

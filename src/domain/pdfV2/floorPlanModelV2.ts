@@ -340,9 +340,9 @@ export function buildFloorPlanModelV2(
     {
       id: 'sub-dims',
       x: VB_W / 2,
-      y: PAD + 22,
-      text: `${formatMm(L)} × ${formatMm(W)}`,
-      className: 'fp-sub',
+      y: PAD + 18,
+      text: `Dimensões do compartimento: ${formatMm(L)} × ${formatMm(W)}`,
+      className: 'fp-drawing-meta',
     },
     ...planCaptionLabels(geometry),
   ];
@@ -365,7 +365,7 @@ function planCaptionLabels(geometry: LayoutGeometry): FloorPlanLabel[] {
   const line: FloorPlanLabel = {
     id: 'cap-module-line',
     x: VB_W / 2,
-    y: PAD + 48,
+    y: PAD + 36,
     text: planModuleSingleCaption(geometry),
     className: 'fp-plan-hint',
   };

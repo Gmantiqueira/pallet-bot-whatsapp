@@ -35,9 +35,9 @@ import { buildPdfArtifactAfterWrite } from './pdfArtifact';
 /** Margens página A4: mais estreitas nas folhas de desenho para maximizar área útil (sem distorcer bitmaps). */
 const PAGE_MARGIN_PT = 36;
 const COL_INK = '#0f172a';
-const COL_MUTED = '#4b5563';
-const COL_RULE = '#e2e8f0';
-const COL_ACCENT = '#1e40af';
+const COL_MUTED = '#64748b';
+const COL_RULE = '#cbd5e1';
+const COL_ACCENT = '#334155';
 const COL_BOX = '#f1f5f9';
 const COL_VALUE_EMPH = '#0f172a';
 /** DPI alinhado a {@link ./pdfService} (rasterização SVG). */
@@ -48,10 +48,11 @@ function ptToPx(pt: number): number {
 }
 
 /**
- * Orçamento vertical do cabeçalho (título + linha) em pt — alinhado ao layout compacto
- * de {@link beginDrawingSheetHeader} para a proporção do PNG ≈ caixa real no PDF.
+ * Orçamento vertical do cabeçalho (bloco à esquerda + traço) em pt — alinhado ao
+ * cabeçalho real em {@link renderPdfV2} para a proporção do PNG ≈ caixa no PDF.
  */
-const DRAWING_SHEET_HEADER_BUDGET_PT = 46;
+/** Alinhado ao bloco real em {@link renderPdfV2} (título à esquerda + nota + traço). */
+const DRAWING_SHEET_HEADER_BUDGET_PT = 44;
 const DRAWING_SHEET_BOTTOM_PAD_PT = 5;
 
 function drawingRasterPixelSize(): { pxW: number; pxH: number } {
@@ -156,6 +157,10 @@ function buildPdfV2Filename(
     return `projeto-${slug}-${timestamp}.pdf`;
   }
   return `projeto-${timestamp}.pdf`;
+}
+
+function hasCoverFieldValue(value: string): boolean {
+  return value.trim().length > 0 && value !== '—';
 }
 
 function coverDataEmissao(project: Record<string, unknown>): string {
@@ -379,7 +384,12 @@ export async function renderPdfV2(
   const horizontalRule = (y: number, inset = 0.08, color = COL_RULE): void => {
     const x0 = left + usableW * inset;
     const x1 = left + usableW * (1 - inset);
-    doc.strokeColor(color).lineWidth(0.75).moveTo(x0, y).lineTo(x1, y).stroke();
+    doc
+      .strokeColor(color)
+      .lineWidth(0.65)
+      .moveTo(x0, y)
+      .lineTo(x1, y)
+      .stroke();
   };
 
   const embedFullWidthDrawing = (
@@ -404,29 +414,34 @@ export async function renderPdfV2(
     doc.y = yImg + dh;
   };
 
-  /** Cabeçalho baixo para folhas de desenho — maximiza altura útil do bitmap. */
+  /**
+   * Cabeçalho de folha de desenho — título à esquerda, traço total, tipografia uniforme
+   * (prancha técnica, não faixa centrada).
+   */
   const beginDrawingSheetHeader = (
     title: string,
     options?: { subtitle?: string; titleSize?: number }
   ): void => {
-    doc.y = doc.page.margins.top + 2;
-    const tSize = options?.titleSize ?? 15;
-    drawCentered(title, {
-      size: tSize,
-      font: 'Helvetica-Bold',
-      color: COL_INK,
-      lineGap: 0,
-      moveDown: options?.subtitle ? 0.05 : 0.08,
-    });
+    const tSize = options?.titleSize ?? 11.5;
+    let y = doc.page.margins.top + 4;
+    doc.font('Helvetica-Bold').fontSize(tSize).fillColor(COL_INK);
+    const hTitle = doc.heightOfString(title, { width: usableW });
+    doc.text(title, left, y, { width: usableW, align: 'left' });
+    y += hTitle + (options?.subtitle ? 3 : 5);
     if (options?.subtitle) {
-      drawCentered(options.subtitle, {
-        size: 10,
-        color: COL_MUTED,
-        moveDown: 0.06,
-      });
+      doc.font('Helvetica').fontSize(9).fillColor(COL_MUTED);
+      const hSub = doc.heightOfString(options.subtitle, { width: usableW });
+      doc.text(options.subtitle, left, y, { width: usableW, align: 'left' });
+      y += hSub + 6;
     }
-    horizontalRule(doc.y + 1.5, 0.05, COL_RULE);
-    doc.moveDown(0.1);
+    const ruleY = y;
+    doc
+      .strokeColor(COL_RULE)
+      .lineWidth(0.65)
+      .moveTo(left, ruleY)
+      .lineTo(left + usableW, ruleY)
+      .stroke();
+    doc.y = ruleY + 8;
   };
 
   const labelColW = 154;
@@ -435,44 +450,56 @@ export async function renderPdfV2(
   doc.moveDown(0.28);
 
   drawCentered('PROJETO DE PORTA-PALETES', {
-    size: 24,
+    size: 23,
     font: 'Helvetica-Bold',
     color: COL_INK,
     lineGap: 2,
-    moveDown: 0.36,
+    moveDown: 0.22,
+  });
+  drawCentered('Documento técnico — layout de armazenagem em porta-paletes', {
+    size: 10,
+    color: COL_MUTED,
+    lineGap: 1,
+    moveDown: 0.42,
   });
 
   const barY = doc.y + 2;
   doc
     .strokeColor(COL_ACCENT)
-    .lineWidth(2.25)
-    .moveTo(left + usableW * 0.28, barY)
-    .lineTo(left + usableW * 0.72, barY)
+    .lineWidth(1.75)
+    .moveTo(left + usableW * 0.22, barY)
+    .lineTo(left + usableW * 0.78, barY)
     .stroke();
-  doc.moveDown(0.55);
+  doc.moveDown(0.6);
 
-  horizontalRule(doc.y, 0.1, COL_RULE);
-  doc.moveDown(0.55);
+  horizontalRule(doc.y, 0.08, COL_RULE);
+  doc.moveDown(0.6);
 
   let rowY = doc.y;
-  rowY = drawKeyValueRow(
-    doc,
-    left,
-    rowY,
-    usableW,
-    'Cliente:',
-    coverCliente(input.project),
-    labelColW
-  );
-  rowY = drawKeyValueRow(
-    doc,
-    left,
-    rowY,
-    usableW,
-    'Projeto:',
-    coverProjeto(input.project),
-    labelColW
-  );
+  const clienteVal = coverCliente(input.project);
+  const projetoVal = coverProjeto(input.project);
+  if (hasCoverFieldValue(clienteVal)) {
+    rowY = drawKeyValueRow(
+      doc,
+      left,
+      rowY,
+      usableW,
+      'Cliente:',
+      clienteVal,
+      labelColW
+    );
+  }
+  if (hasCoverFieldValue(projetoVal)) {
+    rowY = drawKeyValueRow(
+      doc,
+      left,
+      rowY,
+      usableW,
+      'Projeto:',
+      projetoVal,
+      labelColW
+    );
+  }
   rowY = drawKeyValueRow(
     doc,
     left,
@@ -510,7 +537,7 @@ export async function renderPdfV2(
   doc
     .roundedRect(left - 2, boxTop - 4, usableW + 4, boxH, 4)
     .strokeColor(COL_RULE)
-    .lineWidth(0.85)
+    .lineWidth(0.65)
     .stroke();
 
   rowY = boxTop + boxPad;
@@ -519,7 +546,7 @@ export async function renderPdfV2(
   const underY = doc.y + 3;
   doc
     .strokeColor(COL_ACCENT)
-    .lineWidth(1.25)
+    .lineWidth(0.85)
     .moveTo(left, underY)
     .lineTo(left + Math.min(168, usableW * 0.4), underY)
     .stroke();
@@ -539,7 +566,9 @@ export async function renderPdfV2(
   doc.y = boxTop + boxH + 14;
 
   doc.addPage();
-  beginDrawingSheetHeader('PLANTA DE IMPLANTAÇÃO', { titleSize: 16 });
+  beginDrawingSheetHeader('Planta de implantação', {
+    subtitle: 'Cotas em milímetros · escala gráfica',
+  });
   embedFullWidthDrawing(floorRaster, { bottomPadPt: 4 });
 
   doc.addPage();
