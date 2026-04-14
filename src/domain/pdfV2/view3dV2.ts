@@ -39,6 +39,7 @@ export function projectToIsometric(model: Rack3DModel): Projected2D {
       x2: p2.px,
       y2: p2.py,
       kind: L.kind,
+      ...(L.debugTint !== undefined ? { debugTint: L.debugTint } : {}),
     });
   }
 
@@ -64,13 +65,49 @@ const STROKE: Record<
   beam: { c: '#c2410c', w: 1.55, opacity: 1 },
 };
 
+/** Modo DEBUG_PDF: cores por tipo de módulo / contorno do galpão. */
+const STROKE_DEBUG: Record<
+  NonNullable<ProjectedLine2D['debugTint']>,
+  Record<ProjectedLine2D['kind'], { c: string; w: number; opacity: number }>
+> = {
+  boundary: {
+    floor: { c: '#0f766e', w: 2.1, opacity: 0.95 },
+    upright: { c: '#0f766e', w: 1.2, opacity: 0.5 },
+    beam: { c: '#0f766e', w: 1.2, opacity: 0.5 },
+  },
+  normal: {
+    floor: { c: '#64748b', w: 1.35, opacity: 0.9 },
+    upright: { c: '#1d4ed8', w: 1.95, opacity: 1 },
+    beam: { c: '#ea580c', w: 1.65, opacity: 1 },
+  },
+  tunnel: {
+    floor: { c: '#a855f7', w: 1.55, opacity: 0.95 },
+    upright: { c: '#7c3aed', w: 2.05, opacity: 1 },
+    beam: { c: '#f97316', w: 1.75, opacity: 1 },
+  },
+};
+
 const DRAW_ORDER: ProjectedLine2D['kind'][] = ['floor', 'beam', 'upright'];
+
+function strokeForLine(
+  ln: ProjectedLine2D,
+  debug: boolean
+): { c: string; w: number; opacity: number } {
+  if (debug && ln.debugTint !== undefined) {
+    return STROKE_DEBUG[ln.debugTint][ln.kind];
+  }
+  return STROKE[ln.kind];
+}
 
 /**
  * Gera documento SVG completo (wireframe técnico) a partir da projeção.
  * Ordem de desenho: piso → longarinas → montantes.
  */
-export function render3DViewV2(projected: Projected2D): SvgGroup {
+export function render3DViewV2(
+  projected: Projected2D,
+  options?: { debug?: boolean }
+): SvgGroup {
+  const debug = options?.debug === true;
   const vbW = 1100;
   const vbH = 640;
   const pad = 28;
@@ -94,6 +131,11 @@ export function render3DViewV2(projected: Projected2D): SvgGroup {
   parts.push(
     `<rect x="14" y="14" width="${vbW - 28}" height="${vbH - 28}" rx="4" fill="none" stroke="#e2e8f0" stroke-width="0.9"/>`
   );
+  if (debug) {
+    parts.push(
+      `<text x="22" y="28" font-size="11" font-weight="700" fill="#7c3aed" font-family="ui-monospace, monospace">DEBUG 3D · normal=azul/laranja · túnel=roxo · contorno=teal</text>`
+    );
+  }
   parts.push('<g id="v2-3d-wireframe">');
 
   for (const kind of DRAW_ORDER) {
@@ -101,7 +143,7 @@ export function render3DViewV2(projected: Projected2D): SvgGroup {
       if (ln.kind !== kind) continue;
       const a = toSvg(ln.x1, ln.y1);
       const b = toSvg(ln.x2, ln.y2);
-      const st = STROKE[kind];
+      const st = strokeForLine(ln, debug);
       parts.push(
         `<line x1="${a.x.toFixed(2)}" y1="${a.y.toFixed(2)}" x2="${b.x.toFixed(2)}" y2="${b.y.toFixed(2)}" stroke="${st.c}" stroke-width="${st.w}" stroke-opacity="${st.opacity}" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`
       );

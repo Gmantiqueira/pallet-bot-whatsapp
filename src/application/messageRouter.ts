@@ -23,6 +23,7 @@ import {
   validateLayoutGeometry,
   type LayoutGeometry,
 } from '../domain/pdfV2/layoutGeometryV2';
+import { isDebugPdf, logLayoutSolutionDebug } from '../domain/pdfV2/pdfDebugV2';
 import { validatePdfRenderCoherence } from '../domain/pdfV2/pdfRenderCoherenceV2';
 import { buildFloorPlanModelV2 } from '../domain/pdfV2/floorPlanModelV2';
 import { serializeFloorPlanSvgV2 } from '../domain/pdfV2/svgFloorPlanV2';
@@ -253,15 +254,27 @@ export const routeIncoming = async (
       const v2a = buildProjectAnswersV2(ans);
       if (v2a) {
         const sol = buildLayoutSolutionV2(v2a);
+        if (isDebugPdf()) {
+          logLayoutSolutionDebug(sol);
+        }
         const geo: LayoutGeometry = buildLayoutGeometry(sol, ans);
         validateLayoutGeometry(geo);
-        const floorSvg = serializeFloorPlanSvgV2(buildFloorPlanModelV2(geo));
+        const dbg = isDebugPdf();
+        const floorSvg = serializeFloorPlanSvgV2(buildFloorPlanModelV2(geo), {
+          debug: dbg,
+          geometryMm: dbg ? geo : undefined,
+        });
         const elevModel: ElevationModelV2 = buildElevationModelV2(ans, geo);
-        const elevPages: ElevationPageSvgs =
-          serializeElevationPagesV2(elevModel);
+        const elevPages: ElevationPageSvgs = serializeElevationPagesV2(
+          elevModel,
+          { debug: dbg }
+        );
         const rack3d = build3DModelV2(geo);
         validatePdfRenderCoherence(geo, { rack3dModel: rack3d });
-        const view3dSvg = render3DViewV2(projectToIsometric(rack3d));
+        const rack3dView = dbg ? build3DModelV2(geo, { debug: true }) : rack3d;
+        const view3dSvg = render3DViewV2(projectToIsometric(rack3dView), {
+          debug: dbg,
+        });
         fs.writeFileSync(
           path.join(storageDir, `planta-${phone}-${ts}.svg`),
           floorSvg,

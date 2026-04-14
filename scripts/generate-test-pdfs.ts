@@ -10,6 +10,10 @@
  *   LAYOUT_AUDIT_LOG=1 npx tsx scripts/generate-test-pdfs.ts
  *   npm run pdf:test:audit
  *
+ * Debug visual no PDF + log resumido de layoutSolution (overlays planta/elevação/3D):
+ *   npm run pdf:test (DEBUG_PDF=true no script)
+ *   PDF sem overlays: DEBUG_PDF=false npx tsx scripts/generate-test-pdfs.ts
+ *
  * Objetivo:
  * - validar renderização do PDF com o fluxo novo
  * - cobrir planta real vs medidas digitadas

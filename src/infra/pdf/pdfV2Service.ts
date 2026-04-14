@@ -8,6 +8,7 @@ import {
   buildLayoutGeometry,
   validateLayoutGeometry,
 } from '../../domain/pdfV2/layoutGeometryV2';
+import { isDebugPdf, logLayoutSolutionDebug } from '../../domain/pdfV2/pdfDebugV2';
 import { validatePdfRenderCoherence } from '../../domain/pdfV2/pdfRenderCoherenceV2';
 import { buildFloorPlanModelV2 } from '../../domain/pdfV2/floorPlanModelV2';
 import { serializeFloorPlanSvgV2 } from '../../domain/pdfV2/svgFloorPlanV2';
@@ -655,6 +656,9 @@ export async function generatePdfV2FromSession(
     throw new Error('Respostas incompletas para gerar o PDF');
   }
   const layoutSolution = buildLayoutSolutionV2(v2answers);
+  if (isDebugPdf()) {
+    logLayoutSolutionDebug(layoutSolution);
+  }
   const layoutGeometry = buildLayoutGeometry(layoutSolution, answers);
   validateLayoutGeometry(layoutGeometry);
   if (process.env.PDF_TUNNEL_DEBUG === '1') {
@@ -663,14 +667,23 @@ export async function generatePdfV2FromSession(
       `[pdf-v2 tunnel] final metadata.hasTunnel=${layoutGeometry.metadata.hasTunnel} tunnelCount=${layoutGeometry.totals.tunnelCount} v2answers.hasTunnel=${v2answers.hasTunnel}`
     );
   }
+  const debugPdf = isDebugPdf();
   const floorModel = buildFloorPlanModelV2(layoutGeometry);
-  const floorPlanSvg = serializeFloorPlanSvgV2(floorModel);
+  const floorPlanSvg = serializeFloorPlanSvgV2(floorModel, {
+    debug: debugPdf,
+    geometryMm: debugPdf ? layoutGeometry : undefined,
+  });
   const elevationModel = buildElevationModelV2(answers, layoutGeometry);
-  const elevationPages = serializeElevationPagesV2(elevationModel);
+  const elevationPages = serializeElevationPagesV2(elevationModel, {
+    debug: debugPdf,
+  });
   const rack3d = build3DModelV2(layoutGeometry);
   validatePdfRenderCoherence(layoutGeometry, { rack3dModel: rack3d });
-  const projected3d = projectToIsometric(rack3d);
-  const view3dSvg = render3DViewV2(projected3d);
+  const rack3dForView = debugPdf
+    ? build3DModelV2(layoutGeometry, { debug: true })
+    : rack3d;
+  const projected3d = projectToIsometric(rack3dForView);
+  const view3dSvg = render3DViewV2(projected3d, { debug: debugPdf });
 
   return renderPdfV2(
     {

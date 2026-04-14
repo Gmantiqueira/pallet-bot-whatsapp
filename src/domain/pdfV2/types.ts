@@ -283,6 +283,8 @@ export type Rack3DLine3D = {
   x2: number;
   y2: number;
   z2: number;
+  /** Só preenchido em modo debug — evita dedupe para colorir por módulo. */
+  debugTint?: 'tunnel' | 'normal' | 'boundary';
 };
 
 /** Geometria wireframe derivada de {@link LayoutSolutionV2} (sem motor 3D). */
@@ -299,6 +301,7 @@ export type ProjectedLine2D = {
   x2: number;
   y2: number;
   kind: 'upright' | 'beam' | 'floor';
+  debugTint?: 'tunnel' | 'normal' | 'boundary';
 };
 
 /** Após projeção isométrica (unidades arbitrárias até encaixe no viewBox). */

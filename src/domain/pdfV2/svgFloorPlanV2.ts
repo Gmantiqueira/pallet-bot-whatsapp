@@ -1,3 +1,4 @@
+import type { LayoutGeometry } from './layoutGeometryV2';
 import type {
   FloorPlanCirculationSemantic,
   FloorPlanModelV2,
@@ -126,6 +127,63 @@ function moduleBayHintLine(s: FloorPlanModelV2['structureRects'][0]): string {
   return `<line x1="${s.x}" y1="${my}" x2="${s.x + s.w}" y2="${my}" stroke="${ELEV_PALLET_TIER_STROKE}" stroke-width="${thin}" opacity="${op}" stroke-dasharray="${dash}" ${cap}/>`;
 }
 
+function appendFloorPlanDebugOverlay(
+  geometry: LayoutGeometry,
+  model: FloorPlanModelV2,
+  parts: string[]
+): void {
+  const o = model.warehouseOutline;
+  const L = geometry.warehouseLengthMm;
+  const W = geometry.warehouseWidthMm;
+  const scaleX = o.w / L;
+  const scaleY = o.h / W;
+  const bx = o.x;
+  const by = o.y;
+  const toX = (xmm: number) => bx + xmm * scaleX;
+  const toY = (ymm: number) => by + ymm * scaleY;
+
+  parts.push(
+    '<g id="fp-debug" font-family="ui-monospace, monospace" pointer-events="none">'
+  );
+  parts.push(
+    `<text x="${model.viewBox.w / 2}" y="30" text-anchor="middle" font-size="12" font-weight="700" fill="#7c3aed">DEBUG planta · cotas em mm (referencial do galpão)</text>`
+  );
+
+  for (const row of geometry.rows) {
+    for (const m of row.modules) {
+      const fp = m.footprint;
+      const x0 = Math.min(fp.x0, fp.x1);
+      const x1 = Math.max(fp.x0, fp.x1);
+      const y0 = Math.min(fp.y0, fp.y1);
+      const y1 = Math.max(fp.y0, fp.y1);
+      const sx = toX(x0);
+      const sy = toY(y0);
+      const sw = Math.max(2, toX(x1) - toX(x0));
+      const sh = Math.max(2, toY(y1) - toY(y0));
+      const stroke =
+        m.type === 'tunnel'
+          ? '#a855f7'
+          : m.segmentType === 'half'
+            ? '#2563eb'
+            : '#0ea5e9';
+      parts.push(
+        `<rect x="${sx}" y="${sy}" width="${sw}" height="${sh}" fill="none" stroke="${stroke}" stroke-width="2.35" stroke-dasharray="7 5" opacity="0.95"/>`
+      );
+      const l1 = `${m.id}`;
+      const l2 = `(${Math.round(x0)},${Math.round(y0)})–(${Math.round(x1)},${Math.round(y1)}) mm`;
+      parts.push(
+        `<text x="${sx + 4}" y="${sy + 13}" font-size="9" fill="${stroke}">${escapeXml(l1)}</text>`,
+        `<text x="${sx + 4}" y="${sy + 25}" font-size="8.5" fill="${stroke}">${escapeXml(l2)}</text>`
+      );
+    }
+  }
+
+  parts.push(
+    `<text x="24" y="${model.viewBox.h - 28}" font-size="8.5" fill="#64748b">Debug: tracejado = bbox módulo · túnel=roxo · meio módulo=azul · completo=ciano · zonas cor/corredor por baixo</text>`
+  );
+  parts.push('</g>');
+}
+
 function orientationArrowSvg(
   o: FloorPlanModelV2['warehouseOutline'],
   beamAlong: 'x' | 'y'
@@ -151,10 +209,19 @@ function orientationArrowSvg(
   </g>`;
 }
 
+export type SerializeFloorPlanOptions = {
+  /** Só com `DEBUG_PDF=true` na pipeline. */
+  debug?: boolean;
+  geometryMm?: LayoutGeometry;
+};
+
 /**
  * Serializa o modelo de planta em SVG (apenas desenho, sem cálculo).
  */
-export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
+export function serializeFloorPlanSvgV2(
+  model: FloorPlanModelV2,
+  options?: SerializeFloorPlanOptions
+): string {
   const { w, h } = model.viewBox;
   const parts: string[] = [];
   parts.push(
@@ -361,6 +428,10 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
     parts.push(
       `<text x="${lb.x}" y="${lb.y}" text-anchor="middle" class="${cls}">${escapeXml(lb.text)}</text>`
     );
+  }
+
+  if (options?.debug === true && options.geometryMm) {
+    appendFloorPlanDebugOverlay(options.geometryMm, model, parts);
   }
 
   parts.push('</svg>');

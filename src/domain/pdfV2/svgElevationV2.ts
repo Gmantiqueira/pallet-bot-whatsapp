@@ -630,7 +630,7 @@ function drawFrontRack(
   data: ElevationPanelPayload,
   sectionTitle: string,
   subtitle?: string,
-  options?: { labelScale?: number }
+  options?: { labelScale?: number; debug?: boolean }
 ): string {
   const ls = options?.labelScale ?? 1;
   const nMod = FV_FRONT_BAY_COUNT;
@@ -933,6 +933,37 @@ function drawFrontRack(
     );
   }
 
+  if (options?.debug === true) {
+    parts.push(
+      `<g id="el-debug-front" font-family="ui-monospace, monospace" pointer-events="none">`
+    );
+    parts.push(
+      `<text x="${ox + 10}" y="${oy + ph - 10}" font-size="7.5" fill="#7c3aed" font-weight="700">DEBUG · eixos longarina (mm do piso)</text>`
+    );
+    let ty = oy + ph - 22;
+    for (let i = 0; i < data.beamElevationsMm.length; i++) {
+      const mm = data.beamElevationsMm[i]!;
+      const yPx = beamYsPx[i];
+      const yStr =
+        typeof yPx === 'number' ? `${yPx.toFixed(1)} px` : '—';
+      parts.push(
+        `<text x="${ox + 10}" y="${ty}" font-size="7" fill="#6b21a8">beam[${i}] z=${Math.round(mm)} mm · ${yStr}</text>`
+      );
+      ty -= 10;
+      if (typeof yPx === 'number') {
+        parts.push(
+          `<line x1="${rx}" y1="${yPx}" x2="${rx + totalW}" y2="${yPx}" stroke="#c084fc" stroke-width="0.4" stroke-dasharray="4 3" opacity="0.75"/>`
+        );
+      }
+    }
+    if (showTunnelOpening) {
+      parts.push(
+        `<text x="${rx + totalW * 0.5}" y="${yPassTop - 6 * ls}" text-anchor="middle" font-size="7.5" fill="#b45309" font-weight="700">zona túnel · pé livre ${Math.round(clearanceMm)} mm</text>`
+      );
+    }
+    parts.push('</g>');
+  }
+
   return parts.join('');
 }
 
@@ -956,7 +987,7 @@ function drawLateral(
   pw: number,
   ph: number,
   data: ElevationPanelPayload,
-  opts?: { labelScale?: number; hideHeader?: boolean }
+  opts?: { labelScale?: number; hideHeader?: boolean; debug?: boolean }
 ): string {
   const ls = opts?.labelScale ?? 1;
   const hideHeader = opts?.hideHeader === true;
@@ -1132,6 +1163,30 @@ function drawLateral(
     )
   );
 
+  if (opts?.debug === true) {
+    parts.push(
+      '<g id="el-debug-lat" font-family="ui-monospace, monospace" pointer-events="none">'
+    );
+    let tyDbg = oy + ph - 10;
+    parts.push(
+      `<text x="${ox + 8}" y="${tyDbg}" font-size="7" fill="#7c3aed" font-weight="700">DEBUG lateral · eixos z (mm)</text>`
+    );
+    tyDbg -= 10;
+    for (let i = 0; i < data.beamElevationsMm.length; i++) {
+      const mm = data.beamElevationsMm[i]!;
+      parts.push(
+        `<text x="${ox + 8}" y="${tyDbg}" font-size="6.5" fill="#6b21a8">beam[${i}] ${Math.round(mm)} mm</text>`
+      );
+      tyDbg -= 9;
+    }
+    if (showTunnelOpening) {
+      parts.push(
+        `<text x="${ox + 8}" y="${tyDbg}" font-size="6.5" fill="#b45309">restrição túnel · ${Math.round(clearanceLatMm)} mm</text>`
+      );
+    }
+    parts.push('</g>');
+  }
+
   return parts.join('');
 }
 
@@ -1175,9 +1230,15 @@ function wrapElevationDrawingPage(
  * Uma folha SVG por elevação (sem túnel, com túnel se existir, lateral).
  * Títulos conceito-a-conceito ficam no PDF; aqui só desenho + nota mínima.
  */
+export type SerializeElevationPagesOptions = {
+  debug?: boolean;
+};
+
 export function serializeElevationPagesV2(
-  model: ElevationModelV2
+  model: ElevationModelV2,
+  options?: SerializeElevationPagesOptions
 ): ElevationPageSvgs {
+  const dbg = options?.debug === true;
   const w = ELEV_PAGE_W;
   const hF = ELEV_PAGE_H_FRONT;
   const hL = ELEV_PAGE_H_LATERAL;
@@ -1199,6 +1260,7 @@ export function serializeElevationPagesV2(
     undefined,
     {
       labelScale: ls,
+      debug: dbg,
     }
   );
   const frontWithoutTunnel = wrapElevationDrawingPage(
@@ -1219,7 +1281,7 @@ export function serializeElevationPagesV2(
       tun,
       '',
       undefined,
-      { labelScale: ls }
+      { labelScale: ls, debug: dbg }
     );
     frontWithTunnel = wrapElevationDrawingPage(
       inner,
@@ -1232,6 +1294,7 @@ export function serializeElevationPagesV2(
   const latInner = drawLateral(padX, padTop, innerW, innerHLat, model.lateral, {
     labelScale: ls,
     hideHeader: true,
+    debug: dbg,
   });
   const lateral = wrapElevationDrawingPage(
     latInner,
@@ -1248,7 +1311,7 @@ export function serializeElevationPagesV2(
       innerW,
       innerHLat,
       model.lateralWithTunnel,
-      { labelScale: ls, hideHeader: true }
+      { labelScale: ls, hideHeader: true, debug: dbg }
     );
     lateralWithTunnel = wrapElevationDrawingPage(
       latTunInner,

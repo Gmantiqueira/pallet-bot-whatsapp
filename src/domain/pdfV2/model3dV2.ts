@@ -15,9 +15,14 @@ function pushLine(
   z1: number,
   x2: number,
   y2: number,
-  z2: number
+  z2: number,
+  debugTint?: Rack3DLine3D['debugTint']
 ): void {
-  lines.push({ kind, x1, y1, z1, x2, y2, z2 });
+  const seg: Rack3DLine3D = { kind, x1, y1, z1, x2, y2, z2 };
+  if (debugTint !== undefined) {
+    seg.debugTint = debugTint;
+  }
+  lines.push(seg);
 }
 
 /** Dedupe montantes só **dentro** do mesmo prisma (cantos do retângulo). */
@@ -176,7 +181,8 @@ function emitPalletRackPrism(
   lines: Rack3DLine3D[],
   mod: RackModule,
   footprint: ModuleFootprint3d,
-  uprightSeen: Set<string>
+  uprightSeen: Set<string>,
+  debugModuleTint: Rack3DLine3D['debugTint'] | undefined
 ): void {
   const x0 = Math.min(footprint.x0, footprint.x1);
   const x1 = Math.max(footprint.x0, footprint.x1);
@@ -202,23 +208,73 @@ function emitPalletRackPrism(
     const key = uprightKey(cx, cy);
     if (uprightSeen.has(key)) continue;
     uprightSeen.add(key);
-    pushLine(lines, 'upright', cx, cy, 0, cx, cy, mod.heightMm);
+    pushLine(
+      lines,
+      'upright',
+      cx,
+      cy,
+      0,
+      cx,
+      cy,
+      mod.heightMm,
+      debugModuleTint
+    );
   }
 
   if (isTunnel && clearanceMm > EPS) {
     const zOpen = Math.min(mod.heightMm, Math.max(0, clearanceMm));
-    pushLine(lines, 'floor', x0, y0, zOpen, x1, y0, zOpen);
-    pushLine(lines, 'floor', x1, y0, zOpen, x1, y1, zOpen);
-    pushLine(lines, 'floor', x1, y1, zOpen, x0, y1, zOpen);
-    pushLine(lines, 'floor', x0, y1, zOpen, x0, y0, zOpen);
+    pushLine(
+      lines,
+      'floor',
+      x0,
+      y0,
+      zOpen,
+      x1,
+      y0,
+      zOpen,
+      debugModuleTint
+    );
+    pushLine(
+      lines,
+      'floor',
+      x1,
+      y0,
+      zOpen,
+      x1,
+      y1,
+      zOpen,
+      debugModuleTint
+    );
+    pushLine(
+      lines,
+      'floor',
+      x1,
+      y1,
+      zOpen,
+      x0,
+      y1,
+      zOpen,
+      debugModuleTint
+    );
+    pushLine(
+      lines,
+      'floor',
+      x0,
+      y1,
+      zOpen,
+      x0,
+      y0,
+      zOpen,
+      debugModuleTint
+    );
   }
 
   for (const z of beamZs) {
     if (isTunnel && z < clearanceMm - EPS) continue;
-    pushLine(lines, 'beam', x0, y0, z, x1, y0, z);
-    pushLine(lines, 'beam', x1, y0, z, x1, y1, z);
-    pushLine(lines, 'beam', x1, y1, z, x0, y1, z);
-    pushLine(lines, 'beam', x0, y1, z, x0, y0, z);
+    pushLine(lines, 'beam', x0, y0, z, x1, y0, z, debugModuleTint);
+    pushLine(lines, 'beam', x1, y0, z, x1, y1, z, debugModuleTint);
+    pushLine(lines, 'beam', x1, y1, z, x0, y1, z, debugModuleTint);
+    pushLine(lines, 'beam', x0, y1, z, x0, y0, z, debugModuleTint);
   }
 }
 
@@ -246,17 +302,22 @@ function maxUprightHeightAndTiers(geometry: LayoutGeometry): {
  * {@link dedupeWireframeLines} remove arestas coincidentes entre módulos adjacentes
  * (mesmo segmento 3D), alinhando o wireframe à planta sem linhas duplas sobrepostas.
  */
-export function build3DModelV2(geometry: LayoutGeometry): Rack3DModel {
+export function build3DModelV2(
+  geometry: LayoutGeometry,
+  options?: { debug?: boolean }
+): Rack3DModel {
+  const debug = options?.debug === true;
   const { uprightHeightMm: H, tiers: levels } =
     maxUprightHeightAndTiers(geometry);
   const lines: Rack3DLine3D[] = [];
   const { warehouseLengthMm: L, warehouseWidthMm: W } = geometry;
 
   const z0 = 0;
-  pushLine(lines, 'floor', 0, 0, z0, L, 0, z0);
-  pushLine(lines, 'floor', L, 0, z0, L, W, z0);
-  pushLine(lines, 'floor', L, W, z0, 0, W, z0);
-  pushLine(lines, 'floor', 0, W, z0, 0, 0, z0);
+  const bTint = debug ? ('boundary' as const) : undefined;
+  pushLine(lines, 'floor', 0, 0, z0, L, 0, z0, bTint);
+  pushLine(lines, 'floor', L, 0, z0, L, W, z0, bTint);
+  pushLine(lines, 'floor', L, W, z0, 0, W, z0, bTint);
+  pushLine(lines, 'floor', 0, W, z0, 0, 0, z0, bTint);
 
   const rackDepthMm = geometry.metadata.rackDepthMm;
   const layoutOrientation = geometry.orientation;
@@ -270,8 +331,13 @@ export function build3DModelV2(geometry: LayoutGeometry): Rack3DModel {
         rackDepthMm,
         layoutOrientation
       );
+      const modTint: Rack3DLine3D['debugTint'] | undefined = debug
+        ? mod.type === 'tunnel'
+          ? 'tunnel'
+          : 'normal'
+        : undefined;
       for (const fp of fps) {
-        emitPalletRackPrism(lines, mod, fp, uprightSeen);
+        emitPalletRackPrism(lines, mod, fp, uprightSeen, modTint);
       }
       if (
         fps.length === 2 &&
@@ -290,7 +356,7 @@ export function build3DModelV2(geometry: LayoutGeometry): Rack3DModel {
     }
   }
 
-  const linesDeduped = dedupeWireframeLines(lines);
+  const linesDeduped = debug ? lines : dedupeWireframeLines(lines);
 
   return {
     warehouse: { lengthMm: L, widthMm: W },
