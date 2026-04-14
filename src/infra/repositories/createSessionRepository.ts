@@ -14,7 +14,8 @@ export function createSessionRepository(): SessionRepository {
   }
   if (process.env.NODE_ENV === 'production') {
     console.warn(
-      '[sessions] UPSTASH_REDIS_REST_URL/TOKEN ausentes — a usar memória (estado não persistido entre restarts/réplicas).'
+      '[sessions] UPSTASH_REDIS_REST_URL/TOKEN ausentes — memória local por instância. ' +
+        'Fluxos multi-pedido (simulador/WhatsApp) podem voltar ao menu a meio.'
     );
   }
   return new MemorySessionRepository();

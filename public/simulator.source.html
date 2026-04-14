@@ -177,6 +177,13 @@
       <div style="font-size:12px;font-weight:400;opacity:0.95;margin-top:4px">
         Simulador web — mesmo fluxo que no WhatsApp (via /webhook)
       </div>
+      <div style="font-size:11px;font-weight:400;opacity:0.88;margin-top:8px;line-height:1.4;max-width:42em;margin-left:auto;margin-right:auto">
+        <strong>Produção (Vercel):</strong> configura
+        <code style="font-size:10px">UPSTASH_REDIS_REST_URL</code> +
+        <code style="font-size:10px">UPSTASH_REDIS_REST_TOKEN</code>
+        no projeto. Sem Redis, cada pedido pode ir a outra instância e o fluxo
+        volta ao menu (sessão em memória não é partilhada).
+      </div>
     </div>
     <div class="messages" id="messages"></div>
     <div class="input-area">
@@ -189,12 +196,30 @@
   <script>
     /* Local: igual ao WEBHOOK_SECRET no .env. Produção (Vercel): npm run build injeta o valor das env vars. */
     const WEBHOOK_SECRET = 'd184805abc64e12c2211b08b4e544f59ac7dcf136b7f3095a59db06ca1bffdda';
-    /** Novo id a cada carregamento (F5 incluído) — sessão no servidor é sempre limpa. */
-    const PHONE =
-      '55119sim' +
-      (typeof crypto !== 'undefined' && crypto.randomUUID
-        ? crypto.randomUUID().replace(/-/g, '')
-        : String(Date.now()) + Math.random().toString(36).slice(2, 12));
+    /** Mesmo `from` durante a vida da aba (sessionStorage); com Upstash no servidor a conversa sobrevive a F5. */
+    function getOrCreateSimPhone() {
+      var storageKey = 'palletBotSimFrom';
+      try {
+        var existing = sessionStorage.getItem(storageKey);
+        if (existing && existing.length >= 12) {
+          return existing;
+        }
+      } catch (e) {
+        /* sessionStorage indisponível */
+      }
+      var suffix =
+        typeof crypto !== 'undefined' && crypto.randomUUID
+          ? crypto.randomUUID().replace(/-/g, '')
+          : String(Date.now()) + Math.random().toString(36).slice(2, 12);
+      var phone = '55119sim' + suffix;
+      try {
+        sessionStorage.setItem(storageKey, phone);
+      } catch (e2) {
+        /* ignore */
+      }
+      return phone;
+    }
+    const PHONE = getOrCreateSimPhone();
     const API_URL = window.location.origin;
     const WEBHOOK_URL = `${API_URL}/webhook`;
 
