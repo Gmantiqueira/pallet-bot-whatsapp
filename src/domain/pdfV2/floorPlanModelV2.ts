@@ -1,3 +1,4 @@
+import { sanitizeText } from '../../utils/sanitizeText';
 import type { LayoutGeometry, RackModule, RackRow } from './layoutGeometryV2';
 import type {
   FloorPlanCirculationSemantic,
@@ -29,7 +30,7 @@ const HEADER = 22;
 const DIM_OUT = 16;
 
 function escapeXml(text: string): string {
-  return text
+  return sanitizeText(text)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')

@@ -6,6 +6,7 @@ import {
 } from '../../domain/warehouseHeightDerive';
 import { MIN_LEVEL_GAP_MM } from '../../domain/conversationHelpers';
 import { formatModuleCountForDocumentPt } from '../../domain/pdfV2/formatModuleCountDisplay';
+import { sanitizeText } from '../../utils/sanitizeText';
 import { formatMm, formatPeDireitoAltura } from './pdfService';
 
 export type TechnicalSummaryRow = {
@@ -245,5 +246,9 @@ export function technicalSummaryRowsFromLayoutGeometry(
     });
   }
 
-  return rows;
+  return rows.map(row => ({
+    ...row,
+    label: sanitizeText(row.label),
+    value: sanitizeText(row.value),
+  }));
 }
