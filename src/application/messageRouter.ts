@@ -15,6 +15,16 @@ import {
 } from './messageBuilder';
 import { PdfService } from '../infra/pdf/pdfService';
 import type { GeneratedPdfArtifact } from '../types/generatedPdf';
+import type { GeneratedBudgetArtifact } from '../types/generatedBudget';
+import { selectStructure } from '../domain/structureEngine';
+import { buildFloorPlanAccessories } from '../domain/pdfV2/visualAccessoriesV2';
+import { buildBillOfMaterials } from '../domain/pdfV2/billOfMaterials';
+import { resolveUprightHeightMmForProject } from '../domain/projectEngines';
+import {
+  fillBudgetWorkbookFromTemplate,
+  writeBudgetXlsxFile,
+} from '../infra/budget/budgetSpreadsheetV2';
+import { buildBudgetArtifactAfterWrite } from '../infra/budget/budgetArtifact';
 import { resolveStoragePath } from '../config/storagePath';
 import { buildProjectAnswersV2 } from '../domain/pdfV2/answerMapping';
 import { buildLayoutSolutionV2 } from '../domain/pdfV2/layoutSolutionV2';
@@ -70,6 +80,8 @@ export interface RouterResult {
    * não representa URL pública nem “entrega” ao utilizador final.
    */
   generatedPdf?: GeneratedPdfArtifact;
+  /** Planilha .xlsx de orçamento (modelo comercial) quando gerada neste pedido. */
+  generatedBudget?: GeneratedBudgetArtifact;
   /**
    * Quando `true`, o integrador deve enviar de seguida outro POST com `resumePdfGeneration: true`
    * (mesmo `from` / sessão) para executar a geração do PDF após mostrar a mensagem de espera.
@@ -314,6 +326,101 @@ async function executeProjectPdfGeneration(
   return { updatedSession, generatedPdf, deliveryError };
 }
 
+async function executeBudgetXlsxGeneration(
+  genSession: Session
+): Promise<{
+  generatedBudget?: GeneratedBudgetArtifact;
+  deliveryError?: string;
+}> {
+  const storageDir = resolveStoragePath();
+  if (!fs.existsSync(storageDir)) {
+    fs.mkdirSync(storageDir, { recursive: true });
+  }
+
+  try {
+    const ans = finalizeSummaryAnswers({ ...genSession.answers });
+
+    if (!computeProjectEngines(ans)) {
+      return { deliveryError: 'Dados do projeto incompletos para o orçamento.' };
+    }
+
+    const v2a = buildProjectAnswersV2(ans);
+    if (!v2a) {
+      return { deliveryError: 'Respostas do projeto incompletas (V2).' };
+    }
+
+    const sol = buildLayoutSolutionV2(v2a);
+    const geo: LayoutGeometry = buildLayoutGeometry(sol, ans);
+    validateLayoutGeometry(geo);
+
+    const rack3d = build3DModelV2(geo);
+    validatePdfRenderCoherence(geo, {
+      rack3dModel: rack3d,
+      layoutSolution: sol,
+    });
+    validatePdfV2FinalConsistency({
+      answers: ans,
+      v2answers: v2a,
+      layoutSolution: sol,
+      geometry: geo,
+    });
+
+    const accessories = buildFloorPlanAccessories(ans, geo);
+    const cap =
+      typeof ans.capacityKg === 'number' && Number.isFinite(ans.capacityKg)
+        ? ans.capacityKg
+        : 0;
+    const structure = selectStructure({
+      capacityKgPerLevel: cap,
+      levels: sol.metadata.structuralLevels,
+      hasGroundLevel: sol.metadata.hasGroundLevel,
+    });
+    const uprightH = resolveUprightHeightMmForProject(ans);
+    const bom = buildBillOfMaterials(sol, geo, accessories, structure, uprightH);
+
+    const clientName =
+      typeof ans.clientName === 'string'
+        ? ans.clientName
+        : typeof ans.cliente === 'string'
+          ? ans.cliente
+          : undefined;
+    const city =
+      typeof ans.city === 'string'
+        ? ans.city
+        : typeof ans.cidade === 'string'
+          ? ans.cidade
+          : undefined;
+    const projectLabel =
+      typeof ans.projectName === 'string'
+        ? ans.projectName
+        : typeof ans.projetoNome === 'string'
+          ? ans.projetoNome
+          : undefined;
+
+    const wb = await fillBudgetWorkbookFromTemplate({
+      bom,
+      layoutSolution: sol,
+      clientName,
+      city,
+      projectLabel,
+    });
+
+    const ts = Date.now();
+    const fn = `orcamento-${ts}.xlsx`;
+    const abs = path.join(storageDir, fn);
+    await writeBudgetXlsxFile(wb, abs);
+
+    const artifact = buildBudgetArtifactAfterWrite(abs, fn);
+    return { generatedBudget: artifact };
+  } catch (err) {
+    console.error('[budget] xlsx generation failed', err);
+    return {
+      deliveryError:
+        'Não foi possível gerar o orçamento agora. Tente novamente em instantes.',
+    };
+  }
+}
+
 export const routeIncoming = async (
   session: Session,
   incoming: IncomingPayload,
@@ -475,6 +582,17 @@ export const routeIncoming = async (
     }
   }
 
+  const hasBudgetEffect = transitionResult.effects.some(
+    e => e.type === 'GENERATE_BUDGET_XLSX'
+  );
+  let generatedBudget: GeneratedBudgetArtifact | undefined;
+  let budgetError: string | undefined;
+  if (hasBudgetEffect && updatedSession.state === 'DONE') {
+    const budgetOutcome = await executeBudgetXlsxGeneration(updatedSession);
+    generatedBudget = budgetOutcome.generatedBudget;
+    budgetError = budgetOutcome.deliveryError;
+  }
+
   const imageAnalyzed =
     previousState === 'WAIT_PLANT_IMAGE' &&
     updatedSession.state === 'WAIT_PLANT_CONFIRM_DIMS';
@@ -485,6 +603,10 @@ export const routeIncoming = async (
     previousState,
     lastError: deliveryError,
     doneResendPdf: hasResendPdfEffect,
+    budgetError,
+    budgetSuccessMessage: generatedBudget
+      ? `📊 Orçamento Excel: ${generatedBudget.filename} (preços editáveis; totais com fórmulas).`
+      : undefined,
   };
 
   if (
@@ -511,5 +633,6 @@ export const routeIncoming = async (
     session: updatedSession,
     outgoingMessages: messages,
     generatedPdf,
+    generatedBudget,
   };
 };

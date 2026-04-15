@@ -183,6 +183,7 @@ describe('MessageBuilder', () => {
       expect(messages[0].text).toContain('integrador interno');
       expect(messages[0].buttons).toEqual([
         { id: 'BAIXAR_PDF', label: 'Baixar PDF' },
+        { id: 'GERAR_ORCAMENTO', label: 'Gerar orçamento' },
       ]);
       expect(messages.some(m => m.type === 'document')).toBe(false);
     });

@@ -22,6 +22,10 @@ export interface MessageContext {
   pdfFilename?: string;
   /** Utilizador pediu reenvio do PDF (botão Baixar no estado DONE). */
   doneResendPdf?: boolean;
+  /** Mensagem curta após gerar o Excel de orçamento no mesmo pedido. */
+  budgetSuccessMessage?: string;
+  /** Falha ao gerar orçamento (estado DONE; PDF pode estar ok). */
+  budgetError?: string;
 }
 
 export const buildMessages = (
@@ -87,8 +91,25 @@ export const buildMessages = (
       to: session.phone,
       type: 'text',
       text: textDone,
-      buttons: [{ id: 'BAIXAR_PDF', label: 'Baixar PDF' }],
+      buttons: [
+        { id: 'BAIXAR_PDF', label: 'Baixar PDF' },
+        { id: 'GERAR_ORCAMENTO', label: 'Gerar orçamento' },
+      ],
     });
+    if (ctx.budgetError?.trim()) {
+      messages.push({
+        to: session.phone,
+        type: 'text',
+        text: `❌ Orçamento: ${ctx.budgetError.trim()}`,
+      });
+    }
+    if (ctx.budgetSuccessMessage?.trim()) {
+      messages.push({
+        to: session.phone,
+        type: 'text',
+        text: ctx.budgetSuccessMessage.trim(),
+      });
+    }
     return messages;
   }
 

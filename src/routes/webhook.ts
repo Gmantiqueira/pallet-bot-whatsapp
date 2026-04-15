@@ -13,6 +13,7 @@ import {
   IncomingPayload,
 } from '../application/messageRouter';
 import type { GeneratedPdfArtifact } from '../types/generatedPdf';
+import type { GeneratedBudgetArtifact } from '../types/generatedBudget';
 import type { Session } from '../domain/session';
 import { normalizeWebhookFrom } from '../infra/http/normalizeWebhookFrom';
 import { parseClientSession } from '../infra/http/parseClientSession';
@@ -42,6 +43,10 @@ interface WebhookResponse {
   generatedPdf?: GeneratedPdfArtifact;
   /** Só com `simulator: true`: bytes do PDF em base64 (mesma invocação que grava em /tmp; evita 404 entre instâncias). */
   pdfBase64?: string;
+  /** Metadados do Excel de orçamento quando gerado neste pedido. */
+  generatedBudget?: GeneratedBudgetArtifact;
+  /** Só com `simulator: true`: bytes do orçamento .xlsx em base64. */
+  budgetBase64?: string;
   /** Quando `true`, enviar de seguida outro POST com `resumePdfGeneration: true` para continuar a geração do PDF. */
   resumePdfGeneration?: boolean;
 }
@@ -155,12 +160,24 @@ export const webhookRoutes = async (
             console.error('[webhook] simulator pdfBase64 read failed', e);
           }
         }
+        let budgetBase64: string | undefined;
+        if (simulatorMode && result.generatedBudget?.absolutePath) {
+          try {
+            budgetBase64 = fs
+              .readFileSync(result.generatedBudget.absolutePath)
+              .toString('base64');
+          } catch (e) {
+            console.error('[webhook] simulator budgetBase64 read failed', e);
+          }
+        }
         return reply.code(200).send({
           messages: result.outgoingMessages,
           sessionBackend: getSessionBackend(),
           ...(simulatorMode ? { clientSession: result.session } : {}),
           ...(result.generatedPdf ? { generatedPdf: result.generatedPdf } : {}),
           ...(pdfBase64 ? { pdfBase64 } : {}),
+          ...(result.generatedBudget ? { generatedBudget: result.generatedBudget } : {}),
+          ...(budgetBase64 ? { budgetBase64 } : {}),
           ...(result.resumePdfGeneration
             ? { resumePdfGeneration: true }
             : {}),
