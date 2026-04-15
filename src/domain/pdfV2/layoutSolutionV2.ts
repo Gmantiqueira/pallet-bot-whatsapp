@@ -59,6 +59,29 @@ function storageTiersForPositionCount(
  * (equiv. ao longo do vão) × {@link MODULE_PALLET_BAYS_PER_LEVEL} × (1 ou 2 costas) × patamares de carga.
  * Equiv.: 1 = módulo completo (2 baias na face), 0,5 = meio módulo (= 1 baia).
  */
+/**
+ * Módulos de **frente** (1 frente = 2 baias, como na elevação): em dupla costas há duas frentes por
+ * estação ao longo do vão; túnel conta como uma unidade.
+ */
+function computePhysicalPickingModules(
+  rows: RackRowSolution[],
+  rackDepthMode: RackDepthModeV2
+): number {
+  const ff = rackDepthMode === 'double' ? 2 : 1;
+  let sum = 0;
+  for (const row of rows) {
+    for (const seg of row.modules) {
+      const along = seg.type === 'half' ? 0.5 : 1;
+      if (seg.variant === 'tunnel') {
+        sum += 1;
+      } else {
+        sum += along * ff;
+      }
+    }
+  }
+  return sum;
+}
+
 function computeTotalPalletPositions(
   rows: RackRowSolution[],
   depthMode: RackDepthModeV2,
@@ -1093,6 +1116,7 @@ function buildLayoutSolutionV2Core(
     structuralLevels,
     hasGroundLevel
   );
+  const physicalPickingModules = computePhysicalPickingModules(rows, depthMode);
 
   const sol: LayoutSolutionV2 = {
     warehouse: { lengthMm, widthMm },
@@ -1111,6 +1135,7 @@ function buildLayoutSolutionV2Core(
     tunnels,
     totals: {
       modules: totalModEquiv,
+      physicalPickingModules,
       positions,
       levels: storageTierCount,
     },

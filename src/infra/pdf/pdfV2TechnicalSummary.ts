@@ -170,7 +170,9 @@ export function technicalSummaryRowsFromLayoutGeometry(
 ): TechnicalSummaryRow[] {
   const { totals, metadata, warehouseLengthMm, warehouseWidthMm } = geometry;
 
-  const modulos = formatModuleCountForDocumentPt(totals.moduleCount);
+  const modulos = formatModuleCountForDocumentPt(
+    totals.physicalPickingModuleCount ?? totals.moduleCount
+  );
   const niveisText = formatNiveisArmazenagemForDocumentPt(metadata);
   const niveisDetail =
     totals.levelCount !== metadata.structuralLevels

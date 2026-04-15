@@ -229,6 +229,16 @@ export function validatePdfRenderCoherence(
       `layoutSolution.totals.modules (${sol.totals.modules}) ≠ geometry.totals.moduleCount (${geometry.totals.moduleCount})`
     );
   }
+  if (
+    Math.abs(
+      sol.totals.physicalPickingModules -
+        geometry.totals.physicalPickingModuleCount
+    ) > MM_EPS
+  ) {
+    errors.push(
+      `layoutSolution.totals.physicalPickingModules (${sol.totals.physicalPickingModules}) ≠ geometry.totals.physicalPickingModuleCount (${geometry.totals.physicalPickingModuleCount})`
+    );
+  }
   const nRow = Math.min(sol.rows.length, geometry.rows.length);
   for (let i = 0; i < nRow; i++) {
     if (sol.rows[i]!.id !== geometry.rows[i]!.id) {

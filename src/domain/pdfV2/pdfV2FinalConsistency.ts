@@ -204,6 +204,15 @@ function validateSolutionSnapshot(
       `layoutSolution.totals.modules (${sol.totals.modules}) ≠ geometry.totals.moduleCount (${geo.totals.moduleCount}).`
     );
   }
+  if (
+    Math.abs(
+      sol.totals.physicalPickingModules - geo.totals.physicalPickingModuleCount
+    ) > MM_TOL
+  ) {
+    errors.push(
+      `layoutSolution.totals.physicalPickingModules (${sol.totals.physicalPickingModules}) ≠ geometry.totals.physicalPickingModuleCount (${geo.totals.physicalPickingModuleCount}).`
+    );
+  }
   if (sol.totals.positions !== geo.totals.positionCount) {
     errors.push(
       `layoutSolution.totals.positions (${sol.totals.positions}) ≠ geometry.totals.positionCount (${geo.totals.positionCount}).`

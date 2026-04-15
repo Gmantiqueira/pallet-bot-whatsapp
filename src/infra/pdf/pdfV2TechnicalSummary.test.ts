@@ -62,7 +62,7 @@ describe('technicalSummaryRowsFromLayoutGeometry', () => {
 
     expect(rowValue(rows, 'Coluna selecionada:')).toBe(structure.uprightType);
     expect(rowValue(rows, 'Módulos:')).toBe(
-      formatModuleCountForDocumentPt(geo.totals.moduleCount)
+      formatModuleCountForDocumentPt(geo.totals.physicalPickingModuleCount)
     );
     expect(rowValue(rows, 'Posições totais:')).toBe(
       String(geo.totals.positionCount)
@@ -212,9 +212,9 @@ describe('technicalSummaryRowsFromLayoutGeometry', () => {
 
     expect(rowValue(legacyRows, 'Módulos')).toBe('999');
     expect(rowValue(v2Rows, 'Módulos:')).toBe(
-      formatModuleCountForDocumentPt(geo.totals.moduleCount)
+      formatModuleCountForDocumentPt(geo.totals.physicalPickingModuleCount)
     );
-    expect(geo.totals.moduleCount).not.toBe(999);
+    expect(geo.totals.physicalPickingModuleCount).not.toBe(999);
 
     expect(rowValue(legacyRows, 'Posições estimadas')).toBeDefined();
     expect(rowValue(v2Rows, 'Posições totais:')).toBe(

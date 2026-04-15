@@ -1,5 +1,6 @@
 import { sanitizeText } from '../../utils/sanitizeText';
 import type { LayoutGeometry, RackModule, RackRow } from './layoutGeometryV2';
+import { splitModuleFootprintsFor3d } from './model3dV2';
 import type {
   FloorPlanCirculationSemantic,
   FloorPlanDimension,
@@ -13,9 +14,10 @@ import { ELEV_BEAM_FILL } from './elevationVisualTokens';
 /**
  * Canvas SVG da planta.
  *
- * **Mesma convenção que {@link buildLayoutGeometry}:** cada `structureRects` vem de
- * `RackModule.footprint` (retângulos em mm no referencial do galpão). O eixo **longitudinal da linha**
- * é o do vão (face frontal do módulo); o eixo **transversal da faixa** é a profundidade de posição.
+ * **Mesma convenção que {@link buildLayoutGeometry}:** retângulos em mm no referencial do galpão.
+ * Em **dupla costas**, cada `RackModule` parte-se em **duas** pegadas (duas frentes de picking), como na
+ * vista frontal / 3D — 1 módulo = 1 frente (2 baias), não o bloco fundido em profundidade.
+ * O eixo **longitudinal da linha** é o do vão; o **transversal** é a profundidade de posição.
  * Não há segunda geometria aqui — só escala e projeção para o viewBox SVG.
  *
  * - Para L ≈ W, se `innerH` < `innerW`, `scale = innerH/W` fica baixo e o bitmap fica “paisagem”; no PDF
@@ -77,6 +79,21 @@ function sortModulesAlongBeam(
   return [...modules].sort(
     (a, b) => beamStartMm(a.footprint, orientation) - beamStartMm(b.footprint, orientation)
   );
+}
+
+/** Módulos de frente na fileira (dupla costas: 2× por segmento ao longo do vão; túnel: 1). */
+function physicalPickingModuleCountForRow(row: RackRow): number {
+  const ff = row.rowType === 'backToBack' ? 2 : 1;
+  let n = 0;
+  for (const m of row.modules) {
+    const along = m.segmentType === 'half' ? 0.5 : 1;
+    if (m.type === 'tunnel') {
+      n += 1;
+    } else {
+      n += along * ff;
+    }
+  }
+  return n;
 }
 
 /**
@@ -184,7 +201,7 @@ export function buildFloorPlanModelV2(
   const rowBandRects: FloorPlanModelV2['rowBandRects'] = [];
   geometry.rows.forEach((row, rowIndex) => {
     const r = rowBandFootprintMm(row);
-    const nMod = row.modules.length;
+    const nMod = physicalPickingModuleCountForRow(row);
     rowBandRects.push({
       id: `${row.id}-band`,
       x: toX(r.x0),
@@ -196,29 +213,34 @@ export function buildFloorPlanModelV2(
     });
   });
 
-  const indexByModuleId = new Map<string, number>();
-  let nextIdx = 1;
-  for (const row of geometry.rows) {
-    for (const m of sortModulesAlongBeam(row.modules, geometry.orientation)) {
-      indexByModuleId.set(m.id, nextIdx++);
-    }
-  }
-
   const structureRects: FloorPlanModelV2['structureRects'] = [];
+  let nextDisplayIdx = 1;
+  const rackD = geometry.metadata.rackDepthMm;
+  const ori = geometry.orientation;
   for (const row of geometry.rows) {
     const kind = rackDepthModeFromRow(row);
-    for (const m of row.modules) {
-      const fp = m.footprint;
-      structureRects.push({
-        id: m.id,
-        x: toX(fp.x0),
-        y: toY(fp.y0),
-        w: Math.max(0.5, toX(fp.x1) - toX(fp.x0)),
-        h: Math.max(0.5, toY(fp.y1) - toY(fp.y0)),
-        kind,
-        variant: m.type === 'tunnel' ? 'tunnel' : 'normal',
-        displayIndex: indexByModuleId.get(m.id),
-      });
+    const sorted = sortModulesAlongBeam(row.modules, geometry.orientation);
+    for (const m of sorted) {
+      const fps = splitModuleFootprintsFor3d(row, m, rackD, ori);
+      let fi = 0;
+      for (const fp of fps) {
+        const x0 = Math.min(fp.x0, fp.x1);
+        const x1 = Math.max(fp.x0, fp.x1);
+        const y0 = Math.min(fp.y0, fp.y1);
+        const y1 = Math.max(fp.y0, fp.y1);
+        const id = fps.length > 1 ? `${m.id}-f${fi}` : m.id;
+        fi += 1;
+        structureRects.push({
+          id,
+          x: toX(x0),
+          y: toY(y0),
+          w: Math.max(0.5, toX(x1) - toX(x0)),
+          h: Math.max(0.5, toY(y1) - toY(y0)),
+          kind,
+          variant: m.type === 'tunnel' ? 'tunnel' : 'normal',
+          displayIndex: nextDisplayIdx++,
+        });
+      }
     }
   }
 
@@ -412,16 +434,18 @@ function planCaptionLabels(
 }
 
 function planModuleSingleCaption(geometry: LayoutGeometry): string {
-  const { positionCount, moduleCount } = geometry.totals;
+  const { positionCount, physicalPickingModuleCount, moduleCount } =
+    geometry.totals;
+  const faceMods = physicalPickingModuleCount ?? moduleCount;
   if (
-    moduleCount <= 0 ||
+    faceMods <= 0 ||
     !Number.isFinite(positionCount) ||
-    !Number.isFinite(moduleCount)
+    !Number.isFinite(faceMods)
   ) {
-    return 'Cada número representa um módulo (ver resumo técnico)';
+    return 'Cada número representa um módulo de frente (2 baias), ver resumo técnico';
   }
-  const approx = Math.round(positionCount / moduleCount);
-  return `Cada número representa um módulo (≈${approx} posições)`;
+  const approx = Math.round(positionCount / faceMods);
+  return `Cada número = 1 módulo de frente (2 baias) (≈${approx} posições por módulo)`;
 }
 
 export { escapeXml };

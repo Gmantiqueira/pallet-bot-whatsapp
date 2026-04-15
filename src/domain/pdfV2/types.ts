@@ -61,8 +61,16 @@ export type LayoutSolutionV2 = {
   corridors: CirculationZone[];
   tunnels: TunnelZone[];
   totals: {
-    /** Células de vão (face) — meio módulo conta 0,5 quando aplicável. */
+    /**
+     * Equivalente ao longo do vão por segmento de layout (1 = módulo completo ao longo da fileira,
+     * 0,5 = meio módulo) — usado no motor de pontuação e coerência com modelo 3D equiv.
+     */
     modules: number;
+    /**
+     * Módulos de **frente** (faces de picking): em linha dupla costas, cada segmento conta ×2;
+     * túnel = 1 unidade. Alinha numeração da planta e resumo ao conceito da vista frontal (2 baias / frente).
+     */
+    physicalPickingModules: number;
     positions: number;
     /**
      * Total de patamares de armazenagem no cálculo de posições (= níveis com longarina
