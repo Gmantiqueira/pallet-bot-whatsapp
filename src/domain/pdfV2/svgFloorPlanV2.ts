@@ -20,6 +20,13 @@ const COL_WH_STROKE = '#94a3b8';
 /** Faixa de fileira: fundo contínuo atrás dos módulos (leitura de “linha”). */
 const COL_ROW_SINGLE = '#eef2f7';
 const COL_ROW_DOUBLE = '#e2edf8';
+/** Dupla costas: duas faixas paralelas (frente A vs B), ligeiramente distintas. */
+const COL_ROW_DOUBLE_FACE_A = '#dde8f6';
+const COL_ROW_DOUBLE_FACE_B = '#e8eef8';
+/** Linha ao longo da espinha (costas) entre frentes. */
+const COL_SPINE_LINE = '#64748b';
+const SPINE_LINE_SW = 1.45;
+const SPINE_DASH = '5 4';
 /** Nível 2 — módulo: preenchimento médio; contorno perimetral forte (unidade estrutural). */
 const COL_MOD_FILL = '#f1f5f9';
 /** Contorno do módulo: hierarquia acima da subdivisão interna (baias) e da grelha. */
@@ -489,6 +496,7 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
     .fp-drawing-meta { font: 700 14px ${SVG_FONT_FAMILY_CSS}; fill: #334155; letter-spacing: 0.01em; }
     .fp-plan-hint { font: 400 12.5px ${SVG_FONT_FAMILY_CSS}; fill: #64748b; }
     .fp-row-legend { font: 700 13px ${SVG_FONT_FAMILY_CSS}; fill: #334155; letter-spacing: 0.01em; }
+    .fp-row-face { font: 600 11px ${SVG_FONT_FAMILY_CSS}; fill: #475569; letter-spacing: 0.02em; }
     .fp-first-level { font: 400 12px ${SVG_FONT_FAMILY_CSS}; fill: #0f766e; }
     .fp-anno-heading { font: 700 11px ${SVG_FONT_FAMILY_CSS}; fill: #64748b; letter-spacing: 0.06em; text-transform: uppercase; }
     .fp-circ-op { font: 700 14px ${SVG_FONT_FAMILY_CSS}; fill: #0f172a; }
@@ -516,9 +524,25 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
   );
 
   for (const r of model.rowBandRects) {
-    const fill = r.kind === 'double' ? COL_ROW_DOUBLE : COL_ROW_SINGLE;
+    let fill: string;
+    if (r.kind === 'double') {
+      fill =
+        r.pickingFace === 'A'
+          ? COL_ROW_DOUBLE_FACE_A
+          : r.pickingFace === 'B'
+            ? COL_ROW_DOUBLE_FACE_B
+            : COL_ROW_DOUBLE;
+    } else {
+      fill = COL_ROW_SINGLE;
+    }
     parts.push(
       `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="${fill}" stroke="none" opacity="0.94"/>`
+    );
+  }
+
+  for (const ln of model.rowSpineLines) {
+    parts.push(
+      `<line x1="${ln.x1}" y1="${ln.y1}" x2="${ln.x2}" y2="${ln.y2}" stroke="${COL_SPINE_LINE}" stroke-width="${SPINE_LINE_SW}" stroke-dasharray="${SPINE_DASH}" stroke-linecap="round" opacity="0.92"/>`
     );
   }
 
@@ -660,6 +684,35 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
     parts.push(
       `<text x="${tcx}" y="${tcy}" text-anchor="middle" dominant-baseline="middle" class="fp-mod-num" font-size="${fontPx}px" opacity="${opacity}">${s.displayIndex}</text>`
     );
+  }
+
+  for (const r of model.rowBandRects) {
+    if (r.pickingFace !== 'A' && r.pickingFace !== 'B') continue;
+    const minSide = Math.min(r.w, r.h);
+    if (minSide < 20) continue;
+    const txt =
+      minSide >= 36
+        ? r.pickingFace === 'A'
+          ? 'Frente A'
+          : 'Frente B'
+        : r.pickingFace === 'A'
+          ? 'A'
+          : 'B';
+    const fs = Math.min(12, Math.max(9, minSide * 0.14));
+    const longAlongBeam = r.w >= r.h;
+    if (longAlongBeam) {
+      const x = r.x + 10;
+      const y = r.y + r.h / 2;
+      parts.push(
+        `<text x="${x}" y="${y}" text-anchor="start" dominant-baseline="middle" class="fp-row-face" font-size="${fs}px" stroke="#ffffff" stroke-width="0.35" paint-order="stroke fill">${escapeXml(txt)}</text>`
+      );
+    } else {
+      const x = r.x + r.w / 2;
+      const y = r.y + Math.min(14, r.h * 0.32);
+      parts.push(
+        `<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="middle" class="fp-row-face" font-size="${fs}px" stroke="#ffffff" stroke-width="0.35" paint-order="stroke fill">${escapeXml(txt)}</text>`
+      );
+    }
   }
 
   parts.push(orientationArrowSvg(o, model.beamSpanAlong));

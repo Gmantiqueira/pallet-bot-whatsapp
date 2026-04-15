@@ -30,6 +30,8 @@ const PAD = 16;
 /** Espaço superior sem título duplicado (o PDF traz o cabeçalho da folha). */
 const HEADER = 22;
 const DIM_OUT = 16;
+/** Espinha entre costas (mm) — igual a layoutGeometryV2 / model3dV2.splitModuleFootprintsFor3d. */
+const SPINE_BACK_TO_BACK_MM = 100;
 
 function escapeXml(text: string): string {
   return sanitizeText(text)
@@ -180,6 +182,42 @@ function rowBandFootprintMm(row: RackRow): {
 }
 
 /**
+ * Duas faixas paralelas + linha média da espinha (mm), alinhadas ao corte em
+ * {@link splitModuleFootprintsFor3d} (1.ª face = A em menor Y ou menor X).
+ */
+function doubleRowFaceBandsMm(
+  row: RackRow,
+  rackDepthMm: number
+): {
+  faceAMm: { x0: number; y0: number; x1: number; y1: number };
+  faceBMm: { x0: number; y0: number; x1: number; y1: number };
+  spineMidlineMm: { x1: number; y1: number; x2: number; y2: number };
+} | null {
+  if (row.rowType !== 'backToBack') return null;
+  const r = rowBandFootprintMm(row);
+  const md = rackDepthMm;
+  const sp = SPINE_BACK_TO_BACK_MM;
+  if (row.layoutOrientation === 'along_length') {
+    const ySplitFront = r.y0 + md;
+    const ySplitBack = ySplitFront + sp;
+    const yMid = ySplitFront + sp / 2;
+    return {
+      faceAMm: { x0: r.x0, y0: r.y0, x1: r.x1, y1: ySplitFront },
+      faceBMm: { x0: r.x0, y0: ySplitBack, x1: r.x1, y1: r.y1 },
+      spineMidlineMm: { x1: r.x0, y1: yMid, x2: r.x1, y2: yMid },
+    };
+  }
+  const xSplitFront = r.x0 + md;
+  const xSplitBack = xSplitFront + sp;
+  const xMid = xSplitFront + sp / 2;
+  return {
+    faceAMm: { x0: r.x0, y0: r.y0, x1: xSplitFront, y1: r.y1 },
+    faceBMm: { x0: xSplitBack, y0: r.y0, x1: r.x1, y1: r.y1 },
+    spineMidlineMm: { x1: xMid, y1: r.y0, x2: xMid, y2: r.y1 },
+  };
+}
+
+/**
  * Converte o modelo geométrico canónico num modelo de planta com coordenadas de desenho.
  */
 export function buildFloorPlanModelV2(
@@ -198,30 +236,77 @@ export function buildFloorPlanModelV2(
   const toX = (xmm: number) => bx + xmm * scale;
   const toY = (ymm: number) => by + ymm * scale;
 
+  const rackDepthMm = geometry.metadata.rackDepthMm;
   const rowBandRects: FloorPlanModelV2['rowBandRects'] = [];
-  geometry.rows.forEach((row, rowIndex) => {
-    const r = rowBandFootprintMm(row);
-    const nMod = physicalPickingModuleCountForRow(row);
+  const rowSpineLines: FloorPlanModelV2['rowSpineLines'] = [];
+
+  function mmRectToBand(
+    id: string,
+    mm: { x0: number; y0: number; x1: number; y1: number },
+    kind: RackDepthModeV2,
+    caption: string,
+    opts: {
+      showInRowLegend?: boolean;
+      pickingFace?: 'A' | 'B';
+    }
+  ): void {
+    const x0 = Math.min(mm.x0, mm.x1);
+    const x1 = Math.max(mm.x0, mm.x1);
+    const y0 = Math.min(mm.y0, mm.y1);
+    const y1 = Math.max(mm.y0, mm.y1);
     rowBandRects.push({
-      id: `${row.id}-band`,
-      x: toX(r.x0),
-      y: toY(r.y0),
-      w: Math.max(0.5, toX(r.x1) - toX(r.x0)),
-      h: Math.max(0.5, toY(r.y1) - toY(r.y0)),
-      kind: rackDepthModeFromRow(row),
-      rowCaption: `Linha ${rowIndex + 1} — ${nMod} ${nMod === 1 ? 'módulo' : 'módulos'}`,
+      id,
+      x: toX(x0),
+      y: toY(y0),
+      w: Math.max(0.5, toX(x1) - toX(x0)),
+      h: Math.max(0.5, toY(y1) - toY(y0)),
+      kind,
+      rowCaption: caption,
+      showInRowLegend: opts.showInRowLegend,
+      pickingFace: opts.pickingFace,
     });
+  }
+
+  geometry.rows.forEach((row, rowIndex) => {
+    const kind = rackDepthModeFromRow(row);
+    const nMod = physicalPickingModuleCountForRow(row);
+    const caption = `Linha ${rowIndex + 1} — ${nMod} ${nMod === 1 ? 'módulo' : 'módulos'}`;
+
+    if (kind === 'double') {
+      const split = doubleRowFaceBandsMm(row, rackDepthMm);
+      if (split) {
+        const { faceAMm, faceBMm, spineMidlineMm } = split;
+        mmRectToBand(`${row.id}-band-a`, faceAMm, kind, caption, {
+          showInRowLegend: true,
+          pickingFace: 'A',
+        });
+        mmRectToBand(`${row.id}-band-b`, faceBMm, kind, caption, {
+          showInRowLegend: false,
+          pickingFace: 'B',
+        });
+        rowSpineLines.push({
+          id: `${row.id}-spine`,
+          x1: toX(spineMidlineMm.x1),
+          y1: toY(spineMidlineMm.y1),
+          x2: toX(spineMidlineMm.x2),
+          y2: toY(spineMidlineMm.y2),
+        });
+        return;
+      }
+    }
+
+    const r = rowBandFootprintMm(row);
+    mmRectToBand(`${row.id}-band`, r, kind, caption, {});
   });
 
   const structureRects: FloorPlanModelV2['structureRects'] = [];
   let nextDisplayIdx = 1;
-  const rackD = geometry.metadata.rackDepthMm;
   const ori = geometry.orientation;
   for (const row of geometry.rows) {
     const kind = rackDepthModeFromRow(row);
     const sorted = sortModulesAlongBeam(row.modules, geometry.orientation);
     for (const m of sorted) {
-      const fps = splitModuleFootprintsFor3d(row, m, rackD, ori);
+      const fps = splitModuleFootprintsFor3d(row, m, rackDepthMm, ori);
       let fi = 0;
       for (const fp of fps) {
         const x0 = Math.min(fp.x0, fp.x1);
@@ -361,8 +446,11 @@ export function buildFloorPlanModelV2(
   const moduleLevelTint = moduleLevelTintFromMetadata(geometry.metadata);
 
   const rowLegendBaseY = by + boxH + 56;
+  const rowBandsForLegend = rowBandRects.filter(
+    r => r.showInRowLegend !== false
+  );
   const rowLegendBlock: FloorPlanLabel[] =
-    rowBandRects.length === 0
+    rowBandsForLegend.length === 0
       ? []
       : [
           {
@@ -372,7 +460,7 @@ export function buildFloorPlanModelV2(
             text: 'Fileiras (referência)',
             className: 'fp-anno-heading',
           },
-          ...rowBandRects.map((r, i) => ({
+          ...rowBandsForLegend.map((r, i) => ({
             id: `row-leg-${r.id}`,
             x: VB_W / 2,
             y: rowLegendBaseY + 22 + i * 19,
@@ -401,6 +489,7 @@ export function buildFloorPlanModelV2(
     beamSpanAlong: geometry.beamSpanDirection,
     planAccessories,
     rowBandRects,
+    rowSpineLines,
     structureRects,
     circulationRects,
     dimensionLines,

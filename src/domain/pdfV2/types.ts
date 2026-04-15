@@ -176,7 +176,13 @@ export type FloorPlanModelV2 = {
     kind: RackDepthModeV2;
     /** Uma linha: "Linha N — X módulos". */
     rowCaption: string;
+    /** Segunda faixa de uma dupla: não repetir na legenda "Fileiras". */
+    showInRowLegend?: boolean;
+    /** Dupla costas: frente de picking (alinhado ao 1.º / 2.º split da pegada). */
+    pickingFace?: 'A' | 'B';
   }[];
+  /** Dupla costas: eixo ao longo da espinha (costas) entre as duas frentes — tracejado na planta. */
+  rowSpineLines: { id: string; x1: number; y1: number; x2: number; y2: number }[];
   structureRects: {
     id: string;
     x: number;
