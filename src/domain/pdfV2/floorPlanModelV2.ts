@@ -323,6 +323,7 @@ export function buildFloorPlanModelV2(
           h: Math.max(0.5, toY(y1) - toY(y0)),
           kind,
           variant: m.type === 'tunnel' ? 'tunnel' : 'normal',
+          segmentType: m.type === 'tunnel' ? undefined : m.segmentType,
           displayIndex: nextDisplayIdx++,
         });
       }

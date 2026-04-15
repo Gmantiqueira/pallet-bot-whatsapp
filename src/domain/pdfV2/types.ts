@@ -191,6 +191,8 @@ export type FloorPlanModelV2 = {
     h: number;
     kind: RackDepthModeV2;
     variant?: ModuleVariantV2;
+    /** Meio-módulo (1 baia ao longo do vão) — desenho e legenda distintos na planta. */
+    segmentType?: ModuleSegmentType;
     /** Numeração global na planta (1…n), linha a linha, ao longo do vão. */
     displayIndex?: number;
   }[];

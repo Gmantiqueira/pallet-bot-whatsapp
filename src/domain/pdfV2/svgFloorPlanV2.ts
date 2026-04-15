@@ -29,6 +29,9 @@ const SPINE_LINE_SW = 1.45;
 const SPINE_DASH = '5 4';
 /** Nível 2 — módulo: preenchimento médio; contorno perimetral forte (unidade estrutural). */
 const COL_MOD_FILL = '#f1f5f9';
+/** Meio-módulo (1 baia): base mais fria + hachura; contorno índigo tracejado. */
+const COL_MOD_HALF_FILL = '#e0e7ff';
+const COL_MOD_HALF_STROKE = '#4f46e5';
 /** Contorno do módulo: hierarquia acima da subdivisão interna (baias) e da grelha. */
 const COL_MOD_STROKE = '#64748b';
 const COL_MOD_STROKE_W = 1.74;
@@ -137,6 +140,8 @@ function moduleDisplayFontOpacity(
 }
 
 function moduleBayHintLine(s: FloorPlanModelV2['structureRects'][0]): string {
+  /** Uma só baia na face — não sugerir divisão ao meio como duas baias. */
+  if (s.segmentType === 'half') return '';
   const thin = 0.095;
   const op = 0.125;
   const dash = '1.8 8';
@@ -504,11 +509,17 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
     .fp-circ-res { font: 700 12.5px ${SVG_FONT_FAMILY_CSS}; fill: #44403c; }
     .fp-dim { font: 700 18px ${SVG_FONT_FAMILY_CSS}; fill: ${COL_DIM}; }
     .fp-mod-num { font-family: ${SVG_FONT_FAMILY_CSS}; font-weight: 600; fill: #1e293b; }
+    .fp-mod-half { font-family: ${SVG_FONT_FAMILY_CSS}; font-weight: 600; fill: #4338ca; letter-spacing: 0.02em; }
   </style>`);
   /** 1.º eixo elevado: leitura imediata na planta (sombreia o módulo). */
   parts.push(
     `<pattern id="fp-first-level-elevated" patternUnits="userSpaceOnUse" width="12" height="12" patternTransform="rotate(35)">` +
       `<path d="M-3,15 l18,-18 M-3,3 l6,-6 M9,15 l10,-10" stroke="#c2410c" stroke-width="1.65" opacity="0.62"/>` +
+      `</pattern>`
+  );
+  parts.push(
+    `<pattern id="fp-half-module-hatch" patternUnits="userSpaceOnUse" width="9" height="9" patternTransform="rotate(-38)">` +
+      `<path d="M0,9 l9,-9 M-2,2 l4,-4 M5,11 l4,-4" stroke="#6366f1" stroke-width="0.9" opacity="0.42"/>` +
       `</pattern>`
   );
   parts.push('</defs>');
@@ -605,9 +616,23 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
   const firstOnGround = model.planAccessories.firstLevelOnGround !== false;
   for (const s of model.structureRects) {
     const isTunnel = s.variant === 'tunnel';
-    const fillMod = isTunnel ? COL_MOD_TUNNEL_FILL : COL_MOD_FILL;
-    const strokeMod = isTunnel ? COL_MOD_TUNNEL_STROKE : COL_MOD_STROKE;
-    const sw = isTunnel ? Math.max(COL_MOD_STROKE_W, 2.1) : COL_MOD_STROKE_W;
+    const isHalf = s.segmentType === 'half';
+    const fillMod = isTunnel
+      ? COL_MOD_TUNNEL_FILL
+      : isHalf
+        ? COL_MOD_HALF_FILL
+        : COL_MOD_FILL;
+    const strokeMod = isTunnel
+      ? COL_MOD_TUNNEL_STROKE
+      : isHalf
+        ? COL_MOD_HALF_STROKE
+        : COL_MOD_STROKE;
+    const sw = isTunnel
+      ? Math.max(COL_MOD_STROKE_W, 2.1)
+      : isHalf
+        ? COL_MOD_STROKE_W + 0.2
+        : COL_MOD_STROKE_W;
+    const halfDash = isHalf ? ' stroke-dasharray="5 3.5"' : '';
     if (isTunnel) {
       parts.push(
         `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="${fillMod}" stroke="${strokeMod}" stroke-width="${sw}"/>`
@@ -619,6 +644,11 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
       parts.push(
         `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="${levelTint.fill}" fill-opacity="${levelTint.opacity}" stroke="none"/>`
       );
+      if (isHalf) {
+        parts.push(
+          `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="url(#fp-half-module-hatch)" stroke="none" opacity="0.62"/>`
+        );
+      }
       if (firstOnGround) {
         const band = Math.max(6.5, s.h * 0.078);
         parts.push(
@@ -639,7 +669,7 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
         );
       }
       parts.push(
-        `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="none" stroke="${strokeMod}" stroke-width="${sw}"/>`
+        `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="none" stroke="${strokeMod}" stroke-width="${sw}"${halfDash}/>`
       );
       parts.push(moduleBayHintLine(s));
     }
@@ -683,6 +713,23 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
     const tcy = s.y + s.h / 2 + nudgeY;
     parts.push(
       `<text x="${tcx}" y="${tcy}" text-anchor="middle" dominant-baseline="middle" class="fp-mod-num" font-size="${fontPx}px" opacity="${opacity}">${s.displayIndex}</text>`
+    );
+  }
+
+  for (const s of model.structureRects) {
+    if (s.segmentType !== 'half' || s.displayIndex === undefined) continue;
+    const minSide = Math.min(s.w, s.h);
+    if (minSide < 18) continue;
+    const { fontPx, opacity, nudgeX, nudgeY } = moduleDisplayFontOpacity(
+      s,
+      moduleCount
+    );
+    const tcx = s.x + s.w / 2 + nudgeX;
+    const tcy = s.y + s.h / 2 + nudgeY;
+    const fsHalf = Math.max(6.5, Math.min(10, fontPx * 0.4));
+    const yHalf = tcy + fontPx * 0.42 + 1;
+    parts.push(
+      `<text x="${tcx}" y="${yHalf}" text-anchor="middle" dominant-baseline="middle" class="fp-mod-half" font-size="${fsHalf}px" opacity="${Math.min(0.96, opacity + 0.06)}">${escapeXml('1/2 módulo')}</text>`
     );
   }
 
