@@ -16,14 +16,8 @@ import {
 import { PdfService } from '../infra/pdf/pdfService';
 import type { GeneratedPdfArtifact } from '../types/generatedPdf';
 import type { GeneratedBudgetArtifact } from '../types/generatedBudget';
-import { selectStructure } from '../domain/structureEngine';
-import { buildFloorPlanAccessories } from '../domain/pdfV2/visualAccessoriesV2';
-import { buildBillOfMaterials } from '../domain/pdfV2/billOfMaterials';
-import { resolveUprightHeightMmForProject } from '../domain/projectEngines';
-import {
-  fillBudgetWorkbookFromTemplate,
-  writeBudgetXlsxFile,
-} from '../infra/budget/budgetSpreadsheetV2';
+import { writeBudgetXlsxFile } from '../infra/budget/budgetSpreadsheetV2';
+import { buildBudgetWorkbookFromProjectAnswers } from '../infra/budget/budgetWorkbookFromProject';
 import { buildBudgetArtifactAfterWrite } from '../infra/budget/budgetArtifact';
 import { resolveStoragePath } from '../config/storagePath';
 import { buildProjectAnswersV2 } from '../domain/pdfV2/answerMapping';
@@ -338,72 +332,7 @@ async function executeBudgetXlsxGeneration(
   }
 
   try {
-    const ans = finalizeSummaryAnswers({ ...genSession.answers });
-
-    if (!computeProjectEngines(ans)) {
-      return { deliveryError: 'Dados do projeto incompletos para o orçamento.' };
-    }
-
-    const v2a = buildProjectAnswersV2(ans);
-    if (!v2a) {
-      return { deliveryError: 'Respostas do projeto incompletas (V2).' };
-    }
-
-    const sol = buildLayoutSolutionV2(v2a);
-    const geo: LayoutGeometry = buildLayoutGeometry(sol, ans);
-    validateLayoutGeometry(geo);
-
-    const rack3d = build3DModelV2(geo);
-    validatePdfRenderCoherence(geo, {
-      rack3dModel: rack3d,
-      layoutSolution: sol,
-    });
-    validatePdfV2FinalConsistency({
-      answers: ans,
-      v2answers: v2a,
-      layoutSolution: sol,
-      geometry: geo,
-    });
-
-    const accessories = buildFloorPlanAccessories(ans, geo);
-    const cap =
-      typeof ans.capacityKg === 'number' && Number.isFinite(ans.capacityKg)
-        ? ans.capacityKg
-        : 0;
-    const structure = selectStructure({
-      capacityKgPerLevel: cap,
-      levels: sol.metadata.structuralLevels,
-      hasGroundLevel: sol.metadata.hasGroundLevel,
-    });
-    const uprightH = resolveUprightHeightMmForProject(ans);
-    const bom = buildBillOfMaterials(sol, geo, accessories, structure, uprightH);
-
-    const clientName =
-      typeof ans.clientName === 'string'
-        ? ans.clientName
-        : typeof ans.cliente === 'string'
-          ? ans.cliente
-          : undefined;
-    const city =
-      typeof ans.city === 'string'
-        ? ans.city
-        : typeof ans.cidade === 'string'
-          ? ans.cidade
-          : undefined;
-    const projectLabel =
-      typeof ans.projectName === 'string'
-        ? ans.projectName
-        : typeof ans.projetoNome === 'string'
-          ? ans.projetoNome
-          : undefined;
-
-    const wb = await fillBudgetWorkbookFromTemplate({
-      bom,
-      layoutSolution: sol,
-      clientName,
-      city,
-      projectLabel,
-    });
+    const wb = await buildBudgetWorkbookFromProjectAnswers(genSession.answers);
 
     const ts = Date.now();
     const fn = `orcamento-${ts}.xlsx`;
