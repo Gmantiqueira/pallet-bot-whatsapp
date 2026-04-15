@@ -95,6 +95,7 @@ describe('buildLayoutSolutionV2', () => {
       crossSpan: 8000,
       bandDepth: 2700,
       corridorMm: 3000,
+      rackDepthMm: 2700,
       depthMode: 'single',
       hasTunnel: false,
     });
@@ -118,6 +119,7 @@ describe('buildLayoutSolutionV2', () => {
       crossSpan: 5699,
       bandDepth: 2700,
       corridorMm: 3000,
+      rackDepthMm: 2700,
       depthMode: 'single',
       hasTunnel: false,
     });
@@ -137,6 +139,7 @@ describe('buildLayoutSolutionV2', () => {
       crossSpan: 16_000,
       bandDepth,
       corridorMm,
+      rackDepthMm: 2700,
       depthMode: 'double',
       hasTunnel: false,
     });
@@ -156,10 +159,31 @@ describe('buildLayoutSolutionV2', () => {
       crossSpan: 8000,
       bandDepth: 2700,
       corridorMm: 3000,
+      rackDepthMm: 2700,
       depthMode: 'single',
       hasTunnel: false,
     });
     expect(r.rowBands[0]!.c0).toBeLessThan(50);
+  });
+
+  it('dupla costas: remanescente ≥ corredor + profundidade simples → fileira(s) simples extra', () => {
+    const corridorMm = 3000;
+    const rackDepthMm = 2700;
+    const bandDepth = 2 * rackDepthMm + 100;
+    const r = fillWarehouseCross({
+      orientation: 'along_length',
+      lengthMm: 40_000,
+      widthMm: 16_000,
+      beamSpan: 40_000,
+      crossSpan: 16_000,
+      bandDepth,
+      corridorMm,
+      rackDepthMm,
+      depthMode: 'double',
+      hasTunnel: false,
+    });
+    const singles = r.rowBands.filter(x => x.rackDepthMode === 'single');
+    expect(singles.length).toBeGreaterThanOrEqual(1);
   });
 
   it('posições = módulos (equiv.) × 2 baias × costas × patamares (sem túnel nem meio módulo)', () => {

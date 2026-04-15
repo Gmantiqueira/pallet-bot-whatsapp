@@ -171,7 +171,7 @@ describe('build3DModelV2 + projeção isométrica', () => {
     expect(b6).toBeGreaterThan(b1);
   });
 
-  it('6: dupla costas — dois prismas de pegada por módulo (vs um na simples); totais de montantes podem coincidir após dedupe', () => {
+  it('6: dupla costas — dois prismas de pegada por módulo na dupla (vs um na simples); remanescente pode misturar razões', () => {
     const aDouble = { ...base(), lineStrategy: 'APENAS_DUPLOS' as const };
     const aSingle = { ...base(), lineStrategy: 'APENAS_SIMPLES' as const };
     const solD = buildLayoutSolutionV2(aDouble);
@@ -180,7 +180,19 @@ describe('build3DModelV2 + projeção isométrica', () => {
     expect(solS.rackDepthMode).toBe('single');
     const mD = build3DModelV2(geomFromAnswers(aDouble));
     const mS = build3DModelV2(geomFromAnswers(aSingle));
-    expect(mD.footprintPrismCount / solD.totals.modules).toBeCloseTo(2, 5);
+    const gD = geomFromAnswers(aDouble);
+    let expectedD = 0;
+    for (const row of gD.rows) {
+      for (const mod of row.modules) {
+        expectedD += splitModuleFootprintsFor3d(
+          row,
+          mod,
+          gD.metadata.rackDepthMm,
+          gD.orientation
+        ).length;
+      }
+    }
+    expect(mD.footprintPrismCount).toBe(expectedD);
     expect(mS.footprintPrismCount / solS.totals.modules).toBeCloseTo(1, 5);
   });
 

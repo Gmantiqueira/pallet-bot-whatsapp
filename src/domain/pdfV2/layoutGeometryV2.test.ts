@@ -121,16 +121,19 @@ describe('buildLayoutGeometry + validateLayoutGeometry', () => {
     };
     const solD = buildLayoutSolutionV2(dbl);
     const geoD = buildLayoutGeometry(solD, dbl);
-    let segEquiv = 0;
-    let tunnels = 0;
+    let expectedPhy = 0;
     for (const r of solD.rows) {
+      const ff = r.kind === 'double' ? 2 : 1;
       for (const m of r.modules) {
-        if (m.variant === 'tunnel') tunnels += 1;
-        else segEquiv += m.type === 'half' ? 0.5 : 1;
+        if (m.variant === 'tunnel') {
+          expectedPhy += 1;
+        } else {
+          expectedPhy += (m.type === 'half' ? 0.5 : 1) * ff;
+        }
       }
     }
     expect(geoD.totals.physicalPickingModuleCount).toBeCloseTo(
-      segEquiv * 2 + tunnels,
+      expectedPhy,
       5
     );
     const planD = buildFloorPlanModelV2(geoD, dbl);
