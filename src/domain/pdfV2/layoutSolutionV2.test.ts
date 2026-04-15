@@ -515,6 +515,107 @@ describe('buildLayoutSolutionV2', () => {
   });
 });
 
+describe('túnel: ancoragem ao comprimento operacional da fileira', () => {
+  const tunnelBase = (): ProjectAnswersV2 => ({
+    ...base(),
+    lineStrategy: 'APENAS_SIMPLES' as const,
+    lengthMm: 40_000,
+    widthMm: 16_000,
+    corridorMm: 3000,
+    moduleWidthMm: 1100,
+    moduleDepthMm: 2700,
+    hasTunnel: true,
+    tunnelAppliesTo: 'AMBOS',
+  });
+
+  function alongInterval(
+    m: { x0: number; x1: number; y0: number; y1: number },
+    alongLength: boolean
+  ): { a0: number; a1: number } {
+    if (alongLength) {
+      const x0 = Math.min(m.x0, m.x1);
+      const x1 = Math.max(m.x0, m.x1);
+      return { a0: x0, a1: x1 };
+    }
+    const y0 = Math.min(m.y0, m.y1);
+    const y1 = Math.max(m.y0, m.y1);
+    return { a0: y0, a1: y1 };
+  }
+
+  it('INICIO: troço do túnel começa junto à origem do vão (0)', () => {
+    const s = buildLayoutSolutionV2({
+      ...tunnelBase(),
+      tunnelPosition: 'INICIO',
+    });
+    const tun = s.rows[0]!.modules.find(x => x.variant === 'tunnel')!;
+    const { a0 } = alongInterval(tun, s.orientation === 'along_length');
+    expect(a0).toBeLessThan(2);
+    expect(s.metadata.tunnelOperationalExtentMm).toBeLessThanOrEqual(
+      s.beamSpanMm
+    );
+  });
+
+  it('FIM: extremo operacional do túnel alinha ao fim da corrida empacotada', () => {
+    const s = buildLayoutSolutionV2({
+      ...tunnelBase(),
+      tunnelPosition: 'FIM',
+    });
+    const U = s.metadata.tunnelOperationalExtentMm ?? 0;
+    expect(U).toBeGreaterThan(1000);
+    expect(U).toBeLessThanOrEqual(s.beamSpanMm);
+    const tun = s.rows[0]!.modules.find(x => x.variant === 'tunnel')!;
+    const { a1 } = alongInterval(tun, s.orientation === 'along_length');
+    expect(Math.abs(a1 - U)).toBeLessThan(2);
+  });
+
+  it('MEIO: centro do túnel próximo do centro da extensão operacional', () => {
+    const s = buildLayoutSolutionV2({
+      ...tunnelBase(),
+      tunnelPosition: 'MEIO',
+    });
+    const U = s.metadata.tunnelOperationalExtentMm ?? 0;
+    const tun = s.rows[0]!.modules.find(x => x.variant === 'tunnel')!;
+    const { a0, a1 } = alongInterval(tun, s.orientation === 'along_length');
+    const center = (a0 + a1) / 2;
+    expect(Math.abs(center - U / 2)).toBeLessThan(20);
+  });
+
+  it('par vs ímpar de módulos completos: regra MEIO mantém centro operacional', () => {
+    const run = (lengthMm: number) => {
+      const s = buildLayoutSolutionV2({
+        ...tunnelBase(),
+        lengthMm,
+        tunnelPosition: 'MEIO',
+      });
+      const U = s.metadata.tunnelOperationalExtentMm ?? 0;
+      const tun = s.rows[0]!.modules.find(x => x.variant === 'tunnel')!;
+      const { a0, a1 } = alongInterval(tun, s.orientation === 'along_length');
+      return { U, center: (a0 + a1) / 2 };
+    };
+    const evenLen = 36_000;
+    const oddLen = 35_200;
+    const a = run(evenLen);
+    const b = run(oddLen);
+    expect(Math.abs(a.center - a.U / 2)).toBeLessThan(25);
+    expect(Math.abs(b.center - b.U / 2)).toBeLessThan(25);
+  });
+
+  it('com meio módulo: extensão operacional reflete meio módulo e MEIO continua centrado', () => {
+    const s = buildLayoutSolutionV2({
+      ...tunnelBase(),
+      tunnelPosition: 'MEIO',
+      halfModuleOptimization: true,
+      lengthMm: 38_500,
+    });
+    const U = s.metadata.tunnelOperationalExtentMm ?? 0;
+    const tun = s.rows[0]!.modules.find(x => x.variant === 'tunnel')!;
+    const { a0, a1 } = alongInterval(tun, s.orientation === 'along_length');
+    const center = (a0 + a1) / 2;
+    expect(U).toBeGreaterThan(0);
+    expect(Math.abs(center - U / 2)).toBeLessThan(30);
+  });
+});
+
 describe('halfModuleRelativePositionGainPercent', () => {
   it('calcula ganho % do layout com meio módulo face à variante só com módulos completos', () => {
     expect(halfModuleRelativePositionGainPercent(104, 100)).toBeCloseTo(4, 5);

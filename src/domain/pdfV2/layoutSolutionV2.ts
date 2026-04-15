@@ -9,6 +9,7 @@ import {
 } from './rackModuleSpec';
 import {
   effectiveTunnelStartMm,
+  operationalPackedExtentMm,
   resolveTunnelSpanAlongBeam,
   shouldReserveCrossPassageForSpan,
   type TunnelSpanPlacement,
@@ -913,12 +914,6 @@ function buildLayoutSolutionV2Core(
   const crossSpan = orientation === 'along_length' ? widthMm : lengthMm;
 
   const tunnelPos = tunnelPosition as TunnelPositionCode | undefined;
-  const placement: TunnelSpanPlacement =
-    typeof tunnelOffsetMm === 'number'
-      ? { tunnelOffsetMm }
-      : tunnelPos
-        ? { tunnelPosition: tunnelPos }
-        : {};
 
   const band = bandDepthForMode(depthMode, rackDepthMm);
 
@@ -937,6 +932,22 @@ function buildLayoutSolutionV2Core(
   const { rowBands, corridors: corridorsFromFill } = fillWarehouseCross(ctx);
 
   const rowBandCount = rowBands.length;
+
+  /** Ancoragem INICIO/MEIO/FIM à corrida real de módulos (exclui remanescente vazio no fim do vão). */
+  const operationalExtentMm = operationalPackedExtentMm(
+    beamSpan,
+    bayClearSpanAlongBeamMm,
+    halfModuleOptimization,
+    canHaveHalfAtBeamEnd(beamSpan, beamSpan, null, rowBandCount)
+  );
+
+  const placement: TunnelSpanPlacement =
+    typeof tunnelOffsetMm === 'number'
+      ? { tunnelOffsetMm }
+      : {
+          ...(tunnelPos !== undefined ? { tunnelPosition: tunnelPos } : {}),
+          operationalExtentMm,
+        };
 
   const reserveCrossPassageNoTunnel = shouldReserveCrossPassageWithoutTunnel(
     hasTunnel,
@@ -1050,6 +1061,32 @@ function buildLayoutSolutionV2Core(
     });
   }
 
+  if (
+    (process.env.TUNNEL_LAYOUT_DEBUG === '1' ||
+      process.env.PDF_TUNNEL_DEBUG === '1') &&
+    hasTunnel &&
+    tunnelSpec
+  ) {
+    const { t0, t1 } = tunnelSpec;
+    for (const row of rows) {
+      row.modules.forEach((m, i) => {
+        if (m.variant !== 'tunnel') return;
+        const alongStart =
+          orientation === 'along_length'
+            ? Math.min(m.x0, m.x1)
+            : Math.min(m.y0, m.y1);
+        const alongEnd =
+          orientation === 'along_length'
+            ? Math.max(m.x0, m.x1)
+            : Math.max(m.y0, m.y1);
+        // eslint-disable-next-line no-console
+        console.warn(
+          `[tunnel-layout] row=${row.id} moduleIndexInRow=${i} alongMm=[${Math.round(alongStart)}–${Math.round(alongEnd)}] tunnelSpanMm=[${Math.round(t0)}–${Math.round(t1)}] operationalExtentMm=${Math.round(operationalExtentMm)}`
+        );
+      });
+    }
+  }
+
   const positions = computeTotalPalletPositions(
     rows,
     depthMode,
@@ -1094,6 +1131,7 @@ function buildLayoutSolutionV2Core(
         corridorMm,
         placement
       ),
+      tunnelOperationalExtentMm: operationalExtentMm,
     },
   };
   assertLayoutSolutionDoubleRowBilateralAccess(sol);

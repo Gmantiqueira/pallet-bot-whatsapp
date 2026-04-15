@@ -4,6 +4,11 @@
  */
 
 import type { TunnelPositionCode } from './types';
+import {
+  maxFullModulesInBeamRun,
+  moduleLengthAlongBeamMm,
+  totalBeamRunLengthForModuleCount,
+} from './rackModuleSpec';
 
 const EPS = 0.5;
 
@@ -20,7 +25,38 @@ export type TunnelSpanPlacement = {
   tunnelOffsetMm?: number;
   /** Compatibilidade: INICIO / MEIO / FIM → equivalente a offsets (ver {@link legacyTunnelPositionToSpan}). */
   tunnelPosition?: TunnelPositionCode;
+  /**
+   * Comprimento ao longo do vão efetivamente ocupado pela fileira (módulos completos + meio módulo),
+   * **sem** faixa vazia residual no fim do compartimento. INICIO/MEIO/FIM ancoram a este intervalo
+   * [0, operationalExtentMm], não ao `beamSpan` total do galpão.
+   */
+  operationalExtentMm?: number;
 };
+
+/**
+ * Extensão (mm) desde 0 até ao extremo operacional da corrida de módulos num único segmento [0, beamSpan],
+ * com a mesma regra de meio módulo que {@link fillSegmentModules} (sem túnel).
+ */
+export function operationalPackedExtentMm(
+  beamSpan: number,
+  bayClearSpanMm: number,
+  halfOpt: boolean,
+  allowHalfAtRunEnd: boolean
+): number {
+  const firstLen = moduleLengthAlongBeamMm(bayClearSpanMm);
+  if (firstLen <= 0 || beamSpan <= EPS) {
+    return 0;
+  }
+  const nFull = maxFullModulesInBeamRun(beamSpan, bayClearSpanMm);
+  const used = totalBeamRunLengthForModuleCount(nFull, bayClearSpanMm);
+  const rem = beamSpan - used;
+  const wantHalf =
+    halfOpt && rem + EPS >= firstLen / 2 && rem < firstLen;
+  if (!wantHalf || !allowHalfAtRunEnd) {
+    return Math.min(beamSpan, used);
+  }
+  return Math.min(beamSpan, used + firstLen / 2);
+}
 
 /**
  * Intervalo [t0, t1] ocupado pelo túnel ao longo do vão.
@@ -35,11 +71,20 @@ export function resolveTunnelSpanAlongBeam(
   if (beamSpan <= 0 || tw <= 0) {
     return { t0: 0, t1: 0 };
   }
-  if (typeof placement.tunnelOffsetMm === 'number' && Number.isFinite(placement.tunnelOffsetMm)) {
+  if (
+    typeof placement.tunnelOffsetMm === 'number' &&
+    Number.isFinite(placement.tunnelOffsetMm)
+  ) {
     return spanFromStartOffsetMm(beamSpan, tw, placement.tunnelOffsetMm);
   }
   const pos = placement.tunnelPosition ?? 'MEIO';
-  return legacyTunnelPositionToSpan(beamSpan, tw, pos);
+  const op =
+    typeof placement.operationalExtentMm === 'number' &&
+    Number.isFinite(placement.operationalExtentMm) &&
+    placement.operationalExtentMm > EPS
+      ? Math.min(beamSpan, placement.operationalExtentMm)
+      : undefined;
+  return legacyTunnelPositionToSpan(beamSpan, tw, pos, op);
 }
 
 /**
@@ -64,21 +109,40 @@ export function spanFromStartOffsetMm(
   return { t0, t1: t0 + w };
 }
 
-/** Mesma geometria que o modelo anterior só com INICIO / MEIO / FIM. */
+/**
+ * INICIO / MEIO / FIM ao longo do vão.
+ * @param operationalSpanMm — se definido, posiciona relativamente a [0, operationalSpanMm] (fileira
+ *   operacional); caso contrário usa `beamSpan` (comportamento legado).
+ */
 export function legacyTunnelPositionToSpan(
   beamSpan: number,
   tw: number,
-  pos: TunnelPositionCode
+  pos: TunnelPositionCode,
+  operationalSpanMm?: number
 ): { t0: number; t1: number } {
+  const span =
+    operationalSpanMm != null &&
+    Number.isFinite(operationalSpanMm) &&
+    operationalSpanMm > EPS
+      ? Math.min(beamSpan, operationalSpanMm)
+      : beamSpan;
+  if (beamSpan <= 0 || tw <= 0) {
+    return { t0: 0, t1: 0 };
+  }
+  const w = Math.min(tw, span, beamSpan);
+  if (w <= EPS) {
+    return { t0: 0, t1: 0 };
+  }
   if (pos === 'INICIO') {
-    return { t0: 0, t1: Math.min(tw, beamSpan) };
+    return { t0: 0, t1: Math.min(w, beamSpan) };
   }
   if (pos === 'FIM') {
-    const w = Math.min(tw, beamSpan);
-    return { t0: Math.max(0, beamSpan - w), t1: beamSpan };
+    const t0 = Math.max(0, span - w);
+    const t1 = Math.min(beamSpan, t0 + w);
+    return { t0, t1 };
   }
-  const c = beamSpan / 2;
-  const half = Math.min(tw, beamSpan) / 2;
+  const c = span / 2;
+  const half = w / 2;
   return {
     t0: Math.max(0, c - half),
     t1: Math.min(beamSpan, c + half),

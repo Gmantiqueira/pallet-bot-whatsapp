@@ -84,6 +84,11 @@ export type LayoutSolutionV2 = {
     tunnelPosition?: TunnelPositionCode;
     /** Início efetivo do vão ao longo do `beamSpanMm` (mm), após limites geométricos. */
     tunnelOffsetEffectiveMm?: number;
+    /**
+     * Extensão ao longo do vão ocupada por módulos (full/half) **sem** contar faixa vazia residual
+     * no fim do compartimento — usada para INICIO/MEIO/FIM relativos à fileira operacional.
+     */
+    tunnelOperationalExtentMm?: number;
   };
 };
 
