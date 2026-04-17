@@ -20,7 +20,7 @@ const COL_WH_STROKE = '#94a3b8';
 /** Faixa de fileira: fundo contínuo atrás dos módulos (leitura de “linha”). */
 const COL_ROW_SINGLE = '#eef2f7';
 const COL_ROW_DOUBLE = '#e2edf8';
-/** Dupla costas: duas faixas paralelas (frente A vs B), ligeiramente distintas. */
+/** Dupla costas: duas faixas paralelas, tom ligeiramente distinto por faixa. */
 const COL_ROW_DOUBLE_FACE_A = '#dde8f6';
 const COL_ROW_DOUBLE_FACE_B = '#e8eef8';
 /** Linha ao longo da espinha (costas) entre frentes. */
@@ -501,7 +501,6 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
     .fp-drawing-meta { font: 700 14px ${SVG_FONT_FAMILY_CSS}; fill: #334155; letter-spacing: 0.01em; }
     .fp-plan-hint { font: 400 12.5px ${SVG_FONT_FAMILY_CSS}; fill: #64748b; }
     .fp-row-legend { font: 700 13px ${SVG_FONT_FAMILY_CSS}; fill: #334155; letter-spacing: 0.01em; }
-    .fp-row-face { font: 600 11px ${SVG_FONT_FAMILY_CSS}; fill: #475569; letter-spacing: 0.02em; }
     .fp-first-level { font: 400 12px ${SVG_FONT_FAMILY_CSS}; fill: #0f766e; }
     .fp-anno-heading { font: 700 11px ${SVG_FONT_FAMILY_CSS}; fill: #64748b; letter-spacing: 0.06em; text-transform: uppercase; }
     .fp-circ-op { font: 700 14px ${SVG_FONT_FAMILY_CSS}; fill: #0f172a; }
@@ -731,35 +730,6 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
     parts.push(
       `<text x="${tcx}" y="${yHalf}" text-anchor="middle" dominant-baseline="middle" class="fp-mod-half" font-size="${fsHalf}px" opacity="${Math.min(0.96, opacity + 0.06)}">${escapeXml('1/2 módulo')}</text>`
     );
-  }
-
-  for (const r of model.rowBandRects) {
-    if (r.pickingFace !== 'A' && r.pickingFace !== 'B') continue;
-    const minSide = Math.min(r.w, r.h);
-    if (minSide < 20) continue;
-    const txt =
-      minSide >= 36
-        ? r.pickingFace === 'A'
-          ? 'Frente A'
-          : 'Frente B'
-        : r.pickingFace === 'A'
-          ? 'A'
-          : 'B';
-    const fs = Math.min(12, Math.max(9, minSide * 0.14));
-    const longAlongBeam = r.w >= r.h;
-    if (longAlongBeam) {
-      const x = r.x + 10;
-      const y = r.y + r.h / 2;
-      parts.push(
-        `<text x="${x}" y="${y}" text-anchor="start" dominant-baseline="middle" class="fp-row-face" font-size="${fs}px" stroke="#ffffff" stroke-width="0.35" paint-order="stroke fill">${escapeXml(txt)}</text>`
-      );
-    } else {
-      const x = r.x + r.w / 2;
-      const y = r.y + Math.min(14, r.h * 0.32);
-      parts.push(
-        `<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="middle" class="fp-row-face" font-size="${fs}px" stroke="#ffffff" stroke-width="0.35" paint-order="stroke fill">${escapeXml(txt)}</text>`
-      );
-    }
   }
 
   parts.push(orientationArrowSvg(o, model.beamSpanAlong));
