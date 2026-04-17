@@ -46,7 +46,12 @@ export type BillOfMaterials = {
   /** Metadados para descrições dinâmicas. */
   meta: {
     structuralLevels: number;
+    /** Extensão do compartimento ao longo do eixo das longarinas (não usar como vão de peça). */
     beamSpanMm: number;
+    /** Profundidade estrutural (eixo transversal ao vão) — base da descrição de montante. */
+    rackDepthMm: number;
+    /** Vão livre de uma baia ao longo das longarinas — base da descrição de longarina. */
+    beamBaySpanMm: number;
     uprightHeightMm: number;
     uprightType: StructureResult['uprightType'];
     loadTonPerModule: number;
@@ -136,12 +141,65 @@ function guardRailUnitCount(
   return rowCount * ends;
 }
 
-function formatMm3d(mm: number): string {
+export function formatMm3d(mm: number): string {
   const m = mm / 1000;
   return m.toLocaleString('pt-BR', {
     minimumFractionDigits: 3,
     maximumFractionDigits: 3,
   });
+}
+
+const DESC_EPS_MM = 0.5;
+
+/**
+ * Garante descrições comerciais alinhadas à referência Brauna (profundidade×altura em montantes; vão de baia em longarinas).
+ * Não altera quantidades.
+ */
+export function validateBillOfMaterialsCommercialDescriptions(
+  bom: BillOfMaterials,
+  layoutSolution: LayoutSolutionV2,
+  uprightHeightMm: number
+): void {
+  const depthMm = layoutSolution.rackDepthMm;
+  const bayMm = layoutSolution.beamAlongModuleMm;
+  const spanMm = layoutSolution.beamSpanMm;
+
+  const depthFmt = formatMm3d(depthMm);
+  const bayFmt = formatMm3d(bayMm);
+  const spanFmt = formatMm3d(spanMm);
+
+  const montantePair = `${depthFmt}x${formatMm3d(uprightHeightMm)}`;
+
+  for (const id of ['upright75', 'upright100'] as const) {
+    const line = bom.lines.find(l => l.id === id);
+    const desc = line?.description?.trim();
+    if (!desc) continue;
+    if (!desc.includes(montantePair)) {
+      throw new Error(
+        `Descrição de MONTANTE (${id}) deve usar profundidade×altura (${montantePair} m); texto: ${desc}`
+      );
+    }
+    if (Math.abs(spanMm - depthMm) > DESC_EPS_MM && desc.includes(spanFmt)) {
+      throw new Error(
+        `Descrição de MONTANTE (${id}) não deve usar o comprimento total do galpão (${spanFmt} m); texto: ${desc}`
+      );
+    }
+  }
+
+  const beamLine = bom.lines.find(l => l.id === 'beamPairs');
+  const beamDesc = beamLine?.description?.trim();
+  if (beamDesc) {
+    if (!beamDesc.includes(bayFmt)) {
+      throw new Error(
+        `Descrição de longarina deve usar o vão da baia (${bayFmt} m); texto: ${beamDesc}`
+      );
+    }
+    if (Math.abs(spanMm - bayMm) > DESC_EPS_MM && beamDesc.includes(spanFmt)) {
+      throw new Error(
+        `Descrição de longarina não deve usar o comprimento total do galpão (${spanFmt} m); usar vão da baia (${bayFmt} m). Texto: ${beamDesc}`
+      );
+    }
+  }
 }
 
 function tonLabel(t: StructureResult['uprightType']): string {
@@ -189,12 +247,15 @@ export function buildBillOfMaterials(
     ? Math.max(0, montTotal)
     : 0;
 
-  const beamMm = layoutSolution.beamSpanMm;
+  /** Profundidade estrutural (transversal ao vão); montante = profundidade × altura (padrão Brauna). */
+  const depthMm = layoutSolution.rackDepthMm;
+  /** Vão livre de uma baia — longarina, não o comprimento total do galpão. */
+  const baySpanMm = layoutSolution.beamAlongModuleMm;
   const hMm = uprightHeightMm;
 
-  const desc75 = `MONTANTE #14 F75 - ${formatMm3d(beamMm)}x${formatMm3d(hMm)} - ${tonLabel(structure.uprightType)}`;
-  const desc100 = `MONTANTE #14 F100 - ${formatMm3d(beamMm)}x${formatMm3d(hMm)} - 15T`;
-  const descBeams = `PAR DE LONGARINAS #14 - Z95x${formatMm3d(beamMm)} - 1T`;
+  const desc75 = `MONTANTE #14 F75 - ${formatMm3d(depthMm)}x${formatMm3d(hMm)} - ${tonLabel(structure.uprightType)}`;
+  const desc100 = `MONTANTE #14 F100 - ${formatMm3d(depthMm)}x${formatMm3d(hMm)} - 15T`;
+  const descBeams = `PAR DE LONGARINAS #14 - Z95x${formatMm3d(baySpanMm)} - 1T`;
 
   const lines: BillOfMaterialsLine[] = [
     { id: 'upright75', quantity: upright75, description: desc75 },
@@ -212,7 +273,7 @@ export function buildBillOfMaterials(
     { id: 'calco', quantity: 0 },
   ];
 
-  return {
+  const bom: BillOfMaterials = {
     lines,
     totals: {
       modulesAlong,
@@ -221,9 +282,15 @@ export function buildBillOfMaterials(
     meta: {
       structuralLevels,
       beamSpanMm: layoutSolution.beamSpanMm,
+      rackDepthMm: layoutSolution.rackDepthMm,
+      beamBaySpanMm: layoutSolution.beamAlongModuleMm,
       uprightHeightMm,
       uprightType: structure.uprightType,
       loadTonPerModule: structure.loadTonPerModule,
     },
   };
+
+  validateBillOfMaterialsCommercialDescriptions(bom, layoutSolution, uprightHeightMm);
+
+  return bom;
 }

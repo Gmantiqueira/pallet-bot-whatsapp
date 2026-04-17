@@ -7,6 +7,7 @@ import { resolveUprightHeightMmForProject } from '../projectEngines';
 import {
   buildBillOfMaterials,
   countUprightsByThicknessFromGeometry,
+  formatMm3d,
 } from './billOfMaterials';
 import type { ProjectAnswersV2 } from './answerMapping';
 
@@ -55,5 +56,20 @@ describe('buildBillOfMaterials', () => {
     }
     const counts = countUprightsByThicknessFromGeometry(geo);
     expect(counts.upright75 + counts.upright100).toBeGreaterThan(0);
+
+    const depthFmt = formatMm3d(sol.rackDepthMm);
+    const bayFmt = formatMm3d(sol.beamAlongModuleMm);
+    const spanFmt = formatMm3d(sol.beamSpanMm);
+    const hFmt = formatMm3d(h);
+    const u75 = bom.lines.find(l => l.id === 'upright75');
+    const u100 = bom.lines.find(l => l.id === 'upright100');
+    const beams = bom.lines.find(l => l.id === 'beamPairs');
+    expect(u75?.description).toContain(`${depthFmt}x${hFmt}`);
+    expect(u100?.description).toContain(`${depthFmt}x${hFmt}`);
+    expect(beams?.description).toContain(`Z95x${bayFmt}`);
+    expect(beams?.description).not.toContain(spanFmt);
+    expect(u75?.description).not.toContain(spanFmt);
+    expect(bom.meta.rackDepthMm).toBe(sol.rackDepthMm);
+    expect(bom.meta.beamBaySpanMm).toBe(sol.beamAlongModuleMm);
   });
 });
