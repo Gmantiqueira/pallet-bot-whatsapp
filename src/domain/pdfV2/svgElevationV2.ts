@@ -1058,18 +1058,26 @@ function drawFrontRack(
   ) {
     const capText = `${Math.round(data.capacityKgPerLevel)}kg`;
     const capFs = 12.6 * ls;
-    const faceCx = (faceSpanLeft + faceSpanRight) / 2;
+    const placeCapInEachBay = (
+      ty: number,
+      fill: string
+    ): void => {
+      for (const bay of bays) {
+        const cx = (bay.left + bay.right) / 2;
+        parts.push(
+          `<text x="${cx}" y="${ty}" text-anchor="middle" font-size="${capFs}px" fill="${fill}" font-family="${SVG_FONT_FAMILY}" font-weight="700">${escapeXml(
+            capText
+          )}</text>`
+        );
+      }
+    };
     if (
       data.hasGroundLevel === true &&
       !showTunnelOpening &&
       typeof beamYsPx[0] === 'number'
     ) {
       const ty = (beamYsPx[0]! + rackBottom) / 2 + 2.6 * ls;
-      parts.push(
-        `<text x="${faceCx}" y="${ty}" text-anchor="middle" font-size="${capFs}px" fill="#047857" font-family="${SVG_FONT_FAMILY}" font-weight="700">${escapeXml(
-          capText
-        )}</text>`
-      );
+      placeCapInEachBay(ty, '#047857');
     }
     for (let j = 0; j < nStorageBeams; j++) {
       const yy = beamYsPx[j]!;
@@ -1078,11 +1086,7 @@ function drawFrontRack(
       }
       const bh = Math.max(beamTh, 2.2);
       const ty = yy - bh / 2 - 3.8 * ls;
-      parts.push(
-        `<text x="${faceCx}" y="${ty}" text-anchor="middle" font-size="${capFs}px" fill="#111827" font-family="${SVG_FONT_FAMILY}" font-weight="700">${escapeXml(
-          capText
-        )}</text>`
-      );
+      placeCapInEachBay(ty, '#111827');
     }
   }
 

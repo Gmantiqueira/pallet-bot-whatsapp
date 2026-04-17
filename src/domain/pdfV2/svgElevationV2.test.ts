@@ -13,7 +13,7 @@ const answersToSession = (a: ProjectAnswersV2): Record<string, unknown> => ({
 });
 
 describe('serializeElevationPagesV2', () => {
-  it('página sem túnel: piso, H total, cotas e carga (kg) uma vez por nível (face centrada)', () => {
+  it('página sem túnel: piso, H total, cotas e carga (kg) por baia (centrada no vão, sem sobrepor o montante)', () => {
     const a: ProjectAnswersV2 = {
       lengthMm: 12_000,
       widthMm: 10_000,
@@ -41,8 +41,8 @@ describe('serializeElevationPagesV2', () => {
     expect(svg).toMatch(/2 baias/);
     expect(svg).toMatch(/vão/);
     const kgLabels = svg.match(/1200kg/g) ?? [];
-    // Carga homogénea: uma etiqueta por patamar (piso + cada vão entre eixos), centrada na face (não por baia).
-    expect(kgLabels.length).toBe(a.levels + 1);
+    // Duas baias: mesma carga em cada vão por patamar (piso + cada intervalo entre eixos).
+    expect(kgLabels.length).toBe((a.levels + 1) * 2);
     // Duas baias: uma longarina por baia e por nível estrutural (sem longarina no piso).
     const orangeBeams = svg.match(/fill="#fb923c"/g) ?? [];
     expect(orangeBeams.length).toBe(a.levels * 2);
