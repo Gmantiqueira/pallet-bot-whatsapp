@@ -180,7 +180,14 @@ export type FloorPlanModelV2 = {
     showInRowLegend?: boolean;
     /** Dupla costas: frente de picking (alinhado ao 1.º / 2.º split da pegada). */
     pickingFace?: 'A' | 'B';
+    /**
+     * Dupla costas: aresta da faixa voltada para a espinha (canal entre costas).
+     * Usado na planta para não desenhar contorno forte nessa aresta — duas estruturas independentes.
+     */
+    spineFacingEdge?: 'min_x' | 'max_x' | 'min_y' | 'max_y';
   }[];
+  /** Dupla costas: faixa do canal entre as duas frentes (espinha), em px — preenchimento / divisores. */
+  rowSpineGapRects: { id: string; x: number; y: number; w: number; h: number }[];
   /** Dupla costas: eixo ao longo da espinha (costas) entre as duas frentes — tracejado na planta. */
   rowSpineLines: { id: string; x1: number; y1: number; x2: number; y2: number }[];
   structureRects: {

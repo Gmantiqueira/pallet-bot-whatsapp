@@ -24,9 +24,13 @@ const COL_ROW_DOUBLE = '#e2edf8';
 const COL_ROW_DOUBLE_FACE_A = '#dde8f6';
 const COL_ROW_DOUBLE_FACE_B = '#e8eef8';
 /** Linha ao longo da espinha (costas) entre frentes. */
-const COL_SPINE_LINE = '#64748b';
-const SPINE_LINE_SW = 1.45;
-const SPINE_DASH = '5 4';
+const COL_SPINE_LINE = '#475569';
+const SPINE_LINE_SW = 1.72;
+const SPINE_DASH = '4 3.5';
+/** Canal entre costas em dupla: leve contraste + limites explícitos. */
+const COL_SPINE_GAP_FILL = '#f1f5f9';
+const COL_SPINE_GAP_DIVIDER = '#94a3b8';
+const SPINE_GAP_DIVIDER_SW = 1.35;
 /** Nível 2 — módulo: preenchimento médio; contorno perimetral forte (unidade estrutural). */
 const COL_MOD_FILL = '#f1f5f9';
 /** Meio-módulo (1 baia): base mais fria + hachura; contorno índigo tracejado. */
@@ -34,7 +38,10 @@ const COL_MOD_HALF_FILL = '#e0e7ff';
 const COL_MOD_HALF_STROKE = '#4f46e5';
 /** Contorno do módulo: hierarquia acima da subdivisão interna (baias) e da grelha. */
 const COL_MOD_STROKE = '#64748b';
+/** Dupla costas: contorno ligeiramente mais escuro — leitura de armação própria por face. */
+const COL_MOD_STROKE_DOUBLE = '#475569';
 const COL_MOD_STROKE_W = 1.74;
+const COL_MOD_STROKE_W_DOUBLE = 2.18;
 const COL_MOD_TUNNEL_FILL = '#fffbeb';
 const COL_MOD_TUNNEL_STROKE = '#b45309';
 /**
@@ -58,6 +65,9 @@ const COL_DIM = '#111827';
 /** Contorno da **faixa da linha** (unidade contínua), desenhado por cima dos módulos. */
 const COL_ROW_ENVELOPE_STROKE = '#334155';
 const ROW_ENVELOPE_SW = 2.92;
+/** Aresta voltada à espinha (dupla): não usar o mesmo peso — evita “caixa” única. */
+const COL_ROW_ENVELOPE_SPINE_EDGE = '#94a3b8';
+const ROW_ENVELOPE_SPINE_EDGE_SW = 1.05;
 
 const SEM_ORDER: Record<FloorPlanCirculationSemantic, number> = {
   residual: 0,
@@ -142,9 +152,10 @@ function moduleDisplayFontOpacity(
 function moduleBayHintLine(s: FloorPlanModelV2['structureRects'][0]): string {
   /** Uma só baia na face — não sugerir divisão ao meio como duas baias. */
   if (s.segmentType === 'half') return '';
-  const thin = 0.095;
-  const op = 0.125;
-  const dash = '1.8 8';
+  const isDouble = s.kind === 'double';
+  const thin = isDouble ? 0.14 : 0.095;
+  const op = isDouble ? 0.2 : 0.125;
+  const dash = isDouble ? '2 7' : '1.8 8';
   const cap = 'stroke-linecap="round"';
   if (s.w >= s.h) {
     const mx = s.x + s.w / 2;
@@ -460,6 +471,46 @@ function appendFloorPlanAccessoryGraphics(
   appendColumnProtectorAlongModules(model, parts);
 }
 
+/**
+ * Contorno da faixa da fileira: em dupla costas, a aresta voltada para o canal da espinha
+ * fica mais fina — lê-se como duas molduras independentes, não um bloco único.
+ */
+function appendRowBandEnvelope(
+  r: FloorPlanModelV2['rowBandRects'][0],
+  parts: string[]
+): void {
+  if (Math.min(r.w, r.h) < 14) return;
+  const { x, y, w, h } = r;
+  const e = r.spineFacingEdge;
+  if (!e) {
+    parts.push(
+      `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="none" stroke="${COL_ROW_ENVELOPE_STROKE}" stroke-width="${ROW_ENVELOPE_SW}"/>`
+    );
+    return;
+  }
+  const isSpine = (edge: NonNullable<typeof e>) => edge === e;
+  const strokeFor = (edge: NonNullable<typeof e>) =>
+    isSpine(edge)
+      ? { c: COL_ROW_ENVELOPE_SPINE_EDGE, sw: ROW_ENVELOPE_SPINE_EDGE_SW, op: 0.9 }
+      : { c: COL_ROW_ENVELOPE_STROKE, sw: ROW_ENVELOPE_SW, op: 1 };
+  const line = (
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number,
+    edge: NonNullable<typeof e>
+  ) => {
+    const { c, sw, op } = strokeFor(edge);
+    parts.push(
+      `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${c}" stroke-width="${sw}" stroke-linecap="square" opacity="${op}"/>`
+    );
+  };
+  line(x, y, x + w, y, 'min_y');
+  line(x, y + h, x + w, y + h, 'max_y');
+  line(x, y, x, y + h, 'min_x');
+  line(x + w, y, x + w, y + h, 'max_x');
+}
+
 function orientationArrowSvg(
   o: FloorPlanModelV2['warehouseOutline'],
   beamAlong: 'x' | 'y'
@@ -550,6 +601,27 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
     );
   }
 
+  for (const g of model.rowSpineGapRects) {
+    parts.push(
+      `<rect x="${g.x}" y="${g.y}" width="${g.w}" height="${g.h}" fill="${COL_SPINE_GAP_FILL}" stroke="none" opacity="0.97"/>`
+    );
+    if (g.w >= g.h) {
+      parts.push(
+        `<line x1="${g.x}" y1="${g.y}" x2="${g.x + g.w}" y2="${g.y}" stroke="${COL_SPINE_GAP_DIVIDER}" stroke-width="${SPINE_GAP_DIVIDER_SW}" stroke-linecap="square" opacity="0.92"/>`
+      );
+      parts.push(
+        `<line x1="${g.x}" y1="${g.y + g.h}" x2="${g.x + g.w}" y2="${g.y + g.h}" stroke="${COL_SPINE_GAP_DIVIDER}" stroke-width="${SPINE_GAP_DIVIDER_SW}" stroke-linecap="square" opacity="0.92"/>`
+      );
+    } else {
+      parts.push(
+        `<line x1="${g.x}" y1="${g.y}" x2="${g.x}" y2="${g.y + g.h}" stroke="${COL_SPINE_GAP_DIVIDER}" stroke-width="${SPINE_GAP_DIVIDER_SW}" stroke-linecap="square" opacity="0.92"/>`
+      );
+      parts.push(
+        `<line x1="${g.x + g.w}" y1="${g.y}" x2="${g.x + g.w}" y2="${g.y + g.h}" stroke="${COL_SPINE_GAP_DIVIDER}" stroke-width="${SPINE_GAP_DIVIDER_SW}" stroke-linecap="square" opacity="0.92"/>`
+      );
+    }
+  }
+
   for (const ln of model.rowSpineLines) {
     parts.push(
       `<line x1="${ln.x1}" y1="${ln.y1}" x2="${ln.x2}" y2="${ln.y2}" stroke="${COL_SPINE_LINE}" stroke-width="${SPINE_LINE_SW}" stroke-dasharray="${SPINE_DASH}" stroke-linecap="round" opacity="0.92"/>`
@@ -621,16 +693,21 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
       : isHalf
         ? COL_MOD_HALF_FILL
         : COL_MOD_FILL;
+    const isDoubleRow = s.kind === 'double';
     const strokeMod = isTunnel
       ? COL_MOD_TUNNEL_STROKE
       : isHalf
         ? COL_MOD_HALF_STROKE
-        : COL_MOD_STROKE;
+        : isDoubleRow
+          ? COL_MOD_STROKE_DOUBLE
+          : COL_MOD_STROKE;
     const sw = isTunnel
       ? Math.max(COL_MOD_STROKE_W, 2.1)
       : isHalf
         ? COL_MOD_STROKE_W + 0.2
-        : COL_MOD_STROKE_W;
+        : isDoubleRow
+          ? COL_MOD_STROKE_W_DOUBLE
+          : COL_MOD_STROKE_W;
     const halfDash = isHalf ? ' stroke-dasharray="5 3.5"' : '';
     if (isTunnel) {
       parts.push(
@@ -694,12 +771,9 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
     );
   }
 
-  /** Faixa da linha como contorno único — reforça continuidade em relação à grelha de módulos. */
+  /** Faixa da linha: contorno por face; em dupla, aresta da espinha mais leve (ver appendRowBandEnvelope). */
   for (const r of model.rowBandRects) {
-    if (Math.min(r.w, r.h) < 14) continue;
-    parts.push(
-      `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="none" stroke="${COL_ROW_ENVELOPE_STROKE}" stroke-width="${ROW_ENVELOPE_SW}"/>`
-    );
+    appendRowBandEnvelope(r, parts);
   }
 
   for (const s of model.structureRects) {

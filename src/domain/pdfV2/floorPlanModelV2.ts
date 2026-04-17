@@ -238,6 +238,7 @@ export function buildFloorPlanModelV2(
 
   const rackDepthMm = geometry.metadata.rackDepthMm;
   const rowBandRects: FloorPlanModelV2['rowBandRects'] = [];
+  const rowSpineGapRects: FloorPlanModelV2['rowSpineGapRects'] = [];
   const rowSpineLines: FloorPlanModelV2['rowSpineLines'] = [];
 
   function mmRectToBand(
@@ -248,6 +249,7 @@ export function buildFloorPlanModelV2(
     opts: {
       showInRowLegend?: boolean;
       pickingFace?: 'A' | 'B';
+      spineFacingEdge?: FloorPlanModelV2['rowBandRects'][0]['spineFacingEdge'];
     }
   ): void {
     const x0 = Math.min(mm.x0, mm.x1);
@@ -264,6 +266,24 @@ export function buildFloorPlanModelV2(
       rowCaption: caption,
       showInRowLegend: opts.showInRowLegend,
       pickingFace: opts.pickingFace,
+      spineFacingEdge: opts.spineFacingEdge,
+    });
+  }
+
+  function mmSpineGapToRect(
+    id: string,
+    mm: { x0: number; y0: number; x1: number; y1: number }
+  ): void {
+    const x0 = Math.min(mm.x0, mm.x1);
+    const x1 = Math.max(mm.x0, mm.x1);
+    const y0 = Math.min(mm.y0, mm.y1);
+    const y1 = Math.max(mm.y0, mm.y1);
+    rowSpineGapRects.push({
+      id,
+      x: toX(x0),
+      y: toY(y0),
+      w: Math.max(0.5, toX(x1) - toX(x0)),
+      h: Math.max(0.5, toY(y1) - toY(y0)),
     });
   }
 
@@ -276,14 +296,45 @@ export function buildFloorPlanModelV2(
       const split = doubleRowFaceBandsMm(row, rackDepthMm);
       if (split) {
         const { faceAMm, faceBMm, spineMidlineMm } = split;
+        const lo = row.layoutOrientation;
+        /** Aresta da faixa voltada para o canal da espinha (referencial SVG do retângulo). */
+        const spineEdgeA =
+          lo === 'along_length' ? ('max_y' as const) : ('max_x' as const);
+        const spineEdgeB =
+          lo === 'along_length' ? ('min_y' as const) : ('min_x' as const);
         mmRectToBand(`${row.id}-band-a`, faceAMm, kind, caption, {
           showInRowLegend: true,
           pickingFace: 'A',
+          spineFacingEdge: spineEdgeA,
         });
         mmRectToBand(`${row.id}-band-b`, faceBMm, kind, caption, {
           showInRowLegend: false,
           pickingFace: 'B',
+          spineFacingEdge: spineEdgeB,
         });
+        const gx0 = Math.min(faceAMm.x0, faceAMm.x1, faceBMm.x0, faceBMm.x1);
+        const gx1 = Math.max(faceAMm.x0, faceAMm.x1, faceBMm.x0, faceBMm.x1);
+        const gy0 = Math.min(faceAMm.y0, faceAMm.y1, faceBMm.y0, faceBMm.y1);
+        const gy1 = Math.max(faceAMm.y0, faceAMm.y1, faceBMm.y0, faceBMm.y1);
+        if (lo === 'along_length') {
+          const ySplitFront = Math.min(faceAMm.y0, faceAMm.y1) + rackDepthMm;
+          const ySplitBack = ySplitFront + SPINE_BACK_TO_BACK_MM;
+          mmSpineGapToRect(`${row.id}-spine-gap`, {
+            x0: gx0,
+            y0: ySplitFront,
+            x1: gx1,
+            y1: ySplitBack,
+          });
+        } else {
+          const xSplitFront = Math.min(faceAMm.x0, faceAMm.x1) + rackDepthMm;
+          const xSplitBack = xSplitFront + SPINE_BACK_TO_BACK_MM;
+          mmSpineGapToRect(`${row.id}-spine-gap`, {
+            x0: xSplitFront,
+            y0: gy0,
+            x1: xSplitBack,
+            y1: gy1,
+          });
+        }
         rowSpineLines.push({
           id: `${row.id}-spine`,
           x1: toX(spineMidlineMm.x1),
@@ -490,6 +541,7 @@ export function buildFloorPlanModelV2(
     beamSpanAlong: geometry.beamSpanDirection,
     planAccessories,
     rowBandRects,
+    rowSpineGapRects,
     rowSpineLines,
     structureRects,
     circulationRects,
