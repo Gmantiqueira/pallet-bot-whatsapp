@@ -33,9 +33,6 @@ const FV_FRONT_BAY_COUNT = 2;
  */
 const FV_FRONT_UPRIGHT_SLIM = 0.46;
 const FV_FRONT_CENTER_UPRIGHT_SLIM = 0.86;
-/** Marcadores discretos ao longo do vão (posições de carga na longarina). */
-const FV_ALONG_BEAM_DIVISIONS = 3;
-
 const COL_BG = '#ffffff';
 const COL_FRAME = '#d4d4d4';
 const COL_FLOOR = '#334155';
@@ -724,15 +721,6 @@ function drawFrontStorageTiers(
       parts.push(
         `<line x1="${mx}" y1="${t + 1.5}" x2="${mx}" y2="${b - 1.5}" stroke="${FV_PALLET_TIER_STROKE}" stroke-width="0.28" opacity="0.28" stroke-dasharray="2 3"/>`
       );
-      const bw = xr - xl;
-      if (bw > 28) {
-        for (let k = 1; k <= FV_ALONG_BEAM_DIVISIONS; k++) {
-          const xDiv = xl + (k / (FV_ALONG_BEAM_DIVISIONS + 1)) * bw;
-          parts.push(
-            `<line x1="${xDiv}" y1="${t + 2.5}" x2="${xDiv}" y2="${b - 2.5}" stroke="${FV_PALLET_TIER_STROKE}" stroke-width="0.22" opacity="0.22"/>`
-          );
-        }
-      }
     }
   }
   return parts.join('');
@@ -931,39 +919,20 @@ function drawFrontRack(
     const tx0 = faceSpanLeft;
     const tx1 = faceSpanRight;
     const tw = Math.max(0, tx1 - tx0);
-    const yMid = (yPassTop + floorTop) / 2;
+    /** Abertura inferior: sem hachura dominante; ausência de longarinas + cotas definem o vão. */
     parts.push(
-      `<rect x="${tx0}" y="${yPassTop}" width="${tw}" height="${floorTop - yPassTop}" fill="#fef3c7" fill-opacity="0.42" stroke="#b45309" stroke-width="0.55" opacity="0.95"/>`
+      `<line x1="${tx0}" y1="${yPassTop}" x2="${tx1}" y2="${yPassTop}" stroke="#94a3b8" stroke-width="0.38" stroke-dasharray="5 6" opacity="0.42"/>`
     );
-    parts.push(
-      `<line x1="${tx0}" y1="${yPassTop}" x2="${tx1}" y2="${yPassTop}" stroke="#b45309" stroke-width="1.05" opacity="0.9"/>`
-    );
-    parts.push(
-      textLines(tx0 + tw * 0.25, yMid - 2 * ls, ['PASSAGEM'], {
-        fontSize: 9.25 * ls,
-        fill: '#b45309',
-        fontWeight: '700',
-      })
-    );
-    parts.push(
-      textLines(tx0 + tw * 0.75, yMid - 2 * ls, ['PASSAGEM'], {
-        fontSize: 9.25 * ls,
-        fill: '#b45309',
-        fontWeight: '700',
-      })
-    );
-    parts.push(
-      textLines(
-        tx0 + tw / 2,
-        yPassTop + Math.max(10, (floorTop - yPassTop) * 0.14),
-        ['TÚNEL'],
-        {
-          fontSize: 9.5 * ls,
-          fill: '#b45309',
-          fontWeight: '700',
-        }
-      )
-    );
+    if (tw > 36 && floorTop - yPassTop > 28) {
+      const yMid = (yPassTop + floorTop) / 2;
+      parts.push(
+        textLines(tx0 + tw / 2, yMid, ['Vão túnel (referência nas cotas)'], {
+          fontSize: 7.4 * ls,
+          fill: '#64748b',
+          fontWeight: '600',
+        })
+      );
+    }
   }
 
   const lastUx = uprightXs[nMod]!;
@@ -1088,39 +1057,32 @@ function drawFrontRack(
     data.capacityKgPerLevel > 0
   ) {
     const capText = `${Math.round(data.capacityKgPerLevel)}kg`;
-    const capFs = 14.5 * ls;
+    const capFs = 12.6 * ls;
+    const faceCx = (faceSpanLeft + faceSpanRight) / 2;
     if (
       data.hasGroundLevel === true &&
       !showTunnelOpening &&
       typeof beamYsPx[0] === 'number'
     ) {
-      const ty = (beamYsPx[0]! + rackBottom) / 2 + 3 * ls;
-      for (let bi = 0; bi < bays.length; bi++) {
-        const bay = bays[bi]!;
-        const cx = (bay.left + bay.right) / 2;
-        parts.push(
-          `<text x="${cx}" y="${ty}" text-anchor="middle" font-size="${capFs}px" fill="#047857" font-family="${SVG_FONT_FAMILY}" font-weight="700">${escapeXml(
-            capText
-          )}</text>`
-        );
-      }
+      const ty = (beamYsPx[0]! + rackBottom) / 2 + 2.6 * ls;
+      parts.push(
+        `<text x="${faceCx}" y="${ty}" text-anchor="middle" font-size="${capFs}px" fill="#047857" font-family="${SVG_FONT_FAMILY}" font-weight="700">${escapeXml(
+          capText
+        )}</text>`
+      );
     }
-    for (let bi = 0; bi < bays.length; bi++) {
-      const bay = bays[bi]!;
-      for (let j = 0; j < nStorageBeams; j++) {
-        const yy = beamYsPx[j]!;
-        if (showTunnelOpening && yy >= yPassTop - beamTh * 0.55) {
-          continue;
-        }
-        const bh = Math.max(beamTh, 2.2);
-        const ty = yy - bh / 2 - 4.5 * ls;
-        const cx = (bay.left + bay.right) / 2;
-        parts.push(
-          `<text x="${cx}" y="${ty}" text-anchor="middle" font-size="${capFs}px" fill="#111827" font-family="${SVG_FONT_FAMILY}" font-weight="700">${escapeXml(
-            capText
-          )}</text>`
-        );
+    for (let j = 0; j < nStorageBeams; j++) {
+      const yy = beamYsPx[j]!;
+      if (showTunnelOpening && yy >= yPassTop - beamTh * 0.55) {
+        continue;
       }
+      const bh = Math.max(beamTh, 2.2);
+      const ty = yy - bh / 2 - 3.8 * ls;
+      parts.push(
+        `<text x="${faceCx}" y="${ty}" text-anchor="middle" font-size="${capFs}px" fill="#111827" font-family="${SVG_FONT_FAMILY}" font-weight="700">${escapeXml(
+          capText
+        )}</text>`
+      );
     }
   }
 
@@ -1141,9 +1103,9 @@ function drawFrontRack(
   parts.push(
     dimensionLineHArrows(faceSpanLeft, dimTopY, faceSpanRight, DIM_MINOR)
   );
-  const faceTitle = `Módulo 2 baias · vão ${escapeXml(
+  const faceTitle = `2 baias · vão ${escapeXml(
     formatMmPtBr(Math.round(beamL))
-  )} mm/baia · face de armazenagem`;
+  )}/baia · face de carga`;
   parts.push(
     `<text x="${ox + pw / 2}" y="${dimTopY - 6 * ls}" text-anchor="middle" font-size="${10.5 * ls}px" fill="${DIM_MAJOR}" font-family="${SVG_FONT_FAMILY}" font-weight="700">${faceTitle}</text>`
   );
@@ -1232,11 +1194,12 @@ function braceBetween(
   x1: number,
   yLow: number,
   yHigh: number,
-  flip: boolean
+  flip: boolean,
+  strokeOpacity = 0.9
 ): string {
   const xa = flip ? x1 : x0;
   const xb = flip ? x0 : x1;
-  return `<line x1="${xa}" y1="${yLow}" x2="${xb}" y2="${yHigh}" stroke="${COL_BRACE_STROKE}" stroke-width="1.1" opacity="0.9"/>`;
+  return `<line x1="${xa}" y1="${yLow}" x2="${xb}" y2="${yHigh}" stroke="${COL_BRACE_STROKE}" stroke-width="1.05" opacity="${strokeOpacity}"/>`;
 }
 
 /** Vista lateral: um só perfil (faixa total), treliça única; dupla costas = espinha ao centro (sem duplicar pórticos). */
@@ -1355,39 +1318,19 @@ function drawLateral(
 
   if (showTunnelOpening && yPassTop < floorTopLat - 2.5) {
     const tw = Math.max(0, bayRight - bayLeft);
-    const yMid = (yPassTop + floorTopLat) / 2;
     parts.push(
-      `<rect x="${bayLeft}" y="${yPassTop}" width="${tw}" height="${floorTopLat - yPassTop}" fill="#fef3c7" fill-opacity="0.42" stroke="#b45309" stroke-width="0.55" opacity="0.95"/>`
+      `<line x1="${bayLeft}" y1="${yPassTop}" x2="${bayRight}" y2="${yPassTop}" stroke="#94a3b8" stroke-width="0.36" stroke-dasharray="5 6" opacity="0.4"/>`
     );
-    parts.push(
-      `<line x1="${bayLeft}" y1="${yPassTop}" x2="${bayRight}" y2="${yPassTop}" stroke="#b45309" stroke-width="1.05" opacity="0.9"/>`
-    );
-    parts.push(
-      textLines(bayLeft + tw * 0.25, yMid - 2 * ls, ['PASSAGEM'], {
-        fontSize: 9 * ls,
-        fill: '#b45309',
-        fontWeight: '700',
-      })
-    );
-    parts.push(
-      textLines(bayLeft + tw * 0.75, yMid - 2 * ls, ['PASSAGEM'], {
-        fontSize: 9 * ls,
-        fill: '#b45309',
-        fontWeight: '700',
-      })
-    );
-    parts.push(
-      textLines(
-        bayLeft + tw / 2,
-        yPassTop + Math.max(8, (floorTopLat - yPassTop) * 0.14),
-        ['TÚNEL'],
-        {
-          fontSize: 9.25 * ls,
-          fill: '#b45309',
-          fontWeight: '700',
-        }
-      )
-    );
+    if (tw > 32 && floorTopLat - yPassTop > 24) {
+      const yMid = (yPassTop + floorTopLat) / 2;
+      parts.push(
+        textLines(bayLeft + tw / 2, yMid, ['Vão túnel (cotas)'], {
+          fontSize: 7 * ls,
+          fill: '#94a3b8',
+          fontWeight: '600',
+        })
+      );
+    }
   }
 
   const yB0Lat = beamYLocal(0);
@@ -1440,15 +1383,15 @@ function drawLateral(
   for (let j = 0; j < storageTiers; j++) {
     const yLo = beamYLocal(j);
     const yHi = beamYLocal(j + 1);
-    parts.push(braceBetween(bayLeft, bayRight, yLo, yHi, j % 2 === 0));
+    parts.push(braceBetween(bayLeft, bayRight, yLo, yHi, j % 2 === 0, 0.62));
   }
 
   parts.push(
     dimensionLineHArrows(x0, floorTopLat + 22 * ls, x0 + dw, DIM_MINOR)
   );
   parts.push(
-    `<text x="${x0 + dw / 2}" y="${floorTopLat + 40 * ls}" text-anchor="middle" font-size="${10 * ls}px" fill="#334155" font-family="${SVG_FONT_FAMILY}">${escapeXml(
-      `Prof. posição (lateral) ${formatMmPtBr(Math.round(sliceMm))}`
+    `<text x="${x0 + dw / 2}" y="${floorTopLat + 38 * ls}" text-anchor="middle" font-size="${8.25 * ls}px" fill="#64748b" font-family="${SVG_FONT_FAMILY}">${escapeXml(
+      `Prof. ${formatMmPtBr(Math.round(sliceMm))}`
     )}</text>`
   );
 
@@ -1502,10 +1445,14 @@ function drawLateral(
 
 /** Escala de cotas / legendas em páginas PDF dedicadas (uma elevação por folha). */
 const ELEV_PAGE_LABEL_SCALE = 1.9;
+/** Vista lateral: texto e cotas mais discretos que a frontal (hierarquia visual). */
+const ELEV_LATERAL_LABEL_SCALE = ELEV_PAGE_LABEL_SCALE * 0.82;
 /** Proporção mais próxima de A4 retrato (~0,75) para o PDF encher altura sem faixas largas vazias. */
 const ELEV_PAGE_W = 1180;
-const ELEV_PAGE_H_FRONT = 1500;
-const ELEV_PAGE_H_LATERAL = 1440;
+/** Frontal = primária: mais altura útil para escala e respiro. */
+const ELEV_PAGE_H_FRONT = 1620;
+/** Lateral = secundária: folha ligeiramente mais baixa para não competir com a frontal. */
+const ELEV_PAGE_H_LATERAL = 1260;
 
 export type ElevationPageSvgs = {
   frontWithoutTunnel: string;
@@ -1558,8 +1505,8 @@ export function serializeElevationPagesV2(
   const padX = 20;
   const padTop = 16;
   const innerW = w - padX * 2;
-  const innerHFront = hF - padTop - 54;
-  const innerHLat = hL - padTop - 50;
+  const innerHFront = hF - padTop - 52;
+  const innerHLat = hL - padTop - 48;
 
   const std = model.frontWithoutTunnel;
   const frontStdInner = drawFrontRack(
@@ -1604,7 +1551,7 @@ export function serializeElevationPagesV2(
   }
 
   const latInner = drawLateral(padX, padTop, innerW, innerHLat, model.lateral, {
-    labelScale: ls,
+    labelScale: ELEV_LATERAL_LABEL_SCALE,
     hideHeader: true,
     debug: dbg,
   });
@@ -1612,7 +1559,7 @@ export function serializeElevationPagesV2(
     latInner,
     w,
     hL,
-    'Lateral = perfil de uma costa; dupla costas completa apenas em planta'
+    'Perfil de uma costa (estrutura) — planta para dupla costas completa'
   );
 
   let lateralWithTunnel: string | null = null;
@@ -1623,13 +1570,13 @@ export function serializeElevationPagesV2(
       innerW,
       innerHLat,
       model.lateralWithTunnel,
-      { labelScale: ls, hideHeader: true, debug: dbg }
+      { labelScale: ELEV_LATERAL_LABEL_SCALE, hideHeader: true, debug: dbg }
     );
     lateralWithTunnel = wrapElevationDrawingPage(
       latTunInner,
       w,
       hL,
-      'Lateral = perfil de uma costa · túnel — abertura inferior e níveis ativos'
+      'Perfil lateral · túnel: vão inferior (cotas); níveis ativos alinhados ao frontal'
     );
   }
 

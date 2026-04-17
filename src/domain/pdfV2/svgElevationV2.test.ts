@@ -13,7 +13,7 @@ const answersToSession = (a: ProjectAnswersV2): Record<string, unknown> => ({
 });
 
 describe('serializeElevationPagesV2', () => {
-  it('página sem túnel: piso, H total, cotas e carga (kg) por nível acima das longarinas', () => {
+  it('página sem túnel: piso, H total, cotas e carga (kg) uma vez por nível (face centrada)', () => {
     const a: ProjectAnswersV2 = {
       lengthMm: 12_000,
       widthMm: 10_000,
@@ -41,8 +41,8 @@ describe('serializeElevationPagesV2', () => {
     expect(svg).toMatch(/2 baias/);
     expect(svg).toMatch(/vão/);
     const kgLabels = svg.match(/1200kg/g) ?? [];
-    // Uma etiqueta por baia por patamar de armazenagem (incl. piso sem longarina).
-    expect(kgLabels.length).toBe(layout.totals.levels * 2);
+    // Carga homogénea: uma etiqueta por patamar (piso + cada vão entre eixos), centrada na face (não por baia).
+    expect(kgLabels.length).toBe(a.levels + 1);
     // Duas baias: uma longarina por baia e por nível estrutural (sem longarina no piso).
     const orangeBeams = svg.match(/fill="#fb923c"/g) ?? [];
     expect(orangeBeams.length).toBe(a.levels * 2);
@@ -72,8 +72,8 @@ describe('serializeElevationPagesV2', () => {
     const model = buildElevationModelV2(session, geo);
     const svg = serializeElevationPagesV2(model).lateral;
     expect(svg).not.toContain('ESPINHA');
-    // Página PDF omite cabeçalho; cota horizontal = prof. uma costa (1000 mm), não faixa 2×+espinha.
-    expect(svg).toContain('Prof. posição (lateral)');
+    // Página PDF omite cabeçalho; legenda de profundidade discreta (secundária vs. frontal).
+    expect(svg).toMatch(/Prof\./);
     expect(svg).toMatch(/1\.000 mm/);
   });
 
@@ -108,11 +108,9 @@ describe('serializeElevationPagesV2', () => {
     expect(pages.frontWithTunnel).toBeDefined();
     expect(model.lateralWithTunnel).toBeDefined();
     expect(pages.lateralWithTunnel).toBeDefined();
-    expect(pages.frontWithoutTunnel).not.toContain('TÚNEL');
-    expect(pages.frontWithTunnel!).toContain('TÚNEL');
+    expect(pages.frontWithoutTunnel).not.toContain('Vão túnel (referência');
+    expect(pages.frontWithTunnel!).toContain('Vão túnel (referência');
     expect(pages.frontWithTunnel!).toContain('Vão túnel');
-    expect(pages.lateral).not.toContain('PASSAGEM');
-    expect(pages.lateralWithTunnel!).toContain('PASSAGEM');
-    expect(pages.lateralWithTunnel!).toContain('TÚNEL');
+    expect(pages.lateralWithTunnel!).toMatch(/Vão túnel/i);
   });
 });
