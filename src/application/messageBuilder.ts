@@ -10,7 +10,8 @@ import type { LayoutSolutionV2 } from '../domain/pdfV2/types';
 import type { StructureResult } from '../domain/structureEngine';
 
 /** Mensagem enquanto a geração do PDF está em curso (router + estado). */
-export const GENERATING_DOC_WAIT_TEXT = 'A gerar o documento, aguarde...';
+export const GENERATING_DOC_WAIT_TEXT =
+  '⏳ A gerar o projeto (PDF e desenhos). Isto pode demorar um pouco — aguarde.';
 
 export interface MessageContext {
   lastError?: string;
@@ -21,6 +22,10 @@ export interface MessageContext {
   pdfFilename?: string;
   /** Utilizador pediu reenvio do PDF (botão Baixar no estado DONE). */
   doneResendPdf?: boolean;
+  /** Mensagem curta após gerar o Excel de orçamento no mesmo pedido. */
+  budgetSuccessMessage?: string;
+  /** Falha ao gerar orçamento (estado DONE; PDF pode estar ok). */
+  budgetError?: string;
 }
 
 export const buildMessages = (
@@ -86,8 +91,25 @@ export const buildMessages = (
       to: session.phone,
       type: 'text',
       text: textDone,
-      buttons: [{ id: 'BAIXAR_PDF', label: 'Baixar PDF' }],
+      buttons: [
+        { id: 'BAIXAR_PDF', label: 'Baixar PDF' },
+        { id: 'GERAR_ORCAMENTO', label: 'Gerar orçamento' },
+      ],
     });
+    if (ctx.budgetError?.trim()) {
+      messages.push({
+        to: session.phone,
+        type: 'text',
+        text: `❌ Orçamento: ${ctx.budgetError.trim()}`,
+      });
+    }
+    if (ctx.budgetSuccessMessage?.trim()) {
+      messages.push({
+        to: session.phone,
+        type: 'text',
+        text: ctx.budgetSuccessMessage.trim(),
+      });
+    }
     return messages;
   }
 

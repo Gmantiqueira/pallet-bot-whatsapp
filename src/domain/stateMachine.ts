@@ -60,7 +60,9 @@ export type Effect =
   | { type: 'SEND' }
   | { type: 'GENERATE_PDF' }
   /** Reenviar o PDF já gravado (botão "Baixar" em DONE). */
-  | { type: 'RESEND_PDF' };
+  | { type: 'RESEND_PDF' }
+  /** Gerar planilha de orçamento (.xlsx) a partir do layout (botão em DONE). */
+  | { type: 'GENERATE_BUDGET_XLSX' };
 
 export interface TransitionResult {
   session: Session;
@@ -839,6 +841,11 @@ export const transition = (
     case 'DONE':
       if (input.type === 'BUTTON' && input.value === 'BAIXAR_PDF') {
         effects.push({ type: 'RESEND_PDF' });
+        effects.push({ type: 'SEND' });
+        return { session: newSession, effects };
+      }
+      if (input.type === 'BUTTON' && input.value === 'GERAR_ORCAMENTO') {
+        effects.push({ type: 'GENERATE_BUDGET_XLSX' });
         effects.push({ type: 'SEND' });
         return { session: newSession, effects };
       }

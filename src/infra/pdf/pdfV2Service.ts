@@ -39,6 +39,7 @@ import {
   PDFKIT_FONT_REGULAR,
   registerPdfKitFonts,
 } from '../../config/pdfFonts';
+import { sanitizeText } from '../../utils/sanitizeText';
 
 /** Margens página A4 — equilíbrio entre aparência e área útil para desenhos. */
 const PAGE_MARGIN_PT = 24;
@@ -103,10 +104,10 @@ function stringField(
   for (const k of keys) {
     const v = project[k];
     if (typeof v === 'string' && v.trim().length > 0) {
-      return v.trim();
+      return sanitizeText(v.trim());
     }
   }
-  return fallback;
+  return sanitizeText(fallback);
 }
 
 function coverCliente(project: Record<string, unknown>): string {
@@ -183,20 +184,24 @@ function hasCoverFieldValue(value: string): boolean {
 function coverDataEmissao(project: Record<string, unknown>): string {
   const raw = project.pdfDate ?? project.dataEmissao ?? project.documentDate;
   if (typeof raw === 'string' && raw.trim()) {
-    return raw.trim();
+    return sanitizeText(raw.trim());
   }
   if (typeof raw === 'number') {
-    return new Date(raw).toLocaleDateString('pt-BR', {
+    return sanitizeText(
+      new Date(raw).toLocaleDateString('pt-BR', {
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric',
+      })
+    );
+  }
+  return sanitizeText(
+    new Date().toLocaleDateString('pt-BR', {
       day: '2-digit',
       month: 'long',
       year: 'numeric',
-    });
-  }
-  return new Date().toLocaleDateString('pt-BR', {
-    day: '2-digit',
-    month: 'long',
-    year: 'numeric',
-  });
+    })
+  );
 }
 
 function drawKeyValueRow(
@@ -209,6 +214,8 @@ function drawKeyValueRow(
   labelW: number,
   opts?: { emphasis?: boolean }
 ): number {
+  label = sanitizeText(label);
+  value = sanitizeText(value);
   const valX = x + labelW;
   const valW = Math.max(80, usableW - labelW);
   const emphasis = opts?.emphasis === true;
@@ -257,11 +264,13 @@ function measureTechnicalSummaryHeight(
     const labelSize = emphasis ? 10 : 9.25;
     const valueSize = emphasis ? 13 : 10.75;
     doc.font(PDFKIT_FONT_BOLD).fontSize(labelSize);
-    const hLabel = doc.heightOfString(row.label, { width: labelColW - 4 });
+    const hLabel = doc.heightOfString(sanitizeText(row.label), {
+      width: labelColW - 4,
+    });
     doc
       .font(emphasis ? PDFKIT_FONT_BOLD : PDFKIT_FONT_REGULAR)
       .fontSize(valueSize);
-    const hVal = doc.heightOfString(row.value, { width: valW });
+    const hVal = doc.heightOfString(sanitizeText(row.value), { width: valW });
     h += Math.max(hLabel, hVal, emphasis ? 18 : 14) + (emphasis ? 8 : 5.5);
   }
   return h + 14;
@@ -391,8 +400,9 @@ export async function renderPdfV2(
       lineGap = 0,
       moveDown: md = 0,
     } = opts;
+    const t = sanitizeText(text);
     doc.font(font).fillColor(color).fontSize(size);
-    doc.text(text, left, doc.y, {
+    doc.text(t, left, doc.y, {
       align: 'center',
       width: usableW,
       lineGap,
@@ -443,16 +453,19 @@ export async function renderPdfV2(
     title: string,
     options?: { subtitle?: string; titleSize?: number }
   ): void => {
+    const titleT = sanitizeText(title);
+    const subT =
+      options?.subtitle !== undefined ? sanitizeText(options.subtitle) : '';
     const tSize = options?.titleSize ?? 11.5;
     let y = doc.page.margins.top + 2;
     doc.font(PDFKIT_FONT_BOLD).fontSize(tSize).fillColor(COL_INK);
-    const hTitle = doc.heightOfString(title, { width: usableW });
-    doc.text(title, left, y, { width: usableW, align: 'left' });
+    const hTitle = doc.heightOfString(titleT, { width: usableW });
+    doc.text(titleT, left, y, { width: usableW, align: 'left' });
     y += hTitle + (options?.subtitle ? 3 : 5);
     if (options?.subtitle) {
       doc.font(PDFKIT_FONT_REGULAR).fontSize(9).fillColor(COL_MUTED);
-      const hSub = doc.heightOfString(options.subtitle, { width: usableW });
-      doc.text(options.subtitle, left, y, { width: usableW, align: 'left' });
+      const hSub = doc.heightOfString(subT, { width: usableW });
+      doc.text(subT, left, y, { width: usableW, align: 'left' });
       y += hSub + 4;
     }
     const ruleY = y;

@@ -101,11 +101,11 @@ function expectedTunnelOpeningFloorSegments(geo: LayoutGeometry): number {
 export function computePalletPositionsFromLayoutGeometry(
   geo: LayoutGeometry
 ): number {
-  const depthFactor = geo.metadata.rackDepthMode === 'double' ? 2 : 1;
   const structuralLevels = geo.metadata.structuralLevels;
   const hasGroundLevel = geo.metadata.hasGroundLevel;
   let sum = 0;
   for (const row of geo.rows) {
+    const depthFactor = row.rowType === 'backToBack' ? 2 : 1;
     for (const m of row.modules) {
       const alongEquiv = m.segmentType === 'half' ? 0.5 : 1;
       let tiers: number;
@@ -227,6 +227,16 @@ export function validatePdfRenderCoherence(
   if (Math.abs(sol.totals.modules - geometry.totals.moduleCount) > MM_EPS) {
     errors.push(
       `layoutSolution.totals.modules (${sol.totals.modules}) ≠ geometry.totals.moduleCount (${geometry.totals.moduleCount})`
+    );
+  }
+  if (
+    Math.abs(
+      sol.totals.physicalPickingModules -
+        geometry.totals.physicalPickingModuleCount
+    ) > MM_EPS
+  ) {
+    errors.push(
+      `layoutSolution.totals.physicalPickingModules (${sol.totals.physicalPickingModules}) ≠ geometry.totals.physicalPickingModuleCount (${geometry.totals.physicalPickingModuleCount})`
     );
   }
   const nRow = Math.min(sol.rows.length, geometry.rows.length);

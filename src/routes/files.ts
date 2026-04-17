@@ -54,8 +54,13 @@ export const filesRoutes = async (fastify: FastifyInstance): Promise<void> => {
       }
 
       const safeName = name.replace(/"/g, '');
+      const lower = safeName.toLowerCase();
+      const mime =
+        lower.endsWith('.xlsx') || lower.endsWith('.xlsm')
+          ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+          : 'application/pdf';
       return reply
-        .type('application/pdf')
+        .type(mime)
         .header('Content-Disposition', `inline; filename="${safeName}"`)
         .send(fs.createReadStream(filePath));
     }

@@ -134,7 +134,14 @@ export type TunnelInfo = {
 };
 
 export type LayoutGeometryTotals = {
+  /**
+   * Equiv. de segmentos ao longo do vão (meio = 0,5) — igual a {@link LayoutSolutionV2.totals.modules}.
+   */
   moduleCount: number;
+  /**
+   * Módulos como frentes de picking: dupla costas ⇒ 2× por segmento; túnel ⇒ 1.
+   */
+  physicalPickingModuleCount: number;
   positionCount: number;
   levelCount: number;
   tunnelCount: number;
@@ -617,6 +624,7 @@ export function buildLayoutGeometry(
     tunnels: tunnelInfos,
     totals: {
       moduleCount: solution.totals.modules,
+      physicalPickingModuleCount: solution.totals.physicalPickingModules,
       positionCount: solution.totals.positions,
       levelCount: solution.totals.levels,
       tunnelCount,

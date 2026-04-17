@@ -9,6 +9,7 @@ import {
 } from './rackModuleSpec';
 import {
   effectiveTunnelStartMm,
+  operationalPackedExtentMm,
   resolveTunnelSpanAlongBeam,
   shouldReserveCrossPassageForSpan,
   type TunnelSpanPlacement,
@@ -58,15 +59,34 @@ function storageTiersForPositionCount(
  * (equiv. ao longo do vão) × {@link MODULE_PALLET_BAYS_PER_LEVEL} × (1 ou 2 costas) × patamares de carga.
  * Equiv.: 1 = módulo completo (2 baias na face), 0,5 = meio módulo (= 1 baia).
  */
+/**
+ * Módulos de **frente** (1 frente = 2 baias, como na elevação): em dupla costas há duas frentes por
+ * estação ao longo do vão; túnel conta como uma unidade.
+ */
+function computePhysicalPickingModules(rows: RackRowSolution[]): number {
+  let sum = 0;
+  for (const row of rows) {
+    const ff = row.kind === 'double' ? 2 : 1;
+    for (const seg of row.modules) {
+      const along = seg.type === 'half' ? 0.5 : 1;
+      if (seg.variant === 'tunnel') {
+        sum += 1;
+      } else {
+        sum += along * ff;
+      }
+    }
+  }
+  return sum;
+}
+
 function computeTotalPalletPositions(
   rows: RackRowSolution[],
-  depthMode: RackDepthModeV2,
   structuralLevels: number,
   hasGroundLevel: boolean
 ): number {
-  const depthFactor = depthMode === 'double' ? 2 : 1;
   let sum = 0;
   for (const row of rows) {
+    const depthFactor = row.kind === 'double' ? 2 : 1;
     for (const seg of row.modules) {
       const alongEquiv = seg.type === 'half' ? 0.5 : 1;
       const tiers = storageTiersForPositionCount(
@@ -172,15 +192,17 @@ function layoutSearchCandidates(
 }
 
 function transverseUsedMm(s: LayoutSolutionV2): number {
-  const band = bandDepthForMode(s.rackDepthMode, s.rackDepthMm);
-  const n = s.rows.length;
   const cor = s.corridorMm;
-  if (n <= 0) return 0;
-  const stack = n * band + Math.max(0, n - 1) * cor;
-  /** Fileira dupla: faixas de acesso obrigatórias junto às duas paredes transversais. */
-  const perimeter =
-    s.rackDepthMode === 'double' ? 2 * cor : 0;
-  return stack + perimeter;
+  const rows = s.rows;
+  if (rows.length === 0) return 0;
+  let bandSum = 0;
+  for (const row of rows) {
+    bandSum += bandDepthForMode(row.kind, s.rackDepthMm);
+  }
+  const between = Math.max(0, rows.length - 1) * cor;
+  /** Qualquer fileira dupla na solução implica reserva bilateral no eixo transversal (faixa interior). */
+  const perimeter = rows.some(r => r.kind === 'double') ? 2 * cor : 0;
+  return bandSum + between + perimeter;
 }
 
 /** Faixa transversal não ocupada por fileiras+corredores (mm) — menor é melhor em empate. */
@@ -438,16 +460,26 @@ function crossZonesForTunnel(crossSpan: number): CrossZone[] {
   return [{ z0: 0, z1: crossSpan, id: 'zone-all' }];
 }
 
-export type RowBandCross = { id: string; c0: number; c1: number };
+export type RowBandCross = {
+  id: string;
+  c0: number;
+  c1: number;
+  /** Omisso: igual a `depthMode` do preenchimento; `single` em fileiras extra no remanescente (dupla+simples). */
+  rackDepthMode?: RackDepthModeV2;
+};
 
 /**
  * Preenche uma zona [zoneStart, zoneEnd] com fileiras e corredores operacionais **entre** fileiras.
  * Fileiras encostam ao início da zona; o remanescente transversal fica no fim (sem margem simétrica).
+ *
+ * Em **dupla costas**, se após a última fileira dupla o remanescente for ≥ corredor + profundidade simples,
+ * empacita-se uma ou mais **fileiras simples** extra (corredor + banda) até esgotar o espaço útil.
  */
 function fillCrossZone(
   zone: CrossZone,
   bandDepth: number,
   corridorMm: number,
+  rackDepthMm: number,
   idPrefix: string,
   orientation: LayoutOrientationV2,
   lengthMm: number,
@@ -514,7 +546,12 @@ function fillCrossZone(
   for (let i = 0; i < n; i++) {
     const c0 = y;
     const c1 = y + bandDepth;
-    rows.push({ id: `${idPrefix}-r${i}`, c0, c1 });
+    rows.push({
+      id: `${idPrefix}-r${i}`,
+      c0,
+      c1,
+      ...(depthMode === 'double' ? { rackDepthMode: 'double' as const } : {}),
+    });
     y = c1;
     if (i < n - 1) {
       const cor0 = y;
@@ -545,18 +582,73 @@ function fillCrossZone(
   }
 
   /**
-   * Remanescente transversal após a última fileira: circulação real (corredor de serviço / parede)
-   * que antes não entrava em `corridors` — só havia retângulos **entre** fileiras.
-   * Modela-se sempre que houver largura útil, para o PDF/planta não “perder” o corredor em layouts compactos.
+   * Remanescente transversal após a última fileira dupla: se couber corredor + profundidade de
+   * fileira **simples**, empacota uma ou mais fileiras simples (dupla + simples no mesmo galpão).
    */
-  const usedEnd = y;
-  const remainder = zone.z1 - usedEnd;
+  let usedEnd = y;
+  let remainder = zone.z1 - usedEnd;
+  const tolTrail = OPERATIONAL_ACCESS_TOL_MM;
+  const needSingle = corridorMm + rackDepthMm;
+  if (
+    depthMode === 'double' &&
+    n > 0 &&
+    rackDepthMm > EPS &&
+    remainder + tolTrail >= needSingle
+  ) {
+    let trailIdx = 0;
+    while (remainder + tolTrail >= needSingle) {
+      const cor0 = usedEnd;
+      const cor1 = usedEnd + corridorMm;
+      if (orientation === 'along_length') {
+        corridors.push({
+          id: `${idPrefix}-cor-trail-${trailIdx}`,
+          kind: 'corridor',
+          x0: 0,
+          x1: lengthMm,
+          y0: cor0,
+          y1: cor1,
+          label: 'Corredor operacional',
+        });
+      } else {
+        corridors.push({
+          id: `${idPrefix}-cor-trail-${trailIdx}`,
+          kind: 'corridor',
+          x0: cor0,
+          x1: cor1,
+          y0: 0,
+          y1: widthMm,
+          label: 'Corredor operacional',
+        });
+      }
+      usedEnd = cor1;
+      const r0 = usedEnd;
+      const r1 = usedEnd + rackDepthMm;
+      rows.push({
+        id: `${idPrefix}-r-trail-${trailIdx}`,
+        c0: r0,
+        c1: r1,
+        rackDepthMode: 'single',
+      });
+      usedEnd = r1;
+      trailIdx += 1;
+      remainder = zone.z1 - usedEnd;
+    }
+  }
+
+  /**
+   * Remanescente final: circulação / residual explícito.
+   */
   if (remainder > EPS) {
+    const hadTrailSingles = rows.some(
+      r => r.id.includes('-r-trail-') && r.rackDepthMode === 'single'
+    );
     const label =
       remainder + EPS >= corridorMm
-        ? depthMode === 'double'
+        ? depthMode === 'double' && !hadTrailSingles
           ? 'Corredor operacional (faixa transversal — após última fileira dupla)'
-          : 'Corredor operacional (faixa transversal)'
+          : hadTrailSingles
+            ? 'Corredor operacional (faixa transversal — após última fileira simples)'
+            : 'Corredor operacional (faixa transversal)'
         : 'Faixa transversal residual (largura inferior ao corredor declarado)';
     if (orientation === 'along_length') {
       corridors.push({
@@ -592,6 +684,8 @@ type FillContext = {
   crossSpan: number;
   bandDepth: number;
   corridorMm: number;
+  /** Profundidade de uma face (fileira simples); usada para empacotar fileiras simples no remanescente. */
+  rackDepthMm: number;
   depthMode: RackDepthModeV2;
   hasTunnel: boolean;
 };
@@ -615,6 +709,7 @@ export function fillWarehouseCross(ctx: FillContext): {
       z,
       ctx.bandDepth,
       ctx.corridorMm,
+      ctx.rackDepthMm,
       z.id,
       ctx.orientation,
       ctx.lengthMm,
@@ -913,12 +1008,6 @@ function buildLayoutSolutionV2Core(
   const crossSpan = orientation === 'along_length' ? widthMm : lengthMm;
 
   const tunnelPos = tunnelPosition as TunnelPositionCode | undefined;
-  const placement: TunnelSpanPlacement =
-    typeof tunnelOffsetMm === 'number'
-      ? { tunnelOffsetMm }
-      : tunnelPos
-        ? { tunnelPosition: tunnelPos }
-        : {};
 
   const band = bandDepthForMode(depthMode, rackDepthMm);
 
@@ -930,6 +1019,7 @@ function buildLayoutSolutionV2Core(
     crossSpan,
     bandDepth: band,
     corridorMm,
+    rackDepthMm,
     depthMode,
     hasTunnel,
   };
@@ -937,6 +1027,22 @@ function buildLayoutSolutionV2Core(
   const { rowBands, corridors: corridorsFromFill } = fillWarehouseCross(ctx);
 
   const rowBandCount = rowBands.length;
+
+  /** Ancoragem INICIO/MEIO/FIM à corrida real de módulos (exclui remanescente vazio no fim do vão). */
+  const operationalExtentMm = operationalPackedExtentMm(
+    beamSpan,
+    bayClearSpanAlongBeamMm,
+    halfModuleOptimization,
+    canHaveHalfAtBeamEnd(beamSpan, beamSpan, null, rowBandCount)
+  );
+
+  const placement: TunnelSpanPlacement =
+    typeof tunnelOffsetMm === 'number'
+      ? { tunnelOffsetMm }
+      : {
+          ...(tunnelPos !== undefined ? { tunnelPosition: tunnelPos } : {}),
+          operationalExtentMm,
+        };
 
   const reserveCrossPassageNoTunnel = shouldReserveCrossPassageWithoutTunnel(
     hasTunnel,
@@ -1005,12 +1111,23 @@ function buildLayoutSolutionV2Core(
     const rb = rowBands[rowBandIndex]!;
     const c0 = rb.c0;
     const c1 = rb.c1;
-    const rowKind: RackDepthModeV2 = depthMode;
-    const appliesTunnelToThisRow = tunnelAppliesToRow(
-      tunnelAppliesTo,
-      rowKind === 'single' ? 'single' : 'double',
-      rowBandIndex
-    );
+    const rowKind: RackDepthModeV2 = rb.rackDepthMode ?? depthMode;
+    const rowId = rb.id;
+    /**
+     * Fileiras simples extra no remanescente (dupla + simples) não devem receber módulo túnel quando
+     * o cliente restringiu o vão a “linhas simples” no sentido de estratégia — antes só havia duplas.
+     */
+    const isResidualPackedSingle =
+      depthMode === 'double' &&
+      rowKind === 'single' &&
+      rowId.includes('-r-trail-');
+    const appliesTunnelToThisRow =
+      !isResidualPackedSingle &&
+      tunnelAppliesToRow(
+        tunnelAppliesTo,
+        rowKind === 'single' ? 'single' : 'double',
+        rowBandIndex
+      );
 
     const useBeamSplit =
       (hasTunnel && appliesTunnelToThisRow) || reserveCrossPassageNoTunnel;
@@ -1019,7 +1136,6 @@ function buildLayoutSolutionV2Core(
       : [{ a: 0, b: beamSpan, kind: 'normal' as const }];
 
     const crossSeg = { c0, c1 };
-    const rowId = rb.id;
     const tunnelForHalf =
       hasTunnel && appliesTunnelToThisRow
         ? tunnelSpec
@@ -1050,12 +1166,38 @@ function buildLayoutSolutionV2Core(
     });
   }
 
+  if (
+    (process.env.TUNNEL_LAYOUT_DEBUG === '1' ||
+      process.env.PDF_TUNNEL_DEBUG === '1') &&
+    hasTunnel &&
+    tunnelSpec
+  ) {
+    const { t0, t1 } = tunnelSpec;
+    for (const row of rows) {
+      row.modules.forEach((m, i) => {
+        if (m.variant !== 'tunnel') return;
+        const alongStart =
+          orientation === 'along_length'
+            ? Math.min(m.x0, m.x1)
+            : Math.min(m.y0, m.y1);
+        const alongEnd =
+          orientation === 'along_length'
+            ? Math.max(m.x0, m.x1)
+            : Math.max(m.y0, m.y1);
+        // eslint-disable-next-line no-console
+        console.warn(
+          `[tunnel-layout] row=${row.id} moduleIndexInRow=${i} alongMm=[${Math.round(alongStart)}–${Math.round(alongEnd)}] tunnelSpanMm=[${Math.round(t0)}–${Math.round(t1)}] operationalExtentMm=${Math.round(operationalExtentMm)}`
+        );
+      });
+    }
+  }
+
   const positions = computeTotalPalletPositions(
     rows,
-    depthMode,
     structuralLevels,
     hasGroundLevel
   );
+  const physicalPickingModules = computePhysicalPickingModules(rows);
 
   const sol: LayoutSolutionV2 = {
     warehouse: { lengthMm, widthMm },
@@ -1074,6 +1216,7 @@ function buildLayoutSolutionV2Core(
     tunnels,
     totals: {
       modules: totalModEquiv,
+      physicalPickingModules,
       positions,
       levels: storageTierCount,
     },
@@ -1094,6 +1237,7 @@ function buildLayoutSolutionV2Core(
         corridorMm,
         placement
       ),
+      tunnelOperationalExtentMm: operationalExtentMm,
     },
   };
   assertLayoutSolutionDoubleRowBilateralAccess(sol);

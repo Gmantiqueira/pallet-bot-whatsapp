@@ -210,6 +210,8 @@
     var lastPdfFilename = null;
     /** Base64 devolvido no mesmo pedido que gerou o PDF (funciona em serverless; /files pode 404 entre instâncias). */
     var lastPdfBase64 = null;
+    var lastBudgetFilename = null;
+    var lastBudgetBase64 = null;
 
     function loadClientSession() {
       return simClientSession || undefined;
@@ -242,6 +244,34 @@
       if (!url) return '';
       if (/^https?:\/\//i.test(url)) return url;
       return `${API_URL}${url.startsWith('/') ? '' : '/'}${url}`;
+    }
+
+    function downloadXlsxFromBase64(b64, filename) {
+      try {
+        var bin = atob(b64);
+        var len = bin.length;
+        var bytes = new Uint8Array(len);
+        for (var i = 0; i < len; i++) {
+          bytes[i] = bin.charCodeAt(i);
+        }
+        var blob = new Blob([bytes], {
+          type:
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        });
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = filename || 'orcamento.xlsx';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(a.href);
+        addMessage('📥 Orçamento descarregado: ' + (filename || 'orcamento.xlsx'), true);
+      } catch (err) {
+        addMessage(
+          '❌ Orçamento (base64): ' + (err && err.message ? err.message : String(err)),
+          false
+        );
+      }
     }
 
     function addBotDocumentMessage(filename, url) {
@@ -317,6 +347,15 @@
       }
       if (data.pdfBase64 && typeof data.pdfBase64 === 'string') {
         lastPdfBase64 = data.pdfBase64;
+      }
+      if (data.generatedBudget && data.generatedBudget.filename) {
+        lastBudgetFilename = String(data.generatedBudget.filename).trim();
+      }
+      if (data.budgetBase64 && typeof data.budgetBase64 === 'string') {
+        lastBudgetBase64 = data.budgetBase64;
+        if (lastBudgetFilename) {
+          downloadXlsxFromBase64(lastBudgetBase64, lastBudgetFilename);
+        }
       }
       if (data.generatedPdf && data.generatedPdf.absolutePath) {
         addMessage(
@@ -493,7 +532,7 @@
           return;
         }
 
-        const data = await parseJsonSafe(response);
+        let data = await parseJsonSafe(response);
 
         if (text) {
           addMessage(text, true);
@@ -502,6 +541,37 @@
         }
 
         handleWebhookPayload(data);
+
+        if (data.resumePdfGeneration) {
+          const resumePayload = {
+            from: PHONE,
+            simulator: true,
+            resumePdfGeneration: true,
+          };
+          var csResume = loadClientSession();
+          if (csResume) resumePayload.clientSession = csResume;
+          const response2 = await fetch(WEBHOOK_URL, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${WEBHOOK_SECRET}`,
+            },
+            body: JSON.stringify(resumePayload),
+          });
+          if (!response2.ok) {
+            const errText = await response2.text();
+            addMessage(
+              '❌ Erro ao continuar a geração do PDF (HTTP ' +
+                response2.status +
+                '): ' +
+                (errText ? errText.slice(0, 200) : ''),
+              false
+            );
+          } else {
+            data = await parseJsonSafe(response2);
+            handleWebhookPayload(data);
+          }
+        }
       } catch (error) {
         console.error('Error:', error);
         addMessage(

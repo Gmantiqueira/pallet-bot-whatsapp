@@ -7,6 +7,7 @@ import type { LayoutResult } from '../../domain/layoutEngine';
 import { resolveStoragePath } from '../../config/storagePath';
 import { embedSvgFontFaces } from '../../config/pdfFonts';
 import type { GeneratedPdfArtifact } from '../../types/generatedPdf';
+import { sanitizeText } from '../../utils/sanitizeText';
 
 /** DPI para rasterizar SVG antes de embutir no PDF (nitidez em impressão / PDF cliente). */
 const RASTER_DPI = 300;
@@ -18,7 +19,7 @@ export type PdfResult = GenerateProjectPdfResult;
 
 /** Formatação pt-BR para cotas no resumo técnico e comparações de teste. */
 export function formatMm(n: number): string {
-  return `${n.toLocaleString('pt-BR')} mm`;
+  return sanitizeText(`${n.toLocaleString('pt-BR')} mm`);
 }
 
 /**
@@ -80,9 +81,11 @@ export function formatPeDireitoAltura(
     typeof project.levels === 'number'
   ) {
     const total = project.loadHeightMm * project.levels;
-    return `${formatMm(total)} (${project.levels} × ${formatMm(project.loadHeightMm)})`;
+    return sanitizeText(
+      `${formatMm(total)} (${project.levels} × ${formatMm(project.loadHeightMm)})`
+    );
   }
-  return '—';
+  return sanitizeText('—');
 }
 
 function formatPosicoesEstimadas(
@@ -115,7 +118,7 @@ export function technicalSummaryRows(
     typeof project.levels === 'number' ? String(project.levels) : '—';
   const modulos = String(layout.modulesTotal);
 
-  return [
+  const rows = [
     { label: 'Comprimento', value: comprimento },
     { label: 'Largura', value: largura },
     { label: 'Pé-direito / altura', value: formatPeDireitoAltura(project) },
@@ -126,6 +129,10 @@ export function technicalSummaryRows(
       value: formatPosicoesEstimadas(project, layout),
     },
   ];
+  return rows.map(r => ({
+    label: sanitizeText(r.label),
+    value: sanitizeText(r.value),
+  }));
 }
 
 export class PdfService {

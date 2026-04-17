@@ -15,6 +15,10 @@ import {
 } from './messageBuilder';
 import { PdfService } from '../infra/pdf/pdfService';
 import type { GeneratedPdfArtifact } from '../types/generatedPdf';
+import type { GeneratedBudgetArtifact } from '../types/generatedBudget';
+import { writeBudgetXlsxFile } from '../infra/budget/budgetSpreadsheetV2';
+import { buildBudgetWorkbookFromProjectAnswers } from '../infra/budget/budgetWorkbookFromProject';
+import { buildBudgetArtifactAfterWrite } from '../infra/budget/budgetArtifact';
 import { resolveStoragePath } from '../config/storagePath';
 import { buildProjectAnswersV2 } from '../domain/pdfV2/answerMapping';
 import { buildLayoutSolutionV2 } from '../domain/pdfV2/layoutSolutionV2';
@@ -28,6 +32,7 @@ import { validatePdfRenderCoherence } from '../domain/pdfV2/pdfRenderCoherenceV2
 import { validatePdfV2FinalConsistency } from '../domain/pdfV2/pdfV2FinalConsistency';
 import { buildFloorPlanModelV2 } from '../domain/pdfV2/floorPlanModelV2';
 import { serializeFloorPlanSvgV2 } from '../domain/pdfV2/svgFloorPlanV2';
+import { loadEnv } from '../config/env';
 import { buildElevationModelV2 } from '../domain/pdfV2/elevationModelV2';
 import {
   serializeElevationPagesV2,
@@ -48,6 +53,11 @@ export interface IncomingPayload {
   /** Simulador web: estado no browser; não usado pela state machine. */
   simulator?: boolean;
   clientSession?: unknown;
+  /**
+   * Segundo pedido após `resumePdfGeneration` na resposta ao toque em *Gerar projeto*
+   * (geração do PDF em pedido separado para o utilizador receber primeiro a mensagem de espera).
+   */
+  resumePdfGeneration?: boolean;
 }
 
 export interface RouteIncomingOptions {
@@ -64,6 +74,13 @@ export interface RouterResult {
    * não representa URL pública nem “entrega” ao utilizador final.
    */
   generatedPdf?: GeneratedPdfArtifact;
+  /** Planilha .xlsx de orçamento (modelo comercial) quando gerada neste pedido. */
+  generatedBudget?: GeneratedBudgetArtifact;
+  /**
+   * Quando `true`, o integrador deve enviar de seguida outro POST com `resumePdfGeneration: true`
+   * (mesmo `from` / sessão) para executar a geração do PDF após mostrar a mensagem de espera.
+   */
+  resumePdfGeneration?: boolean;
 }
 
 const GLOBAL_COMMANDS = ['novo', 'voltar', 'cancelar', 'status'];
@@ -166,6 +183,173 @@ const convertToInput = (
   return null;
 };
 
+interface PdfGenerationOutcome {
+  updatedSession: Session;
+  generatedPdf?: GeneratedPdfArtifact;
+  deliveryError?: string;
+}
+
+async function executeProjectPdfGeneration(
+  genSession: Session
+): Promise<PdfGenerationOutcome> {
+  const storageDir = resolveStoragePath();
+  if (!fs.existsSync(storageDir)) {
+    fs.mkdirSync(storageDir, { recursive: true });
+  }
+
+  let generatedPdf: GeneratedPdfArtifact | undefined;
+  let deliveryError: string | undefined;
+  let updatedSession: Session;
+
+  try {
+    const ts = Date.now();
+    const phone = genSession.phone;
+    const ans = genSession.answers;
+
+    if (!computeProjectEngines(ans)) {
+      throw new Error('Layout ausente');
+    }
+
+    const v2a = buildProjectAnswersV2(ans);
+    if (v2a) {
+      const sol = buildLayoutSolutionV2(v2a);
+      if (isDebugPdf()) {
+        logLayoutSolutionDebug(sol);
+      }
+      const geo: LayoutGeometry = buildLayoutGeometry(sol, ans);
+      validateLayoutGeometry(geo);
+      const dbg = isDebugPdf();
+      const floorSvg = serializeFloorPlanSvgV2(buildFloorPlanModelV2(geo, ans));
+      const elevModel: ElevationModelV2 = buildElevationModelV2(ans, geo);
+      const elevPages: ElevationPageSvgs = serializeElevationPagesV2(
+        elevModel,
+        { debug: dbg }
+      );
+      const rack3d = build3DModelV2(geo);
+      validatePdfRenderCoherence(geo, {
+        rack3dModel: rack3d,
+        layoutSolution: sol,
+      });
+      validatePdfV2FinalConsistency({
+        answers: ans,
+        v2answers: v2a,
+        layoutSolution: sol,
+        geometry: geo,
+      });
+      const rack3dView = dbg ? build3DModelV2(geo, { debug: true }) : rack3d;
+      const view3dSvg = render3DViewV2(projectToIsometric(rack3dView), {
+        debug: dbg,
+      });
+      fs.writeFileSync(
+        path.join(storageDir, `planta-${phone}-${ts}.svg`),
+        floorSvg,
+        'utf8'
+      );
+      fs.writeFileSync(
+        path.join(storageDir, `elevacao-sem-tunel-${phone}-${ts}.svg`),
+        elevPages.frontWithoutTunnel,
+        'utf8'
+      );
+      if (elevPages.frontWithTunnel) {
+        fs.writeFileSync(
+          path.join(storageDir, `elevacao-com-tunel-${phone}-${ts}.svg`),
+          elevPages.frontWithTunnel,
+          'utf8'
+        );
+      }
+      fs.writeFileSync(
+        path.join(storageDir, `elevacao-lateral-${phone}-${ts}.svg`),
+        elevPages.lateral,
+        'utf8'
+      );
+      if (elevPages.lateralWithTunnel) {
+        fs.writeFileSync(
+          path.join(storageDir, `elevacao-lateral-tunel-${phone}-${ts}.svg`),
+          elevPages.lateralWithTunnel,
+          'utf8'
+        );
+      }
+      fs.writeFileSync(
+        path.join(storageDir, `vista-3d-${phone}-${ts}.svg`),
+        view3dSvg,
+        'utf8'
+      );
+    }
+
+    const pdfService = new PdfService(storageDir);
+    const pdfResult = await pdfService.generatePdf(genSession);
+
+    const nextAnswers = { ...genSession.answers };
+    delete nextAnswers.pdfFilename;
+    delete nextAnswers.pdfPath;
+
+    const fn = pdfResult.filename?.trim() ?? '';
+    if (!fn) {
+      throw new Error('PDF sem filename');
+    }
+    generatedPdf = pdfResult;
+    updatedSession = {
+      ...genSession,
+      state: 'DONE',
+      updatedAt: Date.now(),
+      answers: {
+        ...nextAnswers,
+        pdfFilename: fn,
+        pdfPath: pdfResult.absolutePath,
+      },
+    };
+  } catch (pdfErr) {
+    console.error('[diag] rt:pdf-gen-err', pdfErr);
+    const cleanAnswers = { ...genSession.answers };
+    delete cleanAnswers.pdfFilename;
+    delete cleanAnswers.pdfPath;
+    updatedSession = {
+      ...genSession,
+      state: 'SUMMARY_CONFIRM',
+      stack:
+        genSession.stack.length > 0
+          ? genSession.stack.slice(0, -1)
+          : genSession.stack,
+      updatedAt: Date.now(),
+      answers: cleanAnswers,
+    };
+    deliveryError =
+      'Não foi possível gerar o documento agora. Tente novamente em instantes.';
+  }
+
+  return { updatedSession, generatedPdf, deliveryError };
+}
+
+async function executeBudgetXlsxGeneration(
+  genSession: Session
+): Promise<{
+  generatedBudget?: GeneratedBudgetArtifact;
+  deliveryError?: string;
+}> {
+  const storageDir = resolveStoragePath();
+  if (!fs.existsSync(storageDir)) {
+    fs.mkdirSync(storageDir, { recursive: true });
+  }
+
+  try {
+    const wb = await buildBudgetWorkbookFromProjectAnswers(genSession.answers);
+
+    const ts = Date.now();
+    const fn = `orcamento-${ts}.xlsx`;
+    const abs = path.join(storageDir, fn);
+    await writeBudgetXlsxFile(wb, abs);
+
+    const artifact = buildBudgetArtifactAfterWrite(abs, fn);
+    return { generatedBudget: artifact };
+  } catch (err) {
+    console.error('[budget] xlsx generation failed', err);
+    return {
+      deliveryError:
+        'Não foi possível gerar o orçamento agora. Tente novamente em instantes.',
+    };
+  }
+}
+
 export const routeIncoming = async (
   session: Session,
   incoming: IncomingPayload,
@@ -173,6 +357,52 @@ export const routeIncoming = async (
   options?: RouteIncomingOptions
 ): Promise<RouterResult> => {
   const persistSession = options?.persistSession !== false;
+  const inlinePdf = loadEnv().PALLET_BOT_INLINE_PDF;
+
+  if (incoming.resumePdfGeneration === true) {
+    if (session.state !== 'GENERATING_DOC') {
+      const gp = generatedPdfFromSessionAnswers(session.answers);
+      const messages = buildMessages(session, {});
+      return {
+        session,
+        outgoingMessages: messages,
+        generatedPdf: gp,
+      };
+    }
+
+    const genSession: Session = {
+      ...session,
+      answers: finalizeSummaryAnswers({ ...session.answers }),
+    };
+
+    const { updatedSession, generatedPdf, deliveryError } =
+      await executeProjectPdfGeneration(genSession);
+
+    const ctx: MessageContext = {
+      lastError: deliveryError,
+    };
+
+    if (
+      updatedSession.state === 'DONE' &&
+      typeof updatedSession.answers.pdfFilename === 'string' &&
+      updatedSession.answers.pdfFilename.trim().length > 0
+    ) {
+      ctx.pdfFilename = updatedSession.answers.pdfFilename.trim();
+    }
+
+    const messages = buildMessages(updatedSession, ctx);
+    const finalSession = { ...updatedSession, updatedAt: Date.now() };
+    if (persistSession) {
+      await sessionRepository.upsert(finalSession);
+    }
+
+    return {
+      session: finalSession,
+      outgoingMessages: messages,
+      generatedPdf,
+    };
+  }
+
   if (session.state === 'GENERATING_DOC') {
     console.log('[diag] rt:x0-generating-doc-short');
     return {
@@ -238,11 +468,6 @@ export const routeIncoming = async (
   let generatedPdf: GeneratedPdfArtifact | undefined;
 
   if (hasGeneratePdfEffect && updatedSession.state === 'GENERATING_DOC') {
-    const storageDir = resolveStoragePath();
-    if (!fs.existsSync(storageDir)) {
-      fs.mkdirSync(storageDir, { recursive: true });
-    }
-
     const genSession: Session = {
       ...updatedSession,
       answers: finalizeSummaryAnswers({ ...updatedSession.answers }),
@@ -255,123 +480,25 @@ export const routeIncoming = async (
       });
     }
 
-    try {
-      const ts = Date.now();
-      const phone = genSession.phone;
-      const ans = genSession.answers;
-
-      if (!computeProjectEngines(ans)) {
-        throw new Error('Layout ausente');
-      }
-
-      const v2a = buildProjectAnswersV2(ans);
-      if (v2a) {
-        const sol = buildLayoutSolutionV2(v2a);
-        if (isDebugPdf()) {
-          logLayoutSolutionDebug(sol);
-        }
-        const geo: LayoutGeometry = buildLayoutGeometry(sol, ans);
-        validateLayoutGeometry(geo);
-        const dbg = isDebugPdf();
-        const floorSvg = serializeFloorPlanSvgV2(
-          buildFloorPlanModelV2(geo, ans)
-        );
-        const elevModel: ElevationModelV2 = buildElevationModelV2(ans, geo);
-        const elevPages: ElevationPageSvgs = serializeElevationPagesV2(
-          elevModel,
-          { debug: dbg }
-        );
-        const rack3d = build3DModelV2(geo);
-        validatePdfRenderCoherence(geo, {
-          rack3dModel: rack3d,
-          layoutSolution: sol,
-        });
-        validatePdfV2FinalConsistency({
-          answers: ans,
-          v2answers: v2a,
-          layoutSolution: sol,
-          geometry: geo,
-        });
-        const rack3dView = dbg ? build3DModelV2(geo, { debug: true }) : rack3d;
-        const view3dSvg = render3DViewV2(projectToIsometric(rack3dView), {
-          debug: dbg,
-        });
-        fs.writeFileSync(
-          path.join(storageDir, `planta-${phone}-${ts}.svg`),
-          floorSvg,
-          'utf8'
-        );
-        fs.writeFileSync(
-          path.join(storageDir, `elevacao-sem-tunel-${phone}-${ts}.svg`),
-          elevPages.frontWithoutTunnel,
-          'utf8'
-        );
-        if (elevPages.frontWithTunnel) {
-          fs.writeFileSync(
-            path.join(storageDir, `elevacao-com-tunel-${phone}-${ts}.svg`),
-            elevPages.frontWithTunnel,
-            'utf8'
-          );
-        }
-        fs.writeFileSync(
-          path.join(storageDir, `elevacao-lateral-${phone}-${ts}.svg`),
-          elevPages.lateral,
-          'utf8'
-        );
-        if (elevPages.lateralWithTunnel) {
-          fs.writeFileSync(
-            path.join(storageDir, `elevacao-lateral-tunel-${phone}-${ts}.svg`),
-            elevPages.lateralWithTunnel,
-            'utf8'
-          );
-        }
-        fs.writeFileSync(
-          path.join(storageDir, `vista-3d-${phone}-${ts}.svg`),
-          view3dSvg,
-          'utf8'
-        );
-      }
-
-      const pdfService = new PdfService(storageDir);
-      const pdfResult = await pdfService.generatePdf(genSession);
-
-      const nextAnswers = { ...genSession.answers };
-      delete nextAnswers.pdfFilename;
-      delete nextAnswers.pdfPath;
-
-      const fn = pdfResult.filename?.trim() ?? '';
-      if (!fn) {
-        throw new Error('PDF sem filename');
-      }
-      generatedPdf = pdfResult;
-      updatedSession = {
-        ...genSession,
-        state: 'DONE',
-        updatedAt: Date.now(),
-        answers: {
-          ...nextAnswers,
-          pdfFilename: fn,
-          pdfPath: pdfResult.absolutePath,
-        },
+    if (!inlinePdf) {
+      return {
+        session: genSession,
+        outgoingMessages: [
+          {
+            to: genSession.phone,
+            type: 'text',
+            text: GENERATING_DOC_WAIT_TEXT,
+          },
+        ],
+        generatedPdf: undefined,
+        resumePdfGeneration: true,
       };
-    } catch (pdfErr) {
-      console.error('[diag] rt:pdf-gen-err', pdfErr);
-      const cleanAnswers = { ...genSession.answers };
-      delete cleanAnswers.pdfFilename;
-      delete cleanAnswers.pdfPath;
-      updatedSession = {
-        ...genSession,
-        state: 'SUMMARY_CONFIRM',
-        stack:
-          genSession.stack.length > 0
-            ? genSession.stack.slice(0, -1)
-            : genSession.stack,
-        updatedAt: Date.now(),
-        answers: cleanAnswers,
-      };
-      deliveryError =
-        'Não foi possível gerar o documento agora. Tente novamente em instantes.';
     }
+
+    const outcome = await executeProjectPdfGeneration(genSession);
+    generatedPdf = outcome.generatedPdf;
+    deliveryError = outcome.deliveryError;
+    updatedSession = outcome.updatedSession;
   }
 
   const hasResendPdfEffect = transitionResult.effects.some(
@@ -384,6 +511,17 @@ export const routeIncoming = async (
     }
   }
 
+  const hasBudgetEffect = transitionResult.effects.some(
+    e => e.type === 'GENERATE_BUDGET_XLSX'
+  );
+  let generatedBudget: GeneratedBudgetArtifact | undefined;
+  let budgetError: string | undefined;
+  if (hasBudgetEffect && updatedSession.state === 'DONE') {
+    const budgetOutcome = await executeBudgetXlsxGeneration(updatedSession);
+    generatedBudget = budgetOutcome.generatedBudget;
+    budgetError = budgetOutcome.deliveryError;
+  }
+
   const imageAnalyzed =
     previousState === 'WAIT_PLANT_IMAGE' &&
     updatedSession.state === 'WAIT_PLANT_CONFIRM_DIMS';
@@ -394,6 +532,10 @@ export const routeIncoming = async (
     previousState,
     lastError: deliveryError,
     doneResendPdf: hasResendPdfEffect,
+    budgetError,
+    budgetSuccessMessage: generatedBudget
+      ? `📊 Orçamento Excel: ${generatedBudget.filename} (preços editáveis; totais com fórmulas).`
+      : undefined,
   };
 
   if (
@@ -420,5 +562,6 @@ export const routeIncoming = async (
     session: updatedSession,
     outgoingMessages: messages,
     generatedPdf,
+    generatedBudget,
   };
 };

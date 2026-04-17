@@ -61,8 +61,16 @@ export type LayoutSolutionV2 = {
   corridors: CirculationZone[];
   tunnels: TunnelZone[];
   totals: {
-    /** Células de vão (face) — meio módulo conta 0,5 quando aplicável. */
+    /**
+     * Equivalente ao longo do vão por segmento de layout (1 = módulo completo ao longo da fileira,
+     * 0,5 = meio módulo) — usado no motor de pontuação e coerência com modelo 3D equiv.
+     */
     modules: number;
+    /**
+     * Módulos de **frente** (faces de picking): em linha dupla costas, cada segmento conta ×2;
+     * túnel = 1 unidade. Alinha numeração da planta e resumo ao conceito da vista frontal (2 baias / frente).
+     */
+    physicalPickingModules: number;
     positions: number;
     /**
      * Total de patamares de armazenagem no cálculo de posições (= níveis com longarina
@@ -84,6 +92,11 @@ export type LayoutSolutionV2 = {
     tunnelPosition?: TunnelPositionCode;
     /** Início efetivo do vão ao longo do `beamSpanMm` (mm), após limites geométricos. */
     tunnelOffsetEffectiveMm?: number;
+    /**
+     * Extensão ao longo do vão ocupada por módulos (full/half) **sem** contar faixa vazia residual
+     * no fim do compartimento — usada para INICIO/MEIO/FIM relativos à fileira operacional.
+     */
+    tunnelOperationalExtentMm?: number;
   };
 };
 
@@ -163,7 +176,13 @@ export type FloorPlanModelV2 = {
     kind: RackDepthModeV2;
     /** Uma linha: "Linha N — X módulos". */
     rowCaption: string;
+    /** Segunda faixa de uma dupla: não repetir na legenda "Fileiras". */
+    showInRowLegend?: boolean;
+    /** Dupla costas: frente de picking (alinhado ao 1.º / 2.º split da pegada). */
+    pickingFace?: 'A' | 'B';
   }[];
+  /** Dupla costas: eixo ao longo da espinha (costas) entre as duas frentes — tracejado na planta. */
+  rowSpineLines: { id: string; x1: number; y1: number; x2: number; y2: number }[];
   structureRects: {
     id: string;
     x: number;
@@ -172,6 +191,8 @@ export type FloorPlanModelV2 = {
     h: number;
     kind: RackDepthModeV2;
     variant?: ModuleVariantV2;
+    /** Meio-módulo (1 baia ao longo do vão) — desenho e legenda distintos na planta. */
+    segmentType?: ModuleSegmentType;
     /** Numeração global na planta (1…n), linha a linha, ao longo do vão. */
     displayIndex?: number;
   }[];

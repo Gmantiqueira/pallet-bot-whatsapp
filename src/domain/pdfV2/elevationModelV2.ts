@@ -322,7 +322,7 @@ export function buildElevationModelV2(
 
   const summaryLines: string[] = [
     `${geometry.totals.levelCount} níveis · ${frontWithoutTunnel.capacityKgPerLevel} kg/palete · vão/baia ${Math.round(geometry.metadata.beamAlongModuleMm)} mm · módulo ao longo da fileira ~${Math.round(geometry.metadata.moduleLengthAlongBeamMm)} mm · prof. posição ${Math.round(geometry.metadata.moduleDepthMm)} mm · faixa ${Math.round(frontWithoutTunnel.bandDepthMm)} mm`,
-    `${formatModuleCountForDocumentPt(geometry.totals.moduleCount)} (equiv.) · posições ${geometry.totals.positionCount} · ${geometry.metadata.rackDepthMode === 'double' ? 'dupla costas' : 'simples'} · planta: fileiras ponta com ponta (vão automático)`,
+    `${formatModuleCountForDocumentPt(geometry.totals.physicalPickingModuleCount ?? geometry.totals.moduleCount)} módulos de frente · posições ${geometry.totals.positionCount} · ${geometry.metadata.rackDepthMode === 'double' ? 'dupla costas' : 'simples'} · planta: 1 nº = 1 frente (2 baias)`,
   ];
   if (
     userWantsTunnel &&

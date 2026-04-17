@@ -12,6 +12,7 @@ import {
   validateOperationalAccess,
 } from './layoutGeometryV2';
 import type { ProjectAnswersV2 } from './answerMapping';
+import { buildFloorPlanModelV2 } from './floorPlanModelV2';
 
 const minimal = (): ProjectAnswersV2 => ({
   lengthMm: 12_000,
@@ -94,6 +95,51 @@ describe('buildLayoutGeometry + validateLayoutGeometry', () => {
     expect(geo.rows[0]!.rowType).toBe('backToBack');
     validateOperationalAccess(geo);
     expect(layoutSolutionPassesOperationalAccess(sol)).toBe(true);
+  });
+
+  it('totais: módulos de frente — simples 1:1 com segmentos; dupla 2× por segmento (túnel = 1)', () => {
+    const sim: ProjectAnswersV2 = {
+      ...minimal(),
+      lineStrategy: 'APENAS_SIMPLES',
+      hasTunnel: false,
+    };
+    const solS = buildLayoutSolutionV2(sim);
+    const geoS = buildLayoutGeometry(solS, sim);
+    expect(geoS.totals.physicalPickingModuleCount).toBeCloseTo(
+      geoS.totals.moduleCount,
+      5
+    );
+    const planS = buildFloorPlanModelV2(geoS, sim);
+    expect(planS.structureRects.length).toBe(
+      Math.round(geoS.totals.physicalPickingModuleCount)
+    );
+
+    const dbl: ProjectAnswersV2 = {
+      ...minimal(),
+      lineStrategy: 'APENAS_DUPLOS',
+      hasTunnel: false,
+    };
+    const solD = buildLayoutSolutionV2(dbl);
+    const geoD = buildLayoutGeometry(solD, dbl);
+    let expectedPhy = 0;
+    for (const r of solD.rows) {
+      const ff = r.kind === 'double' ? 2 : 1;
+      for (const m of r.modules) {
+        if (m.variant === 'tunnel') {
+          expectedPhy += 1;
+        } else {
+          expectedPhy += (m.type === 'half' ? 0.5 : 1) * ff;
+        }
+      }
+    }
+    expect(geoD.totals.physicalPickingModuleCount).toBeCloseTo(
+      expectedPhy,
+      5
+    );
+    const planD = buildFloorPlanModelV2(geoD, dbl);
+    expect(planD.structureRects.length).toBe(
+      Math.round(geoD.totals.physicalPickingModuleCount)
+    );
   });
 
   it('validateOperationalAccess: dupla encostada à parede transversal (lado baixo) → rejeita', () => {

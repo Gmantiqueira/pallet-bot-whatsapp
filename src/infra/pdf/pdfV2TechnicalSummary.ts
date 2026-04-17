@@ -6,6 +6,7 @@ import {
 } from '../../domain/warehouseHeightDerive';
 import { MIN_LEVEL_GAP_MM } from '../../domain/conversationHelpers';
 import { formatModuleCountForDocumentPt } from '../../domain/pdfV2/formatModuleCountDisplay';
+import { sanitizeText } from '../../utils/sanitizeText';
 import { formatMm, formatPeDireitoAltura } from './pdfService';
 
 export type TechnicalSummaryRow = {
@@ -169,7 +170,9 @@ export function technicalSummaryRowsFromLayoutGeometry(
 ): TechnicalSummaryRow[] {
   const { totals, metadata, warehouseLengthMm, warehouseWidthMm } = geometry;
 
-  const modulos = formatModuleCountForDocumentPt(totals.moduleCount);
+  const modulos = formatModuleCountForDocumentPt(
+    totals.physicalPickingModuleCount ?? totals.moduleCount
+  );
   const niveisText = formatNiveisArmazenagemForDocumentPt(metadata);
   const niveisDetail =
     totals.levelCount !== metadata.structuralLevels
@@ -245,5 +248,9 @@ export function technicalSummaryRowsFromLayoutGeometry(
     });
   }
 
-  return rows;
+  return rows.map(row => ({
+    ...row,
+    label: sanitizeText(row.label),
+    value: sanitizeText(row.value),
+  }));
 }

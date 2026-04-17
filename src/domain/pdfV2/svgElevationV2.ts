@@ -23,6 +23,7 @@ import {
   ELEV_UPRIGHT_STROKE as FV_UPRIGHT_STROKE,
 } from './elevationVisualTokens';
 import { SVG_FONT_FAMILY, svgFontWeightForSvgAttr } from '../../config/pdfFonts';
+import { sanitizeText } from '../../utils/sanitizeText';
 
 /** Um módulo frontal = duas baias lado a lado (3 montantes), como desenho técnico tipo 2× vão. */
 const FV_FRONT_BAY_COUNT = 2;
@@ -47,7 +48,7 @@ const DIM_MINOR = '#475569';
 const COL_BRACE_STROKE = '#475569';
 
 function escapeXml(text: string): string {
-  return text
+  return sanitizeText(text)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')

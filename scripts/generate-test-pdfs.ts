@@ -1,6 +1,7 @@
 /**
  * Gera PDFs de validação visual/técnica da pipeline V2
- * com o NOVO fluxo de conversa do bot de pallet.
+ * com o NOVO fluxo de conversa do bot de pallet,
+ * e para cada caso também a planilha de orçamento (.xlsx) no mesmo diretório.
  *
  * Uso:
  *   npx tsx scripts/generate-test-pdfs.ts
@@ -16,6 +17,7 @@
  *
  * Objetivo:
  * - validar renderização do PDF com o fluxo novo
+ * - gerar orçamento Excel (modelo comercial) alinhado ao mesmo layout
  * - cobrir planta real vs medidas digitadas
  * - cobrir altura direta vs pé-direito
  * - cobrir estratégias de linha, túnel e proteções
@@ -32,6 +34,8 @@ import { buildLayoutSolutionV2 } from '../src/domain/pdfV2/layoutSolutionV2';
 import { finalizeSummaryAnswers } from '../src/domain/projectEngines';
 import type { Session } from '../src/domain/session';
 import { PdfService } from '../src/infra/pdf/pdfService';
+import { buildBudgetWorkbookFromProjectAnswers } from '../src/infra/budget/budgetWorkbookFromProject';
+import { writeBudgetXlsxFile } from '../src/infra/budget/budgetSpreadsheetV2';
 import { HEIGHT_DEFINITION_WAREHOUSE_CLEAR } from '../src/domain/warehouseHeightDerive';
 
 function session(id: string, answers: Record<string, unknown>): Session {
@@ -395,11 +399,19 @@ async function main(): Promise<void> {
       const result = await pdf.generatePdf(sess);
       const abs = path.resolve(result.absolutePath);
 
+      const wb = await buildBudgetWorkbookFromProjectAnswers(sess.answers);
+      const xlsxAbs = path.join(
+        path.dirname(abs),
+        `${c.id}-orcamento.xlsx`
+      );
+      await writeBudgetXlsxFile(wb, xlsxAbs);
+
       out.push(
         [
           `${c.id} · ${c.label}`,
           `Objetivo: ${c.objective}`,
-          `Arquivo: ${abs}`,
+          `PDF: ${abs}`,
+          `Orçamento: ${path.resolve(xlsxAbs)}`,
         ].join('\n')
       );
 
@@ -422,8 +434,10 @@ async function main(): Promise<void> {
     }
   }
 
-  console.log('\nPDFs de validação gerados:\n');
-  console.log(out.length > 0 ? out.join('\n\n') : 'Nenhum PDF gerado.');
+  console.log('\nPDFs e orçamentos gerados:\n');
+  console.log(
+    out.length > 0 ? out.join('\n\n') : 'Nenhum ficheiro gerado.'
+  );
 
   if (failed.length > 0) {
     console.log('\n\nCasos com falha:\n');
