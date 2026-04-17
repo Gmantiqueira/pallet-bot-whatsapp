@@ -600,8 +600,9 @@ export async function renderPdfV2(
   doc.y = boxTop + boxH + 14;
 
   doc.addPage();
-  beginDrawingSheetHeader('Planta de implantação', {
-    subtitle: 'Cotas em milímetros · escala gráfica',
+  beginDrawingSheetHeader('Planta de implantação — porta-paletes', {
+    subtitle:
+      'Desenho de conjunto · cotas em milímetros · leitura operacional e estrutural (legenda na folha)',
   });
   embedFullWidthDrawing(floorRaster, { bottomPadPt: 2 });
 

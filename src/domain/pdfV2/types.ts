@@ -243,6 +243,10 @@ export type FloorPlanDimension = {
   textAnchor?: { x: number; y: number };
   /** Rotação do texto em graus (ex.: -90 para cota vertical). */
   textRotateDeg?: number;
+  /**
+   * Hierarquia visual entre cotas (menos competição): envelope do compartimento → corredor → vão de baia.
+   */
+  dimTier?: 'primary' | 'secondary' | 'detail';
 };
 
 export type FloorPlanLabel = {

@@ -417,6 +417,7 @@ export function buildFloorPlanModelV2(
     x2: bx + boxW,
     y2: dimY,
     text: `Comprimento do galpão: ${formatMm(L)}`,
+    dimTier: 'primary',
   });
   const dimX = bx - 44;
   dimensionLines.push({
@@ -427,6 +428,7 @@ export function buildFloorPlanModelV2(
     y2: by + boxH,
     text: `Largura do galpão: ${formatMm(W)}`,
     offset: -28,
+    dimTier: 'primary',
   });
 
   const corridorZone = pickCorridorZoneForPlanDimension(geometry.circulationZones);
@@ -471,6 +473,7 @@ export function buildFloorPlanModelV2(
         ],
         textAnchor: { x: (cLeft + cRight) / 2, y: textY },
         textRotateDeg: 0,
+        dimTier: 'secondary',
       });
     } else {
       const canPlaceLeft = cLeft > margin + 24;
@@ -491,6 +494,46 @@ export function buildFloorPlanModelV2(
         ],
         textAnchor: { x: textX, y: (cTop + cBot) / 2 },
         textRotateDeg: -90,
+        dimTier: 'secondary',
+      });
+    }
+  }
+
+  const meta = geometry.metadata;
+  const bayRef = structureRects.find(
+    s =>
+      s.variant !== 'tunnel' &&
+      Math.min(s.w, s.h) > 35 &&
+      meta.beamAlongModuleMm > 0
+  );
+  if (bayRef) {
+    const halfMod = bayRef.segmentType === 'half';
+    const t0 = halfMod ? 0.08 : 0.25;
+    const t1 = halfMod ? 0.92 : 0.75;
+    const bayText = `Vão por baia: ${formatMm(meta.beamAlongModuleMm)}`;
+    const alongX = geometry.beamSpanDirection === 'x';
+    if (alongX) {
+      const yB = bayRef.y + bayRef.h - 12;
+      dimensionLines.push({
+        id: 'dim-bay',
+        x1: bayRef.x + bayRef.w * t0,
+        y1: yB,
+        x2: bayRef.x + bayRef.w * t1,
+        y2: yB,
+        text: bayText,
+        dimTier: 'detail',
+      });
+    } else {
+      const xB = bayRef.x + Math.min(20, bayRef.w * 0.18);
+      dimensionLines.push({
+        id: 'dim-bay',
+        x1: xB,
+        y1: bayRef.y + bayRef.h * t0,
+        x2: xB,
+        y2: bayRef.y + bayRef.h * t1,
+        text: bayText,
+        textMode: 'corridor-inline',
+        dimTier: 'detail',
       });
     }
   }
@@ -572,7 +615,15 @@ function planCaptionLabels(
       : '1.º eixo de feixe: elevado — folga sob o primeiro patamar (referência)',
     className: 'fp-first-level',
   };
-  return [line, firstLevel];
+  const implant: FloorPlanLabel = {
+    id: 'cap-implant',
+    x: VB_W / 2,
+    y: PAD + 68,
+    text:
+      'Implantação: módulos = picking · corredores = circulação de empilhador · limite do compartimento em tracejado',
+    className: 'fp-implantacao-hint',
+  };
+  return [line, firstLevel, implant];
 }
 
 function planModuleSingleCaption(geometry: LayoutGeometry): string {

@@ -1,5 +1,6 @@
 import type {
   FloorPlanCirculationSemantic,
+  FloorPlanDimension,
   FloorPlanModelV2,
   GuardRailPositionCode,
 } from './types';
@@ -100,7 +101,9 @@ function corridorDisplayLabel(
       break;
     case 'operational':
     default:
-      text = compact ? 'Corredor op.' : 'Corredor operacional';
+      text = compact
+        ? 'Corredor op.'
+        : 'Corredor operacional (empilhador)';
       break;
   }
   const fontSize = Math.max(
@@ -242,7 +245,7 @@ function appendFloorPlanConfigurationLegend(
   const a = model.planAccessories;
   const pad = 14;
   const boxW = Math.min(468, w - 2 * pad - 8);
-  const boxH = 156;
+  const boxH = 174;
   const x0 = pad;
   const y0 = h - pad - boxH;
   parts.push(
@@ -326,6 +329,9 @@ function appendFloorPlanConfigurationLegend(
     ly += 18;
   }
 
+  parts.push(
+    `<text x="${lx}" y="${y0 + boxH - 28}" font-size="9.5px" fill="#475569" font-family="${SVG_FONT_FAMILY}">Eixos escuros entre módulos: continuidade de montantes · túnel: faixa inferior = passagem sem picking ao piso.</text>`
+  );
   parts.push(
     `<text x="${lx}" y="${y0 + boxH - 10}" font-size="9px" fill="#94a3b8" font-family="${SVG_FONT_FAMILY}">Mesma convenção que a vista frontal e o resumo técnico.</text>`
   );
@@ -516,25 +522,140 @@ function orientationArrowSvg(
   beamAlong: 'x' | 'y'
 ): string {
   const pad = 8;
-  const gw = 200;
-  const gh = 54;
+  const gw = 228;
+  const gh = 58;
   const gx = o.x + o.w - gw - pad;
   const gy = o.y + o.h - gh - pad;
   const ax = gx + gw / 2;
   const shaft =
     beamAlong === 'x'
-      ? `<line x1="${gx + 8}" y1="${gy + 36}" x2="${gx + gw - 22}" y2="${gy + 36}" stroke="#0f172a" stroke-width="2.6"/><polygon points="${gx + gw - 14},${gy + 36} ${gx + gw - 28},${gy + 26} ${gx + gw - 28},${gy + 46}" fill="#0f172a"/>`
-      : `<line x1="${ax}" y1="${gy + gh - 10}" x2="${ax}" y2="${gy + 12}" stroke="#0f172a" stroke-width="2.6"/><polygon points="${ax},${gy + 6} ${ax - 8},${gy + 18} ${ax + 8},${gy + 18}" fill="#0f172a"/>`;
+      ? `<line x1="${gx + 8}" y1="${gy + 38}" x2="${gx + gw - 22}" y2="${gy + 38}" stroke="#0f172a" stroke-width="2.6"/><polygon points="${gx + gw - 14},${gy + 38} ${gx + gw - 28},${gy + 28} ${gx + gw - 28},${gy + 48}" fill="#0f172a"/>`
+      : `<line x1="${ax}" y1="${gy + gh - 10}" x2="${ax}" y2="${gy + 14}" stroke="#0f172a" stroke-width="2.6"/><polygon points="${ax},${gy + 6} ${ax - 8},${gy + 18} ${ax + 8},${gy + 18}" fill="#0f172a"/>`;
   const sub =
     beamAlong === 'x'
-      ? 'Linhas paralelas ao comprimento do galpão'
-      : 'Linhas paralelas à largura do galpão';
+      ? 'Eixo das linhas · circulação do empilhador ao longo do vão'
+      : 'Eixo das linhas · circulação do empilhador ao longo do vão';
   return `<g>
     <rect x="${gx}" y="${gy}" width="${gw}" height="${gh}" rx="5" fill="#f8fafc" fill-opacity="0.96" stroke="#cbd5e1" stroke-width="0.9"/>
-    <text x="${gx + 10}" y="${gy + 18}" font-size="11.5px" fill="#334155" font-family="${SVG_FONT_FAMILY}" font-weight="700">Sentido de entrada / operação</text>
-    <text x="${gx + 10}" y="${gy + 34}" font-size="10px" fill="#64748b" font-family="${SVG_FONT_FAMILY}">${escapeXml(sub)}</text>
+    <text x="${gx + 10}" y="${gy + 18}" font-size="11.5px" fill="#334155" font-family="${SVG_FONT_FAMILY}" font-weight="700">Sentido de trabalho (empilhador)</text>
+    <text x="${gx + 10}" y="${gy + 34}" font-size="9.5px" fill="#64748b" font-family="${SVG_FONT_FAMILY}">${escapeXml(sub)}</text>
     ${shaft}
   </g>`;
+}
+
+function dimTierOf(d: FloorPlanDimension): 'primary' | 'secondary' | 'detail' {
+  if (d.dimTier) return d.dimTier;
+  if (d.id === 'dim-length' || d.id === 'dim-width') return 'primary';
+  if (d.id === 'dim-corridor') return 'secondary';
+  return 'detail';
+}
+
+function dimClassFor(d: FloorPlanDimension): string {
+  switch (dimTierOf(d)) {
+    case 'primary':
+      return 'fp-dim-primary';
+    case 'detail':
+      return 'fp-dim-detail';
+    default:
+      return 'fp-dim-secondary';
+  }
+}
+
+function dimStrokeMain(d: FloorPlanDimension): number {
+  switch (dimTierOf(d)) {
+    case 'primary':
+      return 1.28;
+    case 'detail':
+      return 0.74;
+    default:
+      return 1.05;
+  }
+}
+
+/** Reforço subtil: corredor operacional como fluxo, não só faixa vazia. */
+function appendCorridorForkliftFlowHints(
+  model: FloorPlanModelV2,
+  parts: string[]
+): void {
+  const arrowCol = '#1d4ed8';
+  for (const c of model.circulationRects) {
+    if (circulationSemantic(c) !== 'operational') continue;
+    const minSide = Math.min(c.w, c.h);
+    if (minSide < 40) continue;
+    const op = 0.48;
+    const sw = 1.25;
+    if (c.w >= c.h) {
+      const yc = c.y + c.h / 2;
+      const xs = [c.x + c.w * 0.18, c.x + c.w * 0.52, c.x + c.w * 0.82];
+      for (const x0 of xs) {
+        const seg = Math.min(20, c.w * 0.055);
+        const x1 = x0 + seg;
+        parts.push(
+          `<line x1="${x0}" y1="${yc}" x2="${x1}" y2="${yc}" stroke="${arrowCol}" stroke-width="${sw}" stroke-linecap="round" opacity="${op}"/>`
+        );
+        parts.push(
+          `<polygon points="${x1 + 4},${yc} ${x1 - 1.5},${yc - 3} ${x1 - 1.5},${yc + 3}" fill="${arrowCol}" opacity="${op + 0.12}"/>`
+        );
+      }
+    } else {
+      const xc = c.x + c.w / 2;
+      const ys = [c.y + c.h * 0.2, c.y + c.h * 0.52, c.y + c.h * 0.82];
+      for (const y0 of ys) {
+        const seg = Math.min(20, c.h * 0.055);
+        const y1 = y0 + seg;
+        parts.push(
+          `<line x1="${xc}" y1="${y0}" x2="${xc}" y2="${y1}" stroke="${arrowCol}" stroke-width="${sw}" stroke-linecap="round" opacity="${op}"/>`
+        );
+        parts.push(
+          `<polygon points="${xc},${y1 + 4} ${xc - 3},${y1 - 1.5} ${xc + 3},${y1 - 1.5}" fill="${arrowCol}" opacity="${op + 0.12}"/>`
+        );
+      }
+    }
+  }
+}
+
+/** Continuidade estrutural: eixo de montante na junção entre módulos consecutivos na mesma fileira. */
+function appendInterModuleColumnContinuity(
+  model: FloorPlanModelV2,
+  parts: string[]
+): void {
+  const alongX = model.beamSpanAlong === 'x';
+  const rects = model.structureRects.filter(s => s.variant !== 'tunnel');
+  const rowKey = (r: (typeof rects)[number]): string =>
+    alongX
+      ? `${Math.round(r.y * 2)}_${Math.round(r.h * 2)}`
+      : `${Math.round(r.x * 2)}_${Math.round(r.w * 2)}`;
+  const groups = new Map<string, typeof rects>();
+  for (const r of rects) {
+    const k = rowKey(r);
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k)!.push(r);
+  }
+  const COL = '#64748b';
+  for (const list of groups.values()) {
+    list.sort((a, b) => (alongX ? a.x - b.x : a.y - b.y));
+    for (let i = 0; i < list.length - 1; i++) {
+      const a = list[i]!;
+      const b = list[i + 1]!;
+      const gap = alongX ? b.x - (a.x + a.w) : b.y - (a.y + a.h);
+      if (Math.abs(gap) > 2.5) continue;
+      if (alongX) {
+        const x = a.x + a.w;
+        const y0 = Math.min(a.y, b.y);
+        const y1 = Math.max(a.y + a.h, b.y + b.h);
+        parts.push(
+          `<line x1="${x}" y1="${y0}" x2="${x}" y2="${y1}" stroke="${COL}" stroke-width="1.32" stroke-linecap="square" opacity="0.76"/>`
+        );
+      } else {
+        const y = a.y + a.h;
+        const x0 = Math.min(a.x, b.x);
+        const x1 = Math.max(a.x + a.w, b.x + b.w);
+        parts.push(
+          `<line x1="${x0}" y1="${y}" x2="${x1}" y2="${y}" stroke="${COL}" stroke-width="1.32" stroke-linecap="square" opacity="0.76"/>`
+        );
+      }
+    }
+  }
 }
 
 /**
@@ -558,6 +679,10 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
     .fp-circ { font: 700 14px ${SVG_FONT_FAMILY_CSS}; }
     .fp-circ-res { font: 700 12.5px ${SVG_FONT_FAMILY_CSS}; fill: #44403c; }
     .fp-dim { font: 700 18px ${SVG_FONT_FAMILY_CSS}; fill: ${COL_DIM}; }
+    .fp-dim-primary { font: 700 21px ${SVG_FONT_FAMILY_CSS}; fill: #0f172a; letter-spacing: 0.02em; }
+    .fp-dim-secondary { font: 700 16.5px ${SVG_FONT_FAMILY_CSS}; fill: #1e293b; }
+    .fp-dim-detail { font: 600 13.5px ${SVG_FONT_FAMILY_CSS}; fill: #475569; }
+    .fp-implantacao-hint { font: 400 11.5px ${SVG_FONT_FAMILY_CSS}; fill: #64748b; font-style: italic; }
     .fp-mod-num { font-family: ${SVG_FONT_FAMILY_CSS}; font-weight: 600; fill: #1e293b; }
     .fp-mod-half { font-family: ${SVG_FONT_FAMILY_CSS}; font-weight: 600; fill: #4338ca; letter-spacing: 0.02em; }
   </style>`);
@@ -572,6 +697,11 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
       `<path d="M0,9 l9,-9 M-2,2 l4,-4 M5,11 l4,-4" stroke="#6366f1" stroke-width="0.9" opacity="0.42"/>` +
       `</pattern>`
   );
+  parts.push(
+    `<pattern id="fp-tunnel-void-strip" patternUnits="userSpaceOnUse" width="9" height="9" patternTransform="rotate(40)">` +
+      `<path d="M0,9 l9,-9" stroke="#b45309" stroke-width="1.05" opacity="0.5"/>` +
+      `</pattern>`
+  );
   parts.push('</defs>');
   parts.push(`<rect width="${w}" height="${h}" fill="${COL_BG}"/>`);
   const fpPad = 14;
@@ -582,6 +712,10 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
   const o = model.warehouseOutline;
   parts.push(
     `<rect x="${o.x}" y="${o.y}" width="${o.w}" height="${o.h}" fill="${COL_WH_FILL}" stroke="${COL_WH_STROKE}" stroke-width="2"/>`
+  );
+  /** Limite físico do compartimento — lê-se como implantação, não grelha abstracta. */
+  parts.push(
+    `<rect x="${o.x - 5}" y="${o.y - 5}" width="${o.w + 10}" height="${o.h + 10}" fill="none" stroke="#64748b" stroke-width="0.85" stroke-dasharray="7 5" opacity="0.72"/>`
   );
 
   for (const r of model.rowBandRects) {
@@ -713,6 +847,14 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
       parts.push(
         `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="${fillMod}" stroke="${strokeMod}" stroke-width="${sw}"/>`
       );
+      const stripH = Math.max(10, s.h * 0.36);
+      const fsT = Math.min(11.5, Math.max(7.5, s.w * 0.065));
+      parts.push(
+        `<rect x="${s.x}" y="${s.y + s.h - stripH}" width="${s.w}" height="${stripH}" fill="url(#fp-tunnel-void-strip)" stroke="${COL_MOD_TUNNEL_STROKE}" stroke-width="1.05" stroke-dasharray="5 4" opacity="0.94"/>`
+      );
+      parts.push(
+        `<text x="${s.x + s.w / 2}" y="${s.y + s.h - stripH * 0.48}" text-anchor="middle" dominant-baseline="middle" font-size="${fsT}px" fill="#7c2d12" font-family="${SVG_FONT_FAMILY}" font-weight="700" opacity="0.96">Passagem · sem picking ao piso</text>`
+      );
     } else {
       parts.push(
         `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="${fillMod}" stroke="none"/>`
@@ -776,6 +918,8 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
     appendRowBandEnvelope(r, parts);
   }
 
+  appendInterModuleColumnContinuity(model, parts);
+
   for (const s of model.structureRects) {
     if (s.displayIndex === undefined) continue;
     const { fontPx, opacity, nudgeX, nudgeY } = moduleDisplayFontOpacity(
@@ -806,13 +950,15 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
     );
   }
 
+  appendCorridorForkliftFlowHints(model, parts);
+
   parts.push(orientationArrowSvg(o, model.beamSpanAlong));
 
   const dimExtStroke = 0.82;
-  const dimMainStroke = 1.12;
   const tick = 6.5;
 
   for (const d of model.dimensionLines) {
+    const mainW = dimStrokeMain(d);
     if (d.extensions?.length && d.textMode === 'corridor-outside') {
       for (const e of d.extensions) {
         parts.push(
@@ -821,45 +967,46 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
       }
     }
     parts.push(
-      `<line x1="${d.x1}" y1="${d.y1}" x2="${d.x2}" y2="${d.y2}" stroke="${COL_DIM}" stroke-width="${dimMainStroke}"/>`
+      `<line x1="${d.x1}" y1="${d.y1}" x2="${d.x2}" y2="${d.y2}" stroke="${COL_DIM}" stroke-width="${mainW}"/>`
     );
     if (d.textMode === 'corridor-outside') {
       const horiz = Math.abs(d.y2 - d.y1) < 0.5;
       if (horiz) {
         const y = d.y1;
         parts.push(
-          `<line x1="${d.x1}" y1="${y - tick}" x2="${d.x1}" y2="${y + tick}" stroke="${COL_DIM}" stroke-width="${dimMainStroke}"/>`,
-          `<line x1="${d.x2}" y1="${y - tick}" x2="${d.x2}" y2="${y + tick}" stroke="${COL_DIM}" stroke-width="${dimMainStroke}"/>`
+          `<line x1="${d.x1}" y1="${y - tick}" x2="${d.x1}" y2="${y + tick}" stroke="${COL_DIM}" stroke-width="${mainW}"/>`,
+          `<line x1="${d.x2}" y1="${y - tick}" x2="${d.x2}" y2="${y + tick}" stroke="${COL_DIM}" stroke-width="${mainW}"/>`
         );
       } else {
         const x = d.x1;
         parts.push(
-          `<line x1="${x - tick}" y1="${d.y1}" x2="${x + tick}" y2="${d.y1}" stroke="${COL_DIM}" stroke-width="${dimMainStroke}"/>`,
-          `<line x1="${x - tick}" y1="${d.y2}" x2="${x + tick}" y2="${d.y2}" stroke="${COL_DIM}" stroke-width="${dimMainStroke}"/>`
+          `<line x1="${x - tick}" y1="${d.y1}" x2="${x + tick}" y2="${d.y1}" stroke="${COL_DIM}" stroke-width="${mainW}"/>`,
+          `<line x1="${x - tick}" y1="${d.y2}" x2="${x + tick}" y2="${d.y2}" stroke="${COL_DIM}" stroke-width="${mainW}"/>`
         );
       }
     }
 
+    const dCls = dimClassFor(d);
     const midX = (d.x1 + d.x2) / 2;
     const midY = (d.y1 + d.y2) / 2;
     const isVert = Math.abs(d.x2 - d.x1) < 1;
     if (d.textMode === 'corridor-outside' && d.textAnchor) {
       const deg = d.textRotateDeg ?? 0;
       parts.push(
-        `<text transform="translate(${d.textAnchor.x},${d.textAnchor.y}) rotate(${deg})" text-anchor="middle" dominant-baseline="middle" class="fp-dim">${escapeXml(d.text)}</text>`
+        `<text transform="translate(${d.textAnchor.x},${d.textAnchor.y}) rotate(${deg})" text-anchor="middle" dominant-baseline="middle" class="${dCls}">${escapeXml(d.text)}</text>`
       );
     } else if (d.textMode === 'corridor-inline') {
       parts.push(
-        `<text transform="translate(${midX},${midY}) rotate(-90)" text-anchor="middle" dominant-baseline="middle" class="fp-dim">${escapeXml(d.text)}</text>`
+        `<text transform="translate(${midX},${midY}) rotate(-90)" text-anchor="middle" dominant-baseline="middle" class="${dCls}">${escapeXml(d.text)}</text>`
       );
     } else if (isVert) {
       const ox = d.offset ?? -14;
       parts.push(
-        `<text transform="translate(${d.x1 + ox},${midY}) rotate(-90)" text-anchor="middle" class="fp-dim">${escapeXml(d.text)}</text>`
+        `<text transform="translate(${d.x1 + ox},${midY}) rotate(-90)" text-anchor="middle" class="${dCls}">${escapeXml(d.text)}</text>`
       );
     } else {
       parts.push(
-        `<text x="${midX}" y="${d.y1 - 10}" text-anchor="middle" class="fp-dim">${escapeXml(d.text)}</text>`
+        `<text x="${midX}" y="${d.y1 - 10}" text-anchor="middle" class="${dCls}">${escapeXml(d.text)}</text>`
       );
     }
   }
