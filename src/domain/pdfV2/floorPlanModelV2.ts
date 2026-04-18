@@ -6,6 +6,7 @@ import type {
   FloorPlanDimension,
   FloorPlanLabel,
   FloorPlanModelV2,
+  LineStrategyCode,
   RackDepthModeV2,
 } from './types';
 import { buildFloorPlanAccessories } from './visualAccessoriesV2';
@@ -43,6 +44,54 @@ function escapeXml(text: string): string {
 
 function formatMm(mm: number): string {
   return `${Math.round(mm).toLocaleString('pt-BR')} mm`;
+}
+
+function layoutStrategyCaption(geometry: LayoutGeometry): string {
+  const ls = geometry.metadata.lineStrategy;
+  const depth =
+    geometry.metadata.rackDepthMode === 'double'
+      ? 'fileiras em dupla costas'
+      : 'fileiras simples';
+  const ori =
+    geometry.orientation === 'along_length'
+      ? 'vão das longarinas ∥ comprimento do compartimento'
+      : 'vão das longarinas ∥ largura do compartimento';
+  const strat: Record<LineStrategyCode, string> = {
+    APENAS_SIMPLES: 'Estratégia: só linhas simples',
+    APENAS_DUPLOS: 'Estratégia: só linhas duplas',
+    MELHOR_LAYOUT: 'Estratégia: melhor layout (otimizado)',
+  };
+  return `${strat[ls] ?? 'Estratégia de linhas'} · ${depth} · ${ori}`;
+}
+
+function buildRowLineMarkersFromBands(
+  rowBandRects: FloorPlanModelV2['rowBandRects'],
+  beamSpanDirection: 'x' | 'y'
+): NonNullable<FloorPlanModelV2['rowLineMarkers']> {
+  const out: NonNullable<FloorPlanModelV2['rowLineMarkers']> = [];
+  for (const r of rowBandRects) {
+    if (r.showInRowLegend === false) continue;
+    const lineOnly = r.rowCaption.split('—')[0]?.trim() ?? r.rowCaption;
+    const fs = Math.max(9, Math.min(13, Math.min(r.w, r.h) * 0.052));
+    if (beamSpanDirection === 'x') {
+      out.push({
+        id: `row-m-${r.id}`,
+        text: lineOnly,
+        x: r.x + 4,
+        y: r.y + fs + 1,
+        fontSize: fs,
+      });
+    } else {
+      out.push({
+        id: `row-m-${r.id}`,
+        text: lineOnly,
+        x: r.x + fs + 3,
+        y: r.y + r.h / 2 + fs * 0.2,
+        fontSize: fs,
+      });
+    }
+  }
+  return out;
 }
 
 /**
@@ -578,6 +627,17 @@ export function buildFloorPlanModelV2(
     ...rowLegendBlock,
   ];
 
+  const rowLineMarkers = buildRowLineMarkersFromBands(
+    rowBandRects,
+    geometry.beamSpanDirection
+  );
+
+  const tunnelOperationHint = geometry.metadata.hasTunnel
+    ? geometry.rows.length > 1
+      ? 'Ligação entre fileiras · trânsito ao piso com picking nos níveis superiores'
+      : 'Passagem ao piso · picking nos patamares acima do vão'
+    : undefined;
+
   return {
     viewBox: { w: VB_W, h: VB_H },
     warehouseOutline: { x: bx, y: by, w: boxW, h: boxH },
@@ -591,6 +651,8 @@ export function buildFloorPlanModelV2(
     dimensionLines,
     labels,
     moduleLevelTint,
+    rowLineMarkers,
+    tunnelOperationHint,
   };
 }
 
@@ -623,7 +685,14 @@ function planCaptionLabels(
       'Implantação: módulos = picking · corredores = circulação de empilhador · limite do compartimento em tracejado',
     className: 'fp-implantacao-hint',
   };
-  return [line, firstLevel, implant];
+  const strategy: FloorPlanLabel = {
+    id: 'cap-strategy',
+    x: VB_W / 2,
+    y: PAD + 86,
+    text: layoutStrategyCaption(geometry),
+    className: 'fp-strategy-hint',
+  };
+  return [line, firstLevel, implant, strategy];
 }
 
 function planModuleSingleCaption(geometry: LayoutGeometry): string {

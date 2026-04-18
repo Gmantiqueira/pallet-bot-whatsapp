@@ -221,6 +221,20 @@ export type FloorPlanModelV2 = {
   }[];
   dimensionLines: FloorPlanDimension[];
   labels: FloorPlanLabel[];
+  /**
+   * Identificação de cada fileira no próprio desenho (ex.: «Linha 1» no início da faixa ao longo do vão).
+   */
+  rowLineMarkers?: {
+    id: string;
+    text: string;
+    x: number;
+    y: number;
+    fontSize: number;
+  }[];
+  /**
+   * Texto extra no módulo túnel quando aplicável (continuidade entre fileiras / uso operacional).
+   */
+  tunnelOperationHint?: string;
 };
 
 export type FloorPlanDimension = {
