@@ -902,7 +902,15 @@ function drawFrontRack(
   );
   const g = buildBeamGeometry(data, rackMaxW, rackMaxH, ox, oy, pw, ph);
   const slimmed = frontSlimUprightsWidenBay(g.uprightWidthsPx, g.beamPx, nMod);
-  const uprightWidthsPx = slimmed.uprightWidthsPx;
+  const uprightWidthsPx = [...slimmed.uprightWidthsPx];
+  const nUpr = uprightWidthsPx.length;
+  if (nUpr >= 2) {
+    const u0 = uprightWidthsPx[0]!;
+    const u1 = uprightWidthsPx[nUpr - 1]!;
+    const avg = (u0 + u1) / 2;
+    uprightWidthsPx[0] = avg;
+    uprightWidthsPx[nUpr - 1] = avg;
+  }
   const beamWithFrontVis = slimmed.beamPx;
   const gapPx = g.gapPx;
   const {

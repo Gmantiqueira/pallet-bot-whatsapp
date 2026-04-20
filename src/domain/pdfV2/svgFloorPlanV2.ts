@@ -63,6 +63,10 @@ const COL_TUNNEL_STROKE = '#b45309';
 const COL_RESIDUAL_FILL = '#f4f4f5';
 const COL_RESIDUAL_STROKE = '#a1a1aa';
 const COL_DIM = '#111827';
+/** Reserva inferior do viewBox para legenda + cotas (encaixe global do desenho). */
+const FLOOR_PLAN_LEGEND_RESERVE_PX = 458;
+/** Junção de módulos túnel consecutivos ao longo do vão (px). */
+const TUNNEL_MERGE_GAP_EPS_PX = 3;
 /** Contorno da **faixa da linha** (unidade contínua), desenhado por cima dos módulos. */
 const COL_ROW_ENVELOPE_STROKE = '#334155';
 const ROW_ENVELOPE_SW = 2.92;
@@ -118,6 +122,193 @@ function sortCirculation(
     (a, b) =>
       SEM_ORDER[circulationSemantic(a)] - SEM_ORDER[circulationSemantic(b)]
   );
+}
+
+type StructureRect = FloorPlanModelV2['structureRects'][number];
+type CirculationRect = FloorPlanModelV2['circulationRects'][number];
+
+function rowBandKeyForMerge(
+  r: { x: number; y: number; w: number; h: number },
+  alongX: boolean
+): string {
+  return alongX
+    ? `${Math.round(r.y * 2)}_${Math.round(r.h * 2)}`
+    : `${Math.round(r.x * 2)}_${Math.round(r.w * 2)}`;
+}
+
+/**
+ * Funde módulos túnel consecutivos na mesma fileira (mesma ordem de sobreposição que na geometria).
+ */
+function mergeTunnelStructureRects(
+  rects: StructureRect[],
+  beamAlong: 'x' | 'y'
+): StructureRect[] {
+  const alongX = beamAlong === 'x';
+  const out: StructureRect[] = [];
+  let i = 0;
+  let mergeIdx = 0;
+  while (i < rects.length) {
+    const r = rects[i]!;
+    if (r.variant !== 'tunnel') {
+      out.push(r);
+      i++;
+      continue;
+    }
+    const k = rowBandKeyForMerge(r, alongX);
+    let cur = { ...r };
+    i++;
+    while (i < rects.length) {
+      const nxt = rects[i]!;
+      if (nxt.variant !== 'tunnel') break;
+      if (rowBandKeyForMerge(nxt, alongX) !== k) break;
+      const gap = alongX
+        ? nxt.x - (cur.x + cur.w)
+        : nxt.y - (cur.y + cur.h);
+      if (Math.abs(gap) > TUNNEL_MERGE_GAP_EPS_PX) break;
+      const x0 = Math.min(cur.x, nxt.x);
+      const y0 = Math.min(cur.y, nxt.y);
+      const x1 = Math.max(cur.x + cur.w, nxt.x + nxt.w);
+      const y1 = Math.max(cur.y + cur.h, nxt.y + nxt.h);
+      cur = { ...cur, x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+      i++;
+    }
+    out.push({
+      ...cur,
+      id: `tunnel-merged-${mergeIdx++}`,
+      displayIndex: undefined,
+    });
+  }
+  return out;
+}
+
+/** Funde zonas de circulação «túnel» adjacentes (mesma ordem de pintura que sortCirculation). */
+function mergeTunnelCirculationRects(
+  rects: CirculationRect[],
+  beamAlong: 'x' | 'y'
+): CirculationRect[] {
+  const alongX = beamAlong === 'x';
+  const sorted = sortCirculation(rects);
+  const out: CirculationRect[] = [];
+  let i = 0;
+  let cIdx = 0;
+  while (i < sorted.length) {
+    const r = sorted[i]!;
+    if (circulationSemantic(r) !== 'tunnel') {
+      out.push(r);
+      i++;
+      continue;
+    }
+    const k = rowBandKeyForMerge(r, alongX);
+    let cur = { ...r };
+    i++;
+    while (i < sorted.length) {
+      const nxt = sorted[i]!;
+      if (circulationSemantic(nxt) !== 'tunnel') break;
+      if (rowBandKeyForMerge(nxt, alongX) !== k) break;
+      const gap = alongX
+        ? nxt.x - (cur.x + cur.w)
+        : nxt.y - (cur.y + cur.h);
+      if (Math.abs(gap) > TUNNEL_MERGE_GAP_EPS_PX) break;
+      const x0 = Math.min(cur.x, nxt.x);
+      const y0 = Math.min(cur.y, nxt.y);
+      const x1 = Math.max(cur.x + cur.w, nxt.x + nxt.w);
+      const y1 = Math.max(cur.y + cur.h, nxt.y + nxt.h);
+      cur = { ...cur, x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+      i++;
+    }
+    out.push({ ...cur, id: `tunnel-circ-merged-${cIdx++}` });
+  }
+  return out;
+}
+
+function orientationArrowBounds(
+  o: FloorPlanModelV2['warehouseOutline'],
+  _beamAlong: 'x' | 'y'
+): { minX: number; minY: number; maxX: number; maxY: number } {
+  const pad = 8;
+  const gw = 228;
+  const gh = 58;
+  const gx = o.x + o.w - gw - pad;
+  const gy = o.y + o.h - gh - pad;
+  return { minX: gx, minY: gy, maxX: gx + gw, maxY: gy + gh };
+}
+
+function computeFloorPlanDrawingBounds(
+  model: FloorPlanModelV2,
+  structureDraw: StructureRect[],
+  circulationDraw: CirculationRect[]
+): { minX: number; minY: number; maxX: number; maxY: number } {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  const bump = (x0: number, y0: number, x1: number, y1: number) => {
+    minX = Math.min(minX, x0);
+    minY = Math.min(minY, y0);
+    maxX = Math.max(maxX, x1);
+    maxY = Math.max(maxY, y1);
+  };
+  const o = model.warehouseOutline;
+  bump(o.x - 8, o.y - 8, o.x + o.w + 8, o.y + o.h + 8);
+  for (const s of structureDraw) bump(s.x, s.y, s.x + s.w, s.y + s.h);
+  for (const c of circulationDraw) bump(c.x, c.y, c.x + c.w, c.y + c.h);
+  for (const d of model.dimensionLines) {
+    bump(
+      Math.min(d.x1, d.x2) - 8,
+      Math.min(d.y1, d.y2) - 8,
+      Math.max(d.x1, d.x2) + 8,
+      Math.max(d.y1, d.y2) + 8
+    );
+    if (d.textAnchor) {
+      bump(
+        d.textAnchor.x - 60,
+        d.textAnchor.y - 28,
+        d.textAnchor.x + 60,
+        d.textAnchor.y + 28
+      );
+    } else {
+      const midX = (d.x1 + d.x2) / 2;
+      const midY = (d.y1 + d.y2) / 2;
+      const isVert = Math.abs(d.x2 - d.x1) < 1;
+      if (isVert) {
+        const ox = d.offset ?? -14;
+        bump(d.x1 + ox - 48, midY - 130, d.x1 + ox + 32, midY + 130);
+      } else {
+        bump(midX - 220, d.y1 - 38, midX + 220, d.y1 + 14);
+      }
+    }
+  }
+  const ab = orientationArrowBounds(o, model.beamSpanAlong);
+  bump(ab.minX, ab.minY, ab.maxX, ab.maxY);
+  bump(o.x - 16, o.y - 16, o.x + o.w + 16, o.y + o.h + 16);
+  return { minX, minY, maxX, maxY };
+}
+
+function fitTransformForDrawingBounds(
+  b: { minX: number; minY: number; maxX: number; maxY: number },
+  viewW: number,
+  viewH: number,
+  fpPad: number,
+  legendReservePx: number
+): string {
+  const SAFE = 16;
+  const safeL = fpPad + SAFE;
+  const safeT = fpPad + SAFE;
+  const safeR = viewW - fpPad - SAFE;
+  const safeB = viewH - fpPad - SAFE - legendReservePx;
+  const bw = Math.max(1, b.maxX - b.minX);
+  const bh = Math.max(1, b.maxY - b.minY);
+  const sx = (safeR - safeL) / bw;
+  const sy = (safeB - safeT) / bh;
+  const sc = Math.min(1, sx, sy);
+  if (sc >= 0.998) return '';
+  const cx = (b.minX + b.maxX) / 2;
+  const cy = (b.minY + b.maxY) / 2;
+  const tcx = (safeL + safeR) / 2;
+  const tcy = (safeT + safeB) / 2;
+  const tx = tcx - sc * cx;
+  const ty = tcy - sc * cy;
+  return `translate(${tx.toFixed(3)},${ty.toFixed(3)}) scale(${sc.toFixed(5)})`;
 }
 
 /**
@@ -603,10 +794,11 @@ function dimStrokeColor(d: FloorPlanDimension): string {
 /** Continuidade estrutural: eixo de montante na junção entre módulos consecutivos na mesma fileira. */
 function appendInterModuleColumnContinuity(
   model: FloorPlanModelV2,
+  structureDraw: StructureRect[],
   parts: string[]
 ): void {
   const alongX = model.beamSpanAlong === 'x';
-  const rects = model.structureRects.filter(s => s.variant !== 'tunnel');
+  const rects = structureDraw.filter(s => s.variant !== 'tunnel');
   const rowKey = (r: (typeof rects)[number]): string =>
     alongX
       ? `${Math.round(r.y * 2)}_${Math.round(r.h * 2)}`
@@ -676,22 +868,22 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
   /** 1.º eixo elevado: leitura imediata na planta (sombreia o módulo). */
   parts.push(
     `<pattern id="fp-first-level-elevated" patternUnits="userSpaceOnUse" width="14" height="14" patternTransform="rotate(35)">` +
-      `<path d="M-3,17 l20,-20 M-3,4 l7,-7 M10,17 l11,-11" stroke="#c2410c" stroke-width="0.95" opacity="0.2"/>` +
+      `<path d="M-3,17 l20,-20 M-3,4 l7,-7 M10,17 l11,-11" stroke="#c2410c" stroke-width="0.95" opacity="0.08"/>` +
       `</pattern>`
   );
   parts.push(
     `<pattern id="fp-half-module-hatch" patternUnits="userSpaceOnUse" width="11" height="11" patternTransform="rotate(-38)">` +
-      `<path d="M0,11 l11,-11 M-2,3 l4,-4 M6,13 l4,-4" stroke="#6366f1" stroke-width="0.55" opacity="0.14"/>` +
+      `<path d="M0,11 l11,-11 M-2,3 l4,-4 M6,13 l4,-4" stroke="#6366f1" stroke-width="0.55" opacity="0.06"/>` +
       `</pattern>`
   );
   parts.push(
     `<pattern id="fp-tunnel-void-strip" patternUnits="userSpaceOnUse" width="11" height="11" patternTransform="rotate(40)">` +
-      `<path d="M0,11 l11,-11" stroke="#b45309" stroke-width="0.65" opacity="0.12"/>` +
+      `<path d="M0,11 l11,-11" stroke="#b45309" stroke-width="0.65" opacity="0.05"/>` +
       `</pattern>`
   );
   parts.push(
     `<pattern id="fp-residual-hatch" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(32)">` +
-      `<path d="M0,8 l8,-8" stroke="#52525b" stroke-width="0.55" opacity="0.14"/>` +
+      `<path d="M0,8 l8,-8" stroke="#52525b" stroke-width="0.55" opacity="0.06"/>` +
       `</pattern>`
   );
   parts.push('</defs>');
@@ -700,6 +892,28 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
   parts.push(
     `<rect x="${fpPad}" y="${fpPad}" width="${w - 2 * fpPad}" height="${h - 2 * fpPad}" fill="none" stroke="${COL_FRAME}" stroke-width="0.65"/>`
   );
+
+  const structureDraw = mergeTunnelStructureRects(
+    model.structureRects,
+    model.beamSpanAlong
+  );
+  const circulationDraw = mergeTunnelCirculationRects(
+    model.circulationRects,
+    model.beamSpanAlong
+  );
+  const drawingBounds = computeFloorPlanDrawingBounds(
+    model,
+    structureDraw,
+    circulationDraw
+  );
+  const fitTf = fitTransformForDrawingBounds(
+    drawingBounds,
+    w,
+    h,
+    fpPad,
+    FLOOR_PLAN_LEGEND_RESERVE_PX
+  );
+  parts.push(fitTf ? `<g transform="${fitTf}">` : '<g>');
 
   const o = model.warehouseOutline;
   parts.push(
@@ -753,8 +967,7 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
     );
   }
 
-  const sortedCirc = sortCirculation(model.circulationRects);
-  for (const c of sortedCirc) {
+  for (const c of circulationDraw) {
     const sem = circulationSemantic(c);
     let fill: string;
     let stroke: string;
@@ -788,7 +1001,7 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
     );
     if (sem === 'residual') {
       parts.push(
-        `<rect x="${c.x}" y="${c.y}" width="${c.w}" height="${c.h}" fill="url(#fp-residual-hatch)" stroke="none" opacity="0.18"/>`
+        `<rect x="${c.x}" y="${c.y}" width="${c.w}" height="${c.h}" fill="url(#fp-residual-hatch)" stroke="none" opacity="0.08"/>`
       );
     }
     const minSide = Math.min(c.w, c.h);
@@ -803,19 +1016,13 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
       parts.push(
         `<text x="${tcx}" y="${tcy}" text-anchor="middle" dominant-baseline="middle" class="fp-circ-res" font-size="${fontSize}px">${escapeXml(circText)}</text>`
       );
-    } else {
-      const cls = 'fp-circ';
-      const fillT = sem === 'tunnel' ? '#7c2d12' : '#0c4a6e';
-      parts.push(
-        `<text x="${tcx}" y="${tcy}" text-anchor="middle" dominant-baseline="middle" class="${cls}" fill="${fillT}" font-size="${fontSize}px">${escapeXml(circText)}</text>`
-      );
     }
   }
 
   const levelTint = model.moduleLevelTint;
-  const moduleCount = model.structureRects.length;
+  const moduleCount = structureDraw.length;
   const firstOnGround = model.planAccessories.firstLevelOnGround !== false;
-  for (const s of model.structureRects) {
+  for (const s of structureDraw) {
     const isTunnel = s.variant === 'tunnel';
     const isHalf = s.segmentType === 'half';
     const fillMod = isTunnel
@@ -834,17 +1041,17 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
     const sw = isTunnel
       ? Math.max(COL_MOD_STROKE_W, 2.1)
       : isHalf
-        ? COL_MOD_STROKE_W + 0.2
+        ? COL_MOD_STROKE_W + 0.45
         : isDoubleRow
           ? COL_MOD_STROKE_W_DOUBLE
           : COL_MOD_STROKE_W;
-    const halfDash = isHalf ? ' stroke-dasharray="5 3.5"' : '';
+    const halfDash = isHalf ? ' stroke-dasharray="6 4"' : '';
     if (isTunnel) {
       parts.push(
         `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="${fillMod}" stroke="${strokeMod}" stroke-width="${sw}"/>`
       );
       parts.push(
-        `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="url(#fp-tunnel-void-strip)" stroke="none" opacity="0.22"/>`
+        `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="url(#fp-tunnel-void-strip)" stroke="none" opacity="0.09"/>`
       );
       const fsT = Math.min(12, Math.max(9.5, Math.min(s.w, s.h) * 0.065));
       parts.push(
@@ -859,7 +1066,7 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
       );
       if (isHalf) {
         parts.push(
-          `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="url(#fp-half-module-hatch)" stroke="none" opacity="0.28"/>`
+          `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="url(#fp-half-module-hatch)" stroke="none" opacity="0.11"/>`
         );
       }
       if (firstOnGround) {
@@ -872,10 +1079,10 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
         );
       } else {
         parts.push(
-          `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="url(#fp-first-level-elevated)" stroke="none" opacity="0.32"/>`
+          `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="url(#fp-first-level-elevated)" stroke="none" opacity="0.14"/>`
         );
         parts.push(
-          `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="#fff7ed" fill-opacity="0.22" stroke="none"/>`
+          `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="#fff7ed" fill-opacity="0.1" stroke="none"/>`
         );
         parts.push(
           `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="none" stroke="#ea580c" stroke-width="1.65" stroke-dasharray="6 5" opacity="0.88"/>`
@@ -893,10 +1100,11 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
     appendRowBandEnvelope(r, parts);
   }
 
-  appendInterModuleColumnContinuity(model, parts);
+  appendInterModuleColumnContinuity(model, structureDraw, parts);
 
-  for (const s of model.structureRects) {
+  for (const s of structureDraw) {
     if (s.displayIndex === undefined) continue;
+    if (s.variant === 'tunnel') continue;
     const { fontPx, opacity, nudgeX, nudgeY } = moduleDisplayFontOpacity(
       s,
       moduleCount
@@ -908,7 +1116,7 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
     );
   }
 
-  for (const s of model.structureRects) {
+  for (const s of structureDraw) {
     if (s.segmentType !== 'half' || s.displayIndex === undefined) continue;
     const minSide = Math.min(s.w, s.h);
     if (minSide < 18) continue;
@@ -921,7 +1129,7 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
     const fsHalf = Math.max(6.5, Math.min(10, fontPx * 0.4));
     const yHalf = tcy + fontPx * 0.42 + 1;
     parts.push(
-      `<text x="${tcx}" y="${yHalf}" text-anchor="middle" dominant-baseline="middle" class="fp-mod-half" font-size="${fsHalf}px" opacity="${Math.min(0.96, opacity + 0.06)}">${escapeXml('1/2 módulo')}</text>`
+      `<text x="${tcx}" y="${yHalf}" text-anchor="middle" dominant-baseline="middle" class="fp-mod-half" font-size="${fsHalf}px" opacity="${Math.min(0.96, opacity + 0.06)}">${escapeXml('1/2')}</text>`
     );
   }
 
@@ -988,6 +1196,7 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
   }
 
   appendFloorPlanAccessoryGraphics(model, parts);
+  parts.push('</g>');
   appendFloorPlanConfigurationLegend(model, parts);
 
   for (const lb of model.labels) {

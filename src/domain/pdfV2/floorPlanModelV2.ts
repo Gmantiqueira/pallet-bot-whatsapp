@@ -75,7 +75,7 @@ function moduleLevelTintFromMetadata(
   metadata: LayoutGeometry['metadata']
 ): FloorPlanModelV2['moduleLevelTint'] {
   const n = Math.max(1, metadata.structuralLevels);
-  const opacity = Math.min(0.045, 0.022 + (n - 1) * 0.0035);
+  const opacity = Math.min(0.032, 0.016 + (n - 1) * 0.0025);
   return {
     fill: ELEV_BEAM_FILL,
     opacity,
@@ -537,11 +537,17 @@ export function buildFloorPlanModelV2(
 
   const planAccessories = buildFloorPlanAccessories(answers, geometry);
 
+  const hasTunnelOverlayZones = geometry.tunnelOverlays.length > 0;
+  const hasCrossPassageZone = geometry.circulationZones.some(z =>
+    (z.label ?? '').includes('Passagem transversal')
+  );
   const tunnelOperationHint = geometry.metadata.hasTunnel
     ? geometry.rows.length > 1
       ? 'Ligação entre fileiras · trânsito ao piso com picking nos níveis superiores'
       : 'Passagem ao piso · picking nos patamares acima do vão'
-    : undefined;
+    : hasCrossPassageZone || hasTunnelOverlayZones
+      ? 'Faixas de passagem ao piso no desenho: circulação; picking nos níveis superiores (quando aplicável).'
+      : undefined;
 
   const planLegendNotes = {
     moduleIndexHint: planModuleSingleCaption(geometry),
