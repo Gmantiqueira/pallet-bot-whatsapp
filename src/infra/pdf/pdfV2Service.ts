@@ -597,7 +597,44 @@ export async function renderPdfV2(
       { emphasis: row.emphasis }
     );
   }
-  doc.y = boxTop + boxH + 14;
+
+  const notesTop = boxTop + boxH + 14;
+  doc.font(PDFKIT_FONT_BOLD).fontSize(10.25).fillColor(COL_INK);
+  doc.text('INFORMAÇÕES TÉCNICAS', left, notesTop, { width: usableW });
+  const bodyTop = notesTop + 16;
+  const colW = usableW * 0.62;
+  const techBullets = [
+    'Sistema porta-paletes seletivo.',
+    'Carga distribuída uniformemente.',
+    'Necessário nivelamento do piso.',
+    'Respeitar capacidade estrutural.',
+    'Projeto sujeito a validação técnica.',
+  ];
+  doc.font(PDFKIT_FONT_REGULAR).fontSize(8.35).fillColor('#475569');
+  let yBullet = bodyTop;
+  for (const line of techBullets) {
+    doc.text(sanitizeText(`• ${line}`), left, yBullet, {
+      width: colW,
+      lineGap: 1.25,
+    });
+    yBullet = doc.y + 1.5;
+  }
+
+  const detailW = usableW - colW - 18;
+  const detailX = left + colW + 18;
+  doc.font(PDFKIT_FONT_BOLD).fontSize(8.65).fillColor(COL_ACCENT);
+  doc.text('DETALHE CONSTRUTIVO', detailX, bodyTop, { width: detailW });
+  doc.font(PDFKIT_FONT_REGULAR).fontSize(8.15).fillColor('#475569');
+  doc.text(
+    sanitizeText(
+      'Encaixe por garras.\nEstrutura modular para expansão.'
+    ),
+    detailX,
+    bodyTop + 13,
+    { width: detailW, lineGap: 2 }
+  );
+
+  doc.y = Math.max(yBullet, bodyTop + 48) + 18;
 
   doc.addPage();
   beginDrawingSheetHeader('Planta de implantação — porta-paletes', {

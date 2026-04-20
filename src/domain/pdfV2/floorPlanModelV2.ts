@@ -177,15 +177,15 @@ function corridorPlanDimensionLabel(
   const fmt = formatMm(spanMm);
   const t = zone.label ?? '';
   if (t.includes('residual')) {
-    return `Faixa transversal (residual): ${fmt}`;
+    return `Largura — faixa transversal (residual): ${fmt}`;
   }
   if (t.includes('Passagem transversal')) {
-    return `Passagem transversal: ${fmt}`;
+    return `Largura — passagem transversal: ${fmt}`;
   }
   if (t.includes('faixa transversal') && t.includes('Corredor')) {
-    return `Corredor (faixa transversal): ${fmt}`;
+    return `Largura do corredor (faixa transversal): ${fmt}`;
   }
-  return `Corredor operacional: ${fmt}`;
+  return `Largura do corredor operacional: ${fmt}`;
 }
 
 function circulationSemanticFromZone(
@@ -465,7 +465,7 @@ export function buildFloorPlanModelV2(
     y1: dimY,
     x2: bx + boxW,
     y2: dimY,
-    text: `Comprimento do galpão: ${formatMm(L)}`,
+    text: `Comprimento total: ${formatMm(L)}`,
     dimTier: 'primary',
   });
   const dimX = bx - 44;
@@ -475,7 +475,7 @@ export function buildFloorPlanModelV2(
     y1: by,
     x2: dimX,
     y2: by + boxH,
-    text: `Largura do galpão: ${formatMm(W)}`,
+    text: `Largura total: ${formatMm(W)}`,
     offset: -28,
     dimTier: 'primary',
   });

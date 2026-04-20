@@ -40,9 +40,10 @@ describe('serializeElevationPagesV2', () => {
     expect(svg).toContain('H total');
     expect(svg).toMatch(/2 baias/);
     expect(svg).toMatch(/vão/);
-    const kgLabels = svg.match(/1200kg/g) ?? [];
-    // Duas baias: mesma carga em cada vão por patamar (piso + cada intervalo entre eixos).
-    expect(kgLabels.length).toBe((a.levels + 1) * 2);
+    expect(svg).toMatch(/CAPACIDADE = 1\.200 kg por palete/);
+    const pairLabels = svg.match(/PAR DE LONGARINAS/g) ?? [];
+    // Duas baias: rótulo de par de longarinas por nível em cada vão.
+    expect(pairLabels.length).toBe(a.levels * 2);
     // Duas baias: uma longarina por baia e por nível estrutural (sem longarina no piso).
     const orangeBeams = svg.match(/fill="#fb923c"/g) ?? [];
     expect(orangeBeams.length).toBe(a.levels * 2);
@@ -73,7 +74,7 @@ describe('serializeElevationPagesV2', () => {
     const svg = serializeElevationPagesV2(model).lateral;
     expect(svg).not.toContain('ESPINHA');
     // Página PDF omite cabeçalho; legenda de profundidade discreta (secundária vs. frontal).
-    expect(svg).toMatch(/Prof\./);
+    expect(svg).toMatch(/Profundidade da costa/);
     expect(svg).toMatch(/1\.000 mm/);
   });
 

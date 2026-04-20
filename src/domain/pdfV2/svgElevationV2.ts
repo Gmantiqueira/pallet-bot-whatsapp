@@ -5,8 +5,15 @@ import type {
 } from './types';
 import {
   INTER_BAY_GAP_WITHIN_MODULE_MM,
+  MODULE_PALLET_BAYS_PER_LEVEL,
   uprightWidthsMmForFrontBayCount,
 } from './rackModuleSpec';
+import { FALLBACK_EQUAL_GAP_PER_LEVEL_MM } from './elevationLevelGeometryV2';
+import {
+  DEFAULT_PALLET_CAPACITY_KG,
+  PDF_OPERATIONAL_SAFETY_CLEARANCE_MM,
+  formatKgCapacityPtBr,
+} from './pdfTechnicalDrawingDefaults';
 import {
   ELEV_BEAM_EDGE as FV_BEAM_EDGE,
   ELEV_BEAM_FILL as FV_BEAM_FILL,
@@ -46,6 +53,15 @@ const COL_BRACE_STROKE = '#475569';
 
 function escapeXml(text: string): string {
   return sanitizeText(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/** Escape XML sem NFKC — preserva º em rótulos técnicos (ex.: 1º par de longarinas). */
+function escapeXmlPreserveOrdinal(text: string): string {
+  return text
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
@@ -230,6 +246,65 @@ function formatMmPtBr(mm: number): string {
   return `${Math.round(mm).toLocaleString('pt-BR')} mm`;
 }
 
+function resolvePalletCapacityKg(data: ElevationPanelPayload): number {
+  if (
+    typeof data.capacityKgPerLevel === 'number' &&
+    data.capacityKgPerLevel > 0
+  ) {
+    return Math.round(data.capacityKgPerLevel);
+  }
+  return DEFAULT_PALLET_CAPACITY_KG;
+}
+
+function beamPairCapacityKg(data: ElevationPanelPayload): number {
+  return resolvePalletCapacityKg(data) * MODULE_PALLET_BAYS_PER_LEVEL;
+}
+
+function documentLoadHeightMmForElevation(data: ElevationPanelPayload): number {
+  if (typeof data.loadHeightMm === 'number' && data.loadHeightMm > 0) {
+    return Math.round(data.loadHeightMm);
+  }
+  if (typeof data.meanGapMm === 'number' && data.meanGapMm > 30) {
+    return Math.round(data.meanGapMm);
+  }
+  const elev = data.beamElevationsMm;
+  if (elev.length >= 2) {
+    let m = 0;
+    for (let i = 0; i < elev.length - 1; i++) {
+      m = Math.max(m, elev[i + 1]! - elev[i]!);
+    }
+    if (m > 30) return Math.round(m);
+  }
+  return Math.round(FALLBACK_EQUAL_GAP_PER_LEVEL_MM);
+}
+
+function documentForkliftReachMm(data: ElevationPanelPayload): number {
+  const loadH = documentLoadHeightMmForElevation(data);
+  const safety = PDF_OPERATIONAL_SAFETY_CLEARANCE_MM;
+  const elev = data.beamElevationsMm;
+  const levels = Math.max(1, Math.floor(data.levels));
+  let topBeamMm = 0;
+  if (elev.length > levels) {
+    topBeamMm = elev[levels - 1] ?? 0;
+  } else if (elev.length >= 2) {
+    topBeamMm = elev[elev.length - 2] ?? 0;
+  }
+  if (topBeamMm <= 0) {
+    return Math.round(data.uprightHeightMm + safety);
+  }
+  return Math.round(topBeamMm + loadH + safety);
+}
+
+/** Notas à direita da cadeia de cotas — só vista frontal. */
+function frontOperationalAnnotationLines(data: ElevationPanelPayload): string[] {
+  const loadH = documentLoadHeightMmForElevation(data);
+  const reach = documentForkliftReachMm(data);
+  return [
+    `ALT. MÁX. EMPILHADEIRA = ${reach.toLocaleString('pt-BR')} mm`,
+    `ALT. MÁX. CARGA = ${loadH.toLocaleString('pt-BR')} mm`,
+  ];
+}
+
 function dimensionLineHArrows(
   x1: number,
   y: number,
@@ -367,7 +442,8 @@ function drawVerticalDimChain(
   labelScale: number,
   tunnelDim?: { clearanceMm: number; yPassTop: number },
   hasGroundLevel?: boolean,
-  structuralTopMm?: number
+  structuralTopMm?: number,
+  appendRightLines?: string[]
 ): string {
   const ls = labelScale;
   const nB = beamYsPx.length;
@@ -472,6 +548,18 @@ function drawVerticalDimChain(
     )
   );
 
+  if (appendRightLines && appendRightLines.length > 0) {
+    let yN = (yTop + yFloor) / 2 + 14 * ls;
+    for (const line of appendRightLines) {
+      parts.push(
+        `<text x="${xTotal + 5}" y="${yN}" font-size="${7 * ls}px" fill="${DIM_MINOR}" font-family="${SVG_FONT_FAMILY}" font-weight="600">${escapeXml(
+          line
+        )}</text>`
+      );
+      yN += 9 * ls;
+    }
+  }
+
   const segLabel = (idx: number): string => {
     if (tunnelSplit) {
       if (idx === 0) return 'Vão túnel';
@@ -481,7 +569,7 @@ function drawVerticalDimChain(
           ? 'Últ. longarina → topo coluna'
           : 'Topo / tampo';
       }
-      return `Livre ${idx - 1}–${idx}`;
+      return `Espaço entre eixos (nív. ${idx - 1}–${idx})`;
     }
     if (idx === 0) {
       return hasGroundLevel ? 'Piso → 1.º eixo (sem long.)' : '1.º eixo';
@@ -491,7 +579,7 @@ function drawVerticalDimChain(
         ? 'Últ. longarina → topo coluna'
         : 'Topo / tampo';
     }
-    return `Livre ${idx}–${idx + 1}`;
+    return `Espaço entre eixos (nív. ${idx}–${idx + 1})`;
   };
 
   for (let k = 0; k < detailCount; k++) {
@@ -1052,41 +1140,31 @@ function drawFrontRack(
     }
   }
 
-  if (
-    typeof data.capacityKgPerLevel === 'number' &&
-    data.capacityKgPerLevel > 0
-  ) {
-    const capText = `${Math.round(data.capacityKgPerLevel)}kg`;
-    const capFs = 12.6 * ls;
-    const placeCapInEachBay = (
-      ty: number,
-      fill: string
-    ): void => {
-      for (const bay of bays) {
-        const cx = (bay.left + bay.right) / 2;
-        parts.push(
-          `<text x="${cx}" y="${ty}" text-anchor="middle" font-size="${capFs}px" fill="${fill}" font-family="${SVG_FONT_FAMILY}" font-weight="700">${escapeXml(
-            capText
-          )}</text>`
-        );
-      }
-    };
-    if (
-      data.hasGroundLevel === true &&
-      !showTunnelOpening &&
-      typeof beamYsPx[0] === 'number'
-    ) {
-      const ty = (beamYsPx[0]! + rackBottom) / 2 + 2.6 * ls;
-      placeCapInEachBay(ty, '#047857');
+  const palletKg = resolvePalletCapacityKg(data);
+  const pairKg = beamPairCapacityKg(data);
+  const capFsSmall = 6.85 * ls;
+  const capLinePallet = `CAPACIDADE = ${formatKgCapacityPtBr(palletKg)} kg por palete`;
+  parts.push(
+    `<text x="${(faceSpanLeft + faceSpanRight) / 2}" y="${dimTopY - 20 * ls}" text-anchor="middle" font-size="${capFsSmall}px" fill="${DIM_MINOR}" stroke="${COL_BG}" stroke-width="${0.28 * ls}" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="600">${escapeXml(
+      capLinePallet
+    )}</text>`
+  );
+  for (let j = 0; j < nStorageBeams; j++) {
+    const yy = beamYsPx[j]!;
+    if (showTunnelOpening && yy >= yPassTop - beamTh * 0.55) {
+      continue;
     }
-    for (let j = 0; j < nStorageBeams; j++) {
-      const yy = beamYsPx[j]!;
-      if (showTunnelOpening && yy >= yPassTop - beamTh * 0.55) {
-        continue;
-      }
-      const bh = Math.max(beamTh, 2.2);
-      const ty = yy - bh / 2 - 3.8 * ls;
-      placeCapInEachBay(ty, '#111827');
+    const bh = Math.max(beamTh, 2.2);
+    const ty = yy - bh / 2 - 3.2 * ls;
+    const ord = j + 1;
+    const pairLine = `${ord}\u00BA PAR DE LONGARINAS = ${formatKgCapacityPtBr(pairKg)} kg`;
+    for (const bay of bays) {
+      const cx = (bay.left + bay.right) / 2;
+      parts.push(
+        `<text x="${cx}" y="${ty}" text-anchor="middle" font-size="${capFsSmall}px" fill="${DIM_MINOR}" stroke="${COL_BG}" stroke-width="${0.25 * ls}" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="600">${escapeXmlPreserveOrdinal(
+          pairLine
+        )}</text>`
+      );
     }
   }
 
@@ -1118,7 +1196,7 @@ function drawFrontRack(
     dimensionLineHArrows(rx, rackBottom + 26 * ls, rx + totalW, DIM_MINOR)
   );
   parts.push(
-    `<text x="${rx + totalW / 2}" y="${rackBottom + 44 * ls}" text-anchor="middle" font-size="${9 * ls}px" fill="#334155" font-family="${SVG_FONT_FAMILY}">Largura total ${escapeXml(formatMmPtBr(Math.round(totalWidthMm)))}</text>`
+    `<text x="${rx + totalW / 2}" y="${rackBottom + 44 * ls}" text-anchor="middle" font-size="${9 * ls}px" fill="#334155" font-family="${SVG_FONT_FAMILY}">Largura total da face: ${escapeXml(formatMmPtBr(Math.round(totalWidthMm)))}</text>`
   );
 
   parts.push(
@@ -1143,7 +1221,8 @@ function drawFrontRack(
       ls,
       showTunnelOpening ? { clearanceMm: clearanceMm, yPassTop } : undefined,
       data.hasGroundLevel === true,
-      data.structuralTopMm
+      data.structuralTopMm,
+      frontOperationalAnnotationLines(data)
     )
   );
 
@@ -1384,6 +1463,29 @@ function drawLateral(
     );
   }
 
+  const palletKgLat = resolvePalletCapacityKg(data);
+  const pairKgLat = beamPairCapacityKg(data);
+  const capLatFs = 6.75 * ls;
+  const mxLat = (bayLeft + bayRight) / 2;
+  parts.push(
+    `<text x="${mxLat}" y="${y0 - 8 * ls}" text-anchor="middle" font-size="${capLatFs}px" fill="${DIM_MINOR}" stroke="${COL_BG}" stroke-width="${0.25 * ls}" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="600">${escapeXml(
+      `CAPACIDADE = ${formatKgCapacityPtBr(palletKgLat)} kg por palete`
+    )}</text>`
+  );
+  for (let j = 0; j < nLatBeams; j++) {
+    const yy = beamYLocal(j);
+    if (showTunnelOpening && yy >= yPassTop - bhLat * 0.55) {
+      continue;
+    }
+    const ty = yy - bhLat / 2 - 2.8 * ls;
+    const pairLineLat = `${j + 1}\u00BA PAR DE LONGARINAS = ${formatKgCapacityPtBr(pairKgLat)} kg`;
+    parts.push(
+      `<text x="${mxLat}" y="${ty}" text-anchor="middle" font-size="${capLatFs}px" fill="${DIM_MINOR}" stroke="${COL_BG}" stroke-width="${0.22 * ls}" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="600">${escapeXmlPreserveOrdinal(
+        pairLineLat
+      )}</text>`
+    );
+  }
+
   for (let j = 0; j < storageTiers; j++) {
     const yLo = beamYLocal(j);
     const yHi = beamYLocal(j + 1);
@@ -1395,7 +1497,9 @@ function drawLateral(
   );
   parts.push(
     `<text x="${x0 + dw / 2}" y="${floorTopLat + 38 * ls}" text-anchor="middle" font-size="${8.25 * ls}px" fill="#64748b" font-family="${SVG_FONT_FAMILY}">${escapeXml(
-      `Prof. ${formatMmPtBr(Math.round(sliceMm))}`
+      isDouble
+        ? `Profundidade da costa: ${formatMmPtBr(Math.round(sliceMm))} (dupla costas em planta)`
+        : `Profundidade da costa: ${formatMmPtBr(Math.round(sliceMm))}`
     )}</text>`
   );
 

@@ -294,6 +294,11 @@ export type ElevationPanelPayload = {
   /** Corredor principal (mm) — contexto operacional no PDF. */
   corridorMm: number;
   capacityKgPerLevel: number;
+  /**
+   * Altura útil de carga por nível (mm), quando conhecida — documentação ALT. MÁX. CARGA.
+   * Ausente: deriva-se de `meanGapMm` / geometria de eixos.
+   */
+  loadHeightMm?: number;
   tunnel: boolean;
   /** Espessura representativa dos montantes (mm) — alinhada ao módulo de referência. */
   uprightThicknessMm?: number;

@@ -29,6 +29,15 @@ function bandDepthMmFromGeometry(geometry: LayoutGeometry): number {
     : 2 * d + SPINE_BACK_TO_BACK_MM;
 }
 
+function loadHeightMmFromAnswers(
+  answers: Record<string, unknown>
+): number | undefined {
+  if (typeof answers.loadHeightMm === 'number' && answers.loadHeightMm > 0) {
+    return answers.loadHeightMm;
+  }
+  return undefined;
+}
+
 function clearHeightFromAnswers(
   answers: Record<string, unknown>
 ): number | undefined {
@@ -83,6 +92,7 @@ function panelFromRackModule(
     rackDepthMode: geometry.metadata.rackDepthMode,
     corridorMm: geometry.metadata.corridorMm,
     capacityKgPerLevel: cap,
+    loadHeightMm: loadHeightMmFromAnswers(answers),
     tunnel: opts.tunnelVisual && isTunnel,
     uprightThicknessMm: mod.uprightThicknessMm,
     tunnelClearanceMm: isTunnel ? mod.tunnelClearanceHeightMm : undefined,
@@ -154,6 +164,7 @@ function buildFrontWithoutTunnelPayload(
     rackDepthMode: geometry.metadata.rackDepthMode,
     corridorMm: geometry.metadata.corridorMm,
     capacityKgPerLevel: cap,
+    loadHeightMm: loadHeightMmFromAnswers(answers),
     tunnel: false,
     uprightThicknessMm: UPRIGHT_THICKNESS_NORMAL_MM,
     tunnelClearanceMm: undefined,

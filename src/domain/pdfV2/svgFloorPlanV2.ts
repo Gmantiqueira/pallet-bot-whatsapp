@@ -538,7 +538,7 @@ function orientationArrowSvg(
     'Eixo do vão · fluxo ao longo das linhas · entradas/saídas nos extremos do compartimento (ref. docas)';
   return `<g>
     <rect x="${gx}" y="${gy}" width="${gw}" height="${gh}" rx="5" fill="#f8fafc" fill-opacity="0.96" stroke="#cbd5e1" stroke-width="0.9"/>
-    <text x="${gx + 10}" y="${gy + 18}" font-size="11.5px" fill="#334155" font-family="${SVG_FONT_FAMILY}" font-weight="700">Sentido de trabalho (empilhador)</text>
+    <text x="${gx + 10}" y="${gy + 18}" font-size="11.5px" fill="#334155" font-family="${SVG_FONT_FAMILY}" font-weight="700">Sentido de operação (empilhadeira)</text>
     <text x="${gx + 10}" y="${gy + 34}" font-size="9.5px" fill="#64748b" font-family="${SVG_FONT_FAMILY}">${escapeXml(sub)}</text>
     ${shaft}
   </g>`;
