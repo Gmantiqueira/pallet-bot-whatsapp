@@ -8,6 +8,7 @@ import {
   MODULE_PALLET_BAYS_PER_LEVEL,
   uprightWidthsMmForFrontBayCount,
 } from './rackModuleSpec';
+import { tunnelActiveStorageLevelsFromGlobal } from './elevationLevelGeometryV2';
 import { splitModuleFootprintsFor3d } from './model3dV2';
 import type { StructureResult } from '../structureEngine';
 
@@ -129,6 +130,30 @@ export function countUprightsByThicknessFromGeometry(
   return { upright75, upright100 };
 }
 
+/**
+ * Pares de longarinas: por segmento, (equiv. ao longo do vão) × baias na face × níveis com feixe.
+ * Túnel: só {@link ModuleSegment.activeStorageLevels} patamares de armazenagem (menos longarinas ao nível do vão).
+ * Meio módulo: equiv. 0,5 — meia “faixa” de longarinas em relação ao módulo completo.
+ */
+export function countBeamPairsForLayoutSolution(
+  layoutSolution: LayoutSolutionV2
+): number {
+  const structuralLevels = Math.max(0, layoutSolution.metadata.structuralLevels);
+  let sum = 0;
+  for (const row of layoutSolution.rows) {
+    for (const seg of row.modules) {
+      const along = seg.type === 'half' ? 0.5 : 1;
+      const beamLevels =
+        seg.variant === 'tunnel'
+          ? seg.activeStorageLevels ??
+            tunnelActiveStorageLevelsFromGlobal(structuralLevels)
+          : structuralLevels;
+      sum += along * MODULE_PALLET_BAYS_PER_LEVEL * beamLevels;
+    }
+  }
+  return Math.round(sum);
+}
+
 function guardRailUnitCount(
   rowCount: number,
   enabled: boolean,
@@ -220,8 +245,7 @@ export function buildBillOfMaterials(
   const structuralLevels = Math.max(0, layoutSolution.metadata.structuralLevels);
   const modulesAlong = Math.max(0, layoutSolution.totals.modules);
 
-  /** Pares de longarinas: módulos (equiv. ao longo do vão) × níveis com feixe × 2 faces ao longo do vão. */
-  const beamPairs = Math.round(modulesAlong * structuralLevels * 2);
+  const beamPairs = countBeamPairsForLayoutSolution(layoutSolution);
 
   const rowCount = geometry.rows.length;
   const grSimple = guardRailUnitCount(

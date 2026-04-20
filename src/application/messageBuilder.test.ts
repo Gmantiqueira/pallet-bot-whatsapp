@@ -163,10 +163,10 @@ describe('MessageBuilder', () => {
       expect(messages[0].text).toContain('Profundidade da posição');
       expect(messages[0].text).toContain('Níveis por módulo: 4');
       expect(messages[0].text).toContain('Ambos');
-      expect(messages[0].text).toContain('Módulos: 10');
-      expect(messages[0].text).toContain('Posições: 40');
+      expect(messages[0].text).toContain('Módulos: 9');
+      expect(messages[0].text).toContain('Posições: 72');
       expect(messages[0].text).toContain('Coluna selecionada: 8T');
-      expect(messages[0].text).toContain('Pares de longarinas: 40');
+      expect(messages[0].text).toContain('Pares de longarinas: 72');
       expect(messages[0].buttons).toHaveLength(1);
       expect(messages[0].buttons?.[0].id).toBe('CONTINUAR');
     });

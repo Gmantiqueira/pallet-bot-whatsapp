@@ -277,7 +277,7 @@ describe('State Machine', () => {
       expect(
         (result.session.answers.budget as { totals: { modules: number } })
           .totals.modules
-      ).toBe(10);
+      ).toBe(6);
     });
 
     it('should reach WAIT_HEIGHT_DIRECT after capacity with heightMode DIRECT', () => {

@@ -1,4 +1,8 @@
-import { calculateBudget, type BudgetResult } from './budgetEngine';
+import {
+  budgetResultFromBillOfMaterials,
+  calculateBudget,
+  type BudgetResult,
+} from './budgetEngine';
 import { MIN_LEVEL_GAP_MM } from './conversationHelpers';
 import {
   calculateLayout,
@@ -13,9 +17,18 @@ import {
 } from './warehouseHeightDerive';
 import {
   computeModulePricingSnapshot,
+  computeModulePricingSnapshotFromBom,
   type ModulePricingSnapshot,
 } from './modulePricingComponents';
 import { selectStructure, type StructureResult } from './structureEngine';
+import { buildProjectAnswersV2 } from './pdfV2/answerMapping';
+import { buildLayoutSolutionV2 } from './pdfV2/layoutSolutionV2';
+import {
+  buildLayoutGeometry,
+  validateLayoutGeometry,
+} from './pdfV2/layoutGeometryV2';
+import { buildFloorPlanAccessories } from './pdfV2/visualAccessoriesV2';
+import { buildBillOfMaterials } from './pdfV2/billOfMaterials';
 
 /** Profundidade de módulo padrão (mm) se não for informada. */
 export const DEFAULT_MODULE_DEPTH_MM = 2700;
@@ -31,6 +44,46 @@ export type ProjectEnginesSnapshot = {
   /** Base para precificação por módulo (sem preços). */
   modulePricing: ModulePricingSnapshot;
 };
+
+function tryEnginesFromLayoutV2(
+  answers: Record<string, unknown>
+): Pick<
+  ProjectEnginesSnapshot,
+  'structure' | 'budget' | 'modulePricing'
+> | null {
+  const v2a = buildProjectAnswersV2(answers);
+  if (!v2a) {
+    return null;
+  }
+  try {
+    const sol = buildLayoutSolutionV2(v2a);
+    const geo = buildLayoutGeometry(sol, answers);
+    validateLayoutGeometry(geo);
+    const accessories = buildFloorPlanAccessories(answers, geo);
+    const cap =
+      typeof answers.capacityKg === 'number' && Number.isFinite(answers.capacityKg)
+        ? answers.capacityKg
+        : 0;
+    const structure = selectStructure({
+      capacityKgPerLevel: cap,
+      levels: sol.metadata.structuralLevels,
+      hasGroundLevel: sol.metadata.hasGroundLevel,
+    });
+    const uprightH = resolveUprightHeightMmForProject(answers);
+    const bom = buildBillOfMaterials(sol, geo, accessories, structure, uprightH);
+    return {
+      structure,
+      budget: budgetResultFromBillOfMaterials(bom, sol, structure),
+      modulePricing: computeModulePricingSnapshotFromBom(
+        sol,
+        bom,
+        sol.metadata.hasGroundLevel
+      ),
+    };
+  } catch {
+    return null;
+  }
+}
 
 function deriveWarehouseHeightMmFromAnswers(
   answers: Record<string, unknown>
@@ -148,22 +201,26 @@ export function computeProjectEngines(
   };
   const layout = calculateLayout(layoutInput);
 
-  const structure = selectStructure({
-    capacityKgPerLevel: capacityKg,
-    levels,
-    hasGroundLevel:
-      typeof answers.hasGroundLevel === 'boolean'
-        ? answers.hasGroundLevel
-        : true,
-  });
-
-  const budget = calculateBudget({ layout, structure, levels });
-
   const hasGround =
     typeof answers.hasGroundLevel === 'boolean'
       ? answers.hasGroundLevel
       : true;
-  const modulePricing = computeModulePricingSnapshot(layout, levels, hasGround);
+
+  let structure = selectStructure({
+    capacityKgPerLevel: capacityKg,
+    levels,
+    hasGroundLevel: hasGround,
+  });
+
+  let budget = calculateBudget({ layout, structure, levels });
+  let modulePricing = computeModulePricingSnapshot(layout, levels, hasGround);
+
+  const fromV2 = tryEnginesFromLayoutV2(answers);
+  if (fromV2) {
+    structure = fromV2.structure;
+    budget = fromV2.budget;
+    modulePricing = fromV2.modulePricing;
+  }
 
   return { layout, structure, budget, modulePricing };
 }

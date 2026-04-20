@@ -1,3 +1,5 @@
+import type { BillOfMaterials } from './pdfV2/billOfMaterials';
+import type { LayoutSolutionV2 } from './pdfV2/types';
 import type { LayoutResult } from './layoutEngine';
 import { MODULE_PALLET_BAYS_PER_LEVEL } from './pdfV2/rackModuleSpec';
 
@@ -66,6 +68,50 @@ export function computeModulePricingSnapshot(
     'Longarinas: pares = módulos × níveis estruturais; por módulo = níveis.',
     'Contraventamento: 0 (a definir no catálogo estrutural).',
     `Paletes: ${MODULE_PALLET_BAYS_PER_LEVEL} baias × patamares de carga (níveis + piso se aplicável).`,
+  ];
+
+  return {
+    moduleComponents: {
+      columns: columnsPerModule,
+      beams: beamsPerModule,
+      braces: 0,
+      pallets: palletsPerModule,
+    },
+    totalComponents: {
+      columns: totalCols,
+      beams: totalBeams,
+      braces: 0,
+      pallets: totalPallets,
+    },
+    moduleCount,
+    assumptions,
+  };
+}
+
+/**
+ * Componentes totais / médios alinhados ao BOM V2 (montantes reais por prisma, longarinas por túnel e meio módulo).
+ */
+export function computeModulePricingSnapshotFromBom(
+  sol: LayoutSolutionV2,
+  bom: BillOfMaterials,
+  hasGroundLevel: boolean
+): ModulePricingSnapshot {
+  const moduleCount = Math.max(0, sol.totals.modules);
+  const u75 = bom.lines.find(l => l.id === 'upright75')?.quantity ?? 0;
+  const u100 = bom.lines.find(l => l.id === 'upright100')?.quantity ?? 0;
+  const totalCols = u75 + u100;
+  const totalBeams = bom.lines.find(l => l.id === 'beamPairs')?.quantity ?? 0;
+  const totalPallets = sol.totals.positions;
+
+  const columnsPerModule = moduleCount > 0 ? totalCols / moduleCount : 0;
+  const beamsPerModule = moduleCount > 0 ? totalBeams / moduleCount : 0;
+  const palletsPerModule = moduleCount > 0 ? totalPallets / moduleCount : 0;
+
+  const assumptions: string[] = [
+    'Montantes e longarinas: mesmas quantidades que a lista de materiais (geometria V2).',
+    'Médias por “módulo-equiv.” ao longo do vão (`sol.totals.modules`).',
+    'Contraventamento: 0 (a definir no catálogo estrutural).',
+    `Paletes: total de posições do layout (${hasGroundLevel ? 'incl. patamar ao piso quando aplicável' : 'sem piso'}).`,
   ];
 
   return {
