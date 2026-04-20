@@ -235,6 +235,18 @@ export type FloorPlanModelV2 = {
    * Texto extra no módulo túnel quando aplicável (continuidade entre fileiras / uso operacional).
    */
   tunnelOperationHint?: string;
+  /**
+   * Explicações retiradas do desenho — apenas legenda compacta inferior.
+   */
+  planLegendNotes?: {
+    moduleIndexHint: string;
+    firstLevelHint: string;
+    implantHint: string;
+    strategyHint: string;
+    rowLines: string[];
+    tunnelNote?: string;
+    bayClearSpanNote?: string;
+  };
 };
 
 export type FloorPlanDimension = {

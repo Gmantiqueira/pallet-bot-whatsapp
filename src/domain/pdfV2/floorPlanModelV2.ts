@@ -4,7 +4,6 @@ import { splitModuleFootprintsFor3d } from './model3dV2';
 import type {
   FloorPlanCirculationSemantic,
   FloorPlanDimension,
-  FloorPlanLabel,
   FloorPlanModelV2,
   LineStrategyCode,
   RackDepthModeV2,
@@ -31,6 +30,10 @@ const PAD = 16;
 /** Espaço superior sem título duplicado (o PDF traz o cabeçalho da folha). */
 const HEADER = 22;
 const DIM_OUT = 16;
+/** Reserva à esquerda para cota de largura sem clip. */
+const PLAN_LEFT_DIM_MARGIN_PX = 54;
+/** Reserva inferior para cotas + legenda sem sobreposição ao desenho. */
+const PLAN_BOTTOM_STACK_RESERVE_PX = 236;
 /** Espinha entre costas (mm) — igual a layoutGeometryV2 / model3dV2.splitModuleFootprintsFor3d. */
 const SPINE_BACK_TO_BACK_MM = 100;
 
@@ -64,36 +67,6 @@ function layoutStrategyCaption(geometry: LayoutGeometry): string {
   return `${strat[ls] ?? 'Estratégia de linhas'} · ${depth} · ${ori}`;
 }
 
-function buildRowLineMarkersFromBands(
-  rowBandRects: FloorPlanModelV2['rowBandRects'],
-  beamSpanDirection: 'x' | 'y'
-): NonNullable<FloorPlanModelV2['rowLineMarkers']> {
-  const out: NonNullable<FloorPlanModelV2['rowLineMarkers']> = [];
-  for (const r of rowBandRects) {
-    if (r.showInRowLegend === false) continue;
-    const lineOnly = r.rowCaption.split('—')[0]?.trim() ?? r.rowCaption;
-    const fs = Math.max(9, Math.min(13, Math.min(r.w, r.h) * 0.052));
-    if (beamSpanDirection === 'x') {
-      out.push({
-        id: `row-m-${r.id}`,
-        text: lineOnly,
-        x: r.x + 4,
-        y: r.y + fs + 1,
-        fontSize: fs,
-      });
-    } else {
-      out.push({
-        id: `row-m-${r.id}`,
-        text: lineOnly,
-        x: r.x + fs + 3,
-        y: r.y + r.h / 2 + fs * 0.2,
-        fontSize: fs,
-      });
-    }
-  }
-  return out;
-}
-
 /**
  * Tint subtil alinhado aos níveis: mesma cor das longarinas na elevação ({@link ELEV_BEAM_FILL}).
  * Opacidade 5–10% conforme o número de níveis estruturais.
@@ -102,7 +75,7 @@ function moduleLevelTintFromMetadata(
   metadata: LayoutGeometry['metadata']
 ): FloorPlanModelV2['moduleLevelTint'] {
   const n = Math.max(1, metadata.structuralLevels);
-  const opacity = Math.min(0.1, 0.05 + (n - 1) * 0.008);
+  const opacity = Math.min(0.045, 0.022 + (n - 1) * 0.0035);
   return {
     fill: ELEV_BEAM_FILL,
     opacity,
@@ -276,11 +249,13 @@ export function buildFloorPlanModelV2(
   const { warehouseLengthMm: L, warehouseWidthMm: W } = geometry;
   const innerW = VB_W - 2 * PAD;
   const innerH = VB_H - PAD - HEADER - DIM_OUT - 18;
-  const scale = Math.min(innerW / L, innerH / W);
+  const drawableW = Math.max(120, innerW - PLAN_LEFT_DIM_MARGIN_PX);
+  const drawableH = Math.max(120, innerH - PLAN_BOTTOM_STACK_RESERVE_PX);
+  const scale = Math.min(drawableW / L, drawableH / W);
   const boxW = L * scale;
   const boxH = W * scale;
-  const bx = PAD + (innerW - boxW) / 2;
-  const by = HEADER + (innerH - boxH) / 2;
+  const bx = PAD + PLAN_LEFT_DIM_MARGIN_PX + (drawableW - boxW) / 2;
+  const by = HEADER + (drawableH - boxH) / 2;
 
   const toX = (xmm: number) => bx + xmm * scale;
   const toY = (ymm: number) => by + ymm * scale;
@@ -549,94 +524,37 @@ export function buildFloorPlanModelV2(
   }
 
   const meta = geometry.metadata;
-  const bayRef = structureRects.find(
-    s =>
-      s.variant !== 'tunnel' &&
-      Math.min(s.w, s.h) > 35 &&
-      meta.beamAlongModuleMm > 0
-  );
-  if (bayRef) {
-    const halfMod = bayRef.segmentType === 'half';
-    const t0 = halfMod ? 0.08 : 0.25;
-    const t1 = halfMod ? 0.92 : 0.75;
-    const bayText = `Vão por baia: ${formatMm(meta.beamAlongModuleMm)}`;
-    const alongX = geometry.beamSpanDirection === 'x';
-    if (alongX) {
-      const yB = bayRef.y + bayRef.h - 12;
-      dimensionLines.push({
-        id: 'dim-bay',
-        x1: bayRef.x + bayRef.w * t0,
-        y1: yB,
-        x2: bayRef.x + bayRef.w * t1,
-        y2: yB,
-        text: bayText,
-        dimTier: 'detail',
-      });
-    } else {
-      const xB = bayRef.x + Math.min(20, bayRef.w * 0.18);
-      dimensionLines.push({
-        id: 'dim-bay',
-        x1: xB,
-        y1: bayRef.y + bayRef.h * t0,
-        x2: xB,
-        y2: bayRef.y + bayRef.h * t1,
-        text: bayText,
-        textMode: 'corridor-inline',
-        dimTier: 'detail',
-      });
-    }
-  }
+  const bayClearSpanNote =
+    meta.beamAlongModuleMm > 0
+      ? `Vão por baia (referência): ${formatMm(meta.beamAlongModuleMm)}`
+      : undefined;
 
   const moduleLevelTint = moduleLevelTintFromMetadata(geometry.metadata);
 
-  const rowLegendBaseY = by + boxH + 56;
   const rowBandsForLegend = rowBandRects.filter(
     r => r.showInRowLegend !== false
   );
-  const rowLegendBlock: FloorPlanLabel[] =
-    rowBandsForLegend.length === 0
-      ? []
-      : [
-          {
-            id: 'row-leg-heading',
-            x: VB_W / 2,
-            y: rowLegendBaseY,
-            text: 'Fileiras (referência)',
-            className: 'fp-anno-heading',
-          },
-          ...rowBandsForLegend.map((r, i) => ({
-            id: `row-leg-${r.id}`,
-            x: VB_W / 2,
-            y: rowLegendBaseY + 22 + i * 19,
-            text: r.rowCaption,
-            className: 'fp-row-legend',
-          })),
-        ];
 
   const planAccessories = buildFloorPlanAccessories(answers, geometry);
-
-  const labels: FloorPlanLabel[] = [
-    {
-      id: 'sub-dims',
-      x: VB_W / 2,
-      y: PAD + 16,
-      text: `Dimensões do compartimento: ${formatMm(L)} × ${formatMm(W)}`,
-      className: 'fp-drawing-meta',
-    },
-    ...planCaptionLabels(geometry, planAccessories),
-    ...rowLegendBlock,
-  ];
-
-  const rowLineMarkers = buildRowLineMarkersFromBands(
-    rowBandRects,
-    geometry.beamSpanDirection
-  );
 
   const tunnelOperationHint = geometry.metadata.hasTunnel
     ? geometry.rows.length > 1
       ? 'Ligação entre fileiras · trânsito ao piso com picking nos níveis superiores'
       : 'Passagem ao piso · picking nos patamares acima do vão'
     : undefined;
+
+  const planLegendNotes = {
+    moduleIndexHint: planModuleSingleCaption(geometry),
+    firstLevelHint: planAccessories.firstLevelOnGround
+      ? '1.º eixo de feixe: ao piso (referência).'
+      : '1.º eixo de feixe: elevado — folga sob o 1.º patamar (referência).',
+    implantHint:
+      'Módulos = picking · corredores = circulação do empilhador · tracejado exterior = limite do compartimento.',
+    strategyHint: layoutStrategyCaption(geometry),
+    rowLines: rowBandsForLegend.map(r => r.rowCaption),
+    tunnelNote: tunnelOperationHint,
+    bayClearSpanNote,
+  };
 
   return {
     viewBox: { w: VB_W, h: VB_H },
@@ -649,50 +567,11 @@ export function buildFloorPlanModelV2(
     structureRects,
     circulationRects,
     dimensionLines,
-    labels,
+    labels: [],
     moduleLevelTint,
-    rowLineMarkers,
     tunnelOperationHint,
+    planLegendNotes,
   };
-}
-
-/** Legenda única dos números dos módulos (≈ posições por módulo) + leitura do 1.º nível. */
-function planCaptionLabels(
-  geometry: LayoutGeometry,
-  planAccessories: FloorPlanModelV2['planAccessories']
-): FloorPlanLabel[] {
-  const line: FloorPlanLabel = {
-    id: 'cap-module-line',
-    x: VB_W / 2,
-    y: PAD + 34,
-    text: planModuleSingleCaption(geometry),
-    className: 'fp-plan-hint',
-  };
-  const firstLevel: FloorPlanLabel = {
-    id: 'cap-first-level',
-    x: VB_W / 2,
-    y: PAD + 50,
-    text: planAccessories.firstLevelOnGround
-      ? '1.º eixo de feixe: ao piso (referência)'
-      : '1.º eixo de feixe: elevado — folga sob o primeiro patamar (referência)',
-    className: 'fp-first-level',
-  };
-  const implant: FloorPlanLabel = {
-    id: 'cap-implant',
-    x: VB_W / 2,
-    y: PAD + 68,
-    text:
-      'Implantação: módulos = picking · corredores = circulação de empilhador · limite do compartimento em tracejado',
-    className: 'fp-implantacao-hint',
-  };
-  const strategy: FloorPlanLabel = {
-    id: 'cap-strategy',
-    x: VB_W / 2,
-    y: PAD + 86,
-    text: layoutStrategyCaption(geometry),
-    className: 'fp-strategy-hint',
-  };
-  return [line, firstLevel, implant, strategy];
 }
 
 function planModuleSingleCaption(geometry: LayoutGeometry): string {

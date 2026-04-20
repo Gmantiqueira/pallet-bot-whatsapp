@@ -91,24 +91,22 @@ function corridorDisplayLabel(
   let text: string;
   switch (sem) {
     case 'residual':
-      text = compact ? 'Livre (res.)' : 'Área livre / residual';
+      text = compact ? 'Livre' : 'Área livre';
       break;
     case 'cross_passage':
-      text = compact ? 'Passagem transv.' : 'Passagem transversal';
+      text = 'Passagem';
       break;
     case 'tunnel':
-      text = compact ? 'Túnel' : 'Túnel / passagem';
+      text = 'Passagem';
       break;
     case 'operational':
     default:
-      text = compact
-        ? 'Corredor op.'
-        : 'Corredor operacional (empilhador)';
+      text = compact ? 'Corredor' : 'Corredor';
       break;
   }
   const fontSize = Math.max(
     10,
-    Math.min(compact ? 13 : 15, minSidePx * 0.095)
+    Math.min(compact ? 12 : 13, minSidePx * 0.088)
   );
   return { text, fontSize };
 }
@@ -156,8 +154,8 @@ function moduleBayHintLine(s: FloorPlanModelV2['structureRects'][0]): string {
   /** Uma só baia na face — não sugerir divisão ao meio como duas baias. */
   if (s.segmentType === 'half') return '';
   const isDouble = s.kind === 'double';
-  const thin = isDouble ? 0.14 : 0.095;
-  const op = isDouble ? 0.2 : 0.125;
+  const thin = isDouble ? 0.12 : 0.08;
+  const op = isDouble ? 0.1 : 0.065;
   const dash = isDouble ? '2 7' : '1.8 8';
   const cap = 'stroke-linecap="round"';
   if (s.w >= s.h) {
@@ -243,20 +241,47 @@ function appendFloorPlanConfigurationLegend(
 ): void {
   const { w, h } = model.viewBox;
   const a = model.planAccessories;
+  const notes = model.planLegendNotes;
   const pad = 14;
-  const boxW = Math.min(468, w - 2 * pad - 8);
-  const boxH = 192;
+  const boxW = Math.min(520, w - 2 * pad - 8);
+  const noteLines: string[] = [];
+  if (notes) {
+    noteLines.push(notes.moduleIndexHint, notes.firstLevelHint, notes.implantHint);
+    noteLines.push(notes.strategyHint);
+    for (const r of notes.rowLines) {
+      noteLines.push(r);
+    }
+    if (notes.bayClearSpanNote) noteLines.push(notes.bayClearSpanNote);
+    if (notes.tunnelNote) noteLines.push(notes.tunnelNote);
+  }
+  const notesBlockH = noteLines.length > 0 ? 20 + noteLines.length * 10.5 : 0;
+  /** Bloco de símbolos (mini esquemas + guardas + protetor) + rodapé. */
+  const symbolBlockH = 168;
+  const boxH = Math.min(430, 24 + notesBlockH + symbolBlockH);
   const x0 = pad;
   const y0 = h - pad - boxH;
   parts.push(
     `<rect x="${x0}" y="${y0}" width="${boxW}" height="${boxH}" rx="7" fill="#f8fafc" fill-opacity="0.97" stroke="#cbd5e1" stroke-width="0.95"/>`
   );
-  parts.push(
-    `<text x="${x0 + 12}" y="${y0 + 18}" font-size="11px" fill="#475569" font-family="${SVG_FONT_FAMILY}" font-weight="700" letter-spacing="0.06em">CONFIGURAÇÃO (LEITURA GRÁFICA)</text>`
-  );
-
+  let ly = y0 + 16;
   const lx = x0 + 12;
-  let ly = y0 + 36;
+  if (noteLines.length > 0) {
+    parts.push(
+      `<text x="${lx}" y="${ly}" font-size="10.5px" fill="#334155" font-family="${SVG_FONT_FAMILY}" font-weight="700" letter-spacing="0.05em">NOTAS DO DESENHO</text>`
+    );
+    ly += 14;
+    for (const line of noteLines) {
+      parts.push(
+        `<text x="${lx}" y="${ly}" font-size="8.75px" fill="#475569" font-family="${SVG_FONT_FAMILY}">${escapeXml(line)}</text>`
+      );
+      ly += 10.5;
+    }
+    ly += 6;
+  }
+  parts.push(
+    `<text x="${lx}" y="${ly}" font-size="10.5px" fill="#475569" font-family="${SVG_FONT_FAMILY}" font-weight="700" letter-spacing="0.05em">SÍMBOLOS (1.º nível · guardas · protetor)</text>`
+  );
+  ly += 18;
   const onGround = a.firstLevelOnGround !== false;
   /** Mini esquema: linha do piso + 1.º feixe. */
   const miniGround = (
@@ -330,13 +355,7 @@ function appendFloorPlanConfigurationLegend(
   }
 
   parts.push(
-    `<text x="${lx}" y="${y0 + boxH - 44}" font-size="9.5px" fill="#475569" font-family="${SVG_FONT_FAMILY}">Ocupação: áreas de módulo + corredores operacionais · áreas tracejadas/residual: livres em relação às linhas · limite exterior = compartimento.</text>`
-  );
-  parts.push(
-    `<text x="${lx}" y="${y0 + boxH - 26}" font-size="9.5px" fill="#475569" font-family="${SVG_FONT_FAMILY}">Eixos entre módulos: montantes · túnel: faixa inferior = passagem sem picking ao piso.</text>`
-  );
-  parts.push(
-    `<text x="${lx}" y="${y0 + boxH - 10}" font-size="9px" fill="#94a3b8" font-family="${SVG_FONT_FAMILY}">Mesma convenção que a vista frontal e o resumo técnico.</text>`
+    `<text x="${lx}" y="${y0 + boxH - 12}" font-size="8.5px" fill="#94a3b8" font-family="${SVG_FONT_FAMILY}">Convênio alinhado à vista frontal e ao resumo técnico.</text>`
   );
 }
 
@@ -409,11 +428,13 @@ function appendFloorPlanAccessoryGraphics(
         }
       }
       const midY = (y0 + y1) / 2;
-      const isLeftEdge = x0 < o.x + o.w / 2;
-      const tx = isLeftEdge ? x0 - 16 : x0 + 16;
-      parts.push(
-        `<text x="${tx}" y="${midY + 5}" text-anchor="${isLeftEdge ? 'end' : 'start'}" font-size="12.5px" fill="${col}" stroke="#ffffff" stroke-width="0.45" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="700">${escapeXml(tag)}</text>`
-      );
+      if (tag) {
+        const isLeftEdge = x0 < o.x + o.w / 2;
+        const tx = isLeftEdge ? x0 - 16 : x0 + 16;
+        parts.push(
+          `<text x="${tx}" y="${midY + 5}" text-anchor="${isLeftEdge ? 'end' : 'start'}" font-size="12.5px" fill="${col}" stroke="#ffffff" stroke-width="0.45" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="700">${escapeXml(tag)}</text>`
+        );
+      }
     } else if (kind === 'double') {
       for (const dy of [-5.5, 5.5]) {
         parts.push(
@@ -432,9 +453,11 @@ function appendFloorPlanAccessoryGraphics(
         );
       }
       const ty = y0 + (y0 < o.y + o.h / 2 ? -14 : 16);
-      parts.push(
-        `<text x="${(x0 + x1) / 2}" y="${ty}" text-anchor="middle" font-size="12.5px" fill="${col}" stroke="#ffffff" stroke-width="0.45" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="700">${escapeXml(tag)}</text>`
-      );
+      if (tag) {
+        parts.push(
+          `<text x="${(x0 + x1) / 2}" y="${ty}" text-anchor="middle" font-size="12.5px" fill="${col}" stroke="#ffffff" stroke-width="0.45" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="700">${escapeXml(tag)}</text>`
+        );
+      }
     } else {
       parts.push(
         `<line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" stroke="#f8fafc" stroke-width="${wBack}" stroke-linecap="round" opacity="0.97"/>`
@@ -451,16 +474,12 @@ function appendFloorPlanAccessoryGraphics(
         );
       }
       const ty = y0 + (y0 < o.y + o.h / 2 ? -14 : 16);
-      parts.push(
-        `<text x="${(x0 + x1) / 2}" y="${ty}" text-anchor="middle" font-size="12.5px" fill="${col}" stroke="#ffffff" stroke-width="0.45" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="700">${escapeXml(tag)}</text>`
-      );
+      if (tag) {
+        parts.push(
+          `<text x="${(x0 + x1) / 2}" y="${ty}" text-anchor="middle" font-size="12.5px" fill="${col}" stroke="#ffffff" stroke-width="0.45" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="700">${escapeXml(tag)}</text>`
+        );
+      }
     }
-  };
-
-  const railTag = (kind: 'none' | 'simple' | 'double'): string => {
-    if (kind === 'double') return 'Dupla';
-    if (kind === 'simple') return 'Simples';
-    return '';
   };
 
   const startK = guardKindAtPlanEdge(a, 'start');
@@ -468,13 +487,13 @@ function appendFloorPlanAccessoryGraphics(
   if (along === 'x') {
     const xl = o.x - 12;
     const xr = o.x + o.w + 12;
-    strokeRail(startK, true, xl, o.y, xl, o.y + o.h, railTag(startK));
-    strokeRail(endK, true, xr, o.y, xr, o.y + o.h, railTag(endK));
+    strokeRail(startK, true, xl, o.y, xl, o.y + o.h, '');
+    strokeRail(endK, true, xr, o.y, xr, o.y + o.h, '');
   } else {
     const yt = o.y - 12;
     const yb = o.y + o.h + 12;
-    strokeRail(startK, false, o.x, yt, o.x + o.w, yt, railTag(startK));
-    strokeRail(endK, false, o.x, yb, o.x + o.w, yb, railTag(endK));
+    strokeRail(startK, false, o.x, yt, o.x + o.w, yt, '');
+    strokeRail(endK, false, o.x, yb, o.x + o.w, yb, '');
   }
 
   appendColumnProtectorAlongModules(model, parts);
@@ -534,12 +553,9 @@ function orientationArrowSvg(
     beamAlong === 'x'
       ? `<line x1="${gx + 8}" y1="${gy + 38}" x2="${gx + gw - 22}" y2="${gy + 38}" stroke="#0f172a" stroke-width="2.6"/><polygon points="${gx + gw - 14},${gy + 38} ${gx + gw - 28},${gy + 28} ${gx + gw - 28},${gy + 48}" fill="#0f172a"/>`
       : `<line x1="${ax}" y1="${gy + gh - 10}" x2="${ax}" y2="${gy + 14}" stroke="#0f172a" stroke-width="2.6"/><polygon points="${ax},${gy + 6} ${ax - 8},${gy + 18} ${ax + 8},${gy + 18}" fill="#0f172a"/>`;
-  const sub =
-    'Eixo do vão · fluxo ao longo das linhas · entradas/saídas nos extremos do compartimento (ref. docas)';
   return `<g>
     <rect x="${gx}" y="${gy}" width="${gw}" height="${gh}" rx="5" fill="#f8fafc" fill-opacity="0.96" stroke="#cbd5e1" stroke-width="0.9"/>
-    <text x="${gx + 10}" y="${gy + 18}" font-size="11.5px" fill="#334155" font-family="${SVG_FONT_FAMILY}" font-weight="700">Sentido de operação (empilhadeira)</text>
-    <text x="${gx + 10}" y="${gy + 34}" font-size="9.5px" fill="#64748b" font-family="${SVG_FONT_FAMILY}">${escapeXml(sub)}</text>
+    <text x="${gx + 10}" y="${gy + 22}" font-size="11.5px" fill="#334155" font-family="${SVG_FONT_FAMILY}" font-weight="700">Sentido de operação (empilhadeira)</text>
     ${shaft}
   </g>`;
 }
@@ -581,85 +597,6 @@ function dimStrokeColor(d: FloorPlanDimension): string {
       return '#94a3b8';
     default:
       return '#475569';
-  }
-}
-
-/** Referência de início/fim do vão no perímetro (lógica entrada–saída ao longo do eixo das linhas). */
-function appendWarehouseSpanEntryExitMarkers(
-  o: FloorPlanModelV2['warehouseOutline'],
-  beamAlong: 'x' | 'y',
-  parts: string[]
-): void {
-  const fs = 9.25;
-  const col = '#334155';
-  if (beamAlong === 'x') {
-    const my = o.y + o.h / 2;
-    parts.push(
-      `<text x="${o.x + 8}" y="${my}" font-size="${fs}px" fill="${col}" font-family="${SVG_FONT_FAMILY}" font-weight="700" opacity="0.9">Início do vão (ref. acessos)</text>`,
-      `<text x="${o.x + o.w - 8}" y="${my}" text-anchor="end" font-size="${fs}px" fill="${col}" font-family="${SVG_FONT_FAMILY}" font-weight="700" opacity="0.9">Fim do vão (ref. saídas)</text>`
-    );
-  } else {
-    const mx = o.x + o.w / 2;
-    parts.push(
-      `<text x="${mx}" y="${o.y + 14}" text-anchor="middle" font-size="${fs}px" fill="${col}" font-family="${SVG_FONT_FAMILY}" font-weight="700" opacity="0.9">Início do vão (ref.)</text>`,
-      `<text x="${mx}" y="${o.y + o.h - 6}" text-anchor="middle" font-size="${fs}px" fill="${col}" font-family="${SVG_FONT_FAMILY}" font-weight="700" opacity="0.9">Fim do vão (ref.)</text>`
-    );
-  }
-}
-
-/** Identificação explícita de cada fileira no desenho (continuidade da linha). */
-function appendRowLineMarkers(
-  model: FloorPlanModelV2,
-  parts: string[]
-): void {
-  const m = model.rowLineMarkers;
-  if (!m?.length) return;
-  for (const r of m) {
-    parts.push(
-      `<text x="${r.x}" y="${r.y}" font-size="${r.fontSize}px" fill="#1e3a8a" stroke="#ffffff" stroke-width="0.55" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="800">${escapeXml(r.text)}</text>`
-    );
-  }
-}
-
-/** Reforço subtil: corredor operacional como fluxo, não só faixa vazia. */
-function appendCorridorForkliftFlowHints(
-  model: FloorPlanModelV2,
-  parts: string[]
-): void {
-  const arrowCol = '#1d4ed8';
-  for (const c of model.circulationRects) {
-    if (circulationSemantic(c) !== 'operational') continue;
-    const minSide = Math.min(c.w, c.h);
-    if (minSide < 40) continue;
-    const op = 0.48;
-    const sw = 1.25;
-    if (c.w >= c.h) {
-      const yc = c.y + c.h / 2;
-      const xs = [c.x + c.w * 0.18, c.x + c.w * 0.52, c.x + c.w * 0.82];
-      for (const x0 of xs) {
-        const seg = Math.min(20, c.w * 0.055);
-        const x1 = x0 + seg;
-        parts.push(
-          `<line x1="${x0}" y1="${yc}" x2="${x1}" y2="${yc}" stroke="${arrowCol}" stroke-width="${sw}" stroke-linecap="round" opacity="${op}"/>`
-        );
-        parts.push(
-          `<polygon points="${x1 + 4},${yc} ${x1 - 1.5},${yc - 3} ${x1 - 1.5},${yc + 3}" fill="${arrowCol}" opacity="${op + 0.12}"/>`
-        );
-      }
-    } else {
-      const xc = c.x + c.w / 2;
-      const ys = [c.y + c.h * 0.2, c.y + c.h * 0.52, c.y + c.h * 0.82];
-      for (const y0 of ys) {
-        const seg = Math.min(20, c.h * 0.055);
-        const y1 = y0 + seg;
-        parts.push(
-          `<line x1="${xc}" y1="${y0}" x2="${xc}" y2="${y1}" stroke="${arrowCol}" stroke-width="${sw}" stroke-linecap="round" opacity="${op}"/>`
-        );
-        parts.push(
-          `<polygon points="${xc},${y1 + 4} ${xc - 3},${y1 - 1.5} ${xc + 3},${y1 - 1.5}" fill="${arrowCol}" opacity="${op + 0.12}"/>`
-        );
-      }
-    }
   }
 }
 
@@ -738,23 +675,23 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
   </style>`);
   /** 1.º eixo elevado: leitura imediata na planta (sombreia o módulo). */
   parts.push(
-    `<pattern id="fp-first-level-elevated" patternUnits="userSpaceOnUse" width="12" height="12" patternTransform="rotate(35)">` +
-      `<path d="M-3,15 l18,-18 M-3,3 l6,-6 M9,15 l10,-10" stroke="#c2410c" stroke-width="1.65" opacity="0.62"/>` +
+    `<pattern id="fp-first-level-elevated" patternUnits="userSpaceOnUse" width="14" height="14" patternTransform="rotate(35)">` +
+      `<path d="M-3,17 l20,-20 M-3,4 l7,-7 M10,17 l11,-11" stroke="#c2410c" stroke-width="0.95" opacity="0.2"/>` +
       `</pattern>`
   );
   parts.push(
-    `<pattern id="fp-half-module-hatch" patternUnits="userSpaceOnUse" width="9" height="9" patternTransform="rotate(-38)">` +
-      `<path d="M0,9 l9,-9 M-2,2 l4,-4 M5,11 l4,-4" stroke="#6366f1" stroke-width="0.9" opacity="0.42"/>` +
+    `<pattern id="fp-half-module-hatch" patternUnits="userSpaceOnUse" width="11" height="11" patternTransform="rotate(-38)">` +
+      `<path d="M0,11 l11,-11 M-2,3 l4,-4 M6,13 l4,-4" stroke="#6366f1" stroke-width="0.55" opacity="0.14"/>` +
       `</pattern>`
   );
   parts.push(
-    `<pattern id="fp-tunnel-void-strip" patternUnits="userSpaceOnUse" width="9" height="9" patternTransform="rotate(40)">` +
-      `<path d="M0,9 l9,-9" stroke="#b45309" stroke-width="1.05" opacity="0.5"/>` +
+    `<pattern id="fp-tunnel-void-strip" patternUnits="userSpaceOnUse" width="11" height="11" patternTransform="rotate(40)">` +
+      `<path d="M0,11 l11,-11" stroke="#b45309" stroke-width="0.65" opacity="0.12"/>` +
       `</pattern>`
   );
   parts.push(
-    `<pattern id="fp-residual-hatch" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(32)">` +
-      `<path d="M0,6 l6,-6" stroke="#52525b" stroke-width="0.85" opacity="0.38"/>` +
+    `<pattern id="fp-residual-hatch" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(32)">` +
+      `<path d="M0,8 l8,-8" stroke="#52525b" stroke-width="0.55" opacity="0.14"/>` +
       `</pattern>`
   );
   parts.push('</defs>');
@@ -772,8 +709,6 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
   parts.push(
     `<rect x="${o.x - 5}" y="${o.y - 5}" width="${o.w + 10}" height="${o.h + 10}" fill="none" stroke="#64748b" stroke-width="0.85" stroke-dasharray="7 5" opacity="0.72"/>`
   );
-  appendWarehouseSpanEntryExitMarkers(o, model.beamSpanAlong, parts);
-
   for (const r of model.rowBandRects) {
     let fill: string;
     if (r.kind === 'double') {
@@ -853,7 +788,7 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
     );
     if (sem === 'residual') {
       parts.push(
-        `<rect x="${c.x}" y="${c.y}" width="${c.w}" height="${c.h}" fill="url(#fp-residual-hatch)" stroke="none" opacity="0.44"/>`
+        `<rect x="${c.x}" y="${c.y}" width="${c.w}" height="${c.h}" fill="url(#fp-residual-hatch)" stroke="none" opacity="0.18"/>`
       );
     }
     const minSide = Math.min(c.w, c.h);
@@ -864,34 +799,16 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
       parts.push(
         `<text x="${tcx}" y="${tcy}" text-anchor="middle" dominant-baseline="middle" class="fp-circ-op" font-size="${fontSize}px">${escapeXml(circText)}</text>`
       );
-      if (minSide > 88) {
-        const subFs = Math.max(7.5, fontSize * 0.66);
-        parts.push(
-          `<text x="${tcx}" y="${tcy + fontSize * 0.52}" text-anchor="middle" dominant-baseline="middle" font-size="${subFs}px" fill="#1e40af" font-family="${SVG_FONT_FAMILY}" font-weight="600" opacity="0.9">Serviço às frentes · não é picking</text>`
-        );
-      }
     } else if (sem === 'residual') {
       parts.push(
         `<text x="${tcx}" y="${tcy}" text-anchor="middle" dominant-baseline="middle" class="fp-circ-res" font-size="${fontSize}px">${escapeXml(circText)}</text>`
       );
-      if (minSide > 70) {
-        const subFs = Math.max(7.5, fontSize * 0.65);
-        parts.push(
-          `<text x="${tcx}" y="${tcy + fontSize * 0.48}" text-anchor="middle" dominant-baseline="middle" font-size="${subFs}px" fill="#57534e" font-family="${SVG_FONT_FAMILY}" font-weight="600" opacity="0.88">Fora da ocupação das linhas</text>`
-        );
-      }
     } else {
       const cls = 'fp-circ';
       const fillT = sem === 'tunnel' ? '#7c2d12' : '#0c4a6e';
       parts.push(
         `<text x="${tcx}" y="${tcy}" text-anchor="middle" dominant-baseline="middle" class="${cls}" fill="${fillT}" font-size="${fontSize}px">${escapeXml(circText)}</text>`
       );
-      if (sem === 'tunnel' && minSide > 55) {
-        const subFs = Math.max(7.5, fontSize * 0.64);
-        parts.push(
-          `<text x="${tcx}" y="${tcy + fontSize * 0.52}" text-anchor="middle" dominant-baseline="middle" font-size="${subFs}px" fill="#7c2d12" font-family="${SVG_FONT_FAMILY}" font-weight="600" opacity="0.92">Continuidade da passagem</text>`
-        );
-      }
     }
   }
 
@@ -926,23 +843,13 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
       parts.push(
         `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="${fillMod}" stroke="${strokeMod}" stroke-width="${sw}"/>`
       );
-      const stripH = Math.max(10, s.h * 0.36);
-      const fsT = Math.min(11.5, Math.max(7.5, s.w * 0.065));
       parts.push(
-        `<rect x="${s.x}" y="${s.y + s.h - stripH}" width="${s.w}" height="${stripH}" fill="url(#fp-tunnel-void-strip)" stroke="${COL_MOD_TUNNEL_STROKE}" stroke-width="1.05" stroke-dasharray="5 4" opacity="0.94"/>`
+        `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="url(#fp-tunnel-void-strip)" stroke="none" opacity="0.22"/>`
       );
-      const yMain = model.tunnelOperationHint
-        ? s.y + s.h - stripH * 0.58
-        : s.y + s.h - stripH * 0.48;
+      const fsT = Math.min(12, Math.max(9.5, Math.min(s.w, s.h) * 0.065));
       parts.push(
-        `<text x="${s.x + s.w / 2}" y="${yMain}" text-anchor="middle" dominant-baseline="middle" font-size="${fsT}px" fill="#7c2d12" font-family="${SVG_FONT_FAMILY}" font-weight="700" opacity="0.96">Passagem · sem picking ao piso</text>`
+        `<text x="${s.x + s.w / 2}" y="${s.y + s.h / 2}" text-anchor="middle" dominant-baseline="middle" font-size="${fsT}px" fill="#78350f" font-family="${SVG_FONT_FAMILY}" font-weight="700" opacity="0.94">Passagem</text>`
       );
-      if (model.tunnelOperationHint) {
-        const fsH = Math.min(10, fsT * 0.78);
-        parts.push(
-          `<text x="${s.x + s.w / 2}" y="${s.y + s.h - stripH * 0.22}" text-anchor="middle" dominant-baseline="middle" font-size="${fsH}px" fill="#78350f" font-family="${SVG_FONT_FAMILY}" font-weight="600" opacity="0.94">${escapeXml(model.tunnelOperationHint)}</text>`
-        );
-      }
     } else {
       parts.push(
         `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="${fillMod}" stroke="none"/>`
@@ -952,7 +859,7 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
       );
       if (isHalf) {
         parts.push(
-          `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="url(#fp-half-module-hatch)" stroke="none" opacity="0.62"/>`
+          `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="url(#fp-half-module-hatch)" stroke="none" opacity="0.28"/>`
         );
       }
       if (firstOnGround) {
@@ -965,7 +872,7 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
         );
       } else {
         parts.push(
-          `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="url(#fp-first-level-elevated)" stroke="none" opacity="0.88"/>`
+          `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="url(#fp-first-level-elevated)" stroke="none" opacity="0.32"/>`
         );
         parts.push(
           `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="#fff7ed" fill-opacity="0.22" stroke="none"/>`
@@ -981,33 +888,12 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
     }
   }
 
-  for (const s of model.structureRects) {
-    if (s.variant === 'tunnel') continue;
-    const minS = Math.min(s.w, s.h);
-    if (minS < 30) continue;
-    const long = minS >= 52;
-    const txt = firstOnGround
-      ? long
-        ? '1.º ao piso'
-        : 'Ao piso'
-      : long
-        ? '1.º elevado'
-        : 'Elevado';
-    const fs = Math.min(10.5, Math.max(7, minS * 0.084));
-    const fill = firstOnGround ? '#0f766e' : '#9a3412';
-    const yLab = s.y + fs + 3;
-    parts.push(
-      `<text x="${s.x + s.w / 2}" y="${yLab}" text-anchor="middle" font-size="${fs}px" fill="${fill}" stroke="#ffffff" stroke-width="0.4" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="700">${escapeXml(txt)}</text>`
-    );
-  }
-
   /** Faixa da linha: contorno por face; em dupla, aresta da espinha mais leve (ver appendRowBandEnvelope). */
   for (const r of model.rowBandRects) {
     appendRowBandEnvelope(r, parts);
   }
 
   appendInterModuleColumnContinuity(model, parts);
-  appendRowLineMarkers(model, parts);
 
   for (const s of model.structureRects) {
     if (s.displayIndex === undefined) continue;
@@ -1038,8 +924,6 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
       `<text x="${tcx}" y="${yHalf}" text-anchor="middle" dominant-baseline="middle" class="fp-mod-half" font-size="${fsHalf}px" opacity="${Math.min(0.96, opacity + 0.06)}">${escapeXml('1/2 módulo')}</text>`
     );
   }
-
-  appendCorridorForkliftFlowHints(model, parts);
 
   parts.push(orientationArrowSvg(o, model.beamSpanAlong));
 

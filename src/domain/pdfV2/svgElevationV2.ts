@@ -1004,21 +1004,19 @@ function drawFrontRack(
   }
 
   if (showTunnelOpening && yPassTop < floorTop - 2.5) {
-    const tx0 = faceSpanLeft;
-    const tx1 = faceSpanRight;
-    const tw = Math.max(0, tx1 - tx0);
-    /** Abertura inferior: sem hachura dominante; ausência de longarinas + cotas definem o vão. */
+    const openW = Math.max(0, faceSpanRight - faceSpanLeft);
+    const cxAxis = rx + totalW / 2;
+    const tx0 = cxAxis - openW / 2;
+    const tx1 = cxAxis + openW / 2;
+    const tw = openW;
+    /** Abertura inferior: linha centrada no eixo do módulo (mesma largura útil que o vão entre faces). */
     parts.push(
       `<line x1="${tx0}" y1="${yPassTop}" x2="${tx1}" y2="${yPassTop}" stroke="#94a3b8" stroke-width="0.38" stroke-dasharray="5 6" opacity="0.42"/>`
     );
     if (tw > 36 && floorTop - yPassTop > 28) {
       const yMid = (yPassTop + floorTop) / 2;
       parts.push(
-        textLines(tx0 + tw / 2, yMid, ['Vão túnel (referência nas cotas)'], {
-          fontSize: 7.4 * ls,
-          fill: '#64748b',
-          fontWeight: '600',
-        })
+        `<text x="${cxAxis}" y="${yMid}" text-anchor="middle" dominant-baseline="middle" font-size="${7.4 * ls}px" fill="#64748b" font-family="${SVG_FONT_FAMILY}" font-weight="600">Vão túnel</text>`
       );
     }
   }
@@ -1406,12 +1404,9 @@ function drawLateral(
     );
     if (tw > 32 && floorTopLat - yPassTop > 24) {
       const yMid = (yPassTop + floorTopLat) / 2;
+      const cxBay = (bayLeft + bayRight) / 2;
       parts.push(
-        textLines(bayLeft + tw / 2, yMid, ['Vão túnel (cotas)'], {
-          fontSize: 7 * ls,
-          fill: '#94a3b8',
-          fontWeight: '600',
-        })
+        `<text x="${cxBay}" y="${yMid}" text-anchor="middle" dominant-baseline="middle" font-size="${7 * ls}px" fill="#94a3b8" font-family="${SVG_FONT_FAMILY}" font-weight="600">Vão túnel</text>`
       );
     }
   }
