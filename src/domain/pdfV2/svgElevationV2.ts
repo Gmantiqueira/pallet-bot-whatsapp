@@ -403,7 +403,7 @@ function extensionToDim(
   y: number,
   stroke: string
 ): string {
-  return `<line x1="${xFrom}" y1="${y}" x2="${xTo}" y2="${y}" stroke="${stroke}" stroke-width="0.28" stroke-dasharray="2.5 2" opacity="0.65"/>`;
+  return `<line x1="${xFrom}" y1="${y}" x2="${xTo}" y2="${y}" stroke="${stroke}" stroke-width="0.28" opacity="0.62"/>`;
 }
 
 /** Bloco de texto multilinha (SVG). */
@@ -807,7 +807,7 @@ function drawFrontStorageTiers(
       );
     } else {
       parts.push(
-        `<line x1="${mx}" y1="${t + 1.5}" x2="${mx}" y2="${b - 1.5}" stroke="${FV_PALLET_TIER_STROKE}" stroke-width="0.28" opacity="0.28" stroke-dasharray="2 3"/>`
+        `<line x1="${mx}" y1="${t + 1.5}" x2="${mx}" y2="${b - 1.5}" stroke="${FV_PALLET_TIER_STROKE}" stroke-width="0.28" opacity="0.22"/>`
       );
     }
   }
@@ -877,6 +877,30 @@ function drawUprightWidthDims(
   return parts.join('');
 }
 
+/** Encaixa o desenho no painel: bbox → escala uniforme → centragem (evita clipping). */
+function wrapSvgContentWithPanelFit(
+  inner: string,
+  panel: { ox: number; oy: number; pw: number; ph: number },
+  content: { minX: number; minY: number; maxX: number; maxY: number },
+  margin: number
+): string {
+  const { ox, oy, pw, ph } = panel;
+  const safeL = ox + margin;
+  const safeT = oy + margin;
+  const safeR = ox + pw - margin;
+  const safeB = oy + ph - margin;
+  const bw = Math.max(1, content.maxX - content.minX);
+  const bh = Math.max(1, content.maxY - content.minY);
+  const s = Math.min(1, (safeR - safeL) / bw, (safeB - safeT) / bh);
+  const cx = (content.minX + content.maxX) / 2;
+  const cy = (content.minY + content.maxY) / 2;
+  const tcx = (safeL + safeR) / 2;
+  const tcy = (safeT + safeB) / 2;
+  const tx = tcx - s * cx;
+  const ty = tcy - s * cy;
+  return `<g transform="translate(${tx.toFixed(3)},${ty.toFixed(3)}) scale(${s.toFixed(5)})">${inner}</g>`;
+}
+
 /** Vista frontal: estrutura, longarinas, piso, cotas e carga (kg) centrada acima de cada nível. */
 function drawFrontRack(
   ox: number,
@@ -902,15 +926,7 @@ function drawFrontRack(
   );
   const g = buildBeamGeometry(data, rackMaxW, rackMaxH, ox, oy, pw, ph);
   const slimmed = frontSlimUprightsWidenBay(g.uprightWidthsPx, g.beamPx, nMod);
-  const uprightWidthsPx = [...slimmed.uprightWidthsPx];
-  const nUpr = uprightWidthsPx.length;
-  if (nUpr >= 2) {
-    const u0 = uprightWidthsPx[0]!;
-    const u1 = uprightWidthsPx[nUpr - 1]!;
-    const avg = (u0 + u1) / 2;
-    uprightWidthsPx[0] = avg;
-    uprightWidthsPx[nUpr - 1] = avg;
-  }
+  const uprightWidthsPx = slimmed.uprightWidthsPx;
   const beamWithFrontVis = slimmed.beamPx;
   const gapPx = g.gapPx;
   const {
@@ -1012,20 +1028,21 @@ function drawFrontRack(
   }
 
   if (showTunnelOpening && yPassTop < floorTop - 2.5) {
-    const openW = Math.max(0, faceSpanRight - faceSpanLeft);
-    const cxAxis = rx + totalW / 2;
-    const tx0 = cxAxis - openW / 2;
-    const tx1 = cxAxis + openW / 2;
-    const tw = openW;
-    /** Abertura inferior: linha centrada no eixo do módulo (mesma largura útil que o vão entre faces). */
-    parts.push(
-      `<line x1="${tx0}" y1="${yPassTop}" x2="${tx1}" y2="${yPassTop}" stroke="#94a3b8" stroke-width="0.38" stroke-dasharray="5 6" opacity="0.42"/>`
-    );
-    if (tw > 36 && floorTop - yPassTop > 28) {
-      const yMid = (yPassTop + floorTop) / 2;
+    const yMid = (yPassTop + floorTop) / 2;
+    for (let bi = 0; bi < bays.length; bi++) {
+      const bay = bays[bi]!;
+      const bl = bay.left;
+      const br = bay.right;
+      const bw = br - bl;
+      const cxBay = (bl + br) / 2;
       parts.push(
-        `<text x="${cxAxis}" y="${yMid}" text-anchor="middle" dominant-baseline="middle" font-size="${7.4 * ls}px" fill="#64748b" font-family="${SVG_FONT_FAMILY}" font-weight="600">Vão túnel</text>`
+        `<line x1="${bl}" y1="${yPassTop}" x2="${br}" y2="${yPassTop}" stroke="#94a3b8" stroke-width="0.42" opacity="0.55"/>`
       );
+      if (bw > 18 && floorTop - yPassTop > 28) {
+        parts.push(
+          `<text x="${cxBay}" y="${yMid}" text-anchor="middle" dominant-baseline="middle" font-size="${7.4 * ls}px" fill="#64748b" font-family="${SVG_FONT_FAMILY}" font-weight="600">Vão túnel</text>`
+        );
+      }
     }
   }
 
@@ -1035,30 +1052,6 @@ function drawFrontRack(
 
   const yBeam0Elev = beamYsPx[0];
   if (
-    data.firstLevelOnGround === false &&
-    typeof yBeam0Elev === 'number' &&
-    !showTunnelOpening &&
-    rackBottom - yBeam0Elev > 6
-  ) {
-    for (let bi = 0; bi < bays.length; bi++) {
-      const bay = bays[bi]!;
-      const yTop = Math.min(yBeam0Elev, rackBottom);
-      const yBot = Math.max(yBeam0Elev, rackBottom);
-      parts.push(
-        `<rect x="${bay.left}" y="${yTop}" width="${bay.right - bay.left}" height="${yBot - yTop}" fill="#ffedd5" fill-opacity="0.58" stroke="#ea580c" stroke-width="0.65" stroke-dasharray="7 5" opacity="0.92"/>`
-      );
-      parts.push(
-        `<line x1="${bay.left}" y1="${(yTop + yBot) / 2}" x2="${bay.right}" y2="${(yTop + yBot) / 2}" stroke="#c2410c" stroke-width="0.72" stroke-dasharray="6 5" opacity="0.92"/>`
-      );
-    }
-    const cx = (faceSpanLeft + faceSpanRight) / 2;
-    const cyMid =
-      (Math.min(yBeam0Elev, rackBottom) + Math.max(yBeam0Elev, rackBottom)) /
-      2;
-    parts.push(
-      `<text x="${cx}" y="${cyMid - 4.5 * ls}" text-anchor="middle" font-size="${8.6 * ls}px" fill="#9a3412" stroke="#ffffff" stroke-width="${0.35 * ls}" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="700">1.º eixo elevado (folga sob o patamar)</text>`
-    );
-  } else if (
     data.firstLevelOnGround === true &&
     typeof yBeam0Elev === 'number' &&
     !showTunnelOpening &&
@@ -1274,7 +1267,24 @@ function drawFrontRack(
     parts.push('</g>');
   }
 
-  return parts.join('');
+  const inner = parts.join('');
+  const rackRight = rx + totalW;
+  const step = 12.5 * ls;
+  const detailApprox = Math.max(3, storageTiers + 2 + tunnelExtraSeg);
+  const dimRight = rackRight + 10 + (detailApprox + 1) * step + 96;
+  let minY = Math.min(dimTopY - 22 * ls, ry - 8, dimTopY - 20 * ls - 16);
+  if (sectionTitle) minY = Math.min(minY, oy + 6);
+  if (subtitle) minY = Math.min(minY, oy + 4);
+  if (showTunnelOpening) minY = Math.min(minY, yPassTop - 10);
+  const maxY = Math.max(rackBottom + 76 * ls, floorTop + 16, oy + ph * 0.98);
+  const minX = Math.min(rx - floorPad - 4, faceSpanLeft - 30, ox + 4);
+  const maxX = Math.max(dimRight, ox + pw - 6, rackRight + floorPad + 8);
+  return wrapSvgContentWithPanelFit(
+    inner,
+    { ox, oy, pw, ph },
+    { minX, minY, maxX, maxY },
+    12
+  );
 }
 
 /** Treliça diagonal entre dois níveis de vigas. */
@@ -1408,7 +1418,7 @@ function drawLateral(
   if (showTunnelOpening && yPassTop < floorTopLat - 2.5) {
     const tw = Math.max(0, bayRight - bayLeft);
     parts.push(
-      `<line x1="${bayLeft}" y1="${yPassTop}" x2="${bayRight}" y2="${yPassTop}" stroke="#94a3b8" stroke-width="0.36" stroke-dasharray="5 6" opacity="0.4"/>`
+      `<line x1="${bayLeft}" y1="${yPassTop}" x2="${bayRight}" y2="${yPassTop}" stroke="#94a3b8" stroke-width="0.4" opacity="0.52"/>`
     );
     if (tw > 32 && floorTopLat - yPassTop > 24) {
       const yMid = (yPassTop + floorTopLat) / 2;
@@ -1421,19 +1431,6 @@ function drawLateral(
 
   const yB0Lat = beamYLocal(0);
   if (
-    data.firstLevelOnGround === false &&
-    !showTunnelOpening &&
-    floorTopLat - yB0Lat > 6
-  ) {
-    const yTop = Math.min(yB0Lat, floorTopLat);
-    const yBot = Math.max(yB0Lat, floorTopLat);
-    parts.push(
-      `<rect x="${bayLeft}" y="${yTop}" width="${bayRight - bayLeft}" height="${yBot - yTop}" fill="#ffedd5" fill-opacity="0.55" stroke="#ea580c" stroke-width="0.62" stroke-dasharray="7 5" opacity="0.9"/>`
-    );
-    parts.push(
-      `<line x1="${bayLeft}" y1="${(yTop + yBot) / 2}" x2="${bayRight}" y2="${(yTop + yBot) / 2}" stroke="#c2410c" stroke-width="0.68" stroke-dasharray="6 5" opacity="0.9"/>`
-    );
-  } else if (
     data.firstLevelOnGround === true &&
     !showTunnelOpening &&
     Math.abs(yB0Lat - floorTopLat) > 5
@@ -1551,7 +1548,23 @@ function drawLateral(
     parts.push('</g>');
   }
 
-  return parts.join('');
+  const innerLat = parts.join('');
+  const latStep = 12.5 * ls;
+  const latTunnelExtra =
+    showTunnelOpening && typeof data.tunnelClearanceMm === 'number' ? 1 : 0;
+  const latDetailApprox = Math.max(3, storageTiers + 2 + latTunnelExtra);
+  const dimRightLat =
+    x0 + dw + 10 + (latDetailApprox + 1) * latStep + 92;
+  const minXL = Math.min(x0 - 12, ox + 4);
+  const maxXL = Math.max(dimRightLat, ox + pw - 6);
+  const minYL = Math.min(y0 - 10 * ls, oy + (hideHeader ? 4 : 8));
+  const maxYL = Math.max(floorTopLat + 44 * ls, oy + ph * 0.97);
+  return wrapSvgContentWithPanelFit(
+    innerLat,
+    { ox, oy, pw, ph },
+    { minX: minXL, minY: minYL, maxX: maxXL, maxY: maxYL },
+    12
+  );
 }
 
 /** Escala de cotas / legendas em páginas PDF dedicadas (uma elevação por folha). */

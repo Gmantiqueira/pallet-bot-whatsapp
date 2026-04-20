@@ -65,8 +65,6 @@ const COL_RESIDUAL_STROKE = '#a1a1aa';
 const COL_DIM = '#111827';
 /** Reserva inferior do viewBox para legenda + cotas (encaixe global do desenho). */
 const FLOOR_PLAN_LEGEND_RESERVE_PX = 458;
-/** Junção de módulos túnel consecutivos ao longo do vão (px). */
-const TUNNEL_MERGE_GAP_EPS_PX = 3;
 /** Contorno da **faixa da linha** (unidade contínua), desenhado por cima dos módulos. */
 const COL_ROW_ENVELOPE_STROKE = '#334155';
 const ROW_ENVELOPE_SW = 2.92;
@@ -126,100 +124,6 @@ function sortCirculation(
 
 type StructureRect = FloorPlanModelV2['structureRects'][number];
 type CirculationRect = FloorPlanModelV2['circulationRects'][number];
-
-function rowBandKeyForMerge(
-  r: { x: number; y: number; w: number; h: number },
-  alongX: boolean
-): string {
-  return alongX
-    ? `${Math.round(r.y * 2)}_${Math.round(r.h * 2)}`
-    : `${Math.round(r.x * 2)}_${Math.round(r.w * 2)}`;
-}
-
-/**
- * Funde módulos túnel consecutivos na mesma fileira (mesma ordem de sobreposição que na geometria).
- */
-function mergeTunnelStructureRects(
-  rects: StructureRect[],
-  beamAlong: 'x' | 'y'
-): StructureRect[] {
-  const alongX = beamAlong === 'x';
-  const out: StructureRect[] = [];
-  let i = 0;
-  let mergeIdx = 0;
-  while (i < rects.length) {
-    const r = rects[i]!;
-    if (r.variant !== 'tunnel') {
-      out.push(r);
-      i++;
-      continue;
-    }
-    const k = rowBandKeyForMerge(r, alongX);
-    let cur = { ...r };
-    i++;
-    while (i < rects.length) {
-      const nxt = rects[i]!;
-      if (nxt.variant !== 'tunnel') break;
-      if (rowBandKeyForMerge(nxt, alongX) !== k) break;
-      const gap = alongX
-        ? nxt.x - (cur.x + cur.w)
-        : nxt.y - (cur.y + cur.h);
-      if (Math.abs(gap) > TUNNEL_MERGE_GAP_EPS_PX) break;
-      const x0 = Math.min(cur.x, nxt.x);
-      const y0 = Math.min(cur.y, nxt.y);
-      const x1 = Math.max(cur.x + cur.w, nxt.x + nxt.w);
-      const y1 = Math.max(cur.y + cur.h, nxt.y + nxt.h);
-      cur = { ...cur, x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
-      i++;
-    }
-    out.push({
-      ...cur,
-      id: `tunnel-merged-${mergeIdx++}`,
-      displayIndex: undefined,
-    });
-  }
-  return out;
-}
-
-/** Funde zonas de circulação «túnel» adjacentes (mesma ordem de pintura que sortCirculation). */
-function mergeTunnelCirculationRects(
-  rects: CirculationRect[],
-  beamAlong: 'x' | 'y'
-): CirculationRect[] {
-  const alongX = beamAlong === 'x';
-  const sorted = sortCirculation(rects);
-  const out: CirculationRect[] = [];
-  let i = 0;
-  let cIdx = 0;
-  while (i < sorted.length) {
-    const r = sorted[i]!;
-    if (circulationSemantic(r) !== 'tunnel') {
-      out.push(r);
-      i++;
-      continue;
-    }
-    const k = rowBandKeyForMerge(r, alongX);
-    let cur = { ...r };
-    i++;
-    while (i < sorted.length) {
-      const nxt = sorted[i]!;
-      if (circulationSemantic(nxt) !== 'tunnel') break;
-      if (rowBandKeyForMerge(nxt, alongX) !== k) break;
-      const gap = alongX
-        ? nxt.x - (cur.x + cur.w)
-        : nxt.y - (cur.y + cur.h);
-      if (Math.abs(gap) > TUNNEL_MERGE_GAP_EPS_PX) break;
-      const x0 = Math.min(cur.x, nxt.x);
-      const y0 = Math.min(cur.y, nxt.y);
-      const x1 = Math.max(cur.x + cur.w, nxt.x + nxt.w);
-      const y1 = Math.max(cur.y + cur.h, nxt.y + nxt.h);
-      cur = { ...cur, x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
-      i++;
-    }
-    out.push({ ...cur, id: `tunnel-circ-merged-${cIdx++}` });
-  }
-  return out;
-}
 
 function orientationArrowBounds(
   o: FloorPlanModelV2['warehouseOutline'],
@@ -301,7 +205,6 @@ function fitTransformForDrawingBounds(
   const sx = (safeR - safeL) / bw;
   const sy = (safeB - safeT) / bh;
   const sc = Math.min(1, sx, sy);
-  if (sc >= 0.998) return '';
   const cx = (b.minX + b.maxX) / 2;
   const cy = (b.minY + b.maxY) / 2;
   const tcx = (safeL + safeR) / 2;
@@ -384,43 +287,10 @@ function guardKindAtPlanEdge(
 
 /** Faixa na base da pegada (vista em planta) — alinha com protetor na face frontal da elevação. */
 function appendColumnProtectorAlongModules(
-  model: FloorPlanModelV2,
-  parts: string[]
+  _model: FloorPlanModelV2,
+  _parts: string[]
 ): void {
-  if (!model.planAccessories.columnProtector) return;
-  const maxMarks = 64;
-  let n = 0;
-  for (const s of model.structureRects) {
-    if (s.variant === 'tunnel') continue;
-    if (n >= maxMarks) break;
-    n += 1;
-    const bw = Math.max(16, s.w * 0.62);
-    const bh = 9.2;
-    const bx = s.x + (s.w - bw) / 2;
-    const by = s.y + s.h - bh - 0.5;
-    parts.push(
-      `<rect x="${bx - 1}" y="${by - 0.5}" width="${bw + 2}" height="${bh + 1}" rx="2" fill="none" stroke="#ffffff" stroke-width="1.35" opacity="0.92"/>`
-    );
-    parts.push(
-      `<rect x="${bx}" y="${by}" width="${bw}" height="${bh}" rx="1.6" fill="#ea580c" stroke="#7c2d12" stroke-width="1.35" opacity="0.99"/>`
-    );
-    parts.push(
-      `<line x1="${bx + bw * 0.1}" y1="${by + bh * 0.52}" x2="${bx + bw * 0.9}" y2="${by + bh * 0.52}" stroke="#ffedd5" stroke-width="1.05" opacity="0.95"/>`
-    );
-    const padW = Math.max(4.2, s.w * 0.044);
-    const padH = Math.min(bh + 4.5, s.h * 0.125);
-    const yPad = s.y + s.h - padH;
-    for (const fx of [0.14, 0.5, 0.86] as const) {
-      const cx = s.x + s.w * fx - padW / 2;
-      const foot = 2.8;
-      parts.push(
-        `<rect x="${cx}" y="${yPad}" width="${padW}" height="${padH}" rx="0.75" fill="#c2410c" stroke="#431407" stroke-width="0.72" opacity="0.98"/>`
-      );
-      parts.push(
-        `<line x1="${cx + padW / 2}" y1="${yPad + padH}" x2="${cx + padW / 2}" y2="${yPad + padH + foot}" stroke="#431407" stroke-width="1.15" stroke-linecap="square" opacity="0.95"/>`
-      );
-    }
-  }
+  /* Protetores nas pegadas omitidos na planta (legenda mantém o símbolo). */
 }
 
 /**
@@ -893,14 +763,8 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
     `<rect x="${fpPad}" y="${fpPad}" width="${w - 2 * fpPad}" height="${h - 2 * fpPad}" fill="none" stroke="${COL_FRAME}" stroke-width="0.65"/>`
   );
 
-  const structureDraw = mergeTunnelStructureRects(
-    model.structureRects,
-    model.beamSpanAlong
-  );
-  const circulationDraw = mergeTunnelCirculationRects(
-    model.circulationRects,
-    model.beamSpanAlong
-  );
+  const structureDraw = model.structureRects;
+  const circulationDraw = sortCirculation(model.circulationRects);
   const drawingBounds = computeFloorPlanDrawingBounds(
     model,
     structureDraw,
@@ -913,7 +777,7 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
     fpPad,
     FLOOR_PLAN_LEGEND_RESERVE_PX
   );
-  parts.push(fitTf ? `<g transform="${fitTf}">` : '<g>');
+  parts.push(`<g transform="${fitTf}">`);
 
   const o = model.warehouseOutline;
   parts.push(
@@ -1021,7 +885,6 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
 
   const levelTint = model.moduleLevelTint;
   const moduleCount = structureDraw.length;
-  const firstOnGround = model.planAccessories.firstLevelOnGround !== false;
   for (const s of structureDraw) {
     const isTunnel = s.variant === 'tunnel';
     const isHalf = s.segmentType === 'half';
@@ -1050,13 +913,19 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
       parts.push(
         `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="${fillMod}" stroke="${strokeMod}" stroke-width="${sw}"/>`
       );
+      const cx = s.x + s.w / 2;
+      const cy = s.y + s.h / 2;
+      const fsLbl = Math.min(11, Math.max(8, Math.min(s.w, s.h) * 0.06));
+      const { fontPx, opacity } = moduleDisplayFontOpacity(s, moduleCount);
+      const fsNum = Math.min(fontPx, Math.max(13, Math.min(s.w, s.h) * 0.2));
       parts.push(
-        `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="url(#fp-tunnel-void-strip)" stroke="none" opacity="0.09"/>`
+        `<text x="${cx}" y="${cy - fsNum * 0.38}" text-anchor="middle" dominant-baseline="middle" font-size="${fsLbl}px" fill="#78350f" font-family="${SVG_FONT_FAMILY}" font-weight="600" opacity="0.82">Passagem</text>`
       );
-      const fsT = Math.min(12, Math.max(9.5, Math.min(s.w, s.h) * 0.065));
-      parts.push(
-        `<text x="${s.x + s.w / 2}" y="${s.y + s.h / 2}" text-anchor="middle" dominant-baseline="middle" font-size="${fsT}px" fill="#78350f" font-family="${SVG_FONT_FAMILY}" font-weight="700" opacity="0.94">Passagem</text>`
-      );
+      if (s.displayIndex !== undefined) {
+        parts.push(
+          `<text x="${cx}" y="${cy + fsLbl * 0.35}" text-anchor="middle" dominant-baseline="middle" class="fp-mod-num" font-size="${fsNum}px" opacity="${opacity}">${s.displayIndex}</text>`
+        );
+      }
     } else {
       parts.push(
         `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="${fillMod}" stroke="none"/>`
@@ -1067,25 +936,6 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
       if (isHalf) {
         parts.push(
           `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="url(#fp-half-module-hatch)" stroke="none" opacity="0.11"/>`
-        );
-      }
-      if (firstOnGround) {
-        const band = Math.max(6.5, s.h * 0.078);
-        parts.push(
-          `<rect x="${s.x + 1}" y="${s.y + s.h - band - 1}" width="${s.w - 2}" height="${band}" fill="#2dd4bf" fill-opacity="0.52" stroke="#0f766e" stroke-width="0.85" rx="1"/>`
-        );
-        parts.push(
-          `<line x1="${s.x}" y1="${s.y + s.h}" x2="${s.x + s.w}" y2="${s.y + s.h}" stroke="#0d9488" stroke-width="3.6" stroke-linecap="square" opacity="0.95"/>`
-        );
-      } else {
-        parts.push(
-          `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="url(#fp-first-level-elevated)" stroke="none" opacity="0.14"/>`
-        );
-        parts.push(
-          `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="#fff7ed" fill-opacity="0.1" stroke="none"/>`
-        );
-        parts.push(
-          `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="none" stroke="#ea580c" stroke-width="1.65" stroke-dasharray="6 5" opacity="0.88"/>`
         );
       }
       parts.push(

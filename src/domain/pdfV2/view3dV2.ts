@@ -157,10 +157,14 @@ export function render3DViewV2(
   const availW = vbW - 2 * pad;
   const availH = vbH - 2 * pad;
   const scale = Math.min(availW / spanX, availH / spanY);
+  const drawnW = spanX * scale;
+  const drawnH = spanY * scale;
+  const offX = pad + (availW - drawnW) / 2;
+  const offY = pad + (availH - drawnH) / 2;
 
   const toSvg = (x: number, y: number): { x: number; y: number } => ({
-    x: pad + (x - minX) * scale,
-    y: pad + (y - minY) * scale,
+    x: offX + (x - minX) * scale,
+    y: offY + (y - minY) * scale,
   });
 
   const parts: string[] = [];
@@ -186,13 +190,8 @@ export function render3DViewV2(
       const a = toSvg(ln.x1, ln.y1);
       const b = toSvg(ln.x2, ln.y2);
       const st = strokeForLine(ln, debug);
-      const halfOutlineDash =
-        ln.kind === 'module_outline' &&
-        ln.lineRole === 'module_outline_half'
-          ? ` stroke-dasharray="5.5 4"`
-          : '';
       parts.push(
-        `<line x1="${a.x.toFixed(2)}" y1="${a.y.toFixed(2)}" x2="${b.x.toFixed(2)}" y2="${b.y.toFixed(2)}" stroke="${st.c}" stroke-width="${st.w}" stroke-opacity="${st.opacity}"${halfOutlineDash} stroke-linecap="round" stroke-linejoin="round" fill="none"/>`
+        `<line x1="${a.x.toFixed(2)}" y1="${a.y.toFixed(2)}" x2="${b.x.toFixed(2)}" y2="${b.y.toFixed(2)}" stroke="${st.c}" stroke-width="${st.w}" stroke-opacity="${st.opacity}" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`
       );
     }
   }
@@ -203,7 +202,7 @@ export function render3DViewV2(
     const b = toSvg(ln.x2, ln.y2);
     const st = strokeForLine(ln, debug);
     parts.push(
-      `<line x1="${a.x.toFixed(2)}" y1="${a.y.toFixed(2)}" x2="${b.x.toFixed(2)}" y2="${b.y.toFixed(2)}" stroke="${st.c}" stroke-width="${st.w}" stroke-opacity="${st.opacity}" stroke-dasharray="5 4" stroke-linecap="square" fill="none"/>`
+      `<line x1="${a.x.toFixed(2)}" y1="${a.y.toFixed(2)}" x2="${b.x.toFixed(2)}" y2="${b.y.toFixed(2)}" stroke="${st.c}" stroke-width="${st.w}" stroke-opacity="${st.opacity}" stroke-linecap="square" fill="none"/>`
     );
   }
 
@@ -212,10 +211,8 @@ export function render3DViewV2(
     const a = toSvg(ln.x1, ln.y1);
     const b = toSvg(ln.x2, ln.y2);
     const st = strokeForLine(ln, debug);
-    const dash =
-      ln.kind === 'beam' ? ` stroke-dasharray="4 3.5"` : '';
     parts.push(
-      `<line x1="${a.x.toFixed(2)}" y1="${a.y.toFixed(2)}" x2="${b.x.toFixed(2)}" y2="${b.y.toFixed(2)}" stroke="${st.c}" stroke-width="${st.w}" stroke-opacity="${st.opacity}"${dash} stroke-linecap="round" fill="none"/>`
+      `<line x1="${a.x.toFixed(2)}" y1="${a.y.toFixed(2)}" x2="${b.x.toFixed(2)}" y2="${b.y.toFixed(2)}" stroke="${st.c}" stroke-width="${st.w}" stroke-opacity="${st.opacity}" stroke-linecap="round" fill="none"/>`
     );
   }
 

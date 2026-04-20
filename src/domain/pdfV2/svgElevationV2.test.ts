@@ -110,7 +110,8 @@ describe('serializeElevationPagesV2', () => {
     expect(model.lateralWithTunnel).toBeDefined();
     expect(pages.lateralWithTunnel).toBeDefined();
     expect(pages.frontWithoutTunnel).not.toContain('Vão túnel');
-    expect(pages.frontWithTunnel!).toContain('Vão túnel');
+    const tunLabels = pages.frontWithTunnel!.match(/Vão túnel/g) ?? [];
+    expect(tunLabels.length).toBeGreaterThanOrEqual(2);
     expect(pages.lateralWithTunnel!).toMatch(/Vão túnel/i);
   });
 });
