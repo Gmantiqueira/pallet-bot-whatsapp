@@ -7,7 +7,6 @@ import {
 
 const EPS = 0.5;
 /** Espinha entre costas em dupla — alinhado a layoutSolutionV2 / layoutGeometryV2. */
-const SPINE_BACK_TO_BACK_MM = 100;
 /** Tolerância ao comparar profundidade de cada costa com `rackDepthMm` (mm). */
 const DOUBLE_DEPTH_MATCH_TOL_MM = 80;
 
@@ -106,16 +105,27 @@ export function splitModuleFootprintsFor3d(
   row: RackRow,
   mod: RackModule,
   rackDepthMm: number,
-  layoutOrientation: LayoutOrientationV2
+  layoutOrientation: LayoutOrientationV2,
+  spineBackToBackMm = 100
 ): ModuleFootprint3d[] {
   const fp = mod.footprint;
   if (row.rowType !== 'backToBack') {
     return [fp];
   }
 
-  const split = trySplitBackToBackFootprint(fp, rackDepthMm, layoutOrientation);
+  const split = trySplitBackToBackFootprint(
+    fp,
+    rackDepthMm,
+    layoutOrientation,
+    spineBackToBackMm
+  );
   if (split) return split;
-  const fb = splitBackToBackFallback(fp, rackDepthMm, layoutOrientation);
+  const fb = splitBackToBackFallback(
+    fp,
+    rackDepthMm,
+    layoutOrientation,
+    spineBackToBackMm
+  );
   return fb ?? [fp];
 }
 
@@ -126,7 +136,8 @@ export function splitModuleFootprintsFor3d(
 function trySplitBackToBackFootprint(
   fp: ModuleFootprint3d,
   rackDepthMm: number,
-  layoutOrientation: LayoutOrientationV2
+  layoutOrientation: LayoutOrientationV2,
+  spineBackToBackMm: number
 ): ModuleFootprint3d[] | null {
   const xLo = Math.min(fp.x0, fp.x1);
   const xHi = Math.max(fp.x0, fp.x1);
@@ -137,7 +148,7 @@ function trySplitBackToBackFootprint(
 
   if (layoutOrientation === 'along_length') {
     const ySplitFront = yLo + rackDepthMm;
-    const ySplitBack = ySplitFront + SPINE_BACK_TO_BACK_MM;
+    const ySplitBack = ySplitFront + spineBackToBackMm;
     const frontDepth = ySplitFront - yLo;
     const backDepth = yHi - ySplitBack;
     if (frontDepth <= EPS || backDepth <= EPS) {
@@ -156,7 +167,7 @@ function trySplitBackToBackFootprint(
   }
 
   const xSplitFront = xLo + rackDepthMm;
-  const xSplitBack = xSplitFront + SPINE_BACK_TO_BACK_MM;
+  const xSplitBack = xSplitFront + spineBackToBackMm;
   const frontDepth = xSplitFront - xLo;
   const backDepth = xHi - xSplitBack;
   if (frontDepth <= EPS || backDepth <= EPS) {
@@ -181,20 +192,21 @@ function trySplitBackToBackFootprint(
 function splitBackToBackFallback(
   fp: ModuleFootprint3d,
   rackDepthMm: number,
-  layoutOrientation: LayoutOrientationV2
+  layoutOrientation: LayoutOrientationV2,
+  spineBackToBackMm: number
 ): ModuleFootprint3d[] | null {
   const xLo = Math.min(fp.x0, fp.x1);
   const xHi = Math.max(fp.x0, fp.x1);
   const yLo = Math.min(fp.y0, fp.y1);
   const yHi = Math.max(fp.y0, fp.y1);
-  const expected = 2 * rackDepthMm + SPINE_BACK_TO_BACK_MM;
+  const expected = 2 * rackDepthMm + spineBackToBackMm;
   const looseTol = Math.max(120, 0.12 * rackDepthMm);
 
   if (layoutOrientation === 'along_length') {
     const trans = yHi - yLo;
     if (Math.abs(trans - expected) > looseTol) return null;
     const ySplitFront = yLo + rackDepthMm;
-    const ySplitBack = ySplitFront + SPINE_BACK_TO_BACK_MM;
+    const ySplitBack = ySplitFront + spineBackToBackMm;
     if (ySplitBack >= yHi - EPS) return null;
     return [
       { x0: xLo, x1: xHi, y0: yLo, y1: ySplitFront },
@@ -205,7 +217,7 @@ function splitBackToBackFallback(
   const trans = xHi - xLo;
   if (Math.abs(trans - expected) > looseTol) return null;
   const xSplitFront = xLo + rackDepthMm;
-  const xSplitBack = xSplitFront + SPINE_BACK_TO_BACK_MM;
+  const xSplitBack = xSplitFront + spineBackToBackMm;
   if (xSplitBack >= xHi - EPS) return null;
   return [
     { x0: xLo, x1: xSplitFront, y0: yLo, y1: yHi },
@@ -538,7 +550,8 @@ export function build3DModelV2(
         row,
         mod,
         rackDepthMm,
-        layoutOrientation
+        layoutOrientation,
+        geometry.metadata.spineBackToBackMm
       );
       footprintPrismCount += fps.length;
 
@@ -653,7 +666,13 @@ export function expectedBayDividerSegmentCounts(
     for (const mod of row.modules) {
       const mid = absoluteMidAlongMm(mod, ori);
       if (mid == null) continue;
-      const fps = splitModuleFootprintsFor3d(row, mod, rackDepthMm, ori);
+      const fps = splitModuleFootprintsFor3d(
+        row,
+        mod,
+        rackDepthMm,
+        ori,
+        geometry.metadata.spineBackToBackMm
+      );
       const nb = countBeamZsForBayDivider3d(mod);
       for (const fp of fps) {
         if (!bayDividerFitsFootprint(fp, ori, mid)) continue;

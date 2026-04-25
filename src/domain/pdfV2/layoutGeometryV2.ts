@@ -39,7 +39,6 @@ import type {
 } from './types';
 
 const EPS = 0.5;
-const SPINE_BACK_TO_BACK_MM = 100;
 
 /** Montante padrão (mm) — módulo normal. */
 export const UPRIGHT_THICKNESS_NORMAL_MM = 75;
@@ -174,6 +173,8 @@ export type LayoutGeometryMetadata = {
   crossSpanMm: number;
   /** Same as {@link LayoutSolutionV2.moduleLengthAlongBeamMm} — full module step along the row. */
   moduleLengthAlongBeamMm: number;
+  /** Espinha entre costas (mm) — rua dupla; alinhado ao distanciador no fluxo. */
+  spineBackToBackMm: number;
 };
 
 export type LayoutGeometry = {
@@ -646,6 +647,7 @@ export function buildLayoutGeometry(
       beamSpanMm: solution.beamSpanMm,
       crossSpanMm: solution.crossSpanMm,
       moduleLengthAlongBeamMm: solution.moduleLengthAlongBeamMm,
+      spineBackToBackMm: solution.metadata.spineBackToBackMm ?? 100,
     },
   };
 }
@@ -824,8 +826,9 @@ export function validateLayoutGeometry(geo: LayoutGeometry): void {
     }
     rowIds.add(row.id);
 
+    const spine = geo.metadata.spineBackToBackMm;
     const expectedDepth =
-      row.rowType === 'backToBack' ? 2 * md + SPINE_BACK_TO_BACK_MM : md;
+      row.rowType === 'backToBack' ? 2 * md + spine : md;
     if (Math.abs(row.rowDepthMm - expectedDepth) > 2) {
       throw new LayoutGeometryValidationError(
         `Fileira ${row.id}: profundidade ${row.rowDepthMm} mm não corresponde ao modo ` +

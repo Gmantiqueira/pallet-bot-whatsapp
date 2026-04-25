@@ -10,6 +10,7 @@ import {
   validateLevels,
   validateLevelGap,
   validateMm,
+  validateSpineBackToBackMm,
 } from './conversationHelpers';
 import { capacityKgFromPalletWeightKg } from './capacityFromPallet';
 import {
@@ -34,6 +35,7 @@ export type State =
   | 'CHOOSE_LINE_STRATEGY'
   | 'WAIT_LINE_CUSTOM_SIMPLES'
   | 'WAIT_LINE_CUSTOM_DUPLOS'
+  | 'WAIT_SPINE_BACK_TO_BACK'
   | 'CHOOSE_TUNNEL'
   | 'CHOOSE_TUNNEL_COUNT'
   | 'CHOOSE_TUNNEL_POSITION'
@@ -457,7 +459,19 @@ export const transition = (
       const answers: Record<string, unknown> = { ...newSession.answers, lineStrategy: v };
       clearCustomLineCounts(answers);
       newSession = { ...newSession, answers };
-      newSession = goNext(newSession, { lineStrategy: v }, 'CHOOSE_TUNNEL');
+      if (v === 'APENAS_SIMPLES') {
+        newSession = goNext(
+          newSession,
+          { lineStrategy: v, spineBackToBackMm: 100 },
+          'CHOOSE_TUNNEL'
+        );
+      } else {
+        newSession = goNext(
+          newSession,
+          { lineStrategy: v },
+          'WAIT_SPINE_BACK_TO_BACK'
+        );
+      }
       effects.push({ type: 'SEND' });
       return { session: newSession, effects, error };
     }
@@ -526,14 +540,48 @@ export const transition = (
             'Com corredor 0, não é possível fileiras em dupla costas. Indique 0 fileiras duplas ou defina corredor > 0.',
         };
       }
-      newSession = goNext(
-        newSession,
-        { customLineDoubleCount: n },
-        'CHOOSE_TUNNEL'
-      );
+      if (n > 0) {
+        newSession = goNext(
+          newSession,
+          { customLineDoubleCount: n },
+          'WAIT_SPINE_BACK_TO_BACK'
+        );
+      } else {
+        newSession = goNext(
+          newSession,
+          { customLineDoubleCount: n, spineBackToBackMm: 100 },
+          'CHOOSE_TUNNEL'
+        );
+      }
       effects.push({ type: 'SEND' });
       return { session: newSession, effects, error };
     }
+
+    case 'WAIT_SPINE_BACK_TO_BACK':
+      if (input.type !== 'TEXT') {
+        return { session: newSession, effects, error };
+      }
+      {
+        const mm = parseNumber(input.value);
+        if (mm === null) {
+          return {
+            session: newSession,
+            effects,
+            error: 'Por favor, digite um número válido em mm',
+          };
+        }
+        const ve = validateSpineBackToBackMm(mm);
+        if (ve) {
+          return { session: newSession, effects, error: ve };
+        }
+        newSession = goNext(
+          newSession,
+          { spineBackToBackMm: mm },
+          'CHOOSE_TUNNEL'
+        );
+        effects.push({ type: 'SEND' });
+      }
+      return { session: newSession, effects, error };
 
     case 'CHOOSE_TUNNEL':
       if (input.type === 'BUTTON') {

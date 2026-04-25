@@ -108,6 +108,12 @@ export type LayoutSolutionV2 = {
      * no fim do compartimento — usada para INICIO/MEIO/FIM relativos à fileira operacional.
      */
     tunnelOperationalExtentMm?: number;
+    /**
+     * Largura da espinha / “rua” entre as duas costas numa fileira dupla (mm). Igual à entrada
+     * do distanciador no fluxo; o motor de layout usa o mesmo valor na banda `2×prof + espinha`.
+     * Omisso em testes: tratar como 100 mm.
+     */
+    spineBackToBackMm?: number;
   };
 };
 

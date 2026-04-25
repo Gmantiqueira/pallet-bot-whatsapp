@@ -207,6 +207,14 @@ const buildStateMessage = (session: Session): OutgoingMessage | null => {
             '0–20, inteiro. Ex.: 0 se só tiver fileiras simples. Ordem no desenho: primeiro as duplas, depois as simples.',
       };
 
+    case 'WAIT_SPINE_BACK_TO_BACK':
+      return {
+        to: session.phone,
+        text:
+          'Largura da *rua dupla* entre costas (mm)\n\n' +
+            'Define o canal central (espinha) na fileira em dupla costas e a referência de tamanho do distanciador. Ex.: 100 (comum) ou 120.',
+      };
+
     case 'CHOOSE_TUNNEL':
       return {
         to: session.phone,
@@ -621,6 +629,18 @@ const buildSummary = (session: Session): string => {
     ) {
       lines.push(
         `  • Simples: ${a.customLineSimpleCount} · duplas: ${a.customLineDoubleCount} (ordem: duplas → simples no eixo transversal)`
+      );
+    }
+    const needsSpineLine =
+      (a.lineStrategy === 'APENAS_DUPLOS' ||
+        a.lineStrategy === 'MELHOR_LAYOUT' ||
+        (a.lineStrategy === 'PERSONALIZADO' &&
+          typeof a.customLineDoubleCount === 'number' &&
+          a.customLineDoubleCount > 0)) &&
+      typeof a.spineBackToBackMm === 'number';
+    if (needsSpineLine) {
+      lines.push(
+        `Rua dupla (espinha / distanciador): ${a.spineBackToBackMm} mm`
       );
     }
   }

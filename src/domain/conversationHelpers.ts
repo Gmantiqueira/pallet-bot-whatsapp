@@ -14,6 +14,9 @@ export const MAX_LEVELS = 12;
 /** Espaçamento vertical entre níveis (mm) — intervalo prático para armazenagem. */
 export const MIN_LEVEL_GAP_MM = 800;
 export const MAX_LEVEL_GAP_MM = 5000;
+/** Largura da espinha / rua entre costas (fileira dupla), mm. */
+export const MIN_SPINE_BACK_TO_BACK_MM = 40;
+export const MAX_SPINE_BACK_TO_BACK_MM = 5000;
 
 export const parseNumber = (text: string): number | null => {
   const cleaned = text.trim().replace(/[^\d]/g, '');
@@ -75,6 +78,16 @@ export const validateLevels = (value: number): string | null => {
 export const validateLevelGap = (value: number): string | null => {
   if (value < MIN_LEVEL_GAP_MM || value > MAX_LEVEL_GAP_MM) {
     return `Espaçamento deve estar entre ${MIN_LEVEL_GAP_MM} e ${MAX_LEVEL_GAP_MM} mm`;
+  }
+  return null;
+};
+
+export const validateSpineBackToBackMm = (value: number): string | null => {
+  if (
+    value < MIN_SPINE_BACK_TO_BACK_MM ||
+    value > MAX_SPINE_BACK_TO_BACK_MM
+  ) {
+    return `Largura da rua dupla (distanciador) entre ${MIN_SPINE_BACK_TO_BACK_MM} e ${MAX_SPINE_BACK_TO_BACK_MM} mm`;
   }
   return null;
 };

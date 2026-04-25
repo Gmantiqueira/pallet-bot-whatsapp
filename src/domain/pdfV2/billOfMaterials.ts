@@ -10,13 +10,10 @@ import {
 } from './rackModuleSpec';
 import { tunnelActiveStorageLevelsFromGlobal } from './elevationLevelGeometryV2';
 import { splitModuleFootprintsFor3d } from './model3dV2';
+import { totalDistanciadorCountForDoubleRows } from './spineAndDistanciador';
 import type { StructureResult } from '../structureEngine';
 
 const EPS = 0.5;
-
-/** Referência da planilha modelo ORÇAMENTO-BRAUNA-505-A (escala linear de acessórios). */
-const REF_MO_TOTAL = 84;
-const REF_DISTANCIADOR = 136;
 
 export type BillOfMaterialsLineId =
   | 'upright75'
@@ -85,10 +82,17 @@ function spineGapUprightCount(
   row: RackRow,
   mod: RackModule,
   rackDepthMm: number,
-  orientation: LayoutOrientationV2
+  orientation: LayoutOrientationV2,
+  spineBackToBackMm: number
 ): number {
   if (row.rowType !== 'backToBack' || mod.type === 'tunnel') return 0;
-  const fps = splitModuleFootprintsFor3d(row, mod, rackDepthMm, orientation);
+  const fps = splitModuleFootprintsFor3d(
+    row,
+    mod,
+    rackDepthMm,
+    orientation,
+    spineBackToBackMm
+  );
   if (fps.length < 2 || !fps[0] || !fps[1]) return 0;
   const fpA = fps[0];
   const fpB = fps[1];
@@ -117,13 +121,25 @@ export function countUprightsByThicknessFromGeometry(
 
   for (const row of geometry.rows) {
     for (const mod of row.modules) {
-      const fps = splitModuleFootprintsFor3d(row, mod, rackDepthMm, ori);
+      const fps = splitModuleFootprintsFor3d(
+        row,
+        mod,
+        rackDepthMm,
+        ori,
+        geometry.metadata.spineBackToBackMm
+      );
       const perFace = countUprightThicknessAlongFace(mod);
       const perModuleUpright75 = perFace.n75 * fps.length;
       const perModuleUpright100 = perFace.n100 * fps.length;
       upright75 += perModuleUpright75;
       upright100 += perModuleUpright100;
-      upright75 += spineGapUprightCount(row, mod, rackDepthMm, ori);
+      upright75 += spineGapUprightCount(
+        row,
+        mod,
+        rackDepthMm,
+        ori,
+        geometry.metadata.spineBackToBackMm
+      );
     }
   }
 
@@ -260,10 +276,7 @@ export function buildBillOfMaterials(
   );
 
   const montTotal = Math.max(0, upright75 + upright100);
-  const distanciador = Math.max(
-    0,
-    Math.round((REF_DISTANCIADOR * montTotal) / Math.max(1, REF_MO_TOTAL))
-  );
+  const distanciador = totalDistanciadorCountForDoubleRows(geometry);
 
   const travamento = Math.max(0, rowCount);
 

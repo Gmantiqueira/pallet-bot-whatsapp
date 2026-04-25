@@ -11,9 +11,6 @@ import {
   type RackModule,
 } from './layoutGeometryV2';
 
-/** Espinha central entre costas (mm) — alinhado a layoutSolutionV2. */
-const SPINE_BACK_TO_BACK_MM = 100;
-
 export class ElevationModelValidationError extends Error {
   constructor(message: string) {
     super(message);
@@ -24,9 +21,10 @@ export class ElevationModelValidationError extends Error {
 /** Profundidade de faixa em elevação: usa profundidade de posição semântica (moduleDepthMm), não min(width,depth). */
 function bandDepthMmFromGeometry(geometry: LayoutGeometry): number {
   const d = geometry.metadata.moduleDepthMm;
+  const sp = geometry.metadata.spineBackToBackMm;
   return geometry.metadata.rackDepthMode === 'single'
     ? d
-    : 2 * d + SPINE_BACK_TO_BACK_MM;
+    : 2 * d + sp;
 }
 
 function loadHeightMmFromAnswers(
@@ -263,10 +261,11 @@ export function validateElevationAxesAgainstGeometry(
   }
 
   const md = geometry.metadata.moduleDepthMm;
+  const sp = geometry.metadata.spineBackToBackMm;
   const expectedBand =
     geometry.metadata.rackDepthMode === 'single'
       ? md
-      : 2 * md + SPINE_BACK_TO_BACK_MM;
+      : 2 * md + sp;
   if (Math.abs(front.bandDepthMm - expectedBand) > ELEV_AXIS_TOL_MM) {
     throw new ElevationModelValidationError(
       `Elevação: profundidade de faixa na planta (${front.bandDepthMm} mm) incoerente (esperado ~${expectedBand} mm).`

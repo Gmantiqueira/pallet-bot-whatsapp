@@ -35,7 +35,6 @@ const PLAN_LEFT_DIM_MARGIN_PX = 54;
 /** Reserva inferior para cotas + legenda sem sobreposição ao desenho. */
 const PLAN_BOTTOM_STACK_RESERVE_PX = 236;
 /** Espinha entre costas (mm) — igual a layoutGeometryV2 / model3dV2.splitModuleFootprintsFor3d. */
-const SPINE_BACK_TO_BACK_MM = 100;
 
 function escapeXml(text: string): string {
   return sanitizeText(text)
@@ -212,7 +211,8 @@ function rowBandFootprintMm(row: RackRow): {
  */
 function doubleRowFaceBandsMm(
   row: RackRow,
-  rackDepthMm: number
+  rackDepthMm: number,
+  spineBackToBackMm: number
 ): {
   faceAMm: { x0: number; y0: number; x1: number; y1: number };
   faceBMm: { x0: number; y0: number; x1: number; y1: number };
@@ -221,7 +221,7 @@ function doubleRowFaceBandsMm(
   if (row.rowType !== 'backToBack') return null;
   const r = rowBandFootprintMm(row);
   const md = rackDepthMm;
-  const sp = SPINE_BACK_TO_BACK_MM;
+  const sp = spineBackToBackMm;
   if (row.layoutOrientation === 'along_length') {
     const ySplitFront = r.y0 + md;
     const ySplitBack = ySplitFront + sp;
@@ -264,6 +264,7 @@ export function buildFloorPlanModelV2(
   const toY = (ymm: number) => by + ymm * scale;
 
   const rackDepthMm = geometry.metadata.rackDepthMm;
+  const spineMm = geometry.metadata.spineBackToBackMm;
   const rowBandRects: FloorPlanModelV2['rowBandRects'] = [];
   const rowSpineGapRects: FloorPlanModelV2['rowSpineGapRects'] = [];
   const rowSpineLines: FloorPlanModelV2['rowSpineLines'] = [];
@@ -320,7 +321,7 @@ export function buildFloorPlanModelV2(
     const caption = `Linha ${rowIndex + 1} — ${nMod} ${nMod === 1 ? 'módulo' : 'módulos'}`;
 
     if (kind === 'double') {
-      const split = doubleRowFaceBandsMm(row, rackDepthMm);
+      const split = doubleRowFaceBandsMm(row, rackDepthMm, spineMm);
       if (split) {
         const { faceAMm, faceBMm, spineMidlineMm } = split;
         const lo = row.layoutOrientation;
@@ -345,7 +346,7 @@ export function buildFloorPlanModelV2(
         const gy1 = Math.max(faceAMm.y0, faceAMm.y1, faceBMm.y0, faceBMm.y1);
         if (lo === 'along_length') {
           const ySplitFront = Math.min(faceAMm.y0, faceAMm.y1) + rackDepthMm;
-          const ySplitBack = ySplitFront + SPINE_BACK_TO_BACK_MM;
+          const ySplitBack = ySplitFront + spineMm;
           mmSpineGapToRect(`${row.id}-spine-gap`, {
             x0: gx0,
             y0: ySplitFront,
@@ -354,7 +355,7 @@ export function buildFloorPlanModelV2(
           });
         } else {
           const xSplitFront = Math.min(faceAMm.x0, faceAMm.x1) + rackDepthMm;
-          const xSplitBack = xSplitFront + SPINE_BACK_TO_BACK_MM;
+          const xSplitBack = xSplitFront + spineMm;
           mmSpineGapToRect(`${row.id}-spine-gap`, {
             x0: xSplitFront,
             y0: gy0,
@@ -384,7 +385,13 @@ export function buildFloorPlanModelV2(
     const kind = rackDepthModeFromRow(row);
     const sorted = sortModulesAlongBeam(row.modules, geometry.orientation);
     for (const m of sorted) {
-      const fps = splitModuleFootprintsFor3d(row, m, rackDepthMm, ori);
+      const fps = splitModuleFootprintsFor3d(
+        row,
+        m,
+        rackDepthMm,
+        ori,
+        spineMm
+      );
       let fi = 0;
       for (const fp of fps) {
         const x0 = Math.min(fp.x0, fp.x1);

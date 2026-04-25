@@ -12,6 +12,7 @@ import {
   type HeightDefinitionMode,
 } from '../warehouseHeightDerive';
 import { maxFullModulesInBeamRun } from './rackModuleSpec';
+import { normalizeSpineBackToBackMm } from './spineAndDistanciador';
 import type {
   LayoutOrientationV2,
   LineStrategyCode,
@@ -197,6 +198,9 @@ export function buildProjectAnswersV2(
       typeof answers.clearHeightMm === 'number'
         ? answers.clearHeightMm
         : undefined,
+    spineBackToBackMm: normalizeSpineBackToBackMm(
+      (answers as Record<string, unknown>).spineBackToBackMm
+    ),
   };
 }
 
@@ -249,6 +253,11 @@ export type ProjectAnswersV2 = {
   warehouseMinBeamGapMm?: number;
   loadHeightMm?: number;
   clearHeightMm?: number;
+  /**
+   * Largura da rua dupla: espinha entre costas (mm), alinhada ao tamanho do distanciador.
+   * Em {@link buildProjectAnswersV2} fica sempre definido (padrão 100 mm se em falta).
+   */
+  spineBackToBackMm?: number;
 };
 
 /**

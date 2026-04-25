@@ -21,6 +21,7 @@ import {
   layoutSolutionPassesOperationalAccess,
   OPERATIONAL_ACCESS_TOL_MM,
 } from './layoutGeometryV2';
+import { normalizeSpineBackToBackMm } from './spineAndDistanciador';
 import type {
   CirculationZone,
   LayoutOrientationV2,
@@ -33,7 +34,6 @@ import type {
   TunnelZone,
 } from './types';
 
-const SPINE_BACK_TO_BACK_MM = 100;
 const EPS = 0.5;
 
 /**
@@ -206,9 +206,10 @@ function transverseUsedMm(s: LayoutSolutionV2): number {
   const cor = s.corridorMm;
   const rows = s.rows;
   if (rows.length === 0) return 0;
+  const spine = s.metadata.spineBackToBackMm ?? 100;
   let bandSum = 0;
   for (const row of rows) {
-    bandSum += bandDepthForMode(row.kind, s.rackDepthMm);
+    bandSum += bandDepthForMode(row.kind, s.rackDepthMm, spine);
   }
   const between = Math.max(0, rows.length - 1) * cor;
   const first = rows[0];
@@ -411,11 +412,12 @@ export function tunnelClearanceMmFromCorridor(corridorMm: number): number {
 
 function bandDepthForMode(
   depthMode: RackDepthModeV2,
-  moduleDepthMm: number
+  moduleDepthMm: number,
+  spineBackToBackMm: number
 ): number {
   return depthMode === 'single'
     ? moduleDepthMm
-    : 2 * moduleDepthMm + SPINE_BACK_TO_BACK_MM;
+    : 2 * moduleDepthMm + spineBackToBackMm;
 }
 
 /**
@@ -705,6 +707,7 @@ function fillCrossZoneFromCustomRowMix(
   nSingle: number,
   moduleDepthMm: number,
   corridorMm: number,
+  spineBackToBackMm: number,
   idPrefix: string,
   orientation: LayoutOrientationV2,
   lengthMm: number,
@@ -726,7 +729,7 @@ function fillCrossZoneFromCustomRowMix(
   let simY = zone.z0;
   for (let i = 0; i < kinds.length; i++) {
     const k = kinds[i]!;
-    const b = bandDepthForMode(k, moduleDepthMm);
+    const b = bandDepthForMode(k, moduleDepthMm, spineBackToBackMm);
     if (i === 0) {
       if (k === 'double') {
         simY += g;
@@ -747,7 +750,7 @@ function fillCrossZoneFromCustomRowMix(
   let y = zone.z0;
   for (let i = 0; i < kinds.length; i++) {
     const k = kinds[i]!;
-    const b = bandDepthForMode(k, moduleDepthMm);
+    const b = bandDepthForMode(k, moduleDepthMm, spineBackToBackMm);
     if (i === 0) {
       if (k === 'double' && g > EPS) {
         if (orientation === 'along_length') {
@@ -1195,6 +1198,7 @@ function buildLayoutSolutionV2Core(
    */
   const bayClearSpanAlongBeamMm = Math.max(0, moduleWidthMm);
   const rackDepthMm = Math.max(0, moduleDepthMm);
+  const spineMm = normalizeSpineBackToBackMm(answers.spineBackToBackMm);
   const moduleLengthAlongBeamMm = computeModuleLengthAlongBeamMm(
     bayClearSpanAlongBeamMm
   );
@@ -1232,6 +1236,7 @@ function buildLayoutSolutionV2Core(
       nS,
       rackDepthMm,
       corridorMm,
+      spineMm,
       z.id,
       orientation,
       lengthMm,
@@ -1240,7 +1245,7 @@ function buildLayoutSolutionV2Core(
     rowBands = mix.rows;
     corridorsFromFill = mix.corridors;
   } else {
-    const band = bandDepthForMode(depthMode, rackDepthMm);
+    const band = bandDepthForMode(depthMode, rackDepthMm, spineMm);
     const ctx: FillContext = {
       orientation,
       lengthMm,
@@ -1503,6 +1508,7 @@ function buildLayoutSolutionV2Core(
         placement
       ),
       tunnelOperationalExtentMm: operationalExtentMm,
+      spineBackToBackMm: spineMm,
     },
   };
   assertLayoutSolutionDoubleRowBilateralAccess(sol);

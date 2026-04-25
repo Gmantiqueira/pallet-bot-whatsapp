@@ -47,7 +47,13 @@ export function audit3dModelCoherence(
   for (const row of geometry.rows) {
     for (const mod of row.modules) {
       layoutModuleSegmentCount += 1;
-      const fps = splitModuleFootprintsFor3d(row, mod, rackDepthMm, ori);
+      const fps = splitModuleFootprintsFor3d(
+        row,
+        mod,
+        rackDepthMm,
+        ori,
+        geometry.metadata.spineBackToBackMm
+      );
       expectedPrismCount += fps.length;
 
       if (row.rowType === 'backToBack' && mod.type !== 'tunnel') {

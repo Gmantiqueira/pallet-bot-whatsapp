@@ -504,8 +504,10 @@ describe('State Machine', () => {
       expect(r.session.answers.customLineSimpleCount).toBe(1);
       session = r.session;
       r = transition(session, { type: 'TEXT', value: '1' });
-      expect(r.session.state).toBe('CHOOSE_TUNNEL');
+      expect(r.session.state).toBe('WAIT_SPINE_BACK_TO_BACK');
       expect(r.session.answers.customLineDoubleCount).toBe(1);
+      r = transition(r.session, { type: 'TEXT', value: '100' });
+      expect(r.session.state).toBe('CHOOSE_TUNNEL');
     });
 
     it('should reject corridor above maximum', () => {
