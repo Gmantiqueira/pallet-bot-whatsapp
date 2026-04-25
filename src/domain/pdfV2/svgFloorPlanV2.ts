@@ -952,6 +952,13 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
 
   appendInterModuleColumnContinuity(model, structureDraw, parts);
 
+  const COL_TOP_TRAV = '#64748b';
+  for (const ln of model.topTravamentoLines) {
+    parts.push(
+      `<line x1="${ln.x1}" y1="${ln.y1}" x2="${ln.x2}" y2="${ln.y2}" stroke="${COL_TOP_TRAV}" stroke-width="1.38" stroke-linecap="square" opacity="0.82"/>`
+    );
+  }
+
   for (const s of structureDraw) {
     if (s.displayIndex === undefined) continue;
     if (s.variant === 'tunnel') continue;

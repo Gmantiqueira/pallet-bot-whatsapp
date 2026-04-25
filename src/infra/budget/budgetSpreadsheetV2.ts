@@ -24,6 +24,8 @@ const ROW = {
   calco: 17,
 } as const;
 
+/* `travamentoSuperior` (BOM) não tem linha no modelo .xlsx — quantidade só no BOM digital / PDF. */
+
 function resolveBudgetTemplatePath(): string {
   const candidates = [
     path.join(process.cwd(), 'assets/budget/ORÇAMENTO-BRAUNA-505-A.xlsx'),

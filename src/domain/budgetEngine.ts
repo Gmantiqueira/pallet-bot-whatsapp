@@ -43,6 +43,7 @@ const BUDGET_ASSUMPTIONS_V2: string[] = [
   'Túnel: níveis ativos de armazenagem reduzem pares de longarinas;',
   'Meio módulo: factor 0,5 no comprimento ao longo do vão;',
   'Protetor de coluna (por montante); guardas por extremidade de fileira (conforme opções).',
+  'Travamento superior automático entre fileiras (corredor) quando montantes &gt; 8 m — alinhado ao BOM.',
 ];
 
 export type BudgetResult = {
@@ -130,6 +131,11 @@ export function budgetResultFromBillOfMaterials(
   const grD = lineQty(bom, 'guardRailDouble');
   if (grD > 0) {
     items.push({ name: 'Guarda-corpo dupla', quantity: grD });
+  }
+
+  const travSup = lineQty(bom, 'travamentoSuperior');
+  if (travSup > 0) {
+    items.push({ name: 'Travamento superior (entre fileiras)', quantity: travSup });
   }
 
   return {

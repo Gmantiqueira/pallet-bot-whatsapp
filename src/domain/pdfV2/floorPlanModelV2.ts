@@ -10,6 +10,8 @@ import type {
 } from './types';
 import { buildFloorPlanAccessories } from './visualAccessoriesV2';
 import { ELEV_BEAM_FILL } from './elevationVisualTokens';
+import { topTravamentoPlanLinesMm } from './topTravamento';
+import { resolveUprightHeightMmForProject } from '../projectEngines';
 
 /**
  * Canvas SVG da planta.
@@ -547,6 +549,16 @@ export function buildFloorPlanModelV2(
 
   const planAccessories = buildFloorPlanAccessories(answers, geometry);
 
+  const uprightH = resolveUprightHeightMmForProject(answers ?? {});
+  const topTravamentoLines: FloorPlanModelV2['topTravamentoLines'] =
+    topTravamentoPlanLinesMm(geometry, uprightH).map(ln => ({
+      id: ln.id,
+      x1: toX(ln.x0),
+      y1: toY(ln.y0),
+      x2: toX(ln.x1),
+      y2: toY(ln.y1),
+    }));
+
   const hasTunnelOverlayZones = geometry.tunnelOverlays.length > 0;
   const hasCrossPassageZone = geometry.circulationZones.some(z =>
     (z.label ?? '').includes('Passagem transversal')
@@ -580,6 +592,7 @@ export function buildFloorPlanModelV2(
     rowBandRects,
     rowSpineGapRects,
     rowSpineLines,
+    topTravamentoLines,
     structureRects,
     circulationRects,
     dimensionLines,

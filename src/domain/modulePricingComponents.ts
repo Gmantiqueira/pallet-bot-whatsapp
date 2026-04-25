@@ -102,6 +102,10 @@ export function computeModulePricingSnapshotFromBom(
   const totalCols = u75 + u100;
   const totalBeams = bom.lines.find(l => l.id === 'beamPairs')?.quantity ?? 0;
   const totalPallets = sol.totals.positions;
+  const travFundo = bom.lines.find(l => l.id === 'travamentoFundo')?.quantity ?? 0;
+  const travSup =
+    bom.lines.find(l => l.id === 'travamentoSuperior')?.quantity ?? 0;
+  const totalBraces = travFundo + travSup;
 
   const columnsPerModule = moduleCount > 0 ? totalCols / moduleCount : 0;
   const beamsPerModule = moduleCount > 0 ? totalBeams / moduleCount : 0;
@@ -110,7 +114,7 @@ export function computeModulePricingSnapshotFromBom(
   const assumptions: string[] = [
     'Montantes e longarinas: mesmas quantidades que a lista de materiais (geometria V2).',
     'Médias por “módulo-equiv.” ao longo do vão (`sol.totals.modules`).',
-    'Contraventamento: 0 (a definir no catálogo estrutural).',
+    'Contraventamento: travamento de fundo + travamento superior (quando aplicável), alinhado ao BOM.',
     `Paletes: total de posições do layout (${hasGroundLevel ? 'incl. patamar ao piso quando aplicável' : 'sem piso'}).`,
   ];
 
@@ -118,13 +122,13 @@ export function computeModulePricingSnapshotFromBom(
     moduleComponents: {
       columns: columnsPerModule,
       beams: beamsPerModule,
-      braces: 0,
+      braces: moduleCount > 0 ? totalBraces / moduleCount : 0,
       pallets: palletsPerModule,
     },
     totalComponents: {
       columns: totalCols,
       beams: totalBeams,
-      braces: 0,
+      braces: totalBraces,
       pallets: totalPallets,
     },
     moduleCount,

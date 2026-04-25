@@ -11,6 +11,11 @@ import {
 import { tunnelActiveStorageLevelsFromGlobal } from './elevationLevelGeometryV2';
 import { splitModuleFootprintsFor3d } from './model3dV2';
 import { totalDistanciadorCountForDoubleRows } from './spineAndDistanciador';
+import {
+  countTopTravamentoSuperiorQuantity,
+  minInterRowCorridorWidthMm,
+  topTravamentoCorridorSpanMm,
+} from './topTravamento';
 import type { StructureResult } from '../structureEngine';
 
 const EPS = 0.5;
@@ -25,6 +30,7 @@ export type BillOfMaterialsLineId =
   | 'guardRailSimple'
   | 'guardRailDouble'
   | 'travamentoFundo'
+  | 'travamentoSuperior'
   | 'calco';
 
 export type BillOfMaterialsLine = {
@@ -280,6 +286,16 @@ export function buildBillOfMaterials(
 
   const travamento = Math.max(0, rowCount);
 
+  const travamentoSuperior = countTopTravamentoSuperiorQuantity(
+    geometry,
+    uprightHeightMm
+  );
+  const minCor = minInterRowCorridorWidthMm(geometry);
+  const descTravSup =
+    travamentoSuperior > 0 && minCor !== null
+      ? `TRAVAMENTO SUPERIOR (entre fileiras) — vão: larg. corredor + ${formatMm3d(2000)} m (mín. ref. corredor ${formatMm3d(minCor)} m → vão de peça ${formatMm3d(topTravamentoCorridorSpanMm(minCor))} m).`
+      : undefined;
+
   const protectors = accessories.columnProtector
     ? Math.max(0, montTotal)
     : 0;
@@ -307,6 +323,11 @@ export function buildBillOfMaterials(
     { id: 'guardRailSimple', quantity: grSimple },
     { id: 'guardRailDouble', quantity: grDouble },
     { id: 'travamentoFundo', quantity: travamento },
+    {
+      id: 'travamentoSuperior',
+      quantity: travamentoSuperior,
+      description: descTravSup,
+    },
     { id: 'calco', quantity: 0 },
   ];
 

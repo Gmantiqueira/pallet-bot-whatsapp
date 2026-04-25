@@ -207,6 +207,10 @@ export type FloorPlanModelV2 = {
   rowSpineGapRects: { id: string; x: number; y: number; w: number; h: number }[];
   /** Dupla costas: eixo ao longo da espinha (costas) entre as duas frentes — tracejado na planta. */
   rowSpineLines: { id: string; x1: number; y1: number; x2: number; y2: number }[];
+  /**
+   * Travamento superior (montantes &gt; 8 m): traços no corredor entre fileiras — viewBox, px.
+   */
+  topTravamentoLines: { id: string; x1: number; y1: number; x2: number; y2: number }[];
   structureRects: {
     id: string;
     x: number;
