@@ -313,6 +313,15 @@ export const transition = (
     }
 
     case 'WAIT_CORRIDOR': {
+      if (input.type === 'BUTTON' && input.value === 'SEM_CORREDOR') {
+        newSession = goNext(
+          newSession,
+          { corridorMm: 0, lineStrategy: 'APENAS_SIMPLES' },
+          'CHOOSE_TUNNEL'
+        );
+        effects.push({ type: 'SEND' });
+        return { session: newSession, effects, error };
+      }
       if (input.type !== 'TEXT') {
         return { session: newSession, effects, error };
       }
@@ -328,6 +337,15 @@ export const transition = (
       if (ve) {
         return { session: newSession, effects, error: ve };
       }
+      if (corridor === 0) {
+        newSession = goNext(
+          newSession,
+          { corridorMm: 0, lineStrategy: 'APENAS_SIMPLES' },
+          'CHOOSE_TUNNEL'
+        );
+        effects.push({ type: 'SEND' });
+        return { session: newSession, effects, error };
+      }
       newSession = goNext(
         newSession,
         { corridorMm: corridor },
@@ -339,6 +357,17 @@ export const transition = (
 
     case 'CHOOSE_LINE_STRATEGY':
       if (input.type === 'BUTTON') {
+        const noCorridor =
+          typeof newSession.answers.corridorMm === 'number' &&
+          newSession.answers.corridorMm <= 0;
+        if (noCorridor && input.value !== 'LINE_SIMPLES') {
+          return {
+            session: newSession,
+            effects,
+            error:
+              'Sem corredor principal só combina com linha simples (ex.: uma fileira junto à parede). Toque em *Só linhas simples* ou volte a definir a largura do corredor.',
+          };
+        }
         const map: Record<string, string> = {
           LINE_SIMPLES: 'APENAS_SIMPLES',
           LINE_DUPLOS: 'APENAS_DUPLOS',

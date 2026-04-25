@@ -2,7 +2,8 @@
 
 export const MIN_MM = 500;
 export const MAX_MM = 200000;
-export const MIN_CORRIDOR = 1000;
+/** Corredor operacional mínimo (mm) — alinhado a medidas de galpão; 0 = sem corredor principal. */
+export const MIN_CORRIDOR = 500;
 export const MAX_CORRIDOR = 6000;
 export const MIN_KG = 100;
 export const MAX_KG = 5000;
@@ -46,8 +47,11 @@ export const validateMm = (value: number): string | null => {
 };
 
 export const validateCorridor = (value: number): string | null => {
+  if (value === 0) {
+    return null;
+  }
   if (value < MIN_CORRIDOR || value > MAX_CORRIDOR) {
-    return `Corredor deve estar entre ${MIN_CORRIDOR} e ${MAX_CORRIDOR} mm`;
+    return `Use 0 para sem corredor principal, ou indique entre ${MIN_CORRIDOR} e ${MAX_CORRIDOR} mm`;
   }
   return null;
 };

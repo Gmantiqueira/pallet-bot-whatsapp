@@ -104,13 +104,15 @@ describe('MessageBuilder', () => {
       expect(messages[0].text).toContain('12000');
     });
 
-    it('should build WAIT_CORRIDOR message with examples', () => {
+    it('should build WAIT_CORRIDOR message with examples and Sem corredor', () => {
       const session = createSession('WAIT_CORRIDOR');
       const messages = buildMessages(session);
 
-      expect(messages[0].text).toContain('corredor');
+      expect(messages[0].text).toContain('corredor principal');
       expect(messages[0].text).toContain('2800');
       expect(messages[0].text).toContain('3000');
+      expect(messages[0].text).toContain('500');
+      expect(messages[0].buttons?.map(b => b.id)).toEqual(['SEM_CORREDOR']);
     });
 
     it('should build WAIT_HEIGHT_DIRECT message', () => {

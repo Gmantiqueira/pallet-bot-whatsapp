@@ -317,17 +317,57 @@ describe('State Machine', () => {
       expect(result.session.state).toBe('WAIT_LENGTH');
     });
 
-    it('should reject corridor below minimum', () => {
+    it('should reject corridor below minimum (non-zero)', () => {
       const session = createSession('WAIT_CORRIDOR', {
         lengthMm: 12000,
         widthMm: 10000,
       });
-      const input: Input = { type: 'TEXT', value: '500' };
+      const input: Input = { type: 'TEXT', value: '400' };
 
       const result = transition(session, input);
 
-      expect(result.error).toContain('1000');
+      expect(result.error).toContain('500');
       expect(result.session.state).toBe('WAIT_CORRIDOR');
+    });
+
+    it('should accept corridor 500 mm and advance', () => {
+      const session = createSession('WAIT_CORRIDOR', {
+        lengthMm: 12000,
+        widthMm: 10000,
+      });
+      const result = transition(session, { type: 'TEXT', value: '500' });
+
+      expect(result.error).toBeUndefined();
+      expect(result.session.state).toBe('CHOOSE_LINE_STRATEGY');
+      expect(result.session.answers.corridorMm).toBe(500);
+    });
+
+    it('should treat 0 as no main corridor and skip to tunnel (single line)', () => {
+      const session = createSession('WAIT_CORRIDOR', {
+        lengthMm: 12000,
+        widthMm: 10000,
+      });
+      const result = transition(session, { type: 'TEXT', value: '0' });
+
+      expect(result.error).toBeUndefined();
+      expect(result.session.state).toBe('CHOOSE_TUNNEL');
+      expect(result.session.answers.corridorMm).toBe(0);
+      expect(result.session.answers.lineStrategy).toBe('APENAS_SIMPLES');
+    });
+
+    it('should treat Sem corredor button like 0', () => {
+      const session = createSession('WAIT_CORRIDOR', {
+        lengthMm: 12000,
+        widthMm: 10000,
+      });
+      const result = transition(session, {
+        type: 'BUTTON',
+        value: 'SEM_CORREDOR',
+      });
+
+      expect(result.session.state).toBe('CHOOSE_TUNNEL');
+      expect(result.session.answers.corridorMm).toBe(0);
+      expect(result.session.answers.lineStrategy).toBe('APENAS_SIMPLES');
     });
 
     it('should reject corridor above maximum', () => {

@@ -172,7 +172,10 @@ const buildStateMessage = (session: Session): OutgoingMessage | null => {
     case 'WAIT_CORRIDOR':
       return {
         to: session.phone,
-        text: 'Largura do corredor principal em mm\n\nExemplos: 2800 ou 3000',
+        text:
+          'Largura do corredor principal (mm), ou 0 se não houver corredor entre fileiras\n\n' +
+            'Válido: 0 (só com linha simples, p.ex. fileira encostada à parede) ou entre 500 e 6000 mm. Exemplos: 800, 2800, 3000',
+        buttons: [{ id: 'SEM_CORREDOR', label: 'Sem corredor' }],
       };
 
     case 'CHOOSE_LINE_STRATEGY':
@@ -454,7 +457,11 @@ const buildSummary = (session: Session): string => {
     lines.push(`Largura: ${a.widthMm} mm`);
   }
   if (typeof a.corridorMm === 'number') {
-    lines.push(`Corredor: ${a.corridorMm} mm`);
+    lines.push(
+      a.corridorMm <= 0
+        ? 'Corredor principal: sem (0 mm)'
+        : `Corredor: ${a.corridorMm} mm`
+    );
   }
   if (a.lineStrategy) {
     lines.push(`Linhas: ${lineLabel(a.lineStrategy)}`);
