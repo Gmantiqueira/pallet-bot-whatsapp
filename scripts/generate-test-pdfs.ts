@@ -20,14 +20,11 @@
  * Debug no PDF (layoutSolution resumido; planta sem overlay se desligar):
  *   DEBUG_PDF=false npx tsx scripts/generate-test-pdfs.ts
  *
- * Grupos cobertos:
- * - Baseline manual / planta
- * - Estratégias de linha (simples, dupla, melhor, personalizado)
- * - Túnel (posição, aplicação LINHAS_SIMPLES/DUPLOS/UMA/AMBOS)
- * - Altura: direta baixa/alta, pé-direito, modo CALC
- * - Proteções e armazenagem ao piso
- * - Limites compactos e stress grande
- * - Estrutura recente: montante alto (travamento superior na planta), meio-módulo
+ * Conjunto **fixo de 10 casos** (revisão manual) cobrindo:
+ * - medidas manuais vs. planta | só simples / só duplas | personalizado (1 dupla+1 simples)
+ * - túnel representativo (meio, ambas) | pé-direito (níveis derivados) | CALC
+ * - montante &gt; 8 m (travamento superior) | proteções (protetor + guardas) no desenho
+ * Para varrer mais variações, use `--only=…` com IDs adicionais ou alargue o script localmente.
  */
 
 import * as path from 'path';
@@ -121,17 +118,20 @@ function calcCase(partial: Record<string, unknown>): Record<string, unknown> {
   };
 }
 
+/**
+ * 10 casos: cobertura mínima acordada (IDs estáveis; mais cenários = `--only` ou extensão local).
+ */
 function buildCaseGroups(): PdfCaseGroup[] {
   return [
     {
-      groupKey: 'baseline',
-      title: 'Referência — manual e planta',
+      groupKey: 'core',
+      title: 'Referência e linhas (10 casos no total)',
       cases: [
         {
           id: '01-manual-base-standard',
           label: 'Base padrão manual sem túnel',
           objective:
-            'Fluxo comum: medidas digitadas, altura direta, sem proteções extra (desligadas).',
+            'Medidas digitadas, altura direta, MELHOR_LAYOUT; sem proteções extra.',
           base: manualCase({
             guardRailSimple: false,
             guardRailDouble: false,
@@ -141,19 +141,13 @@ function buildCaseGroups(): PdfCaseGroup[] {
         {
           id: '02-plant-base-standard',
           label: 'Base padrão via planta',
-          objective: 'Projeto a partir do fluxo de planta real.',
+          objective: 'Origem do projeto = planta real.',
           base: plantCase({}),
         },
-      ],
-    },
-    {
-      groupKey: 'line-strategy',
-      title: 'Estratégia de fileiras',
-      cases: [
         {
           id: '03-manual-simple-lines-only',
           label: 'Apenas linhas simples',
-          objective: 'Só fileiras simples; travamento de fundo na BOM se aplicável.',
+          objective: 'Ancoragem: travamento de fundo na BOM quando aplica.',
           base: manualCase({
             lineStrategy: 'APENAS_SIMPLES',
             widthMm: 9_200,
@@ -162,27 +156,16 @@ function buildCaseGroups(): PdfCaseGroup[] {
         {
           id: '04-manual-double-lines-only',
           label: 'Apenas linhas duplas',
-          objective: 'Só dupla costa; sem travamento de fundo (ancoragem dupla).',
+          objective: 'Dupla costa; desenho dupla e sem travamento de fundo.',
           base: manualCase({
             lineStrategy: 'APENAS_DUPLOS',
             widthMm: 12_400,
           }),
         },
         {
-          id: '05-best-layout-near-decision',
-          label: 'Melhor layout perto da fronteira',
-          objective: 'Decisão do optimizador próxima do limiar entre combinações.',
-          base: manualCase({
-            lengthMm: 12_000,
-            widthMm: 8_760,
-            lineStrategy: 'MELHOR_LAYOUT',
-          }),
-        },
-        {
           id: '24-personalizado-mixed-lines',
           label: 'Personalizado: 1 dupla + 1 simples',
-          objective:
-            'Composição explícita duplas→simples; misto desliga travamento de fundo.',
+          objective: 'Estratégia PERSONALIZADO; implantação duplas → simples.',
           base: manualCase({
             lineStrategy: 'PERSONALIZADO',
             customLineSimpleCount: 1,
@@ -192,16 +175,10 @@ function buildCaseGroups(): PdfCaseGroup[] {
             corridorMm: 3_200,
           }),
         },
-      ],
-    },
-    {
-      groupKey: 'tunnel',
-      title: 'Túnel e passagem',
-      cases: [
         {
           id: '06-tunnel-middle-both',
-          label: 'Túnel no meio em ambas as fileiras',
-          objective: 'Túnel central; AMBOS.',
+          label: 'Túnel no meio (ambas as fileiras)',
+          objective: 'Módulo túnel, elevação túnel e planta; AMBOS.',
           base: tunnelCase({
             lengthMm: 16_000,
             widthMm: 12_000,
@@ -211,73 +188,9 @@ function buildCaseGroups(): PdfCaseGroup[] {
           }),
         },
         {
-          id: '07-tunnel-start-one-line',
-          label: 'Túnel no início, uma fileira',
-          objective: 'UMA — aplicação deslocada.',
-          base: tunnelCase({
-            lengthMm: 16_000,
-            widthMm: 12_000,
-            hasTunnel: true,
-            tunnelPosition: 'INICIO',
-            tunnelAppliesTo: 'UMA',
-          }),
-        },
-        {
-          id: '08-tunnel-end-simple-lines',
-          label: 'Túnel no fim em linhas simples',
-          objective: 'LINHAS_SIMPLES.',
-          base: tunnelCase({
-            lineStrategy: 'APENAS_SIMPLES',
-            lengthMm: 18_000,
-            widthMm: 10_800,
-            hasTunnel: true,
-            tunnelPosition: 'FIM',
-            tunnelAppliesTo: 'LINHAS_SIMPLES',
-          }),
-        },
-        {
-          id: '09-tunnel-middle-double-lines',
-          label: 'Túnel no meio em linhas duplas',
-          objective: 'LINHAS_DUPLOS.',
-          base: tunnelCase({
-            lineStrategy: 'APENAS_DUPLOS',
-            lengthMm: 18_000,
-            widthMm: 14_000,
-            hasTunnel: true,
-            tunnelPosition: 'MEIO',
-            tunnelAppliesTo: 'LINHAS_DUPLOS',
-          }),
-        },
-      ],
-    },
-    {
-      groupKey: 'height',
-      title: 'Altura do módulo / pé-direito / CALC',
-      cases: [
-        {
-          id: '10-direct-height-low',
-          label: 'Altura direta baixa',
-          objective: 'Poucos níveis, estrutura baixa.',
-          base: manualCase({
-            heightMm: 3_840,
-            levels: 2,
-            capacityKg: 1_200,
-          }),
-        },
-        {
-          id: '11-direct-height-high',
-          label: 'Altura direta alta',
-          objective: 'Volume maior na elevação.',
-          base: manualCase({
-            heightMm: 6_240,
-            levels: 5,
-            capacityKg: 1_200,
-          }),
-        },
-        {
           id: '12-warehouse-clear-standard',
-          label: 'Pé-direito (altura livre) padrão',
-          objective: 'Níveis derivados do pé-direito declarado.',
+          label: 'Pé-direito (níveis derivados)',
+          objective: 'Altura do armazém via warehouseClearHeightMm + gap entre feixes.',
           base: manualCase({
             heightDefinitionMode: HEIGHT_DEFINITION_WAREHOUSE_CLEAR,
             warehouseClearHeightMm: 10_000,
@@ -286,39 +199,16 @@ function buildCaseGroups(): PdfCaseGroup[] {
           }),
         },
         {
-          id: '13-warehouse-clear-tight-gap',
-          label: 'Pé-direito, gap mínimo apertado',
-          objective: 'minGap agressivo → mais patamares.',
-          base: manualCase({
-            heightDefinitionMode: HEIGHT_DEFINITION_WAREHOUSE_CLEAR,
-            warehouseClearHeightMm: 9_200,
-            warehouseMinBeamGapMm: 950,
-            capacityKg: 1_000,
-          }),
-        },
-        {
-          id: '14-warehouse-clear-large-gap',
-          label: 'Pé-direito, gap mínimo largo',
-          objective: 'minGap conservador.',
-          base: manualCase({
-            heightDefinitionMode: HEIGHT_DEFINITION_WAREHOUSE_CLEAR,
-            warehouseClearHeightMm: 10_500,
-            warehouseMinBeamGapMm: 1_600,
-            capacityKg: 2_000,
-          }),
-        },
-        {
           id: '25-height-calc-mode',
           label: 'Modo CALC (carga × níveis)',
-          objective:
-            'heightMode CALC com loadHeightMm+levels; coerência resumo / PDF (após finalize).',
+          objective: 'heightMode CALC; finalize grava heightMm (orçamento + PDF).',
           base: calcCase({}),
         },
         {
           id: '23-tall-upright-top-travamento',
-          label: 'Montante > 8 m (travamento superior na planta)',
+          label: 'Montante > 8 m (travamento superior)',
           objective:
-            'Altura de montante elevada: linhas de travamento entre corredores na planta + BOM.',
+            'Travamento entre corredores na planta; BOM; montante com altura > 8 m.',
           base: manualCase({
             lineStrategy: 'APENAS_SIMPLES',
             widthMm: 12_000,
@@ -329,125 +219,16 @@ function buildCaseGroups(): PdfCaseGroup[] {
             columnProtector: false,
           }),
         },
-      ],
-    },
-    {
-      groupKey: 'picking-protections',
-      title: '1.º nível e proteções',
-      cases: [
-        {
-          id: '15-first-level-ground-yes',
-          label: 'Primeiro eixo de feixe ao piso',
-          objective: 'firstLevelOnGround true.',
-          base: manualCase({ firstLevelOnGround: true }),
-        },
-        {
-          id: '16-first-level-ground-no',
-          label: 'Primeiro eixo de feixe elevado',
-          objective: 'Comparar com 15.',
-          base: manualCase({ firstLevelOnGround: false }),
-        },
         {
           id: '17-protections-full',
-          label: 'Proteções completas',
-          objective: 'Protetor + guardas simples e dupla, ambas as extremidades.',
+          label: 'Proteções completas no desenho',
+          objective: 'Protetor de coluna + guardas simples/duplas (AMBOS) na elevação/planta.',
           base: manualCase({
             columnProtector: true,
             guardRailSimple: true,
             guardRailSimplePosition: 'AMBOS',
             guardRailDouble: true,
             guardRailDoublePosition: 'AMBOS',
-          }),
-        },
-        {
-          id: '18-protections-mixed',
-          label: 'Proteções mistas',
-          objective: 'Posições assimétricas início/fim.',
-          base: manualCase({
-            columnProtector: true,
-            guardRailSimple: true,
-            guardRailSimplePosition: 'INICIO',
-            guardRailDouble: true,
-            guardRailDoublePosition: 'FINAL',
-          }),
-        },
-      ],
-    },
-    {
-      groupKey: 'edge-stress',
-      title: 'Limites e stress',
-      cases: [
-        {
-          id: '19-compact-limit',
-          label: 'Galpão compacto',
-          objective: 'Largura reduzida; legibilidade mínima.',
-          base: manualCase({
-            lengthMm: 8_000,
-            widthMm: 6_200,
-            corridorMm: 2_800,
-            lineStrategy: 'MELHOR_LAYOUT',
-            heightMm: 3_600,
-            levels: 2,
-            capacityKg: 1_000,
-            columnProtector: false,
-          }),
-        },
-        {
-          id: '20-long-building-threshold',
-          label: 'Fronteira longitudinal de módulos',
-          objective: 'Comprimento no limiar de encaixe de mais um módulo.',
-          base: manualCase({
-            lengthMm: 9_050,
-            widthMm: 10_000,
-          }),
-        },
-        {
-          id: '21-heavy-capacity',
-          label: 'Capacidade elevada',
-          objective: 'Resumo / estrutura com carga maior.',
-          base: manualCase({
-            lengthMm: 14_000,
-            widthMm: 12_000,
-            heightMm: 5_040,
-            levels: 4,
-            capacityKg: 2_500,
-            columnProtector: true,
-          }),
-        },
-        {
-          id: '22-visual-stress-large',
-          label: 'Stress visual — galpão grande com túnel',
-          objective: 'Escala, repetição, túnel e orçamento.',
-          base: tunnelCase({
-            lengthMm: 30_000,
-            widthMm: 30_000,
-            corridorMm: 3_000,
-            lineStrategy: 'MELHOR_LAYOUT',
-            hasTunnel: true,
-            tunnelPosition: 'MEIO',
-            tunnelAppliesTo: 'AMBOS',
-            heightMm: 5_840,
-            levels: 5,
-            capacityKg: 2_000,
-            guardRailSimple: true,
-            guardRailSimplePosition: 'AMBOS',
-          }),
-        },
-        {
-          id: '27-half-module-tunnel',
-          label: 'Meio-módulo com túnel (comprimento longo)',
-          objective:
-            'halfModuleOptimization ativo: segmento half se ganho >= limiar; documentação rejeição se não.',
-          base: tunnelCase({
-            lineStrategy: 'APENAS_SIMPLES',
-            lengthMm: 48_000,
-            widthMm: 18_000,
-            halfModuleOptimization: true,
-            hasTunnel: true,
-            tunnelPosition: 'MEIO',
-            tunnelAppliesTo: 'AMBOS',
-            heightMm: 5_040,
-            levels: 4,
           }),
         },
       ],
