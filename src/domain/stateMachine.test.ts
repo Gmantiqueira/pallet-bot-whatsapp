@@ -1,4 +1,9 @@
-import { transition, Input, parseMenuBranch } from './stateMachine';
+import {
+  transition,
+  Input,
+  parseMenuBranch,
+  parseLineStrategyInput,
+} from './stateMachine';
 import { Session } from './session';
 import {
   DEFAULT_BEAM_LENGTH_MM,
@@ -368,6 +373,31 @@ describe('State Machine', () => {
       expect(result.session.state).toBe('CHOOSE_TUNNEL');
       expect(result.session.answers.corridorMm).toBe(0);
       expect(result.session.answers.lineStrategy).toBe('APENAS_SIMPLES');
+    });
+
+    it('parseLineStrategyInput: 4 = personalizado', () => {
+      expect(
+        parseLineStrategyInput({ type: 'TEXT', value: '4' })
+      ).toBe('PERSONALIZADO');
+    });
+
+    it('PERSONALIZADO: após contagens, vai a CHOOSE_TUNNEL com estratégia e campos', () => {
+      let session = createSession('CHOOSE_LINE_STRATEGY', {
+        lengthMm: 12000,
+        widthMm: 10000,
+        corridorMm: 3000,
+      });
+      let r = transition(session, { type: 'TEXT', value: '4' });
+      expect(r.session.state).toBe('WAIT_LINE_CUSTOM_SIMPLES');
+      expect(r.session.answers.lineStrategy).toBe('PERSONALIZADO');
+      session = r.session;
+      r = transition(session, { type: 'TEXT', value: '1' });
+      expect(r.session.state).toBe('WAIT_LINE_CUSTOM_DUPLOS');
+      expect(r.session.answers.customLineSimpleCount).toBe(1);
+      session = r.session;
+      r = transition(session, { type: 'TEXT', value: '1' });
+      expect(r.session.state).toBe('CHOOSE_TUNNEL');
+      expect(r.session.answers.customLineDoubleCount).toBe(1);
     });
 
     it('should reject corridor above maximum', () => {

@@ -116,6 +116,14 @@ export function buildProjectAnswersV2(
     levels,
     capacityKg: answers.capacityKg,
     lineStrategy,
+    customLineSimpleCount:
+      typeof answers.customLineSimpleCount === 'number'
+        ? answers.customLineSimpleCount
+        : undefined,
+    customLineDoubleCount:
+      typeof answers.customLineDoubleCount === 'number'
+        ? answers.customLineDoubleCount
+        : undefined,
     hasTunnel: answers.hasTunnel === true,
     tunnelPosition,
     tunnelOffsetMm:
@@ -183,6 +191,12 @@ export type ProjectAnswersV2 = {
   levels: number;
   capacityKg: number;
   lineStrategy: LineStrategyCode;
+  /**
+   * Obrigatórios com `lineStrategy === 'PERSONALIZADO'`: contagem de fileiras
+   * (eixo transversal ao vão), implantadas **duplas → simples**.
+   */
+  customLineSimpleCount?: number;
+  customLineDoubleCount?: number;
   hasTunnel: boolean;
   tunnelPosition?: TunnelPositionCode;
   /**

@@ -7,6 +7,8 @@ export const MIN_CORRIDOR = 500;
 export const MAX_CORRIDOR = 6000;
 export const MIN_KG = 100;
 export const MAX_KG = 5000;
+/** Máx. de fileiras simples/duplas (cada) em composição personalizada — evita erros grosseiros. */
+export const MAX_LINE_ROWS = 20;
 export const MIN_LEVELS = 1;
 export const MAX_LEVELS = 12;
 /** Espaçamento vertical entre níveis (mm) — intervalo prático para armazenagem. */
@@ -73,6 +75,14 @@ export const validateLevels = (value: number): string | null => {
 export const validateLevelGap = (value: number): string | null => {
   if (value < MIN_LEVEL_GAP_MM || value > MAX_LEVEL_GAP_MM) {
     return `Espaçamento deve estar entre ${MIN_LEVEL_GAP_MM} e ${MAX_LEVEL_GAP_MM} mm`;
+  }
+  return null;
+};
+
+/** Contagem 0..MAX_LINE_ROWS; simples+duplas ≥ 1. */
+export const validateCustomLineRowCount = (value: number): string | null => {
+  if (!Number.isInteger(value) || value < 0 || value > MAX_LINE_ROWS) {
+    return `Indique um número inteiro entre 0 e ${MAX_LINE_ROWS}`;
   }
   return null;
 };

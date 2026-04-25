@@ -14,7 +14,8 @@ export type RackDepthModeV2 = 'single' | 'double';
 export type LineStrategyCode =
   | 'APENAS_SIMPLES'
   | 'APENAS_DUPLOS'
-  | 'MELHOR_LAYOUT';
+  | 'MELHOR_LAYOUT'
+  | 'PERSONALIZADO';
 
 /** Compatível com START / MIDDLE / END (API em inglês). */
 export type TunnelPositionCode = 'INICIO' | 'MEIO' | 'FIM';
@@ -80,6 +81,11 @@ export type LayoutSolutionV2 = {
   };
   metadata: {
     lineStrategy: LineStrategyCode;
+    /**
+     * Estratégia PERSONALIZADO: nº de fileiras simples e duplas pedidas; implantação transversal
+     * na ordem **duplas → simples** (igual extensão natural do motor em dupla + simples remanescente).
+     */
+    customLineCounts?: { simple: number; double: number };
     optimizeWithHalfModule: boolean;
     halfModuleRejectedReason?: string;
     firstLevelOnGround: boolean;

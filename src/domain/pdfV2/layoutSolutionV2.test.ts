@@ -41,6 +41,19 @@ describe('buildLayoutSolutionV2', () => {
     expect(s.rows[0].kind).toBe('double');
   });
 
+  it('PERSONALIZADO: 1 dupla + 1 simples (eixo transversal: duplas primeiro, depois simples)', () => {
+    const a: ProjectAnswersV2 = {
+      ...base(),
+      lineStrategy: 'PERSONALIZADO',
+      customLineSimpleCount: 1,
+      customLineDoubleCount: 1,
+    };
+    const s = buildLayoutSolutionV2(a);
+    expect(s.metadata.lineStrategy).toBe('PERSONALIZADO');
+    expect(s.metadata.customLineCounts).toEqual({ simple: 1, double: 1 });
+    expect(s.rows.map(r => r.kind)).toEqual(['double', 'single']);
+  });
+
   it('APENAS_DUPLOS: sem fallback silencioso — rejeita se não couber dupla com corredor bilateral', () => {
     const a: ProjectAnswersV2 = {
       ...base(),

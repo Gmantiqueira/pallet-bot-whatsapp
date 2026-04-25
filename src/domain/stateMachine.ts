@@ -6,6 +6,7 @@ import {
 import {
   parseNumber,
   validateCorridor,
+  validateCustomLineRowCount,
   validateKg,
   validateLevels,
   validateLevelGap,
@@ -27,6 +28,8 @@ export type State =
   | 'WAIT_WIDTH'
   | 'WAIT_CORRIDOR'
   | 'CHOOSE_LINE_STRATEGY'
+  | 'WAIT_LINE_CUSTOM_SIMPLES'
+  | 'WAIT_LINE_CUSTOM_DUPLOS'
   | 'CHOOSE_TUNNEL'
   | 'CHOOSE_TUNNEL_POSITION'
   | 'CHOOSE_TUNNEL_APPLIES'
@@ -125,6 +128,36 @@ export function parseMenuBranch(raw: string): '1' | '2' | null {
   if (collapsed === '1') return '1';
   if (collapsed === '2') return '2';
   return null;
+}
+
+/**
+ * 1–3 = botões atuais; 4 = personalizado. Aceita palavra-chave curta.
+ */
+export function parseLineStrategyInput(
+  input: Input
+): 'SIMPLES' | 'DUPLOS' | 'MELHOR' | 'PERSONALIZADO' | null {
+  if (input.type === 'BUTTON') {
+    if (input.value === 'LINE_SIMPLES') return 'SIMPLES';
+    if (input.value === 'LINE_DUPLOS') return 'DUPLOS';
+    if (input.value === 'LINE_MELHOR') return 'MELHOR';
+    if (input.value === 'LINE_PERSONALIZADO') return 'PERSONALIZADO';
+    return null;
+  }
+  if (input.type === 'TEXT') {
+    const t = input.value.trim().toLowerCase();
+    if (t === '1' || t === 'simples' || t === 's') return 'SIMPLES';
+    if (t === '2' || t === 'duplas' || t === 'duplos' || t === 'd') return 'DUPLOS';
+    if (t === '3' || t === 'melhor' || t === 'auto' || t === 'm' || t === 'automático' || t === 'automatico')
+      return 'MELHOR';
+    if (t === '4' || t === 'p' || t === 'personalizado' || t === 'personalizada' || t === 'custom')
+      return 'PERSONALIZADO';
+  }
+  return null;
+}
+
+function clearCustomLineCounts(answers: Record<string, unknown>): void {
+  delete answers.customLineSimpleCount;
+  delete answers.customLineDoubleCount;
 }
 
 function transitionMenuChoice(session: Session, branch: '1' | '2'): Session {
@@ -355,32 +388,131 @@ export const transition = (
       return { session: newSession, effects, error };
     }
 
-    case 'CHOOSE_LINE_STRATEGY':
-      if (input.type === 'BUTTON') {
-        const noCorridor =
-          typeof newSession.answers.corridorMm === 'number' &&
-          newSession.answers.corridorMm <= 0;
-        if (noCorridor && input.value !== 'LINE_SIMPLES') {
-          return {
-            session: newSession,
-            effects,
-            error:
-              'Sem corredor principal só combina com linha simples (ex.: uma fileira junto à parede). Toque em *Só linhas simples* ou volte a definir a largura do corredor.',
-          };
-        }
-        const map: Record<string, string> = {
-          LINE_SIMPLES: 'APENAS_SIMPLES',
-          LINE_DUPLOS: 'APENAS_DUPLOS',
-          LINE_MELHOR: 'MELHOR_LAYOUT',
+    case 'CHOOSE_LINE_STRATEGY': {
+      const choice = parseLineStrategyInput(input);
+      if (!choice) {
+        return {
+          session: newSession,
+          effects,
+          error:
+            'Responda com *1* (simples), *2* (duplas), *3* (melhor) ou *4* (personalizado), ou use os botões.',
         };
-        const v = map[input.value];
-        if (!v) {
-          return { session: newSession, effects };
-        }
-        newSession = goNext(newSession, { lineStrategy: v }, 'CHOOSE_TUNNEL');
-        effects.push({ type: 'SEND' });
       }
-      return { session: newSession, effects };
+      const noCorridor =
+        typeof newSession.answers.corridorMm === 'number' &&
+        newSession.answers.corridorMm <= 0;
+      if (
+        noCorridor &&
+        (choice === 'DUPLOS' || choice === 'MELHOR')
+      ) {
+        return {
+          session: newSession,
+          effects,
+          error:
+            'Sem corredor principal só combina com linha simples (ex.: uma fileira junto à parede) ou personalizado com só fileiras simples. Toque em *Só linhas simples*, digite *4* (personalizado) ou volte a definir a largura do corredor.',
+        };
+      }
+      if (choice === 'PERSONALIZADO') {
+        const answers: Record<string, unknown> = { ...newSession.answers };
+        clearCustomLineCounts(answers);
+        newSession = { ...newSession, answers };
+        newSession = goNext(
+          newSession,
+          { lineStrategy: 'PERSONALIZADO' },
+          'WAIT_LINE_CUSTOM_SIMPLES'
+        );
+        effects.push({ type: 'SEND' });
+        return { session: newSession, effects, error };
+      }
+      const strategyMap: Record<string, string> = {
+        SIMPLES: 'APENAS_SIMPLES',
+        DUPLOS: 'APENAS_DUPLOS',
+        MELHOR: 'MELHOR_LAYOUT',
+      };
+      const v = strategyMap[choice];
+      if (!v) {
+        return { session: newSession, effects, error };
+      }
+      const answers: Record<string, unknown> = { ...newSession.answers, lineStrategy: v };
+      clearCustomLineCounts(answers);
+      newSession = { ...newSession, answers };
+      newSession = goNext(newSession, { lineStrategy: v }, 'CHOOSE_TUNNEL');
+      effects.push({ type: 'SEND' });
+      return { session: newSession, effects, error };
+    }
+
+    case 'WAIT_LINE_CUSTOM_SIMPLES': {
+      if (input.type !== 'TEXT') {
+        return { session: newSession, effects, error };
+      }
+      const n = parseNumber(input.value);
+      if (n === null) {
+        return {
+          session: newSession,
+          effects,
+          error: 'Indique um número inteiro (0 ou mais) em fileiras de linha simples',
+        };
+      }
+      const ve = validateCustomLineRowCount(n);
+      if (ve) {
+        return { session: newSession, effects, error: ve };
+      }
+      newSession = goNext(
+        newSession,
+        { customLineSimpleCount: n },
+        'WAIT_LINE_CUSTOM_DUPLOS'
+      );
+      effects.push({ type: 'SEND' });
+      return { session: newSession, effects, error };
+    }
+
+    case 'WAIT_LINE_CUSTOM_DUPLOS': {
+      if (input.type !== 'TEXT') {
+        return { session: newSession, effects, error };
+      }
+      const n = parseNumber(input.value);
+      if (n === null) {
+        return {
+          session: newSession,
+          effects,
+          error: 'Indique um número inteiro (0 ou mais) em fileiras de linha dupla (dupla costas)',
+        };
+      }
+      const ve = validateCustomLineRowCount(n);
+      if (ve) {
+        return { session: newSession, effects, error: ve };
+      }
+      const simpleN =
+        typeof newSession.answers.customLineSimpleCount === 'number'
+          ? newSession.answers.customLineSimpleCount
+          : 0;
+      if (simpleN + n < 1) {
+        return {
+          session: newSession,
+          effects,
+          error: 'A soma de fileiras simples e duplas deve ser pelo menos 1',
+        };
+      }
+      if (
+        n > 0 &&
+        typeof newSession.answers.corridorMm === 'number' &&
+        newSession.answers.corridorMm <= 0
+      ) {
+        return {
+          session: newSession,
+          effects,
+          error:
+            'Com corredor 0, não é possível fileiras em dupla costas. Indique 0 fileiras duplas ou defina corredor > 0.',
+        };
+      }
+      newSession = goNext(
+        newSession,
+        { customLineDoubleCount: n },
+        'CHOOSE_TUNNEL'
+      );
+      effects.push({ type: 'SEND' });
+      return { session: newSession, effects, error };
+    }
 
     case 'CHOOSE_TUNNEL':
       if (input.type === 'BUTTON') {

@@ -111,6 +111,14 @@ function projectAnswersForWarehouseCandidate(
     levels: rack.levels,
     capacityKg: answers.capacityKg,
     lineStrategy,
+    customLineSimpleCount:
+      typeof answers.customLineSimpleCount === 'number'
+        ? answers.customLineSimpleCount
+        : undefined,
+    customLineDoubleCount:
+      typeof answers.customLineDoubleCount === 'number'
+        ? answers.customLineDoubleCount
+        : undefined,
     hasTunnel: answers.hasTunnel === true,
     tunnelPosition,
     tunnelOffsetMm:

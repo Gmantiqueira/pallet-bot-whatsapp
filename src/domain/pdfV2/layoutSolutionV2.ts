@@ -155,6 +155,13 @@ function layoutSearchCandidates(
       hasTunnel: tunnelFromAnswers,
     }));
   }
+  if (strategy === 'PERSONALIZADO') {
+    return orientations.map(orientation => ({
+      orientation,
+      depthMode: 'single' as const,
+      hasTunnel: tunnelFromAnswers,
+    }));
+  }
 
   /** Com `tunnelOffsetMm` nas respostas, a posição do vão é fixa — não varia INICIO/MEIO/FIM na pesquisa. */
   const tunnelPositionSlots: (TunnelPositionCode | undefined)[] =
@@ -200,8 +207,10 @@ function transverseUsedMm(s: LayoutSolutionV2): number {
     bandSum += bandDepthForMode(row.kind, s.rackDepthMm);
   }
   const between = Math.max(0, rows.length - 1) * cor;
-  /** Qualquer fileira dupla na solução implica reserva bilateral no eixo transversal (faixa interior). */
-  const perimeter = rows.some(r => r.kind === 'double') ? 2 * cor : 0;
+  const first = rows[0];
+  const last = rows[rows.length - 1];
+  const perimeter =
+    (first?.kind === 'double' ? cor : 0) + (last?.kind === 'double' ? cor : 0);
   return bandSum + between + perimeter;
 }
 
@@ -676,6 +685,154 @@ function fillCrossZone(
   return { rows, corridors };
 }
 
+/**
+ * Composição explícita: N fileiras em **dupla costas** e M **simples** no eixo transversal,
+ * por esta ordem (extensão natural do preenchimento “duplas + simples” já usado no motor).
+ * Entre fileiras: corredor; primeira dupla reserva acesso a `z0` quando `corridorMm` > 0.
+ */
+function fillCrossZoneFromCustomRowMix(
+  zone: CrossZone,
+  nDouble: number,
+  nSingle: number,
+  moduleDepthMm: number,
+  corridorMm: number,
+  idPrefix: string,
+  orientation: LayoutOrientationV2,
+  lengthMm: number,
+  widthMm: number
+): { rows: RowBandCross[]; corridors: CirculationZone[] } {
+  const g = Math.max(0, corridorMm);
+  const rows: RowBandCross[] = [];
+  const corridors: CirculationZone[] = [];
+  const zoneLen = zone.z1 - zone.z0;
+  const dN = Math.max(0, Math.floor(nDouble));
+  const sN = Math.max(0, Math.floor(nSingle));
+  const kinds: RackDepthModeV2[] = [
+    ...Array(dN).fill('double' as RackDepthModeV2),
+    ...Array(sN).fill('single' as RackDepthModeV2),
+  ];
+  if (kinds.length === 0) {
+    return { rows, corridors: [] };
+  }
+  let simY = zone.z0;
+  for (let i = 0; i < kinds.length; i++) {
+    const k = kinds[i]!;
+    const b = bandDepthForMode(k, moduleDepthMm);
+    if (i === 0) {
+      if (k === 'double') {
+        simY += g;
+      }
+    } else {
+      simY += g;
+    }
+    simY += b;
+  }
+  if (simY - zone.z1 > OPERATIONAL_ACCESS_TOL_MM) {
+    throw new Error(
+      `PERSONALIZADO: composição (duplas=${dN}, simples=${sN}) excede o espaço transversal (~${Math.round(
+        zoneLen
+      )} mm). Tente orientação alternativa, menos fileiras, ou outras medidas.`
+    );
+  }
+
+  let y = zone.z0;
+  for (let i = 0; i < kinds.length; i++) {
+    const k = kinds[i]!;
+    const b = bandDepthForMode(k, moduleDepthMm);
+    if (i === 0) {
+      if (k === 'double' && g > EPS) {
+        if (orientation === 'along_length') {
+          corridors.push({
+            id: `${idPrefix}-cor-leading`,
+            kind: 'corridor',
+            x0: 0,
+            x1: lengthMm,
+            y0: zone.z0,
+            y1: zone.z0 + g,
+            label: 'Corredor operacional (acesso — perímetro)',
+          });
+        } else {
+          corridors.push({
+            id: `${idPrefix}-cor-leading`,
+            kind: 'corridor',
+            x0: zone.z0,
+            x1: zone.z0 + g,
+            y0: 0,
+            y1: widthMm,
+            label: 'Corredor operacional (acesso — perímetro)',
+          });
+        }
+        y = zone.z0 + g;
+      } else if (k === 'double' && g <= EPS) {
+        y = zone.z0;
+      } else {
+        y = zone.z0;
+      }
+    } else if (g > EPS) {
+      const cor0 = y;
+      const cor1 = y + g;
+      if (orientation === 'along_length') {
+        corridors.push({
+          id: `${idPrefix}-cor-betw-${i}`,
+          kind: 'corridor',
+          x0: 0,
+          x1: lengthMm,
+          y0: cor0,
+          y1: cor1,
+          label: 'Corredor operacional',
+        });
+      } else {
+        corridors.push({
+          id: `${idPrefix}-cor-betw-${i}`,
+          kind: 'corridor',
+          x0: cor0,
+          x1: cor1,
+          y0: 0,
+          y1: widthMm,
+          label: 'Corredor operacional',
+        });
+      }
+      y = cor1;
+    }
+    const c0 = y;
+    const c1 = y + b;
+    rows.push({ id: `${idPrefix}-cust-${i}`, c0, c1, rackDepthMode: k });
+    y = c1;
+  }
+
+  const usedEnd = y;
+  const remainder = zone.z1 - usedEnd;
+  if (remainder > EPS) {
+    const label =
+      remainder + EPS >= g
+        ? 'Corredor operacional (faixa transversal)'
+        : 'Faixa transversal residual (largura inferior ao corredor declarado)';
+    if (orientation === 'along_length') {
+      corridors.push({
+        id: `${idPrefix}-cor-trailing`,
+        kind: 'corridor',
+        x0: 0,
+        x1: lengthMm,
+        y0: usedEnd,
+        y1: zone.z1,
+        label,
+      });
+    } else {
+      corridors.push({
+        id: `${idPrefix}-cor-trailing`,
+        kind: 'corridor',
+        x0: usedEnd,
+        x1: zone.z1,
+        y0: 0,
+        y1: widthMm,
+        label,
+      });
+    }
+  }
+
+  return { rows, corridors };
+}
+
 type FillContext = {
   orientation: LayoutOrientationV2;
   lengthMm: number;
@@ -1009,22 +1166,59 @@ function buildLayoutSolutionV2Core(
 
   const tunnelPos = tunnelPosition as TunnelPositionCode | undefined;
 
-  const band = bandDepthForMode(depthMode, rackDepthMm);
-
-  const ctx: FillContext = {
-    orientation,
-    lengthMm,
-    widthMm,
-    beamSpan,
-    crossSpan,
-    bandDepth: band,
-    corridorMm,
-    rackDepthMm,
-    depthMode,
-    hasTunnel,
-  };
-
-  const { rowBands, corridors: corridorsFromFill } = fillWarehouseCross(ctx);
+  let rowBands: RowBandCross[];
+  let corridorsFromFill: CirculationZone[];
+  if (lineStrategy === 'PERSONALIZADO') {
+    const nS = answers.customLineSimpleCount;
+    const nD = answers.customLineDoubleCount;
+    if (
+      typeof nS !== 'number' ||
+      typeof nD !== 'number' ||
+      !Number.isInteger(nS) ||
+      !Number.isInteger(nD) ||
+      nS < 0 ||
+      nD < 0 ||
+      nS + nD < 1
+    ) {
+      throw new Error('PERSONALIZADO: contagens de fileiras em falta ou inválidas');
+    }
+    if (nD > 0 && corridorMm <= EPS) {
+      throw new DoubleLineAccessValidationError(
+        'PERSONALIZADO: fileira dupla requer corredor > 0 mm (acesso bilateral mínimo).'
+      );
+    }
+    const z = crossZonesForTunnel(crossSpan)[0]!;
+    const mix = fillCrossZoneFromCustomRowMix(
+      z,
+      nD,
+      nS,
+      rackDepthMm,
+      corridorMm,
+      z.id,
+      orientation,
+      lengthMm,
+      widthMm
+    );
+    rowBands = mix.rows;
+    corridorsFromFill = mix.corridors;
+  } else {
+    const band = bandDepthForMode(depthMode, rackDepthMm);
+    const ctx: FillContext = {
+      orientation,
+      lengthMm,
+      widthMm,
+      beamSpan,
+      crossSpan,
+      bandDepth: band,
+      corridorMm,
+      rackDepthMm,
+      depthMode,
+      hasTunnel,
+    };
+    const w = fillWarehouseCross(ctx);
+    rowBands = w.rowBands;
+    corridorsFromFill = w.corridors;
+  }
 
   const rowBandCount = rowBands.length;
 
@@ -1118,6 +1312,7 @@ function buildLayoutSolutionV2Core(
      * o cliente restringiu o vão a “linhas simples” no sentido de estratégia — antes só havia duplas.
      */
     const isResidualPackedSingle =
+      lineStrategy !== 'PERSONALIZADO' &&
       depthMode === 'double' &&
       rowKind === 'single' &&
       rowId.includes('-r-trail-');
@@ -1199,10 +1394,17 @@ function buildLayoutSolutionV2Core(
   );
   const physicalPickingModules = computePhysicalPickingModules(rows);
 
+  const rackOutMode: RackDepthModeV2 =
+    lineStrategy === 'PERSONALIZADO'
+      ? (answers.customLineDoubleCount ?? 0) > 0
+        ? 'double'
+        : 'single'
+      : depthMode;
+
   const sol: LayoutSolutionV2 = {
     warehouse: { lengthMm, widthMm },
     orientation,
-    rackDepthMode: depthMode,
+    rackDepthMode: rackOutMode,
     beamSpanMm: beamSpan,
     crossSpanMm: crossSpan,
     moduleWidthMm,
@@ -1222,6 +1424,16 @@ function buildLayoutSolutionV2Core(
     },
     metadata: {
       lineStrategy,
+      ...(lineStrategy === 'PERSONALIZADO' &&
+      typeof answers.customLineSimpleCount === 'number' &&
+      typeof answers.customLineDoubleCount === 'number'
+        ? {
+            customLineCounts: {
+              simple: answers.customLineSimpleCount,
+              double: answers.customLineDoubleCount,
+            },
+          }
+        : {}),
       optimizeWithHalfModule: halfModuleOptimization,
       halfModuleRejectedReason: anyRejectedHalf
         ? 'Meio módulo não aplicado: extremo sem circulação operacional adjacente (túnel/corredor entre fileiras).'
@@ -1268,6 +1480,7 @@ function pickBestLayoutSolution(
       sol = buildLayoutSolutionV2Core(merged, cand.orientation, cand.depthMode);
     } catch (e) {
       if (e instanceof DoubleLineAccessValidationError) continue;
+      if (e instanceof Error && e.message.startsWith('PERSONALIZADO:')) continue;
       throw e;
     }
     if (!layoutSolutionPassesOperationalAccess(sol)) continue;
@@ -1305,11 +1518,16 @@ export function buildLayoutSolutionV2(
       answers.lineStrategy === 'APENAS_DUPLOS'
         ? ` Estratégia APENAS_DUPLOS: não há conversão automática para linha simples — use dimensões que permitam corredor ≥ ${answers.corridorMm} mm em ambos os lados no eixo transversal, ou escolha MELHOR_LAYOUT / APENAS_SIMPLES.`
         : '';
+    const personHint =
+      answers.lineStrategy === 'PERSONALIZADO'
+        ? ' PERSONALIZADO: ajuste o nº de fileiras, corredor e profundidade (deve caber no eixo transversal).'
+        : '';
     throw new Error(
       'layoutSolutionV2: nenhum candidato com acesso operacional válido ' +
         '(fileira dupla exige corredor bilateral ≥ corredor declarado em ambos os lados no eixo transversal; ' +
         'alargue o compartimento, reduza corredor ou profundidade de posição, ou use estratégia MELHOR_LAYOUT).' +
-        dupOnly
+        dupOnly +
+        personHint
     );
   }
   return applyHalfModuleLowGainPolicy(best, answers);

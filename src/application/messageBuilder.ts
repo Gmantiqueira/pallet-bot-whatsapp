@@ -181,12 +181,30 @@ const buildStateMessage = (session: Session): OutgoingMessage | null => {
     case 'CHOOSE_LINE_STRATEGY':
       return {
         to: session.phone,
-        text: 'Estratégia de linhas de armazenagem',
+        text:
+          'Estratégia de linhas de armazenagem\n\n' +
+            'Pode tocar no botão ou escrever: *1* simples, *2* duplas, *3* melhor, *4* personalizado (definir quantas simples/duplas; implantação no eixo transversal: *duplas depois simples*).',
         buttons: [
           { id: 'LINE_SIMPLES', label: 'Só linhas simples' },
           { id: 'LINE_DUPLOS', label: 'Só linhas duplas' },
           { id: 'LINE_MELHOR', label: 'Melhor layout' },
         ],
+      };
+
+    case 'WAIT_LINE_CUSTOM_SIMPLES':
+      return {
+        to: session.phone,
+        text:
+          'Número de *linhas de armazenagem simples* (fileiras, eixo transversal ao vão)\n\n' +
+            '0–20, inteiro. Ex.: 0 se só houver fileiras em dupla costas.',
+      };
+
+    case 'WAIT_LINE_CUSTOM_DUPLOS':
+      return {
+        to: session.phone,
+        text:
+          'Número de *linhas em dupla costas* (fileiras duplas, eixo transversal ao vão)\n\n' +
+            '0–20, inteiro. Ex.: 0 se só tiver fileiras simples. Ordem no desenho: primeiro as duplas, depois as simples.',
       };
 
     case 'CHOOSE_TUNNEL':
@@ -408,7 +426,8 @@ const lineLabel = (v: unknown): string => {
   const m: Record<string, string> = {
     APENAS_SIMPLES: 'Apenas linhas simples',
     APENAS_DUPLOS: 'Apenas linhas duplas',
-    MELHOR_LAYOUT: 'Melhor layout',
+    MELHOR_LAYOUT: 'Melhor layout (automático)',
+    PERSONALIZADO: 'Personalizado',
   };
   return typeof v === 'string' ? (m[v] ?? v) : '—';
 };
@@ -465,6 +484,15 @@ const buildSummary = (session: Session): string => {
   }
   if (a.lineStrategy) {
     lines.push(`Linhas: ${lineLabel(a.lineStrategy)}`);
+    if (
+      a.lineStrategy === 'PERSONALIZADO' &&
+      typeof a.customLineSimpleCount === 'number' &&
+      typeof a.customLineDoubleCount === 'number'
+    ) {
+      lines.push(
+        `  • Simples: ${a.customLineSimpleCount} · duplas: ${a.customLineDoubleCount} (ordem: duplas → simples no eixo transversal)`
+      );
+    }
   }
   /**
    * Túnel no resumo = layout calculado (módulo túnel real), não só `answers.hasTunnel`.

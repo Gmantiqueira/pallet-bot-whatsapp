@@ -52,9 +52,11 @@ function formatMm(mm: number): string {
 function layoutStrategyCaption(geometry: LayoutGeometry): string {
   const ls = geometry.metadata.lineStrategy;
   const depth =
-    geometry.metadata.rackDepthMode === 'double'
-      ? 'fileiras em dupla costas'
-      : 'fileiras simples';
+    ls === 'PERSONALIZADO'
+      ? 'composição personalizada (simples e/ou duplas)'
+      : geometry.metadata.rackDepthMode === 'double'
+        ? 'fileiras em dupla costas'
+        : 'fileiras simples';
   const ori =
     geometry.orientation === 'along_length'
       ? 'vão das longarinas ∥ comprimento do compartimento'
@@ -63,6 +65,7 @@ function layoutStrategyCaption(geometry: LayoutGeometry): string {
     APENAS_SIMPLES: 'Estratégia: só linhas simples',
     APENAS_DUPLOS: 'Estratégia: só linhas duplas',
     MELHOR_LAYOUT: 'Estratégia: melhor layout (otimizado)',
+    PERSONALIZADO: 'Estratégia: personalizada (N simples, M duplas)',
   };
   return `${strat[ls] ?? 'Estratégia de linhas'} · ${depth} · ${ori}`;
 }

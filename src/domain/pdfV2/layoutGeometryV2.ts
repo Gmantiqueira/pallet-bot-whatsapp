@@ -988,7 +988,7 @@ function doubleBandHasBilateralOperationalAccess(args: {
  * @param layout Geometria canónica da planta (mesma instância que o PDF) — {@link LayoutGeometry}.
  */
 export function validateOperationalAccess(layout: LayoutGeometry): void {
-  if (layout.metadata.rackDepthMode !== 'double') return;
+  if (!layout.rows.some(r => r.rowType === 'backToBack')) return;
 
   const wh = warehouseDoubleLineSectionFromGeometry(layout);
   for (const row of layout.rows) {
@@ -1014,7 +1014,7 @@ export function layoutSolutionPassesOperationalAccess(
 
   if (sol.rows.length === 0) return false;
 
-  if (sol.rackDepthMode !== 'double') return true;
+  if (!sol.rows.some(r => r.kind === 'double')) return true;
 
   if (cor <= EPS) return false;
 
@@ -1049,7 +1049,7 @@ export function layoutSolutionPassesOperationalAccess(
 export function assertLayoutSolutionDoubleRowBilateralAccess(
   sol: LayoutSolutionV2
 ): void {
-  if (sol.rackDepthMode !== 'double') return;
+  if (!sol.rows.some(r => r.kind === 'double')) return;
   if (sol.rows.length === 0) return;
   const wh = warehouseDoubleLineSectionFromSolution(sol);
   for (const row of sol.rows) {
