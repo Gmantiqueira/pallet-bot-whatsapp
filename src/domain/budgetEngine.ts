@@ -44,6 +44,7 @@ const BUDGET_ASSUMPTIONS_V2: string[] = [
   'Meio módulo: factor 0,5 no comprimento ao longo do vão;',
   'Protetor de coluna (por montante); guardas por extremidade de fileira (conforme opções).',
   'Travamento superior automático entre fileiras (corredor) quando montantes &gt; 8 m — alinhado ao BOM.',
+  'Travamento de fundo (costa) só com fileiras simples (sem dupla costa); 400×50%H; cadência 1/3/… módulos — alinhado ao BOM.',
 ];
 
 export type BudgetResult = {
@@ -136,6 +137,14 @@ export function budgetResultFromBillOfMaterials(
   const travSup = lineQty(bom, 'travamentoSuperior');
   if (travSup > 0) {
     items.push({ name: 'Travamento superior (entre fileiras)', quantity: travSup });
+  }
+
+  const travFundo = lineQty(bom, 'travamentoFundo');
+  if (travFundo > 0) {
+    items.push({
+      name: 'Travamento de fundo (costa)',
+      quantity: travFundo,
+    });
   }
 
   return {

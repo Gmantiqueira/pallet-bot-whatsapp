@@ -12,6 +12,11 @@ import { tunnelActiveStorageLevelsFromGlobal } from './elevationLevelGeometryV2'
 import { splitModuleFootprintsFor3d } from './model3dV2';
 import { totalDistanciadorCountForDoubleRows } from './spineAndDistanciador';
 import {
+  countFundoTravamentoQuantity,
+  FUNDO_TRAVAMENTO_WIDTH_MM,
+  fundoTravamentoHeightMm,
+} from './fundoTravamento';
+import {
   countTopTravamentoSuperiorQuantity,
   minInterRowCorridorWidthMm,
   topTravamentoCorridorSpanMm,
@@ -283,8 +288,13 @@ export function buildBillOfMaterials(
 
   const montTotal = Math.max(0, upright75 + upright100);
   const distanciador = totalDistanciadorCountForDoubleRows(geometry);
+  const hMm = uprightHeightMm;
 
-  const travamento = Math.max(0, rowCount);
+  const travamentoFundoQty = countFundoTravamentoQuantity(geometry);
+  const descTravFundo =
+    travamentoFundoQty > 0
+      ? `TRAVAMENTO DE FUNDO (costa, atrás do módulo) — ${formatMm3d(FUNDO_TRAVAMENTO_WIDTH_MM)}×${formatMm3d(fundoTravamentoHeightMm(hMm))} m (L×A); espaçamento alinhado ao módulo (1/3/…); só fileiras simples.`
+      : undefined;
 
   const travamentoSuperior = countTopTravamentoSuperiorQuantity(
     geometry,
@@ -304,7 +314,6 @@ export function buildBillOfMaterials(
   const depthMm = layoutSolution.rackDepthMm;
   /** Vão livre de uma baia — longarina, não o comprimento total do galpão. */
   const baySpanMm = layoutSolution.beamAlongModuleMm;
-  const hMm = uprightHeightMm;
 
   const desc75 = `MONTANTE #14 F75 - ${formatMm3d(depthMm)}x${formatMm3d(hMm)} - ${tonLabel(structure.uprightType)}`;
   const desc100 = `MONTANTE #14 F100 - ${formatMm3d(depthMm)}x${formatMm3d(hMm)} - 15T`;
@@ -322,7 +331,11 @@ export function buildBillOfMaterials(
     { id: 'columnProtector', quantity: protectors },
     { id: 'guardRailSimple', quantity: grSimple },
     { id: 'guardRailDouble', quantity: grDouble },
-    { id: 'travamentoFundo', quantity: travamento },
+    {
+      id: 'travamentoFundo',
+      quantity: travamentoFundoQty,
+      description: descTravFundo,
+    },
     {
       id: 'travamentoSuperior',
       quantity: travamentoSuperior,

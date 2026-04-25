@@ -358,6 +358,11 @@ export type ElevationPanelPayload = {
   guardRailSimplePosition?: GuardRailPositionCode;
   guardRailDouble?: boolean;
   guardRailDoublePosition?: GuardRailPositionCode;
+  /**
+   * Travamento de fundo na costa (só quando o layout é só fileiras simples):
+   * indicador para a vista lateral — peça 400×50%H atrás do módulo.
+   */
+  fundoTravamento?: boolean;
 };
 
 export type ElevationModelV2 = {

@@ -31,6 +31,7 @@ import {
 } from './elevationVisualTokens';
 import { SVG_FONT_FAMILY, svgFontWeightForSvgAttr } from '../../config/pdfFonts';
 import { sanitizeText } from '../../utils/sanitizeText';
+import { FUNDO_TRAVAMENTO_WIDTH_MM } from './fundoTravamento';
 
 /** Um módulo frontal = duas baias lado a lado (3 montantes), como desenho técnico tipo 2× vão. */
 const FV_FRONT_BAY_COUNT = 2;
@@ -1398,6 +1399,16 @@ function drawLateral(
   parts.push(
     `<rect x="${xRightU}" y="${y0}" width="${uSide}" height="${dh}" fill="${FV_UPRIGHT_FILL}" stroke="${FV_UPRIGHT_STROKE}" stroke-width="1.1"/>`
   );
+
+  if (data.fundoTravamento === true && !isDouble) {
+    const wFundoPx = FUNDO_TRAVAMENTO_WIDTH_MM * s;
+    const hFundoPx = 0.5 * dh;
+    const xFundo = x0 + dw;
+    const yFundo = floorTopLat - hFundoPx;
+    parts.push(
+      `<rect id="fundo-travamento-lateral" x="${xFundo}" y="${yFundo}" width="${wFundoPx}" height="${hFundoPx}" fill="#e2e8f0" fill-opacity="0.92" stroke="${COL_BRACE_STROKE}" stroke-width="0.95" stroke-linejoin="miter" opacity="0.94"/>`
+    );
+  }
 
   if (data.columnProtector === true) {
     const bh = 8.8;

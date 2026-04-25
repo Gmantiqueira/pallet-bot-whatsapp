@@ -10,6 +10,7 @@ import {
   type LayoutGeometry,
   type RackModule,
 } from './layoutGeometryV2';
+import { appliesFundoTravamentoLayout } from './fundoTravamento';
 
 export class ElevationModelValidationError extends Error {
   constructor(message: string) {
@@ -304,6 +305,14 @@ export function validateElevationAxesAgainstGeometry(
       );
     }
   }
+
+  const expFundo = appliesFundoTravamentoLayout(geometry);
+  const gotFundo = model.frontWithoutTunnel.fundoTravamento === true;
+  if (gotFundo !== expFundo) {
+    throw new ElevationModelValidationError(
+      `Indicador travamento de fundo incoerente (payload ${gotFundo}, geometria espera ${expFundo}).`
+    );
+  }
 }
 
 /**
@@ -313,7 +322,11 @@ export function buildElevationModelV2(
   answers: Record<string, unknown>,
   geometry: LayoutGeometry
 ): ElevationModelV2 {
-  const frontWithoutTunnel = buildFrontWithoutTunnelPayload(answers, geometry);
+  const fundoTravamento = appliesFundoTravamentoLayout(geometry);
+  const frontWithoutTunnel: ElevationPanelPayload = {
+    ...buildFrontWithoutTunnelPayload(answers, geometry),
+    fundoTravamento,
+  };
 
   const userWantsTunnel = answers.hasTunnel === true;
   const tunnelMod = userWantsTunnel
@@ -321,9 +334,12 @@ export function buildElevationModelV2(
     : undefined;
   const frontWithTunnel =
     userWantsTunnel && geometry.metadata.hasTunnel && tunnelMod
-      ? panelFromRackModule(answers, geometry, tunnelMod, {
-          tunnelVisual: true,
-        })
+      ? {
+          ...panelFromRackModule(answers, geometry, tunnelMod, {
+            tunnelVisual: true,
+          }),
+          fundoTravamento,
+        }
       : undefined;
 
   const lateral: ElevationPanelPayload = { ...frontWithoutTunnel };
@@ -341,6 +357,11 @@ export function buildElevationModelV2(
   ) {
     summaryLines.push(
       `Variante túnel no projeto: pé livre ${Math.round(tunnelMod.tunnelClearanceHeightMm)} mm — elevação ao lado: menos níveis ativos acima do vão (sem redistribuir o total para a zona superior).`
+    );
+  }
+  if (fundoTravamento) {
+    summaryLines.push(
+      'Travamento de fundo (vista lateral): referência 400 mm × 50% da altura do montante na costa; espaçamento modular 1/3/…; só com fileiras simples (sem dupla costa).'
     );
   }
 

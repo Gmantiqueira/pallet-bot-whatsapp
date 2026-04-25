@@ -34,8 +34,10 @@ describe('serializeElevationPagesV2', () => {
     const geo = buildLayoutGeometry(layout, session);
     validateLayoutGeometry(geo);
     const model = buildElevationModelV2(session, geo);
+    expect(model.frontWithoutTunnel.fundoTravamento).toBe(true);
     const pages = serializeElevationPagesV2(model);
     const svg = pages.frontWithoutTunnel;
+    expect(pages.lateral).toContain('id="fundo-travamento-lateral"');
     expect(svg).toContain('PISO');
     expect(svg).toContain('H total');
     expect(svg).toMatch(/2 baias/);
@@ -71,7 +73,9 @@ describe('serializeElevationPagesV2', () => {
     const geo = buildLayoutGeometry(layout, session);
     validateLayoutGeometry(geo);
     const model = buildElevationModelV2(session, geo);
+    expect(model.frontWithoutTunnel.fundoTravamento).toBe(false);
     const svg = serializeElevationPagesV2(model).lateral;
+    expect(svg).not.toContain('id="fundo-travamento-lateral"');
     expect(svg).not.toContain('ESPINHA');
     // Página PDF omite cabeçalho; legenda de profundidade discreta (secundária vs. frontal).
     expect(svg).toMatch(/Profundidade da costa/);

@@ -39,6 +39,7 @@ describe('buildElevationModelV2 axis mapping', () => {
     const geo = buildLayoutGeometry(layout, session);
     validateLayoutGeometry(geo);
     const model = buildElevationModelV2(session, geo);
+    expect(model.frontWithoutTunnel.fundoTravamento).toBe(true);
     const rep = geo.rows[0]!.modules.find(m => m.type === 'normal')!;
 
     expect(model.frontWithoutTunnel.beamLengthMm).toBeCloseTo(
