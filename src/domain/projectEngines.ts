@@ -267,6 +267,15 @@ export function finalizeSummaryAnswers(
       ? HEIGHT_MODE_WAREHOUSE_HEIGHT
       : 'DIRECT';
 
+  let heightMmOut: number | undefined =
+    typeof stripped.heightMm === 'number' ? stripped.heightMm : undefined;
+  if (heightMmOut === undefined) {
+    const fromAnswers = uprightHeightMmFromAnswers(stripped);
+    if (fromAnswers !== null) {
+      heightMmOut = fromAnswers;
+    }
+  }
+
   return {
     ...stripped,
     layout: engines.layout,
@@ -279,6 +288,7 @@ export function finalizeSummaryAnswers(
         ? stripped.heightDefinitionMode
         : HEIGHT_DEFINITION_MODULE_TOTAL,
     heightMode: heightModeOut,
+    ...(heightMmOut !== undefined ? { heightMm: heightMmOut } : {}),
     beamLengthMm:
       typeof answers.beamLengthMm === 'number'
         ? answers.beamLengthMm
