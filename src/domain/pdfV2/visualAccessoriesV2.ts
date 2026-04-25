@@ -21,7 +21,7 @@ function guardPositionOrDefault(
   return pos ?? 'AMBOS';
 }
 
-/** Campos visuais comuns à elevação e à planta (protetores, guardas, 1.º nível). */
+/** Campos visuais comuns à elevação e à planta (protetor de coluna, guardas, 1.º nível). */
 export function accessoryFieldsFromAnswers(
   answers: Record<string, unknown>
 ): Pick<

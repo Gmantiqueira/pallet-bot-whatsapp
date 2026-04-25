@@ -219,7 +219,7 @@ export function technicalSummaryRowsFromLayoutGeometry(
       value: project.firstLevelOnGround !== false ? 'Sim' : 'Não',
     },
     {
-      label: 'Protetor de pilar:',
+      label: 'Protetor de coluna:',
       value: project.columnProtector === true ? 'Sim' : 'Não',
     },
     {

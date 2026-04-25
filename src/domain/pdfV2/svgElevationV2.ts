@@ -216,7 +216,7 @@ export function buildElevationAccessorySubtitle(
 ): string | undefined {
   const bits: string[] = [];
   if (data.columnProtector === true) {
-    bits.push('Protetores de pilar na base');
+    bits.push('Protetores de coluna na base');
   }
   if (data.guardRailSimple === true && data.guardRailSimplePosition) {
     const p = data.guardRailSimplePosition;

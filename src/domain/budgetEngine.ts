@@ -42,7 +42,7 @@ const BUDGET_ASSUMPTIONS_V2: string[] = [
   'Quantidades iguais à lista de materiais (geometria V2): montantes por prisma e vão; longarinas por segmento, baias e níveis com feixe;',
   'Túnel: níveis ativos de armazenagem reduzem pares de longarinas;',
   'Meio módulo: factor 0,5 no comprimento ao longo do vão;',
-  'Protetores por montante; guardas por extremidade de fileira (conforme opções).',
+  'Protetor de coluna (por montante); guardas por extremidade de fileira (conforme opções).',
 ];
 
 export type BudgetResult = {
@@ -119,7 +119,7 @@ export function budgetResultFromBillOfMaterials(
 
   const protectors = lineQty(bom, 'columnProtector');
   if (protectors > 0) {
-    items.push({ name: 'Protetor de pilar', quantity: protectors });
+    items.push({ name: 'Protetor de coluna', quantity: protectors });
   }
 
   const grS = lineQty(bom, 'guardRailSimple');

@@ -134,7 +134,7 @@ export async function fillBudgetWorkbookFromTemplate(args: {
 
   ws.getCell(`A${ROW.columnProtector}`).value = assertNonNegativeQty(
     prot?.quantity ?? 0,
-    'protetor'
+    'protetor de coluna'
   );
 
   ws.getCell(`A${ROW.guardRailSimple}`).value = assertNonNegativeQty(

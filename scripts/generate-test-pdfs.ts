@@ -294,7 +294,7 @@ async function main(): Promise<void> {
       id: '17-protections-full',
       label: 'Proteções completas',
       objective:
-        'Validar presença de protetores de pilar, guarda simples e guarda dupla no mesmo projeto.',
+        'Validar presença de protetores de coluna, guarda simples e guarda dupla no mesmo projeto.',
       base: manualCase({
         columnProtector: true,
         guardRailSimple: true,

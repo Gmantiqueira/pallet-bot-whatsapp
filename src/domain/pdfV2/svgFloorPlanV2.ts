@@ -285,16 +285,16 @@ function guardKindAtPlanEdge(
   return 'none';
 }
 
-/** Faixa na base da pegada (vista em planta) — alinha com protetor na face frontal da elevação. */
+/** Faixa na base da pegada (vista em planta) — alinha com o protetor de coluna na face frontal da elevação. */
 function appendColumnProtectorAlongModules(
   _model: FloorPlanModelV2,
   _parts: string[]
 ): void {
-  /* Protetores nas pegadas omitidos na planta (legenda mantém o símbolo). */
+  /* Protetores de coluna nas pegadas omitidos na planta (legenda mantém o símbolo). */
 }
 
 /**
- * Legenda compacta: 1.º nível, guardas (simples/dupla), protetor — mesma semântica do resumo técnico.
+ * Legenda compacta: 1.º nível, guardas (simples/dupla), protetor de coluna — mesma semântica do resumo técnico.
  */
 function appendFloorPlanConfigurationLegend(
   model: FloorPlanModelV2,
@@ -316,7 +316,7 @@ function appendFloorPlanConfigurationLegend(
     if (notes.tunnelNote) noteLines.push(notes.tunnelNote);
   }
   const notesBlockH = noteLines.length > 0 ? 20 + noteLines.length * 10.5 : 0;
-  /** Bloco de símbolos (mini esquemas + guardas + protetor) + rodapé. */
+  /** Bloco de símbolos (mini esquemas + guardas + protetor de coluna) + rodapé. */
   const symbolBlockH = 168;
   const boxH = Math.min(430, 24 + notesBlockH + symbolBlockH);
   const x0 = pad;
@@ -340,7 +340,7 @@ function appendFloorPlanConfigurationLegend(
     ly += 6;
   }
   parts.push(
-    `<text x="${lx}" y="${ly}" font-size="10.5px" fill="#475569" font-family="${SVG_FONT_FAMILY}" font-weight="700" letter-spacing="0.05em">SÍMBOLOS (1.º nível · guardas · protetor)</text>`
+    `<text x="${lx}" y="${ly}" font-size="10.5px" fill="#475569" font-family="${SVG_FONT_FAMILY}" font-weight="700" letter-spacing="0.05em">SÍMBOLOS (1.º nível · guardas · protetor de coluna)</text>`
   );
   ly += 18;
   const onGround = a.firstLevelOnGround !== false;
@@ -410,7 +410,7 @@ function appendFloorPlanConfigurationLegend(
   if (a.columnProtector) {
     parts.push(
       `<rect x="${lx}" y="${ly - 8}" width="22" height="9" rx="1.5" fill="#ea580c" stroke="#9a3412" stroke-width="0.8"/>`,
-      `<text x="${lx + 30}" y="${ly}" font-size="9.5px" fill="#431407" font-family="${SVG_FONT_FAMILY}">Protetor de pilar (base dos montantes — cantos + faixas nas pegadas)</text>`
+      `<text x="${lx + 30}" y="${ly}" font-size="9.5px" fill="#431407" font-family="${SVG_FONT_FAMILY}">Protetor de coluna (base dos montantes — cantos + faixas nas pegadas)</text>`
     );
     ly += 18;
   }
@@ -420,7 +420,7 @@ function appendFloorPlanConfigurationLegend(
   );
 }
 
-/** Protetores nos cantos + guardas nas extremidades ao longo do vão (símbolo). */
+/** Protetores de coluna nos cantos + guardas nas extremidades ao longo do vão (símbolo). */
 function appendFloorPlanAccessoryGraphics(
   model: FloorPlanModelV2,
   parts: string[]

@@ -442,7 +442,7 @@ const buildStateMessage = (session: Session): OutgoingMessage | null => {
         : '';
       return {
         to: session.phone,
-        text: `${prefix}Proteção de cantoneiras (protetores de pilar)?`,
+        text: `${prefix}Protetor de coluna?`,
         buttons: [
           { id: 'COL_SIM', label: 'Sim' },
           { id: 'COL_NAO', label: 'Não' },
@@ -762,7 +762,7 @@ const buildSummary = (session: Session): string => {
   }
 
   if (typeof a.columnProtector === 'boolean') {
-    lines.push(`Protetores de pilar: ${a.columnProtector ? 'Sim' : 'Não'}`);
+    lines.push(`Protetores de coluna: ${a.columnProtector ? 'Sim' : 'Não'}`);
   }
   if (a.guardRailSimple === false) {
     lines.push('Guarda simples: Não');

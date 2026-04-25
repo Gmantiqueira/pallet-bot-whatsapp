@@ -175,7 +175,7 @@ export type FloorPlanModelV2 = {
   warehouseOutline: { x: number; y: number; w: number; h: number };
   /** Direção do vão das longarinas no plano (eixo das linhas de armazenagem). */
   beamSpanAlong: 'x' | 'y';
-  /** Protetores, guardas e leitura do 1.º nível — mesmo critério do resumo técnico. */
+  /** Protetores de coluna, guardas e leitura do 1.º nível — mesmo critério do resumo técnico. */
   planAccessories: FloorPlanAccessoriesV2;
   /** Faixa da fileira (estrutura) por baixo dos módulos. */
   rowBandRects: {
@@ -342,7 +342,7 @@ export type ElevationPanelPayload = {
   structuralTopMm: number;
   usableHeightMm: number;
   meanGapMm: number;
-  /** Protetor de cantoneira na base dos montantes (face frontal). */
+  /** Protetor de coluna na base dos montantes (face frontal). */
   columnProtector?: boolean;
   guardRailSimple?: boolean;
   guardRailSimplePosition?: GuardRailPositionCode;
