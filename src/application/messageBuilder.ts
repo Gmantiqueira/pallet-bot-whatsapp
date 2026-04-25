@@ -395,10 +395,32 @@ const buildStateMessage = (session: Session): OutgoingMessage | null => {
         ],
       };
 
+    case 'CHOOSE_CAPACITY_MODE':
+      return {
+        to: session.phone,
+        text:
+          'Como pretende indicar a *capacidade por nível* (kg no feixe)?\n\n' +
+            '• *Direto* — indica o valor em kg\n' +
+            '• *Automático* — indica o peso do palete; calculamos: capacidade = 2× peso (2 baias por patamar)',
+        buttons: [
+          { id: 'CAP_MODE_DIRETO', label: 'Direto' },
+          { id: 'CAP_MODE_AUTO', label: 'Automático' },
+        ],
+      };
+
     case 'WAIT_CAPACITY':
       return {
         to: session.phone,
         text: 'Capacidade por nível de feixe em kg\n\nExemplos: 1200, 1500 ou 2000',
+      };
+
+    case 'WAIT_PALLET_WEIGHT':
+      return {
+        to: session.phone,
+        text:
+          'Peso do palete com carga (kg)\n\n' +
+            'A capacidade por nível será: *2×* este valor (2 baias por patamar).\n\n' +
+            'Exemplo: 1000',
       };
 
     case 'WAIT_HEIGHT_DIRECT':
@@ -710,7 +732,16 @@ const buildSummary = (session: Session): string => {
   }
 
   if (typeof a.capacityKg === 'number') {
-    lines.push(`Capacidade por nível: ${a.capacityKg} kg`);
+    if (
+      a.capacityInputMode === 'AUTO' &&
+      typeof a.palletWeightKg === 'number'
+    ) {
+      lines.push(
+        `Capacidade por nível: ${a.capacityKg} kg (automático: palete ${a.palletWeightKg} kg × 2)`
+      );
+    } else {
+      lines.push(`Capacidade por nível: ${a.capacityKg} kg`);
+    }
   }
 
   if (typeof a.heightMm === 'number') {

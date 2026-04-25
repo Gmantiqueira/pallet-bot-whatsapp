@@ -11,6 +11,7 @@ import {
   validateLevelGap,
   validateMm,
 } from './conversationHelpers';
+import { capacityKgFromPalletWeightKg } from './capacityFromPallet';
 import {
   moduleGeometryFromPalletInputMm,
   PALLET_TO_UPRIGHT_OFFSET_MM,
@@ -49,6 +50,8 @@ export type State =
   | 'WAIT_LEVEL_SPACINGS_LIST'
   | 'WAIT_WAREHOUSE_CLEAR_HEIGHT'
   | 'CHOOSE_FIRST_LEVEL_GROUND'
+  | 'CHOOSE_CAPACITY_MODE'
+  | 'WAIT_PALLET_WEIGHT'
   | 'WAIT_CAPACITY'
   | 'WAIT_LOAD_HEIGHT_FOR_SPACING'
   | 'WAIT_HEIGHT_DIRECT'
@@ -855,7 +858,9 @@ export const transition = (
           return { session: newSession, effects, error: ve };
         }
         const next: State =
-          levels <= 1 ? 'WAIT_CAPACITY' : 'CHOOSE_LEVEL_SPACING_MODE';
+          levels <= 1
+            ? 'CHOOSE_CAPACITY_MODE'
+            : 'CHOOSE_LEVEL_SPACING_MODE';
         newSession = goNext(newSession, { levels }, next);
         effects.push({ type: 'SEND' });
       }
@@ -957,11 +962,75 @@ export const transition = (
         newSession = goNext(
           newSession,
           { firstLevelOnGround: onGround },
-          'WAIT_CAPACITY'
+          'CHOOSE_CAPACITY_MODE'
         );
         effects.push({ type: 'SEND' });
       }
       return { session: newSession, effects };
+
+    case 'CHOOSE_CAPACITY_MODE':
+      if (input.type === 'BUTTON') {
+        if (input.value === 'CAP_MODE_DIRETO') {
+          newSession = goNext(
+            newSession,
+            { capacityInputMode: 'DIRECT', palletWeightKg: null },
+            'WAIT_CAPACITY'
+          );
+        } else if (input.value === 'CAP_MODE_AUTO') {
+          newSession = goNext(
+            newSession,
+            { capacityInputMode: 'AUTO' },
+            'WAIT_PALLET_WEIGHT'
+          );
+        }
+        effects.push({ type: 'SEND' });
+      }
+      return { session: newSession, effects };
+
+    case 'WAIT_PALLET_WEIGHT':
+      if (input.type === 'TEXT') {
+        const w = parseNumber(input.value);
+        if (w === null) {
+          return {
+            session: newSession,
+            effects,
+            error: 'Por favor, digite um número válido em kg',
+          };
+        }
+        if (w <= 0) {
+          return {
+            session: newSession,
+            effects,
+            error: 'O peso do palete deve ser positivo (kg).',
+          };
+        }
+        const cap = capacityKgFromPalletWeightKg(w);
+        const ve = validateKg(cap);
+        if (ve) {
+          return {
+            session: newSession,
+            effects,
+            error: `${ve} (capacidade = 2× peso; ajuste o peso do palete.)`,
+          };
+        }
+        const nextAfterCapacity: State =
+          newSession.answers.heightDefinitionMode ===
+          HEIGHT_DEFINITION_WAREHOUSE_CLEAR
+            ? 'WAIT_LOAD_HEIGHT_FOR_SPACING'
+            : 'WAIT_HEIGHT_DIRECT';
+        newSession = goNext(
+          newSession,
+          {
+            palletWeightKg: w,
+            capacityKg: cap,
+            capacityInputMode: 'AUTO',
+            heightMode: 'DIRECT',
+          },
+          nextAfterCapacity
+        );
+        effects.push({ type: 'SEND' });
+      }
+      return { session: newSession, effects, error };
 
     case 'WAIT_CAPACITY':
       if (input.type === 'TEXT') {
@@ -984,7 +1053,12 @@ export const transition = (
             : 'WAIT_HEIGHT_DIRECT';
         newSession = goNext(
           newSession,
-          { capacityKg: capacity, heightMode: 'DIRECT' },
+          {
+            capacityKg: capacity,
+            capacityInputMode: 'DIRECT',
+            palletWeightKg: null,
+            heightMode: 'DIRECT',
+          },
           nextAfterCapacity
         );
         effects.push({ type: 'SEND' });
@@ -1258,9 +1332,9 @@ export const transition = (
           stopBefore = 'CHOOSE_MODULE_DIMENSION_MODE';
         } else if (field === 'EDIT_MODULO') {
           targetState = 'CHOOSE_MODULE_DIMENSION_MODE';
-          stopBefore = 'WAIT_CAPACITY';
+          stopBefore = 'CHOOSE_CAPACITY_MODE';
         } else if (field === 'EDIT_CARGA') {
-          targetState = 'WAIT_CAPACITY';
+          targetState = 'CHOOSE_CAPACITY_MODE';
           stopBefore = 'CHOOSE_COLUMN_PROTECTOR';
         } else if (field === 'EDIT_PROTECOES') {
           targetState = 'CHOOSE_COLUMN_PROTECTOR';

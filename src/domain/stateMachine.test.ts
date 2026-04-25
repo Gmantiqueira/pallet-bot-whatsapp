@@ -272,6 +272,13 @@ describe('State Machine', () => {
       session = result.session;
 
       result = transition(session, { type: 'BUTTON', value: 'FLG_SIM' });
+      expect(result.session.state).toBe('CHOOSE_CAPACITY_MODE');
+      session = result.session;
+
+      result = transition(session, {
+        type: 'BUTTON',
+        value: 'CAP_MODE_DIRETO',
+      });
       expect(result.session.state).toBe('WAIT_CAPACITY');
       session = result.session;
 
@@ -318,6 +325,28 @@ describe('State Machine', () => {
       const result = transition(session, { type: 'TEXT', value: '2000' });
       expect(result.session.state).toBe('WAIT_HEIGHT_DIRECT');
       expect(result.session.answers.heightMode).toBe('DIRECT');
+    });
+
+    it('capacity automática: 2× peso do palete e capacidade preenchida', () => {
+      const session = createSession('CHOOSE_CAPACITY_MODE', {
+        lengthMm: 12000,
+        widthMm: 10000,
+        corridorMm: 3000,
+        moduleDepthMm: 2700,
+        beamLengthMm: DEFAULT_BEAM_LENGTH_MM,
+        levels: 4,
+        firstLevelOnGround: true,
+        levelSpacingMm: 1500,
+        equalLevelSpacing: true,
+        heightDefinitionMode: 'module_total',
+      });
+      let r = transition(session, { type: 'BUTTON', value: 'CAP_MODE_AUTO' });
+      expect(r.session.state).toBe('WAIT_PALLET_WEIGHT');
+      r = transition(r.session, { type: 'TEXT', value: '1000' });
+      expect(r.session.state).toBe('WAIT_HEIGHT_DIRECT');
+      expect(r.session.answers.capacityKg).toBe(2000);
+      expect(r.session.answers.palletWeightKg).toBe(1000);
+      expect(r.session.answers.capacityInputMode).toBe('AUTO');
     });
   });
 
