@@ -2,6 +2,7 @@ import { Session } from './session';
 import { finalizeSummaryAnswers } from './projectEngines';
 import {
   MIN_MM,
+  parseCommaSeparatedNumbers,
   parseNumber,
   validateCorridor,
   validateCustomLineRowCount,
@@ -43,6 +44,9 @@ export type State =
   | 'WAIT_BEAM_LENGTH'
   | 'CHOOSE_HEIGHT_DEFINITION'
   | 'WAIT_LEVELS'
+  | 'CHOOSE_LEVEL_SPACING_MODE'
+  | 'WAIT_LEVEL_SPACING_UNIFORM'
+  | 'WAIT_LEVEL_SPACINGS_LIST'
   | 'WAIT_WAREHOUSE_CLEAR_HEIGHT'
   | 'CHOOSE_FIRST_LEVEL_GROUND'
   | 'WAIT_CAPACITY'
@@ -198,6 +202,13 @@ function goNext(
     stack: [...session.stack, session.state],
     updatedAt: Date.now(),
   };
+}
+
+/** Após definir espaçamento vertical (≥2 níveis): pé-direito → colunas; altura módulo → 1.º ao chão. */
+function nextStateAfterLevelSpacing(answers: Record<string, unknown>): State {
+  return answers.heightDefinitionMode === HEIGHT_DEFINITION_WAREHOUSE_CLEAR
+    ? 'CHOOSE_COLUMN_PROTECTOR'
+    : 'CHOOSE_FIRST_LEVEL_GROUND';
 }
 
 export const transition = (
@@ -844,8 +855,95 @@ export const transition = (
           return { session: newSession, effects, error: ve };
         }
         const next: State =
-          levels <= 1 ? 'WAIT_CAPACITY' : 'CHOOSE_FIRST_LEVEL_GROUND';
+          levels <= 1 ? 'WAIT_CAPACITY' : 'CHOOSE_LEVEL_SPACING_MODE';
         newSession = goNext(newSession, { levels }, next);
+        effects.push({ type: 'SEND' });
+      }
+      return { session: newSession, effects, error };
+
+    case 'CHOOSE_LEVEL_SPACING_MODE':
+      if (input.type === 'BUTTON') {
+        if (input.value === 'LVL_GAP_IGUAL') {
+          newSession = goNext(newSession, {}, 'WAIT_LEVEL_SPACING_UNIFORM');
+        } else if (input.value === 'LVL_GAP_VARIAVEL') {
+          newSession = goNext(newSession, {}, 'WAIT_LEVEL_SPACINGS_LIST');
+        }
+        effects.push({ type: 'SEND' });
+      }
+      return { session: newSession, effects };
+
+    case 'WAIT_LEVEL_SPACING_UNIFORM':
+      if (input.type === 'TEXT') {
+        const g = parseNumber(input.value);
+        if (g === null) {
+          return {
+            session: newSession,
+            effects,
+            error: 'Por favor, digite um número válido em mm',
+          };
+        }
+        const veG = validateLevelGap(g);
+        if (veG) {
+          return { session: newSession, effects, error: veG };
+        }
+        newSession = goNext(
+          newSession,
+          {
+            equalLevelSpacing: true,
+            levelSpacingMm: g,
+            levelSpacingsMm: null,
+          },
+          nextStateAfterLevelSpacing(newSession.answers)
+        );
+        effects.push({ type: 'SEND' });
+      }
+      return { session: newSession, effects, error };
+
+    case 'WAIT_LEVEL_SPACINGS_LIST':
+      if (input.type === 'TEXT') {
+        const lv =
+          typeof newSession.answers.levels === 'number'
+            ? Math.floor(newSession.answers.levels)
+            : 0;
+        if (lv < 2) {
+          return {
+            session: newSession,
+            effects,
+            error: 'Níveis em falta. Volte ao passo do número de níveis.',
+          };
+        }
+        const need = lv - 1;
+        const raw = input.value;
+        const parsed = parseCommaSeparatedNumbers(raw);
+        if (parsed === null || parsed.length === 0) {
+          return {
+            session: newSession,
+            effects,
+            error: `Indique ${need} valor(es) numérico(s) separados por vírgula (espaçamento entre eixos consecutivos, em mm).`,
+          };
+        }
+        if (parsed.length !== need) {
+          return {
+            session: newSession,
+            effects,
+            error: `Com ${lv} níveis, são necessários *${need}* espaçamentos; recebi ${parsed.length}. Ex.: 1200, 1500, 1500`,
+          };
+        }
+        for (const x of parsed) {
+          const veG = validateLevelGap(x);
+          if (veG) {
+            return { session: newSession, effects, error: veG };
+          }
+        }
+        newSession = goNext(
+          newSession,
+          {
+            equalLevelSpacing: false,
+            levelSpacingsMm: parsed,
+            levelSpacingMm: null,
+          },
+          nextStateAfterLevelSpacing(newSession.answers)
+        );
         effects.push({ type: 'SEND' });
       }
       return { session: newSession, effects, error };
@@ -925,6 +1023,9 @@ export const transition = (
               ? a.firstLevelOnGround
               : true,
         });
+        const L = Math.max(1, derived.structuralLevels);
+        const afterSpacing: State =
+          L <= 1 ? 'CHOOSE_COLUMN_PROTECTOR' : 'CHOOSE_LEVEL_SPACING_MODE';
         newSession = goNext(
           newSession,
           {
@@ -935,7 +1036,7 @@ export const transition = (
             heightMode: 'DIRECT',
             heightDefinitionMode: HEIGHT_DEFINITION_WAREHOUSE_CLEAR,
           },
-          'CHOOSE_COLUMN_PROTECTOR'
+          afterSpacing
         );
         effects.push({ type: 'SEND' });
       }

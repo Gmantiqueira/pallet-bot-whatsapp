@@ -342,8 +342,48 @@ const buildStateMessage = (session: Session): OutgoingMessage | null => {
     case 'WAIT_LEVELS':
       return {
         to: session.phone,
-        text: 'Número de níveis de feixe por módulo\n\nEntre 1 e 12',
+        text:
+          'Número de níveis de feixe por módulo\n\n' +
+            'Entre 1 e 12. Com *mais de um* nível, a seguir pergunta-se o *espaçamento entre eixos* (igual em todos os patamares ou variável de nível a nível). A vista frontal mantém o mesmo padrão de desenho — só as cotas ajustam-se.',
       };
+
+    case 'CHOOSE_LEVEL_SPACING_MODE':
+      return {
+        to: session.phone,
+        text:
+          'Espaçamento *entre eixos de feixe* (longarinas) ao longo do montante\n\n' +
+            '• *Igual* — um único valor (mm) em todos os intervalos entre eixos consecutivos\n' +
+            '• *Variável* — indica cada altura (mm) *entre* eixos, na ordem de baixo para cima, separada por vírgula\n\n' +
+            'Cálculo: respeita a altura total do módulo e a folga superior; se os valores não couberem, o sistema ajusta *proporcionalmente* o espaçamento (igual a como já funcionava a distribuição automática).',
+        buttons: [
+          { id: 'LVL_GAP_IGUAL', label: 'Igual' },
+          { id: 'LVL_GAP_VARIAVEL', label: 'Variável' },
+        ],
+      };
+
+    case 'WAIT_LEVEL_SPACING_UNIFORM':
+      return {
+        to: session.phone,
+        text:
+          'Espaçamento *igual* entre eixos consecutivos (mm)\n\n' +
+            'Intervalo entre 800 e 5000. Ex.: 1500. Aplica-se a *todos* os vãos entre feixe e feixe, no espaço útil abaixo da reserva superior do montante.',
+      };
+
+    case 'WAIT_LEVEL_SPACINGS_LIST': {
+      const L =
+        typeof session.answers.levels === 'number'
+          ? Math.max(0, Math.floor(session.answers.levels))
+          : 0;
+      const n = Math.max(0, L - 1);
+      return {
+        to: session.phone,
+        text:
+          `Espaçamentos *variáveis* entre eixos (mm) — *${n}* valor(es) para *${L}* níveis\n\n` +
+            'Escreva na ordem (de baixo para cima), separados por vírgula. Cada valor é a distância *entre* dois eixos consecutivos de feixe.\n' +
+            'Ex. com 4 níveis: 1000, 1200, 1500 (3 intervalos)\n' +
+            'Cada intervalo: entre 800 e 5000 mm.',
+      };
+    }
 
     case 'CHOOSE_FIRST_LEVEL_GROUND':
       return {
@@ -647,6 +687,18 @@ const buildSummary = (session: Session): string => {
   }
   if (typeof a.levels === 'number') {
     lines.push(`Níveis por módulo: ${a.levels}`);
+  }
+  if (a.equalLevelSpacing === true && typeof a.levelSpacingMm === 'number') {
+    lines.push(
+      `Espaçamento entre eixos de feixe: *igual* — ${a.levelSpacingMm} mm (em todos os intervalos)`
+    );
+  } else if (
+    Array.isArray(a.levelSpacingsMm) &&
+    a.levelSpacingsMm.length > 0
+  ) {
+    lines.push(
+      `Espaçamento entre eixos (variável, mm, de baixo para cima): ${(a.levelSpacingsMm as number[]).join(' · ')}`
+    );
   }
   if (typeof a.firstLevelOnGround === 'boolean') {
     lines.push(`1.º nível ao chão: ${a.firstLevelOnGround ? 'Sim' : 'Não'}`);

@@ -258,7 +258,17 @@ describe('State Machine', () => {
       session = result.session;
 
       result = transition(session, { type: 'TEXT', value: '4' });
+      expect(result.session.state).toBe('CHOOSE_LEVEL_SPACING_MODE');
+      session = result.session;
+
+      result = transition(session, { type: 'BUTTON', value: 'LVL_GAP_IGUAL' });
+      expect(result.session.state).toBe('WAIT_LEVEL_SPACING_UNIFORM');
+      session = result.session;
+
+      result = transition(session, { type: 'TEXT', value: '1500' });
       expect(result.session.state).toBe('CHOOSE_FIRST_LEVEL_GROUND');
+      expect(result.session.answers.equalLevelSpacing).toBe(true);
+      expect(result.session.answers.levelSpacingMm).toBe(1500);
       session = result.session;
 
       result = transition(session, { type: 'BUTTON', value: 'FLG_SIM' });
@@ -389,6 +399,20 @@ describe('State Machine', () => {
       expect(
         parseLineStrategyInput({ type: 'TEXT', value: '4' })
       ).toBe('PERSONALIZADO');
+    });
+
+    it('mais de um nível: escolhe espaçamento variável e N−1 intervalos (mm)', () => {
+      let session = createSession('CHOOSE_LEVEL_SPACING_MODE', {
+        heightDefinitionMode: 'module_total',
+        levels: 3,
+      });
+      let r = transition(session, { type: 'BUTTON', value: 'LVL_GAP_VARIAVEL' });
+      expect(r.session.state).toBe('WAIT_LEVEL_SPACINGS_LIST');
+      session = r.session;
+      r = transition(session, { type: 'TEXT', value: '1000, 1500' });
+      expect(r.session.state).toBe('CHOOSE_FIRST_LEVEL_GROUND');
+      expect(r.session.answers.equalLevelSpacing).toBe(false);
+      expect(r.session.answers.levelSpacingsMm).toEqual([1000, 1500]);
     });
 
     it('TUNNEL_SIM: pergunta quantidade de túneis antes das posições', () => {
