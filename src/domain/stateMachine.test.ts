@@ -381,6 +381,51 @@ describe('State Machine', () => {
       ).toBe('PERSONALIZADO');
     });
 
+    it('TUNNEL_SIM: pergunta quantidade de túneis antes das posições', () => {
+      const session = createSession('CHOOSE_TUNNEL', { hasTunnel: false });
+      const r = transition(session, {
+        type: 'BUTTON',
+        value: 'TUNNEL_SIM',
+      });
+      expect(r.session.state).toBe('CHOOSE_TUNNEL_COUNT');
+      expect(r.session.answers.hasTunnel).toBe(true);
+    });
+
+    it('com túnel: CHOOSE_COLUMN_PROTECTOR salta guardas e define AMBOS no resumo', () => {
+      const session = createSession('CHOOSE_COLUMN_PROTECTOR', {
+        hasTunnel: true,
+      });
+      const r = transition(session, { type: 'BUTTON', value: 'COL_NAO' });
+      expect(r.session.state).toBe('SUMMARY_CONFIRM');
+      expect(r.session.answers.guardRailSimple).toBe(true);
+      expect(r.session.answers.guardRailSimplePosition).toBe('AMBOS');
+      expect(r.session.answers.guardRailDouble).toBe(true);
+      expect(r.session.answers.guardRailDoublePosition).toBe('AMBOS');
+    });
+
+    it('dois túneis: duas respostas de posição depois aplica a linhas', () => {
+      let session = createSession('CHOOSE_TUNNEL_COUNT', {
+        hasTunnel: true,
+        lengthMm: 12_000,
+      });
+      let r = transition(session, {
+        type: 'BUTTON',
+        value: 'TUNNEL_NUM_2',
+      });
+      expect(r.session.state).toBe('CHOOSE_TUNNEL_POSITION');
+      expect(r.session.answers.tunnelSlotCount).toBe(2);
+      expect(r.session.answers.tunnelPlacements).toEqual([]);
+      session = r.session;
+      r = transition(session, { type: 'BUTTON', value: 'TUNNEL_INICIO' });
+      expect(r.session.state).toBe('CHOOSE_TUNNEL_POSITION');
+      expect(r.session.answers.tunnelPlacements).toEqual(['INICIO']);
+      session = r.session;
+      r = transition(session, { type: 'BUTTON', value: 'TUNNEL_FIM' });
+      expect(r.session.state).toBe('CHOOSE_TUNNEL_APPLIES');
+      expect(r.session.answers.tunnelPlacements).toEqual(['INICIO', 'FIM']);
+      expect(r.session.answers.tunnelPosition).toBe('INICIO');
+    });
+
     it('PERSONALIZADO: após contagens, vai a CHOOSE_TUNNEL com estratégia e campos', () => {
       let session = createSession('CHOOSE_LINE_STRATEGY', {
         lengthMm: 12000,

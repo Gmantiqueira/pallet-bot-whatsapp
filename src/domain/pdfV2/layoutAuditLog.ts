@@ -295,6 +295,14 @@ export function formatLayoutAuditReport(
       `  tunnelOffsetEffectiveMm: ${sol.metadata.tunnelOffsetEffectiveMm ?? '—'}`
     );
     push(`  tunnelPosition: ${answers.tunnelPosition ?? '—'}`);
+    push(
+      `  tunnelPlacements: ${
+        Array.isArray(answers.tunnelPlacements) &&
+        answers.tunnelPlacements.length > 0
+          ? answers.tunnelPlacements.join(', ')
+          : '—'
+      }`
+    );
     push(`  tunnelAppliesTo: ${answers.tunnelAppliesTo ?? '—'}`);
     for (const row of sol.rows) {
       const tunnels = row.modules.filter(m => m.variant === 'tunnel');

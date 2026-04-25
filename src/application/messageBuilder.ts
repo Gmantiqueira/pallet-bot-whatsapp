@@ -210,23 +210,51 @@ const buildStateMessage = (session: Session): OutgoingMessage | null => {
     case 'CHOOSE_TUNNEL':
       return {
         to: session.phone,
-        text: 'Haverá túnel para empilhador entre linhas?',
+        text:
+          'Haverá túnel para empilhador entre linhas?\n\n' +
+            'Com túnel, o desenho inclui guarda-corpo (guarda rail) de forma automática, sem alterar o aspeto dos túneis no PDF.',
         buttons: [
           { id: 'TUNNEL_SIM', label: 'Sim' },
           { id: 'TUNNEL_NAO', label: 'Não' },
         ],
       };
 
-    case 'CHOOSE_TUNNEL_POSITION':
+    case 'CHOOSE_TUNNEL_COUNT':
       return {
         to: session.phone,
-        text: 'Posição do túnel ao longo do armazém',
+        text:
+          'Quantos túneis ao longo do eixo do vão (comprimento da fileira)?\n\n' +
+            'Pode ter até 3. Em seguida define a posição (início / meio / fim) de cada um. Em geral, quanto maior o compartimento no sentido do vão, mais vãos cabem sem se sobreporem.',
+        buttons: [
+          { id: 'TUNNEL_NUM_1', label: '1' },
+          { id: 'TUNNEL_NUM_2', label: '2' },
+          { id: 'TUNNEL_NUM_3', label: '3' },
+        ],
+      };
+
+    case 'CHOOSE_TUNNEL_POSITION': {
+      const slotN =
+        typeof session.answers.tunnelSlotCount === 'number'
+          ? session.answers.tunnelSlotCount
+          : 1;
+      const got = Array.isArray(session.answers.tunnelPlacements)
+        ? (session.answers.tunnelPlacements as unknown[]).length
+        : 0;
+      const i = got + 1;
+      return {
+        to: session.phone,
+        text:
+          (slotN > 1
+            ? `Posição do túnel *${i}* de *${slotN}* ao longo do armazém (eixo do vão)\n\n`
+            : 'Posição do túnel ao longo do armazém\n\n') +
+            'Em qualquer fileira com túnel, o módulo túnel e a guarda no desenho seguem o mesmo padrão visual de sempre.',
         buttons: [
           { id: 'TUNNEL_INICIO', label: 'Início' },
           { id: 'TUNNEL_MEIO', label: 'Meio' },
           { id: 'TUNNEL_FIM', label: 'Fim' },
         ],
       };
+    }
 
     case 'CHOOSE_TUNNEL_APPLIES':
       return {
@@ -502,19 +530,55 @@ const buildSummary = (session: Session): string => {
   let layoutForTunnel: LayoutSolutionV2 | null = null;
   const v2 = buildProjectAnswersV2(a);
   if (v2) {
-    layoutForTunnel = buildLayoutSolutionV2(v2);
-    const geo = buildLayoutGeometry(layoutForTunnel, a as Record<string, unknown>);
-    tunnelForSummary = geo.metadata.hasTunnel;
+    try {
+      layoutForTunnel = buildLayoutSolutionV2(v2);
+    } catch {
+      layoutForTunnel = null;
+    }
+    if (layoutForTunnel) {
+      const geo = buildLayoutGeometry(
+        layoutForTunnel,
+        a as Record<string, unknown>
+      );
+      tunnelForSummary = geo.metadata.hasTunnel;
+    }
   }
   if (tunnelForSummary === true) {
     lines.push('Túnel para empilhador: Sim');
     const effOff = layoutForTunnel?.metadata.tunnelOffsetEffectiveMm;
+    const fromMeta = layoutForTunnel?.metadata.tunnelPlacements;
+    const fromAns = Array.isArray(a.tunnelPlacements)
+      ? (a.tunnelPlacements as unknown[]).filter(
+          (x): x is string => typeof x === 'string'
+        )
+      : [];
+    const posList =
+      fromMeta && fromMeta.length > 0
+        ? [...fromMeta]
+        : fromAns.length > 0
+          ? fromAns
+          : a.tunnelPosition
+            ? [String(a.tunnelPosition)]
+            : [];
+    if (posList.length > 1) {
+      lines.push(
+        `  • Posições (ordem): ${posList.map(p => posLabel(p)).join(' · ')}`
+      );
+    }
     if (typeof effOff === 'number') {
       lines.push(
-        `  • Início do vão ao longo da fileira: ${effOff.toLocaleString('pt-BR')} mm`
+        posList.length > 1
+          ? `  • Início do 1.º vão (referência): ${effOff.toLocaleString('pt-BR')} mm`
+          : `  • Início do vão ao longo da fileira: ${effOff.toLocaleString('pt-BR')} mm`
       );
-    } else if (a.tunnelPosition) {
-      lines.push(`  • Posição: ${posLabel(a.tunnelPosition)}`);
+    } else {
+      if (posList.length === 1) {
+        lines.push(`  • Posição: ${posLabel(posList[0])}`);
+      } else if (posList.length > 1) {
+        /* só lista de posições, sem offset derivado do layout */
+      } else if (a.tunnelPosition) {
+        lines.push(`  • Posição: ${posLabel(a.tunnelPosition)}`);
+      }
     }
     if (a.tunnelAppliesTo) {
       lines.push(`  • Aplica-se a: ${tunnelAppliesLabel(a.tunnelAppliesTo)}`);

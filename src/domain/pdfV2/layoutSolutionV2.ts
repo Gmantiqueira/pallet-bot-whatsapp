@@ -10,6 +10,7 @@ import {
 import {
   effectiveTunnelStartMm,
   operationalPackedExtentMm,
+  resolveNonOverlappingTunnelIntervalsMm,
   resolveTunnelSpanAlongBeam,
   shouldReserveCrossPassageForSpan,
   type TunnelSpanPlacement,
@@ -164,8 +165,11 @@ function layoutSearchCandidates(
   }
 
   /** Com `tunnelOffsetMm` nas respostas, a posição do vão é fixa — não varia INICIO/MEIO/FIM na pesquisa. */
+  const hasExplicitTunnelPlacements =
+    Array.isArray(answers.tunnelPlacements) &&
+    answers.tunnelPlacements.length > 0;
   const tunnelPositionSlots: (TunnelPositionCode | undefined)[] =
-    typeof answers.tunnelOffsetMm === 'number'
+    typeof answers.tunnelOffsetMm === 'number' || hasExplicitTunnelPlacements
       ? [undefined]
       : ['INICIO', 'MEIO', 'FIM'];
   const structuralLevels = Math.max(1, Math.floor(answers.levels));
@@ -318,6 +322,10 @@ function mergedAnswersReplicatingSolution(
     best.metadata.tunnelPosition !== undefined
       ? { tunnelPosition: best.metadata.tunnelPosition }
       : {}),
+    ...(Array.isArray(best.metadata.tunnelPlacements) &&
+    best.metadata.tunnelPlacements.length > 0
+      ? { tunnelPlacements: [...best.metadata.tunnelPlacements] }
+      : {}),
   };
 }
 
@@ -351,6 +359,7 @@ function applyHalfModuleLowGainPolicy(
     );
   } catch (e) {
     if (e instanceof DoubleLineAccessValidationError) return best;
+    if (e instanceof Error && e.message.startsWith('Túneis:')) return best;
     throw e;
   }
   if (!layoutSolutionPassesOperationalAccess(alt)) {
@@ -888,17 +897,19 @@ export const fillWarehouseWidth = fillWarehouseCross;
 function canHaveHalfAtBeamEnd(
   endCoord: number,
   beamSpan: number,
-  beamPassage: { t0: number; t1: number } | null,
+  beamPassages: ReadonlyArray<{ t0: number; t1: number }> | null,
   rowBandCount: number
 ): boolean {
   if (rowBandCount >= 2) return true;
-  if (beamPassage) {
-    const nearPassage =
-      Math.abs(endCoord - beamPassage.t0) <= 2 ||
-      Math.abs(endCoord - beamPassage.t1) <= 2;
-    if (nearPassage) return true;
+  if (beamPassages && beamPassages.length > 0) {
+    for (const beamPassage of beamPassages) {
+      const nearPassage =
+        Math.abs(endCoord - beamPassage.t0) <= 2 ||
+        Math.abs(endCoord - beamPassage.t1) <= 2;
+      if (nearPassage) return true;
+    }
   }
-  if (!beamPassage) {
+  if (!beamPassages || beamPassages.length === 0) {
     if (endCoord <= EPS || endCoord >= beamSpan - EPS) return false;
   }
   return true;
@@ -948,25 +959,51 @@ function shouldReserveCrossPassageWithoutTunnel(
   );
 }
 
-/** Parte o vão: segmentos normais, túnel (módulo específico) ou vão transversal vazio (sem túnel). */
-function splitBeamIntoModuleSegments(
+/**
+ * Múltiplos vãos de túnel (mesmo padrão de módulo túnel em cada a intervalo [t0,t1]).
+ */
+function buildSegsFromTunnelIntervals(
   beamSpan: number,
-  hasTunnel: boolean,
+  sortedIntervals: { t0: number; t1: number }[]
+): Segment1DKind[] {
+  if (sortedIntervals.length === 0) {
+    return [{ a: 0, b: beamSpan, kind: 'normal' as const }];
+  }
+  const segs: Segment1DKind[] = [];
+  let a = 0;
+  for (const it of sortedIntervals) {
+    if (it.t0 > a + EPS) {
+      segs.push({ a, b: it.t0, kind: 'normal' });
+    }
+    if (it.t1 - it.t0 > EPS) {
+      segs.push({ a: it.t0, b: it.t1, kind: 'tunnel' });
+    }
+    a = it.t1;
+  }
+  if (beamSpan - a > EPS) {
+    segs.push({ a, b: beamSpan, kind: 'normal' });
+  }
+  if (segs.length === 0) {
+    segs.push({ a: 0, b: beamSpan, kind: 'normal' });
+  }
+  return segs;
+}
+
+/**
+ * Vão com passagem transversal (sem módulo túnel) — só quando `hasTunnel` falso
+ * (com túnel, os segmentos vêm de {@link buildSegsFromTunnelIntervals}).
+ */
+function splitBeamCrossOrFull(
+  beamSpan: number,
   corridorMm: number,
   reserveCrossPassageNoTunnel: boolean,
   placement: TunnelSpanPlacement
 ): Segment1DKind[] {
   const { t0, t1 } = resolveTunnelSpanAlongBeam(beamSpan, corridorMm, placement);
-  if (hasTunnel) {
-    if (t1 - t0 > EPS) {
-      return buildThreeBeamSegs(beamSpan, t0, t1, 'tunnel');
-    }
-    return [{ a: 0, b: beamSpan, kind: 'normal' }];
-  }
   if (reserveCrossPassageNoTunnel && t1 - t0 > EPS) {
     return buildThreeBeamSegs(beamSpan, t0, t1, 'crossGap');
   }
-  return [{ a: 0, b: beamSpan, kind: 'normal' }];
+  return [{ a: 0, b: beamSpan, kind: 'normal' as const }];
 }
 
 function fillSegmentModules(
@@ -996,7 +1033,7 @@ function buildModuleSegmentsForRow(
   bayClearSpanMm: number,
   halfOpt: boolean,
   beamSpan: number,
-  tunnel: { t0: number; t1: number } | null,
+  beamPassages: { t0: number; t1: number }[] | null,
   rowBandCount: number,
   corridorMm: number,
   globalLevels: number
@@ -1034,7 +1071,7 @@ function buildModuleSegmentsForRow(
     const allowHalfEnd = canHaveHalfAtBeamEnd(
       bs.b,
       beamSpan,
-      tunnel,
+      beamPassages,
       rowBandCount
     );
     const {
@@ -1135,6 +1172,7 @@ function buildLayoutSolutionV2Core(
     levels,
     lineStrategy,
     hasTunnel,
+    tunnelPlacements: tunnelPlacementsAns,
     tunnelPosition,
     tunnelOffsetMm,
     tunnelAppliesTo,
@@ -1251,21 +1289,34 @@ function buildLayoutSolutionV2Core(
     ? resolveTunnelSpanAlongBeam(beamSpan, corridorMm, placement)
     : null;
 
-  const tunnelSpanResolved = hasTunnel
-    ? resolveTunnelSpanAlongBeam(beamSpan, corridorMm, placement)
-    : null;
-  const tunnelSpec =
-    tunnelSpanResolved && tunnelSpanResolved.t1 - tunnelSpanResolved.t0 > EPS
-      ? tunnelSpanResolved
-      : null;
+  const tunnelListCodes: TunnelPositionCode[] = hasTunnel
+    ? tunnelPlacementsAns && tunnelPlacementsAns.length > 0
+      ? [...tunnelPlacementsAns]
+      : [tunnelPos ?? 'MEIO']
+    : [];
 
-  const beamSegs = splitBeamIntoModuleSegments(
-    beamSpan,
-    hasTunnel,
-    corridorMm,
-    reserveCrossPassageNoTunnel,
-    placement
-  );
+  const allTunnelIntervals: { t0: number; t1: number }[] =
+    hasTunnel && tunnelListCodes.length > 0
+      ? resolveNonOverlappingTunnelIntervalsMm(
+          beamSpan,
+          corridorMm,
+          placement,
+          tunnelListCodes
+        )
+      : [];
+
+  const tunnelSpec = allTunnelIntervals[0] ?? null;
+
+  const beamSegs: Segment1DKind[] = hasTunnel
+    ? allTunnelIntervals.length > 0
+      ? buildSegsFromTunnelIntervals(beamSpan, allTunnelIntervals)
+      : [{ a: 0, b: beamSpan, kind: 'normal' as const }]
+    : splitBeamCrossOrFull(
+        beamSpan,
+        corridorMm,
+        reserveCrossPassageNoTunnel,
+        placement
+      );
 
   const corridors: CirculationZone[] = [...corridorsFromFill];
   const tunnels: TunnelZone[] = [];
@@ -1331,11 +1382,11 @@ function buildLayoutSolutionV2Core(
       : [{ a: 0, b: beamSpan, kind: 'normal' as const }];
 
     const crossSeg = { c0, c1 };
-    const tunnelForHalf =
+    const passForHalf: { t0: number; t1: number }[] | null =
       hasTunnel && appliesTunnelToThisRow
-        ? tunnelSpec
-        : reserveCrossPassageNoTunnel
-          ? crossPassageSpec
+        ? allTunnelIntervals
+        : reserveCrossPassageNoTunnel && crossPassageSpec
+          ? [crossPassageSpec]
           : null;
     const { segments, moduleEquiv, rejectedHalf } = buildModuleSegmentsForRow(
       rowId,
@@ -1345,7 +1396,7 @@ function buildLayoutSolutionV2Core(
       bayClearSpanAlongBeamMm,
       halfModuleOptimization,
       beamSpan,
-      tunnelForHalf,
+      passForHalf,
       rowBandCount,
       corridorMm,
       levels
@@ -1442,6 +1493,8 @@ function buildLayoutSolutionV2Core(
       structuralLevels,
       hasGroundLevel,
       hasTunnel,
+      tunnelPlacements:
+        tunnelListCodes.length > 0 ? tunnelListCodes : undefined,
       tunnelPosition:
         typeof tunnelOffsetMm === 'number' ? undefined : tunnelPos,
       tunnelOffsetEffectiveMm: effectiveTunnelStartMm(
@@ -1464,11 +1517,15 @@ function pickBestLayoutSolution(
   let bestScore: readonly number[] | null = null;
 
   for (const cand of candidates) {
+    const hasExplicitPlacements =
+      Array.isArray(answers.tunnelPlacements) &&
+      answers.tunnelPlacements.length > 0;
     const merged: BuildLayoutSolutionV2Input = {
       ...answers,
       hasTunnel: cand.hasTunnel,
       ...(typeof answers.tunnelOffsetMm !== 'number' &&
-      cand.tunnelPosition !== undefined
+      cand.tunnelPosition !== undefined &&
+      !hasExplicitPlacements
         ? { tunnelPosition: cand.tunnelPosition }
         : {}),
       ...(cand.halfModuleOptimization !== undefined

@@ -230,6 +230,7 @@ export function finalizeSummaryAnswers(
 ): Record<string, unknown> {
   const stripped: Record<string, unknown> = { ...answers };
   delete (stripped as { heightMmAdjustedFrom?: unknown }).heightMmAdjustedFrom;
+  delete (stripped as { tunnelSlotCount?: unknown }).tunnelSlotCount;
   if (typeof stripped.heightMm === 'number') {
     stripped.heightMm = normalizeUprightHeightMmToColumnStep(stripped.heightMm);
   }

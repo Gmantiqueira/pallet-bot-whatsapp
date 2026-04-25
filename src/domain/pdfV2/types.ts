@@ -94,6 +94,11 @@ export type LayoutSolutionV2 = {
     /** Patamar de palete no piso sem longarina. */
     hasGroundLevel: boolean;
     hasTunnel: boolean;
+    /**
+     * Vãos de túnel (INICIO/MEIO/FIM cada), quando a configuração usa vários túneis;
+     * omisso: usar só `tunnelPosition` ou o equivalente.
+     */
+    tunnelPlacements?: readonly TunnelPositionCode[];
     /** Onde aplicável: posição do vão (túnel / passagem) usada nesta solução. */
     tunnelPosition?: TunnelPositionCode;
     /** Início efetivo do vão ao longo do `beamSpanMm` (mm), após limites geométricos. */

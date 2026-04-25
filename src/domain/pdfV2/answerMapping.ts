@@ -19,6 +19,9 @@ import type {
   TunnelPositionCode,
 } from './types';
 
+const isTunnelPos = (s: string): s is TunnelPositionCode =>
+  s === 'INICIO' || s === 'MEIO' || s === 'FIM';
+
 /** Mapeia respostas do fluxo (state machine) para entradas estáveis da V2. */
 /** Constrói o objeto de respostas V2 a partir das answers da sessão (campos do fluxo). */
 export function buildProjectAnswersV2(
@@ -107,6 +110,20 @@ export function buildProjectAnswersV2(
     | TunnelAppliesCode
     | undefined;
 
+  const rawPlacements = (answers as { tunnelPlacements?: unknown }).tunnelPlacements;
+  let tunnelPlacements: TunnelPositionCode[] | undefined;
+  if (Array.isArray(rawPlacements) && rawPlacements.length > 0) {
+    const parsed: TunnelPositionCode[] = [];
+    for (const x of rawPlacements) {
+      if (typeof x === 'string' && isTunnelPos(x)) {
+        parsed.push(x);
+      }
+    }
+    if (parsed.length > 0) {
+      tunnelPlacements = parsed;
+    }
+  }
+
   return {
     lengthMm: answers.lengthMm,
     widthMm: answers.widthMm,
@@ -125,6 +142,7 @@ export function buildProjectAnswersV2(
         ? answers.customLineDoubleCount
         : undefined,
     hasTunnel: answers.hasTunnel === true,
+    tunnelPlacements,
     tunnelPosition,
     tunnelOffsetMm:
       typeof answers.tunnelOffsetMm === 'number'
@@ -198,6 +216,11 @@ export type ProjectAnswersV2 = {
   customLineSimpleCount?: number;
   customLineDoubleCount?: number;
   hasTunnel: boolean;
+  /**
+   * Vários vãos de túnel ao longo do eixo do vão (cada INICIO/MEIO/FIM);
+   * se omisso, usa-se `tunnelPosition` ou MEIO.
+   */
+  tunnelPlacements?: readonly TunnelPositionCode[];
   tunnelPosition?: TunnelPositionCode;
   /**
    * Início do vão do túnel ao longo da fileira (mm), desde a origem do vão na solução.

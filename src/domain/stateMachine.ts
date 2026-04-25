@@ -31,6 +31,7 @@ export type State =
   | 'WAIT_LINE_CUSTOM_SIMPLES'
   | 'WAIT_LINE_CUSTOM_DUPLOS'
   | 'CHOOSE_TUNNEL'
+  | 'CHOOSE_TUNNEL_COUNT'
   | 'CHOOSE_TUNNEL_POSITION'
   | 'CHOOSE_TUNNEL_APPLIES'
   | 'WAIT_MODULE_DEPTH'
@@ -520,12 +521,14 @@ export const transition = (
           newSession = goNext(
             newSession,
             { hasTunnel: true },
-            'CHOOSE_TUNNEL_POSITION'
+            'CHOOSE_TUNNEL_COUNT'
           );
         } else if (input.value === 'TUNNEL_NAO') {
           const cleared = { ...newSession.answers, hasTunnel: false };
           delete (cleared as { tunnelPosition?: unknown }).tunnelPosition;
           delete (cleared as { tunnelAppliesTo?: unknown }).tunnelAppliesTo;
+          delete (cleared as { tunnelPlacements?: unknown }).tunnelPlacements;
+          delete (cleared as { tunnelSlotCount?: unknown }).tunnelSlotCount;
           newSession = {
             ...newSession,
             answers: cleared,
@@ -536,6 +539,26 @@ export const transition = (
             'WAIT_MODULE_DEPTH'
           );
         }
+        effects.push({ type: 'SEND' });
+      }
+      return { session: newSession, effects };
+
+    case 'CHOOSE_TUNNEL_COUNT':
+      if (input.type === 'BUTTON') {
+        const countMap: Record<string, number> = {
+          TUNNEL_NUM_1: 1,
+          TUNNEL_NUM_2: 2,
+          TUNNEL_NUM_3: 3,
+        };
+        const n = countMap[input.value];
+        if (n == null) {
+          return { session: newSession, effects };
+        }
+        newSession = goNext(
+          newSession,
+          { tunnelSlotCount: n, tunnelPlacements: [] },
+          'CHOOSE_TUNNEL_POSITION'
+        );
         effects.push({ type: 'SEND' });
       }
       return { session: newSession, effects };
@@ -551,11 +574,33 @@ export const transition = (
         if (!pos) {
           return { session: newSession, effects };
         }
-        newSession = goNext(
-          newSession,
-          { tunnelPosition: pos },
-          'CHOOSE_TUNNEL_APPLIES'
-        );
+        const slotN =
+          typeof newSession.answers.tunnelSlotCount === 'number'
+            ? newSession.answers.tunnelSlotCount
+            : 1;
+        const prev = Array.isArray(newSession.answers.tunnelPlacements)
+          ? [...(newSession.answers.tunnelPlacements as string[])]
+          : [];
+        const nextPlacements = [...prev, pos];
+        if (nextPlacements.length >= slotN) {
+          newSession = goNext(
+            newSession,
+            {
+              tunnelPlacements: nextPlacements,
+              tunnelPosition: nextPlacements[0],
+            },
+            'CHOOSE_TUNNEL_APPLIES'
+          );
+        } else {
+          newSession = {
+            ...newSession,
+            answers: {
+              ...newSession.answers,
+              tunnelPlacements: nextPlacements,
+            },
+            updatedAt: Date.now(),
+          };
+        }
         effects.push({ type: 'SEND' });
       }
       return { session: newSession, effects };
@@ -791,11 +836,26 @@ export const transition = (
         if (input.value !== 'COL_SIM' && input.value !== 'COL_NAO') {
           return { session: newSession, effects };
         }
-        newSession = goNext(
-          newSession,
-          { columnProtector: input.value === 'COL_SIM' },
-          'CHOOSE_GUARD_RAIL_SIMPLE'
-        );
+        const hasTunnel = newSession.answers.hasTunnel === true;
+        if (hasTunnel) {
+          newSession = goNext(
+            newSession,
+            {
+              columnProtector: input.value === 'COL_SIM',
+              guardRailSimple: true,
+              guardRailSimplePosition: 'AMBOS',
+              guardRailDouble: true,
+              guardRailDoublePosition: 'AMBOS',
+            },
+            'SUMMARY_CONFIRM'
+          );
+        } else {
+          newSession = goNext(
+            newSession,
+            { columnProtector: input.value === 'COL_SIM' },
+            'CHOOSE_GUARD_RAIL_SIMPLE'
+          );
+        }
         effects.push({ type: 'SEND' });
       }
       return { session: newSession, effects };
