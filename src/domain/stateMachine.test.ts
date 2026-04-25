@@ -234,12 +234,22 @@ describe('State Machine', () => {
       session = result.session;
 
       result = transition(session, { type: 'BUTTON', value: 'TUNNEL_NAO' });
+      expect(result.session.state).toBe('CHOOSE_MODULE_DIMENSION_MODE');
+      session = result.session;
+
+      result = transition(session, { type: 'BUTTON', value: 'MDM_MANUAL' });
       expect(result.session.state).toBe('WAIT_MODULE_DEPTH');
+      expect(result.session.answers.moduleDimensionMode).toBe('MANUAL');
       session = result.session;
 
       result = transition(session, { type: 'TEXT', value: '2700' });
+      expect(result.session.state).toBe('WAIT_BEAM_LENGTH');
+      session = result.session;
+
+      result = transition(session, { type: 'TEXT', value: '1100' });
       expect(result.session.state).toBe('CHOOSE_HEIGHT_DEFINITION');
-      expect(result.session.answers.beamLengthMm).toBe(DEFAULT_BEAM_LENGTH_MM);
+      expect(result.session.answers.moduleDepthMm).toBe(2700);
+      expect(result.session.answers.beamLengthMm).toBe(1100);
       session = result.session;
 
       result = transition(session, { type: 'BUTTON', value: 'HD_ALTURA_MODULO' });

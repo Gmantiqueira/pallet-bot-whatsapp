@@ -66,7 +66,7 @@ describe('State Machine - Edit Flow', () => {
       const result = transition(session, input);
 
       expect(result.session.state).toBe('WAIT_CORRIDOR');
-      expect(result.session.editStopBefore).toBe('WAIT_MODULE_DEPTH');
+      expect(result.session.editStopBefore).toBe('CHOOSE_MODULE_DIMENSION_MODE');
       expect(result.session.stack).toContain('CHOOSE_EDIT_FIELD');
     });
 
@@ -85,7 +85,7 @@ describe('State Machine - Edit Flow', () => {
           levels: 4,
         }),
         ['FINAL_CONFIRM', 'CHOOSE_EDIT_FIELD'],
-        'WAIT_MODULE_DEPTH'
+        'CHOOSE_MODULE_DIMENSION_MODE'
       );
 
       const result = transition(session, {

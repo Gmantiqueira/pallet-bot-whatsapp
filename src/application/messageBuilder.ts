@@ -268,10 +268,50 @@ const buildStateMessage = (session: Session): OutgoingMessage | null => {
         ],
       };
 
+    case 'CHOOSE_MODULE_DIMENSION_MODE':
+      return {
+        to: session.phone,
+        text:
+          'Como deseja definir a profundidade de posição e o vão por baia (longarina)?\n\n' +
+            '• *Medidas do palete* — indica a profundidade e a *frente* do palete; calculamos profundidade de montante e vão.\n' +
+            '• *Manual* — indica diretamente a profundidade do montante e o tamanho do vão (longarina).\n\n' +
+            'O desenho final do PDF usa sempre os *valores resultantes* (só muda a forma de os introduzir).',
+        buttons: [
+          { id: 'MDM_PALLET', label: 'Medidas do palete' },
+          { id: 'MDM_MANUAL', label: 'Manual' },
+        ],
+      };
+
+    case 'WAIT_PALLET_DEPTH':
+      return {
+        to: session.phone,
+        text:
+          'Profundidade do *palete* (mm), no sentido da posição (entrada da carga; transversal ao vão do corredor).\n\n' +
+            'A profundidade de posição (montante) calcula-se como: palete − 200 mm. Mín. palete: 700 mm.',
+      };
+
+    case 'WAIT_PALLET_FRONT':
+      return {
+        to: session.phone,
+        text:
+          'Frente / *largura* do *palete* (mm), ao longo do eixo de circulação do empilhador (medida típica da carga vinda da frente).\n\n' +
+            'O vão por baia (entrada, para pernas da longarina) = 2 × frente + 300 mm.',
+      };
+
     case 'WAIT_MODULE_DEPTH':
       return {
         to: session.phone,
-        text: 'Profundidade da posição (palete) em mm\n\nExemplos: 1000 ou 1100',
+        text:
+          'Profundidade de *posição* = profundidade do *montante* (mm)\n\n' +
+            'Eixo *transversal* ao vão, uma costa. Ex.: 2700 (é o que o desenho usa na faixa, como até agora).',
+      };
+
+    case 'WAIT_BEAM_LENGTH':
+      return {
+        to: session.phone,
+        text:
+          'Tamanho do *vão por baia* (mm) — largura de entrada das longarinas, por baia\n\n' +
+            'Ex.: 1100. É o valor que o layout usa no eixo *do vão* (igual a indicar a “medida de longarina” de entrada em modo manual).',
       };
 
     case 'CHOOSE_HEIGHT_DEFINITION':
@@ -587,8 +627,23 @@ const buildSummary = (session: Session): string => {
     lines.push('Túnel para empilhador: Não');
   }
 
+  if (a.moduleDimensionMode === 'PALLET') {
+    lines.push('Dimensões de módulo: a partir de *medidas do palete*');
+    if (typeof a.palletDepthMm === 'number' && typeof a.palletFrontMm === 'number') {
+      lines.push(
+        `  • Palete: profundidade ${a.palletDepthMm} mm · frente ${a.palletFrontMm} mm`
+      );
+    }
+  } else if (a.moduleDimensionMode === 'MANUAL') {
+    lines.push('Dimensões de módulo: *entrada manual* (montante e vão)');
+  }
   if (typeof a.moduleDepthMm === 'number') {
-    lines.push(`Profundidade da posição (palete): ${a.moduleDepthMm} mm`);
+    lines.push(`Profundidade de posição (resultado, montante): ${a.moduleDepthMm} mm`);
+  }
+  if (typeof a.beamLengthMm === 'number') {
+    lines.push(
+      `Vão por baia / entrada longarina (resultado): ${a.beamLengthMm} mm`
+    );
   }
   if (typeof a.levels === 'number') {
     lines.push(`Níveis por módulo: ${a.levels}`);

@@ -1,9 +1,7 @@
 import { Session } from './session';
+import { finalizeSummaryAnswers } from './projectEngines';
 import {
-  DEFAULT_BEAM_LENGTH_MM,
-  finalizeSummaryAnswers,
-} from './projectEngines';
-import {
+  MIN_MM,
   parseNumber,
   validateCorridor,
   validateCustomLineRowCount,
@@ -12,6 +10,10 @@ import {
   validateLevelGap,
   validateMm,
 } from './conversationHelpers';
+import {
+  moduleGeometryFromPalletInputMm,
+  PALLET_TO_UPRIGHT_OFFSET_MM,
+} from './moduleDimensionMode';
 import { normalizeUprightHeightMmToColumnStep } from './rackColumnStep';
 import {
   HEIGHT_DEFINITION_MODULE_TOTAL,
@@ -34,7 +36,11 @@ export type State =
   | 'CHOOSE_TUNNEL_COUNT'
   | 'CHOOSE_TUNNEL_POSITION'
   | 'CHOOSE_TUNNEL_APPLIES'
+  | 'CHOOSE_MODULE_DIMENSION_MODE'
+  | 'WAIT_PALLET_DEPTH'
+  | 'WAIT_PALLET_FRONT'
   | 'WAIT_MODULE_DEPTH'
+  | 'WAIT_BEAM_LENGTH'
   | 'CHOOSE_HEIGHT_DEFINITION'
   | 'WAIT_LEVELS'
   | 'WAIT_WAREHOUSE_CLEAR_HEIGHT'
@@ -536,12 +542,113 @@ export const transition = (
           newSession = goNext(
             newSession,
             { hasTunnel: false },
+            'CHOOSE_MODULE_DIMENSION_MODE'
+          );
+        }
+        effects.push({ type: 'SEND' });
+      }
+      return { session: newSession, effects };
+
+    case 'CHOOSE_MODULE_DIMENSION_MODE':
+      if (input.type === 'BUTTON') {
+        if (input.value === 'MDM_PALLET') {
+          newSession = goNext(
+            newSession,
+            { moduleDimensionMode: 'PALLET' },
+            'WAIT_PALLET_DEPTH'
+          );
+        } else if (input.value === 'MDM_MANUAL') {
+          newSession = goNext(
+            newSession,
+            { moduleDimensionMode: 'MANUAL' },
             'WAIT_MODULE_DEPTH'
           );
         }
         effects.push({ type: 'SEND' });
       }
       return { session: newSession, effects };
+
+    case 'WAIT_PALLET_DEPTH':
+      if (input.type === 'TEXT') {
+        const d = parseNumber(input.value);
+        if (d === null) {
+          return {
+            session: newSession,
+            effects,
+            error: 'Por favor, digite um número válido em mm',
+          };
+        }
+        const ve = validateMm(d);
+        if (ve) {
+          return { session: newSession, effects, error: ve };
+        }
+        const minPallet = MIN_MM + PALLET_TO_UPRIGHT_OFFSET_MM;
+        if (d < minPallet) {
+          return {
+            session: newSession,
+            effects,
+            error: `Profundidade mínima do palete: ${minPallet} mm (profundidade de posição = palete − ${PALLET_TO_UPRIGHT_OFFSET_MM} mm, mín. ${MIN_MM} mm).`,
+          };
+        }
+        newSession = goNext(
+          newSession,
+          { palletDepthMm: d },
+          'WAIT_PALLET_FRONT'
+        );
+        effects.push({ type: 'SEND' });
+      }
+      return { session: newSession, effects, error };
+
+    case 'WAIT_PALLET_FRONT':
+      if (input.type === 'TEXT') {
+        const w = parseNumber(input.value);
+        if (w === null) {
+          return {
+            session: newSession,
+            effects,
+            error: 'Por favor, digite um número válido em mm',
+          };
+        }
+        const ve = validateMm(w);
+        if (ve) {
+          return { session: newSession, effects, error: ve };
+        }
+        const pd = newSession.answers.palletDepthMm;
+        if (typeof pd !== 'number') {
+          return {
+            session: newSession,
+            effects,
+            error: 'Falta a profundidade do palete. Volte um passo.',
+          };
+        }
+        const { moduleDepthMm, beamLengthMm } = moduleGeometryFromPalletInputMm(
+          pd,
+          w
+        );
+        const veM = validateMm(moduleDepthMm);
+        if (veM) {
+          return { session: newSession, effects, error: veM };
+        }
+        const veB = validateMm(beamLengthMm);
+        if (veB) {
+          return {
+            session: newSession,
+            effects,
+            error: `Vão calculado a partir da frente do palete (${beamLengthMm} mm) fora do intervalo permitido; ajuste a frente do palete.`,
+          };
+        }
+        newSession = goNext(
+          newSession,
+          {
+            palletFrontMm: w,
+            moduleDepthMm,
+            beamLengthMm,
+          },
+          'CHOOSE_HEIGHT_DEFINITION'
+        );
+        effects.push({ type: 'SEND' });
+      }
+      return { session: newSession, effects, error };
 
     case 'CHOOSE_TUNNEL_COUNT':
       if (input.type === 'BUTTON') {
@@ -620,7 +727,7 @@ export const transition = (
         newSession = goNext(
           newSession,
           { tunnelAppliesTo: ap },
-          'WAIT_MODULE_DEPTH'
+          'CHOOSE_MODULE_DIMENSION_MODE'
         );
         effects.push({ type: 'SEND' });
       }
@@ -640,9 +747,39 @@ export const transition = (
         if (ve) {
           return { session: newSession, effects, error: ve };
         }
+        if (newSession.answers.moduleDimensionMode !== 'MANUAL') {
+          return {
+            session: newSession,
+            effects,
+            error: 'Escolha antes *Medidas do palete* ou *Manual* (passo anterior).',
+          };
+        }
         newSession = goNext(
           newSession,
-          { moduleDepthMm: depth, beamLengthMm: DEFAULT_BEAM_LENGTH_MM },
+          { moduleDepthMm: depth },
+          'WAIT_BEAM_LENGTH'
+        );
+        effects.push({ type: 'SEND' });
+      }
+      return { session: newSession, effects, error };
+
+    case 'WAIT_BEAM_LENGTH':
+      if (input.type === 'TEXT') {
+        const beam = parseNumber(input.value);
+        if (beam === null) {
+          return {
+            session: newSession,
+            effects,
+            error: 'Por favor, digite um número válido em mm',
+          };
+        }
+        const ve = validateMm(beam);
+        if (ve) {
+          return { session: newSession, effects, error: ve };
+        }
+        newSession = goNext(
+          newSession,
+          { beamLengthMm: beam },
           'CHOOSE_HEIGHT_DEFINITION'
         );
         effects.push({ type: 'SEND' });
@@ -1017,9 +1154,9 @@ export const transition = (
           stopBefore = 'WAIT_CORRIDOR';
         } else if (field === 'EDIT_LAYOUT') {
           targetState = 'WAIT_CORRIDOR';
-          stopBefore = 'WAIT_MODULE_DEPTH';
+          stopBefore = 'CHOOSE_MODULE_DIMENSION_MODE';
         } else if (field === 'EDIT_MODULO') {
-          targetState = 'WAIT_MODULE_DEPTH';
+          targetState = 'CHOOSE_MODULE_DIMENSION_MODE';
           stopBefore = 'WAIT_CAPACITY';
         } else if (field === 'EDIT_CARGA') {
           targetState = 'WAIT_CAPACITY';

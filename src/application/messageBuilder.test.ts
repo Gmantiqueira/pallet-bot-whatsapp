@@ -162,7 +162,8 @@ describe('MessageBuilder', () => {
       expect(messages[0].text).toContain('800');
       expect(messages[0].text).toContain('5040');
       expect(messages[0].text).toContain('Altura útil do sistema');
-      expect(messages[0].text).toContain('Profundidade da posição');
+      expect(messages[0].text).toContain('Profundidade de posição (resultado, montante)');
+      expect(messages[0].text).toContain('Vão por baia / entrada longarina (resultado): 1100');
       expect(messages[0].text).toContain('Níveis por módulo: 4');
       expect(messages[0].text).toContain('Ambos');
       expect(messages[0].text).toContain('Módulos: 9');
