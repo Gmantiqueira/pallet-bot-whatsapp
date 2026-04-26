@@ -11,6 +11,8 @@ import {
   type RackModule,
 } from './layoutGeometryV2';
 import { appliesFundoTravamentoLayout } from './fundoTravamento';
+import { countTopTravamentoSuperiorQuantity } from './topTravamento';
+import { resolveUprightHeightMmForProject } from '../projectEngines';
 
 export class ElevationModelValidationError extends Error {
   constructor(message: string) {
@@ -313,6 +315,18 @@ export function validateElevationAxesAgainstGeometry(
       `Indicador travamento de fundo incoerente (payload ${gotFundo}, geometria espera ${expFundo}).`
     );
   }
+
+  const expTopSup =
+    countTopTravamentoSuperiorQuantity(
+      geometry,
+      resolveUprightHeightMmForProject(answers)
+    ) > 0;
+  const gotTopSup = model.frontWithoutTunnel.topTravamentoSuperior === true;
+  if (gotTopSup !== expTopSup) {
+    throw new ElevationModelValidationError(
+      `Indicador travamento superior incoerente (payload ${gotTopSup}, geometria espera ${expTopSup}).`
+    );
+  }
 }
 
 /**
@@ -323,9 +337,15 @@ export function buildElevationModelV2(
   geometry: LayoutGeometry
 ): ElevationModelV2 {
   const fundoTravamento = appliesFundoTravamentoLayout(geometry);
+  const topTravamentoSuperior =
+    countTopTravamentoSuperiorQuantity(
+      geometry,
+      resolveUprightHeightMmForProject(answers)
+    ) > 0;
   const frontWithoutTunnel: ElevationPanelPayload = {
     ...buildFrontWithoutTunnelPayload(answers, geometry),
     fundoTravamento,
+    topTravamentoSuperior,
   };
 
   const userWantsTunnel = answers.hasTunnel === true;
@@ -339,6 +359,7 @@ export function buildElevationModelV2(
             tunnelVisual: true,
           }),
           fundoTravamento,
+          topTravamentoSuperior,
         }
       : undefined;
 

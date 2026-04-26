@@ -155,6 +155,34 @@ describe('technicalSummaryRowsFromLayoutGeometry', () => {
     expect(rowValue(rowsManual, 'Origem do projeto:')).toBe('Medidas digitadas');
   });
 
+  it('Travamento superior: Sim quando altura de montante > 8 m e há ≥ 2 fileiras (regra BOM)', () => {
+    const a: ProjectAnswersV2 = {
+      ...minimal(),
+      widthMm: 14_000,
+      moduleDepthMm: 2700,
+      heightMm: 9000,
+      lineStrategy: 'APENAS_SIMPLES',
+    };
+    const sol = buildLayoutSolutionV2(a);
+    const geo = buildLayoutGeometry(
+      sol,
+      a as unknown as Record<string, unknown>
+    );
+    if (geo.rows.length < 2) {
+      return;
+    }
+    const project = {
+      ...(a as unknown as Record<string, unknown>),
+      structure: selectStructure({
+        capacityKgPerLevel: a.capacityKg,
+        levels: a.levels,
+        hasGroundLevel: a.firstLevelOnGround !== false,
+      }),
+    };
+    const rows = technicalSummaryRowsFromLayoutGeometry(project, geo);
+    expect(rowValue(rows, 'Travamento superior:')).toBe('Sim');
+  });
+
   it('Túnel: Não no resumo quando o pedido indica túnel mas o layout não coloca módulo túnel', () => {
     const a: ProjectAnswersV2 = {
       ...minimal(),

@@ -363,6 +363,11 @@ export type ElevationPanelPayload = {
    * indicador para a vista lateral — peça 400×50%H atrás do módulo.
    */
   fundoTravamento?: boolean;
+  /**
+   * Travamento superior estrutural (regra BOM: montante acima de 8 m e ≥ 2 fileiras).
+   * Vista frontal/lateral: traço discreto junto ao topo.
+   */
+  topTravamentoSuperior?: boolean;
 };
 
 export type ElevationModelV2 = {

@@ -51,6 +51,36 @@ describe('serializeElevationPagesV2', () => {
     expect(orangeBeams.length).toBe(a.levels * 2);
   });
 
+  it('travamento superior: traço discreto na frontal e na lateral quando regra BOM aplica', () => {
+    const a: ProjectAnswersV2 = {
+      lengthMm: 12_000,
+      widthMm: 14_000,
+      corridorMm: 3000,
+      moduleDepthMm: 2700,
+      moduleWidthMm: 1100,
+      levels: 4,
+      capacityKg: 1200,
+      lineStrategy: 'APENAS_SIMPLES',
+      hasTunnel: false,
+      halfModuleOptimization: false,
+      firstLevelOnGround: true,
+      heightMode: 'DIRECT',
+      heightMm: 9000,
+    };
+    const layout = buildLayoutSolutionV2(a);
+    const session = answersToSession(a);
+    const geo = buildLayoutGeometry(layout, session);
+    validateLayoutGeometry(geo);
+    if (geo.rows.length < 2) {
+      return;
+    }
+    const model = buildElevationModelV2(session, geo);
+    expect(model.frontWithoutTunnel.topTravamentoSuperior).toBe(true);
+    const pages = serializeElevationPagesV2(model);
+    expect(pages.frontWithoutTunnel).toContain('id="top-travamento-superior-front"');
+    expect(pages.lateral).toContain('id="top-travamento-superior-lateral"');
+  });
+
   it('vista lateral dupla costas: perfil estreito de uma costa (não faixa completa nem espinha)', () => {
     const a: ProjectAnswersV2 = {
       lengthMm: 12_000,

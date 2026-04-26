@@ -1188,6 +1188,13 @@ function drawFrontRack(
     `<line x1="${uprightXs[0]}" y1="${topY}" x2="${lastUx + lastUw}" y2="${topY}" stroke="#475569" stroke-width="1.05" stroke-linecap="square" opacity="0.75"/>`
   );
 
+  if (data.topTravamentoSuperior === true) {
+    const yTopBrace = topY - 2.85;
+    parts.push(
+      `<line id="top-travamento-superior-front" x1="${faceSpanLeft}" y1="${yTopBrace}" x2="${faceSpanRight}" y2="${yTopBrace}" stroke="#94a3b8" stroke-width="0.48" stroke-dasharray="2.5 5" opacity="0.4"/>`
+    );
+  }
+
   parts.push(
     drawFrontGuardRailMarkers(
       faceSpanLeft,
@@ -1427,6 +1434,12 @@ function drawLateral(
     const yFundo = floorTopLat - hFundoPx;
     parts.push(
       `<rect id="fundo-travamento-lateral" x="${xFundo}" y="${yFundo}" width="${wFundoPx}" height="${hFundoPx}" fill="#e2e8f0" fill-opacity="0.92" stroke="${COL_BRACE_STROKE}" stroke-width="0.95" stroke-linejoin="miter" opacity="0.94"/>`
+    );
+  }
+
+  if (data.topTravamentoSuperior === true) {
+    parts.push(
+      `<line id="top-travamento-superior-lateral" x1="${bayLeft}" y1="${y0 + 0.9}" x2="${bayRight}" y2="${y0 + 0.9}" stroke="#94a3b8" stroke-width="0.48" stroke-dasharray="2.5 5" opacity="0.4"/>`
     );
   }
 

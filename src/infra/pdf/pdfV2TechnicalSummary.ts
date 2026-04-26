@@ -8,6 +8,8 @@ import { MIN_LEVEL_GAP_MM } from '../../domain/conversationHelpers';
 import { formatModuleCountForDocumentPt } from '../../domain/pdfV2/formatModuleCountDisplay';
 import { sanitizeText } from '../../utils/sanitizeText';
 import { formatMm, formatPeDireitoAltura } from './pdfService';
+import { countTopTravamentoSuperiorQuantity } from '../../domain/pdfV2/topTravamento';
+import { resolveUprightHeightMmForProject } from '../../domain/projectEngines';
 
 export type TechnicalSummaryRow = {
   label: string;
@@ -180,6 +182,11 @@ export function technicalSummaryRowsFromLayoutGeometry(
       : niveisText;
 
   const structure = project.structure as StructureResult | undefined;
+  const topTravamentoSuperiorApplies =
+    countTopTravamentoSuperiorQuantity(
+      geometry,
+      resolveUprightHeightMmForProject(project)
+    ) > 0;
 
   const rows: TechnicalSummaryRow[] = [
     {
@@ -219,6 +226,15 @@ export function technicalSummaryRowsFromLayoutGeometry(
           {
             label: 'Guard rail em túnel:',
             value: 'Sim, obrigatório',
+          } satisfies TechnicalSummaryRow,
+        ]
+      : []),
+    ...(topTravamentoSuperiorApplies
+      ? [
+          {
+            label: 'Travamento superior:',
+            value: 'Sim',
+            emphasis: true,
           } satisfies TechnicalSummaryRow,
         ]
       : []),
