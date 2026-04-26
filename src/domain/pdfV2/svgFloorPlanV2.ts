@@ -141,6 +141,42 @@ function sortCirculation(
 type StructureRect = FloorPlanModelV2['structureRects'][number];
 type CirculationRect = FloorPlanModelV2['circulationRects'][number];
 
+/**
+ * Textura + linha de fluxo muito suave em corredores alongados — reduz leitura “chapada”
+ * em grandes áreas azuis sem alterar cor nem contorno principal.
+ */
+function appendOperationalCorridorVisualExtras(
+  c: CirculationRect,
+  parts: string[]
+): void {
+  parts.push(
+    `<rect x="${c.x}" y="${c.y}" width="${c.w}" height="${c.h}" fill="url(#fp-corridor-op-texture)" stroke="none" pointer-events="none"/>`
+  );
+  const longSide = Math.max(c.w, c.h);
+  const shortSide = Math.min(c.w, c.h);
+  if (longSide < 148 || shortSide < 1 || longSide / shortSide < 1.42) {
+    return;
+  }
+  const inset = Math.min(32, longSide * 0.055);
+  const col = COL_CORRIDOR_OP_STROKE;
+  const op = 0.2;
+  if (c.w >= c.h) {
+    const y = c.y + c.h / 2;
+    const x1 = c.x + inset;
+    const x2 = c.x + c.w - inset;
+    parts.push(
+      `<line x1="${x1}" y1="${y}" x2="${x2}" y2="${y}" stroke="${col}" stroke-width="0.6" stroke-dasharray="4 11" stroke-linecap="round" opacity="${op}" pointer-events="none"/>`
+    );
+  } else {
+    const x = c.x + c.w / 2;
+    const y1 = c.y + inset;
+    const y2 = c.y + c.h - inset;
+    parts.push(
+      `<line x1="${x}" y1="${y1}" x2="${x}" y2="${y2}" stroke="${col}" stroke-width="0.6" stroke-dasharray="4 11" stroke-linecap="round" opacity="${op}" pointer-events="none"/>`
+    );
+  }
+}
+
 function orientationArrowBounds(
   o: FloorPlanModelV2['warehouseOutline'],
   _beamAlong: 'x' | 'y'
@@ -794,6 +830,16 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
       `<path d="M0,8 l8,-8" stroke="#52525b" stroke-width="0.55" opacity="0.06"/>` +
       `</pattern>`
   );
+  parts.push(
+    `<pattern id="fp-corridor-op-texture" patternUnits="userSpaceOnUse" width="22" height="22" patternTransform="rotate(36)">` +
+      `<path d="M0,22 l22,-22 M-4,4 l8,-8 M12,26 l8,-8" stroke="#1e3a8a" stroke-width="0.5" opacity="0.09"/>` +
+      `</pattern>`
+  );
+  parts.push(
+    `<pattern id="fp-cross-passage-texture" patternUnits="userSpaceOnUse" width="18" height="18" patternTransform="rotate(-28)">` +
+      `<path d="M0,18 l18,-18 M-3,6 l9,-9" stroke="#0369a1" stroke-width="0.45" opacity="0.078"/>` +
+      `</pattern>`
+  );
   parts.push('</defs>');
   parts.push(`<rect width="${w}" height="${h}" fill="${COL_BG}"/>`);
   const fpPad = 14;
@@ -901,7 +947,13 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
     parts.push(
       `<rect x="${c.x}" y="${c.y}" width="${c.w}" height="${c.h}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"${dashAttr} opacity="${op}"/>`
     );
-    if (sem === 'residual') {
+    if (sem === 'operational') {
+      appendOperationalCorridorVisualExtras(c, parts);
+    } else if (sem === 'cross_passage') {
+      parts.push(
+        `<rect x="${c.x}" y="${c.y}" width="${c.w}" height="${c.h}" fill="url(#fp-cross-passage-texture)" stroke="none" pointer-events="none"/>`
+      );
+    } else if (sem === 'residual') {
       parts.push(
         `<rect x="${c.x}" y="${c.y}" width="${c.w}" height="${c.h}" fill="url(#fp-residual-hatch)" stroke="none" opacity="0.08"/>`
       );
