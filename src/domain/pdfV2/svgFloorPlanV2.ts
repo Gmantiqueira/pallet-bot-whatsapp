@@ -244,6 +244,17 @@ function moduleDisplayFontOpacity(
   return { fontPx, opacity, nudgeX, nudgeY };
 }
 
+/** Índice do módulo túnel na planta: legível dentro da pegada, coerente com o tom âmbar do túnel. */
+function tunnelModuleDisplayFontPx(
+  s: FloorPlanModelV2['structureRects'][0],
+  moduleCount: number
+): number {
+  const { fontPx } = moduleDisplayFontOpacity(s, moduleCount);
+  const minSide = Math.min(s.w, s.h);
+  const fromBox = minSide * 0.2;
+  return Math.round(Math.max(15, Math.min(24, Math.max(fontPx, fromBox))));
+}
+
 function moduleBayHintLine(s: FloorPlanModelV2['structureRects'][0]): string {
   /** Uma só baia na face — não sugerir divisão ao meio como duas baias. */
   if (s.segmentType === 'half') return '';
@@ -913,17 +924,12 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
       parts.push(
         `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="${fillMod}" stroke="${strokeMod}" stroke-width="${sw}"/>`
       );
-      const cx = s.x + s.w / 2;
-      const cy = s.y + s.h / 2;
-      const fsLbl = Math.min(11, Math.max(8, Math.min(s.w, s.h) * 0.06));
-      const { fontPx, opacity } = moduleDisplayFontOpacity(s, moduleCount);
-      const fsNum = Math.min(fontPx, Math.max(13, Math.min(s.w, s.h) * 0.2));
-      parts.push(
-        `<text x="${cx}" y="${cy - fsNum * 0.38}" text-anchor="middle" dominant-baseline="middle" font-size="${fsLbl}px" fill="#78350f" font-family="${SVG_FONT_FAMILY}" font-weight="600" opacity="0.82">Passagem</text>`
-      );
       if (s.displayIndex !== undefined) {
+        const cx = s.x + s.w / 2;
+        const cy = s.y + s.h / 2;
+        const fsTunnel = tunnelModuleDisplayFontPx(s, moduleCount);
         parts.push(
-          `<text x="${cx}" y="${cy + fsLbl * 0.35}" text-anchor="middle" dominant-baseline="middle" class="fp-mod-num" font-size="${fsNum}px" opacity="${opacity}">${s.displayIndex}</text>`
+          `<text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="middle" font-size="${fsTunnel}px" fill="#78350f" font-family="${SVG_FONT_FAMILY}" font-weight="600" opacity="0.9">${s.displayIndex}</text>`
         );
       }
     } else {
