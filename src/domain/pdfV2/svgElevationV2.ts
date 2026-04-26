@@ -52,6 +52,17 @@ const DIM_MAJOR = '#0f172a';
 const DIM_MINOR = '#475569';
 const COL_BRACE_STROKE = '#475569';
 
+/**
+ * Cotas verticais à direita (frontal e lateral): colunas mais afastadas e calha larga para
+ * rótulos em duas linhas (pt-BR) sem sobreposição nem truncagem no encaixe da folha.
+ */
+const ELEV_VERTICAL_DIM_STEP_LS = 14;
+const ELEV_VERTICAL_DIM_RIGHT_GUTTER_PX = 140;
+/** Reserva horizontal antes de calcular `rackMaxW` na vista frontal (depende do n.º de troços). */
+const ELEV_FRONT_DIM_CHAIN_CAP_PX = 330;
+const ELEV_FRONT_DIM_CHAIN_BASE_PX = 138;
+const ELEV_FRONT_DIM_CHAIN_PER_SEG_LS = 13.5;
+
 function escapeXml(text: string): string {
   return sanitizeText(text)
     .replace(/&/g, '&amp;')
@@ -525,7 +536,7 @@ function drawVerticalDimChain(
     return '';
   }
 
-  const step = 12.5 * ls;
+  const step = ELEV_VERTICAL_DIM_STEP_LS * ls;
   const tickL = rackRight + 2;
   const tickR = tickL + 7.5;
   const parts: string[] = [];
@@ -919,8 +930,12 @@ function drawFrontRack(
   const tunnelExtraSeg =
     data.tunnel === true && typeof data.tunnelClearanceMm === 'number' ? 1 : 0;
   const estSegCount = levelsEst + 2 + tunnelExtraSeg;
-  const dimChainRightPx = Math.min(260, 110 + 11 * ls * (estSegCount + 1));
-  const rackMaxW = Math.max(210, pw - 20 - 40 - dimChainRightPx);
+  const dimChainRightPx = Math.min(
+    ELEV_FRONT_DIM_CHAIN_CAP_PX,
+    ELEV_FRONT_DIM_CHAIN_BASE_PX +
+      ELEV_FRONT_DIM_CHAIN_PER_SEG_LS * ls * (estSegCount + 1)
+  );
+  const rackMaxW = Math.max(210, pw - 22 - 48 - dimChainRightPx);
   const rackMaxH = Math.max(
     120,
     ph - Math.round(78 / ls) - frontRackBelowFloorReservePx(ls)
@@ -1270,9 +1285,13 @@ function drawFrontRack(
 
   const inner = parts.join('');
   const rackRight = rx + totalW;
-  const step = 12.5 * ls;
+  const step = ELEV_VERTICAL_DIM_STEP_LS * ls;
   const detailApprox = Math.max(3, storageTiers + 2 + tunnelExtraSeg);
-  const dimRight = rackRight + 10 + (detailApprox + 1) * step + 96;
+  const dimRight =
+    rackRight +
+    10 +
+    (detailApprox + 2) * step +
+    ELEV_VERTICAL_DIM_RIGHT_GUTTER_PX;
   let minY = Math.min(dimTopY - 22 * ls, ry - 8, dimTopY - 20 * ls - 16);
   if (sectionTitle) minY = Math.min(minY, oy + 6);
   if (subtitle) minY = Math.min(minY, oy + 4);
@@ -1334,7 +1353,7 @@ function drawLateral(
   const sliceMm = Math.max(1, data.lateralProfileDepthMm);
   const isDouble = data.rackDepthMode === 'double';
 
-  const dimReservePx = 54;
+  const dimReservePx = 78;
   const rackW = Math.min(
     Math.max(130, pw - 36 - dimReservePx),
     Math.max(118, pw * 0.52)
@@ -1560,12 +1579,16 @@ function drawLateral(
   }
 
   const innerLat = parts.join('');
-  const latStep = 12.5 * ls;
+  const latStep = ELEV_VERTICAL_DIM_STEP_LS * ls;
   const latTunnelExtra =
     showTunnelOpening && typeof data.tunnelClearanceMm === 'number' ? 1 : 0;
   const latDetailApprox = Math.max(3, storageTiers + 2 + latTunnelExtra);
   const dimRightLat =
-    x0 + dw + 10 + (latDetailApprox + 1) * latStep + 92;
+    x0 +
+    dw +
+    10 +
+    (latDetailApprox + 2) * latStep +
+    ELEV_VERTICAL_DIM_RIGHT_GUTTER_PX;
   const minXL = Math.min(x0 - 12, ox + 4);
   const maxXL = Math.max(dimRightLat, ox + pw - 6);
   const minYL = Math.min(y0 - 10 * ls, oy + (hideHeader ? 4 : 8));
