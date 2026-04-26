@@ -214,6 +214,14 @@ export function technicalSummaryRowsFromLayoutGeometry(
       value: metadata.hasTunnel ? 'Sim' : 'Não',
       emphasis: true,
     },
+    ...(metadata.hasTunnel
+      ? [
+          {
+            label: 'Guard rail em túnel:',
+            value: 'Sim, obrigatório',
+          } satisfies TechnicalSummaryRow,
+        ]
+      : []),
     {
       label: 'Primeiro nível ao piso:',
       value: project.firstLevelOnGround !== false ? 'Sim' : 'Não',

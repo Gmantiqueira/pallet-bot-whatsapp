@@ -71,6 +71,7 @@ describe('technicalSummaryRowsFromLayoutGeometry', () => {
       `${formatNiveisArmazenagemForDocumentPt(geo.metadata)} (${geo.totals.levelCount} patamares no total)`
     );
     expect(rowValue(rows, 'Túnel:')).toBe('Sim');
+    expect(rowValue(rows, 'Guard rail em túnel:')).toBe('Sim, obrigatório');
     expect(geo.totals.tunnelCount).toBeGreaterThan(0);
     expect(rowValue(rows, 'Comprimento:')).toContain(
       geo.warehouseLengthMm.toLocaleString('pt-BR')
@@ -178,6 +179,7 @@ describe('technicalSummaryRowsFromLayoutGeometry', () => {
     };
     const rows = technicalSummaryRowsFromLayoutGeometry(project, geo);
     expect(rowValue(rows, 'Túnel:')).toBe('Não');
+    expect(rowValue(rows, 'Guard rail em túnel:')).toBeUndefined();
     expect(geo.totals.tunnelCount).toBe(0);
   });
 
