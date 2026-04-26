@@ -250,26 +250,14 @@ async function executeProjectPdfGeneration(
         'utf8'
       );
       fs.writeFileSync(
-        path.join(storageDir, `elevacao-sem-tunel-${phone}-${ts}.svg`),
-        elevPages.frontWithoutTunnel,
+        path.join(storageDir, `elevacao-paisagem-padrao-${phone}-${ts}.svg`),
+        elevPages.landscapeStandard,
         'utf8'
       );
-      if (elevPages.frontWithTunnel) {
+      if (elevPages.landscapeTunnel) {
         fs.writeFileSync(
-          path.join(storageDir, `elevacao-com-tunel-${phone}-${ts}.svg`),
-          elevPages.frontWithTunnel,
-          'utf8'
-        );
-      }
-      fs.writeFileSync(
-        path.join(storageDir, `elevacao-lateral-${phone}-${ts}.svg`),
-        elevPages.lateral,
-        'utf8'
-      );
-      if (elevPages.lateralWithTunnel) {
-        fs.writeFileSync(
-          path.join(storageDir, `elevacao-lateral-tunel-${phone}-${ts}.svg`),
-          elevPages.lateralWithTunnel,
+          path.join(storageDir, `elevacao-paisagem-tunel-${phone}-${ts}.svg`),
+          elevPages.landscapeTunnel,
           'utf8'
         );
       }

@@ -858,7 +858,7 @@ function drawGroundPalletBand(
 
 /**
  * Espaço sob o piso da estrutura: cota horizontal (`rackBottom + 26·ls`) + texto «Largura total»
- * (`rackBottom + 44·ls`) deve caber em `ph` sem sobrepor a legenda da folha (`wrapElevationDrawingPage`).
+ * (`rackBottom + 44·ls`) deve caber em `ph` sem sobrepor o rodapé da prancha.
  */
 function frontRackBelowFloorReservePx(labelScale: number): number {
   const ls = labelScale;
@@ -1619,47 +1619,74 @@ function drawLateral(
 const ELEV_PAGE_LABEL_SCALE = 1.9;
 /** Vista lateral: texto e cotas mais discretos que a frontal (hierarquia visual). */
 const ELEV_LATERAL_LABEL_SCALE = ELEV_PAGE_LABEL_SCALE * 0.82;
-/** Proporção mais próxima de A4 retrato (~0,75) para o PDF encher altura sem faixas largas vazias. */
-const ELEV_PAGE_W = 1180;
-/** Frontal = primária: mais altura útil para escala e respiro. */
-const ELEV_PAGE_H_FRONT = 1620;
-/** Lateral = secundária: folha ligeiramente mais baixa para não competir com a frontal. */
-const ELEV_PAGE_H_LATERAL = 1260;
+/**
+ * Folha paisagem (~A4 landscape): duas colunas com área útil elevada.
+ * Proporção próxima de 297/210 mm para encaixe no PDF.
+ */
+const ELEV_SPREAD_W = 1960;
+const ELEV_SPREAD_H = 1280;
 
 export type ElevationPageSvgs = {
-  frontWithoutTunnel: string;
-  frontWithTunnel: string | null;
-  lateral: string;
-  lateralWithTunnel: string | null;
+  /** Paisagem: vista frontal (esq.) + vista lateral (dir.), módulo padrão. */
+  landscapeStandard: string;
+  /** Paisagem: frontal e lateral do módulo com túnel — null sem módulo túnel. */
+  landscapeTunnel: string | null;
 };
 
-function wrapElevationDrawingPage(
-  inner: string,
-  width: number,
-  height: number,
-  footerLine: string
+/**
+ * Folha paisagem: frontal à esquerda, lateral à direita — mesma escala gráfica que as páginas antigas.
+ */
+function wrapElevationLandscapeSpread(
+  leftInner: string,
+  rightInner: string,
+  footerLeft: string,
+  footerRight: string
 ): string {
-  const fsFoot = Math.round(12 * ELEV_PAGE_LABEL_SCALE * 10) / 10;
+  const width = ELEV_SPREAD_W;
+  const height = ELEV_SPREAD_H;
+  const m = 20;
+  const gap = 20;
+  const padTop = 16;
+  const footerReserve = 52;
+  const colInnerW = (width - 2 * m - gap) / 2;
+  const fsFoot =
+    Math.round(11.25 * ELEV_PAGE_LABEL_SCALE * 10) / 10;
+  const fsCol = Math.round(9.2 * ELEV_PAGE_LABEL_SCALE * 10) / 10;
+  const cxLeft = m + colInnerW / 2;
+  const cxRight = m + colInnerW + gap + colInnerW / 2;
+  const sepX = m + colInnerW + gap / 2;
   const parts: string[] = [];
   parts.push(
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">`
   );
   parts.push(`<rect width="${width}" height="${height}" fill="${COL_BG}"/>`);
-  const m = 20;
   parts.push(
     `<rect x="${m}" y="${m}" width="${width - 2 * m}" height="${height - 2 * m}" fill="none" stroke="${COL_FRAME}" stroke-width="0.45"/>`
   );
-  parts.push(inner);
   parts.push(
-    `<text x="${width / 2}" y="${height - 14}" text-anchor="middle" font-size="${fsFoot}px" fill="#475569" font-family="${SVG_FONT_FAMILY}">${escapeXml(footerLine)}</text>`
+    `<line x1="${sepX}" y1="${m + padTop + 2}" x2="${sepX}" y2="${height - m - footerReserve + 4}" stroke="#e2e8f0" stroke-width="0.55" opacity="0.92" pointer-events="none"/>`
+  );
+  parts.push(
+    `<text x="${cxLeft}" y="${m + 13}" text-anchor="middle" font-size="${fsCol}px" fill="#64748b" font-family="${SVG_FONT_FAMILY}" font-weight="600">${escapeXml('Vista frontal')}</text>`
+  );
+  parts.push(
+    `<text x="${cxRight}" y="${m + 13}" text-anchor="middle" font-size="${fsCol}px" fill="#64748b" font-family="${SVG_FONT_FAMILY}" font-weight="600">${escapeXml('Vista lateral')}</text>`
+  );
+  parts.push(leftInner);
+  parts.push(rightInner);
+  parts.push(
+    `<text x="${cxLeft}" y="${height - 16}" text-anchor="middle" font-size="${fsFoot}px" fill="#475569" font-family="${SVG_FONT_FAMILY}">${escapeXml(footerLeft)}</text>`
+  );
+  parts.push(
+    `<text x="${cxRight}" y="${height - 16}" text-anchor="middle" font-size="${fsFoot}px" fill="#475569" font-family="${SVG_FONT_FAMILY}">${escapeXml(footerRight)}</text>`
   );
   parts.push('</svg>');
   return parts.join('');
 }
 
 /**
- * Uma folha SVG por elevação (sem túnel, com túnel se existir, lateral).
- * Títulos conceito-a-conceito ficam no PDF; aqui só desenho + nota mínima.
+ * Pranchas paisagem: frontal + lateral lado a lado (padrão; segunda prancha se houver túnel).
+ * Títulos de folha ficam no PDF; aqui rótulos de coluna discretos e rodapés.
  */
 export type SerializeElevationPagesOptions = {
   debug?: boolean;
@@ -1670,22 +1697,20 @@ export function serializeElevationPagesV2(
   options?: SerializeElevationPagesOptions
 ): ElevationPageSvgs {
   const dbg = options?.debug === true;
-  const w = ELEV_PAGE_W;
-  const hF = ELEV_PAGE_H_FRONT;
-  const hL = ELEV_PAGE_H_LATERAL;
   const ls = ELEV_PAGE_LABEL_SCALE;
-  const padX = 20;
+  const m = 20;
+  const gap = 20;
   const padTop = 16;
-  const innerW = w - padX * 2;
-  const innerHFront = hF - padTop - 52;
-  const innerHLat = hL - padTop - 48;
+  const footerReserve = 52;
+  const colInnerW = (ELEV_SPREAD_W - 2 * m - gap) / 2;
+  const innerH = ELEV_SPREAD_H - padTop - footerReserve - m;
 
   const std = model.frontWithoutTunnel;
-  const frontStdInner = drawFrontRack(
-    padX,
+  const leftStd = drawFrontRack(
+    m,
     padTop,
-    innerW,
-    innerHFront,
+    colInnerW,
+    innerH,
     std,
     '',
     buildElevationAccessorySubtitle(std),
@@ -1694,65 +1719,60 @@ export function serializeElevationPagesV2(
       debug: dbg,
     }
   );
-  const frontWithoutTunnel = wrapElevationDrawingPage(
-    frontStdInner,
-    w,
-    hF,
-    'Cotas em mm · mesmo modelo geométrico que o módulo com túnel (quando aplicável)'
+  const rightStd = drawLateral(
+    m + colInnerW + gap,
+    padTop,
+    colInnerW,
+    innerH,
+    model.lateral,
+    {
+      labelScale: ELEV_LATERAL_LABEL_SCALE,
+      hideHeader: true,
+      debug: dbg,
+    }
+  );
+  const landscapeStandard = wrapElevationLandscapeSpread(
+    leftStd,
+    rightStd,
+    'Cotas em mm · referência de armazenagem (mesmo modelo que o túnel, quando aplicável)',
+    'Perfil de uma costa — planta mostra dupla costas completa, se aplicável'
   );
 
-  let frontWithTunnel: string | null = null;
-  if (model.frontWithTunnel) {
+  let landscapeTunnel: string | null = null;
+  if (model.frontWithTunnel && model.lateralWithTunnel) {
     const tun = model.frontWithTunnel;
-    const inner = drawFrontRack(
-      padX,
+    const latTun = model.lateralWithTunnel;
+    const leftTun = drawFrontRack(
+      m,
       padTop,
-      innerW,
-      innerHFront,
+      colInnerW,
+      innerH,
       tun,
       '',
       buildElevationAccessorySubtitle(tun),
       { labelScale: ls, debug: dbg }
     );
-    frontWithTunnel = wrapElevationDrawingPage(
-      inner,
-      w,
-      hF,
-      'Cotas em mm · passagem entre longarinas da zona túnel'
-    );
-  }
-
-  const latInner = drawLateral(padX, padTop, innerW, innerHLat, model.lateral, {
-    labelScale: ELEV_LATERAL_LABEL_SCALE,
-    hideHeader: true,
-    debug: dbg,
-  });
-  const lateral = wrapElevationDrawingPage(
-    latInner,
-    w,
-    hL,
-    'Perfil de uma costa (estrutura) — planta para dupla costas completa'
-  );
-
-  let lateralWithTunnel: string | null = null;
-  if (model.lateralWithTunnel) {
-    const latTunInner = drawLateral(
-      padX,
+    const rightTun = drawLateral(
+      m + colInnerW + gap,
       padTop,
-      innerW,
-      innerHLat,
-      model.lateralWithTunnel,
-      { labelScale: ELEV_LATERAL_LABEL_SCALE, hideHeader: true, debug: dbg }
+      colInnerW,
+      innerH,
+      latTun,
+      {
+        labelScale: ELEV_LATERAL_LABEL_SCALE,
+        hideHeader: true,
+        debug: dbg,
+      }
     );
-    lateralWithTunnel = wrapElevationDrawingPage(
-      latTunInner,
-      w,
-      hL,
-      'Perfil lateral · túnel: vão inferior (cotas); níveis ativos alinhados ao frontal'
+    landscapeTunnel = wrapElevationLandscapeSpread(
+      leftTun,
+      rightTun,
+      'Cotas em mm · zona túnel (passagem entre longarinas no nível inferior)',
+      'Perfil lateral · vão inferior do túnel; níveis ativos alinhados ao frontal'
     );
   }
 
-  return { frontWithoutTunnel, frontWithTunnel, lateral, lateralWithTunnel };
+  return { landscapeStandard, landscapeTunnel };
 }
 
 /**

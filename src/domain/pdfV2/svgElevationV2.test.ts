@@ -36,19 +36,19 @@ describe('serializeElevationPagesV2', () => {
     const model = buildElevationModelV2(session, geo);
     expect(model.frontWithoutTunnel.fundoTravamento).toBe(true);
     const pages = serializeElevationPagesV2(model);
-    const svg = pages.frontWithoutTunnel;
-    expect(pages.lateral).toContain('id="fundo-travamento-lateral"');
+    expect(pages.landscapeTunnel).toBeNull();
+    const svg = pages.landscapeStandard;
+    expect(svg).toContain('id="fundo-travamento-lateral"');
     expect(svg).toContain('PISO');
     expect(svg).toContain('H total');
     expect(svg).toMatch(/2 baias/);
     expect(svg).toMatch(/vão/);
     expect(svg).toMatch(/CAPACIDADE = 1\.200 kg por palete/);
     const pairLabels = svg.match(/PAR DE LONGARINAS/g) ?? [];
-    // Duas baias: rótulo de par de longarinas por nível em cada vão.
-    expect(pairLabels.length).toBe(a.levels * 2);
-    // Duas baias: uma longarina por baia e por nível estrutural (sem longarina no piso).
+    // Frontal: 2 baias × níveis; lateral: 1 coluna × níveis (mesma prancha paisagem).
+    expect(pairLabels.length).toBe(a.levels * 2 + a.levels);
     const orangeBeams = svg.match(/fill="#fb923c"/g) ?? [];
-    expect(orangeBeams.length).toBe(a.levels * 2);
+    expect(orangeBeams.length).toBe(a.levels * 2 + a.levels);
   });
 
   it('travamento superior: traço discreto na frontal e na lateral quando regra BOM aplica', () => {
@@ -77,8 +77,8 @@ describe('serializeElevationPagesV2', () => {
     const model = buildElevationModelV2(session, geo);
     expect(model.frontWithoutTunnel.topTravamentoSuperior).toBe(true);
     const pages = serializeElevationPagesV2(model);
-    expect(pages.frontWithoutTunnel).toContain('id="top-travamento-superior-front"');
-    expect(pages.lateral).toContain('id="top-travamento-superior-lateral"');
+    expect(pages.landscapeStandard).toContain('id="top-travamento-superior-front"');
+    expect(pages.landscapeStandard).toContain('id="top-travamento-superior-lateral"');
   });
 
   it('vista lateral dupla costas: perfil estreito de uma costa (não faixa completa nem espinha)', () => {
@@ -104,7 +104,7 @@ describe('serializeElevationPagesV2', () => {
     validateLayoutGeometry(geo);
     const model = buildElevationModelV2(session, geo);
     expect(model.frontWithoutTunnel.fundoTravamento).toBe(false);
-    const svg = serializeElevationPagesV2(model).lateral;
+    const svg = serializeElevationPagesV2(model).landscapeStandard;
     expect(svg).not.toContain('id="fundo-travamento-lateral"');
     expect(svg).not.toContain('ESPINHA');
     // Página PDF omite cabeçalho; legenda de profundidade discreta (secundária vs. frontal).
@@ -140,12 +140,11 @@ describe('serializeElevationPagesV2', () => {
       model.frontWithTunnel!.levels
     );
     const pages = serializeElevationPagesV2(model);
-    expect(pages.frontWithTunnel).toBeDefined();
     expect(model.lateralWithTunnel).toBeDefined();
-    expect(pages.lateralWithTunnel).toBeDefined();
-    expect(pages.frontWithoutTunnel).not.toContain('Vão túnel');
-    const tunLabels = pages.frontWithTunnel!.match(/Vão túnel/g) ?? [];
+    expect(pages.landscapeTunnel).toBeDefined();
+    expect(pages.landscapeStandard).not.toContain('Vão túnel');
+    const tunLabels = pages.landscapeTunnel!.match(/Vão túnel/g) ?? [];
     expect(tunLabels.length).toBeGreaterThanOrEqual(2);
-    expect(pages.lateralWithTunnel!).toMatch(/Vão túnel/i);
+    expect(pages.landscapeTunnel!).toMatch(/Vão túnel/i);
   });
 });

@@ -300,7 +300,7 @@ describe('MessageRouter', () => {
       ).toBe(true);
       expect(
         names.some(
-          f => f.startsWith('elevacao-sem-tunel-') && f.endsWith('.svg')
+          f => f.startsWith('elevacao-paisagem-padrao-') && f.endsWith('.svg')
         )
       ).toBe(true);
       expect(
@@ -352,7 +352,7 @@ describe('MessageRouter', () => {
       expect(fs.statSync(pdfPath).size).toBeGreaterThan(500);
 
       const pdfDoc = await PDFDocument.load(fs.readFileSync(pdfPath));
-      expect(pdfDoc.getPageCount()).toBeGreaterThanOrEqual(5);
+      expect(pdfDoc.getPageCount()).toBeGreaterThanOrEqual(4);
 
       const names = fs.existsSync(storageDir)
         ? fs.readdirSync(storageDir).filter(f => f.includes('5511999999999'))
