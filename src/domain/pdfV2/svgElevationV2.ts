@@ -53,15 +53,27 @@ const DIM_MINOR = '#475569';
 const COL_BRACE_STROKE = '#475569';
 
 /**
+ * Tipografia interna das pranchas de elevação (cotas, rótulos técnicos, capacidades).
+ * Faixa pedida 12–18%; ~16% num único fator mantém proporções relativas (via `ls` nos desenhos).
+ */
+const ELEV_INTERIOR_TYPE_SCALE = 1.16;
+
+/**
  * Cotas verticais à direita (frontal e lateral): colunas mais afastadas e calha larga para
  * rótulos em duas linhas (pt-BR) sem sobreposição nem truncagem no encaixe da folha.
  */
 const ELEV_VERTICAL_DIM_STEP_LS = 14;
-/** Calha à direita da última coluna de cota (rótulos auxiliares + encaixe no painel). */
-const ELEV_VERTICAL_DIM_RIGHT_GUTTER_PX = 172;
+/** Calha à direita da última coluna de cota — cresce com o fator de tipografia. */
+const ELEV_VERTICAL_DIM_RIGHT_GUTTER_PX = Math.round(
+  172 * ELEV_INTERIOR_TYPE_SCALE
+);
 /** Reserva horizontal antes de calcular `rackMaxW` na vista frontal (depende do n.º de troços). */
-const ELEV_FRONT_DIM_CHAIN_CAP_PX = 392;
-const ELEV_FRONT_DIM_CHAIN_BASE_PX = 162;
+const ELEV_FRONT_DIM_CHAIN_CAP_PX = Math.round(
+  392 * ELEV_INTERIOR_TYPE_SCALE
+);
+const ELEV_FRONT_DIM_CHAIN_BASE_PX = Math.round(
+  162 * ELEV_INTERIOR_TYPE_SCALE
+);
 const ELEV_FRONT_DIM_CHAIN_PER_SEG_LS = 14.5;
 
 function escapeXml(text: string): string {
@@ -1615,9 +1627,9 @@ function drawLateral(
   );
 }
 
-/** Escala de cotas / legendas em páginas PDF dedicadas (uma elevação por folha). */
-const ELEV_PAGE_LABEL_SCALE = 1.9;
-/** Vista lateral: texto e cotas mais discretos que a frontal (hierarquia visual). */
+/** Escala frontal nas páginas PDF de elevação (`1.9` histórico × fator de tipografia). */
+const ELEV_PAGE_LABEL_SCALE = 1.9 * ELEV_INTERIOR_TYPE_SCALE;
+/** Vista lateral: mais discreta que a frontal (mesma hierarquia relativa). */
 const ELEV_LATERAL_LABEL_SCALE = ELEV_PAGE_LABEL_SCALE * 0.82;
 /**
  * Folha paisagem (~A4 landscape): duas colunas com área útil elevada.
