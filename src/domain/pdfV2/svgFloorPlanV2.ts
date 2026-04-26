@@ -64,7 +64,7 @@ const COL_RESIDUAL_FILL = '#f4f4f5';
 const COL_RESIDUAL_STROKE = '#a1a1aa';
 const COL_DIM = '#111827';
 /** Reserva inferior do viewBox para legenda + cotas (encaixe global do desenho). */
-const FLOOR_PLAN_LEGEND_RESERVE_PX = 518;
+const FLOOR_PLAN_LEGEND_RESERVE_PX = 536;
 /** Contorno da **faixa da linha** (unidade contínua), desenhado por cima dos módulos. */
 const COL_ROW_ENVELOPE_STROKE = '#334155';
 const ROW_ENVELOPE_SW = 2.92;
@@ -311,6 +311,14 @@ function appendFloorPlanConfigurationLegend(
   model: FloorPlanModelV2,
   parts: string[]
 ): void {
+  /** ~15% maior que o bloco «SÍMBOLOS» — só a zona NOTAS DO DESENHO. */
+  const NOTES_DRAWING_FONT_SCALE = 1.15;
+  const noteTitleFs = 11.25 * NOTES_DRAWING_FONT_SCALE;
+  const noteBodyFs = 9.25 * NOTES_DRAWING_FONT_SCALE;
+  const noteAfterTitleDy = 15 * NOTES_DRAWING_FONT_SCALE;
+  const noteLineDy = 11.25 * NOTES_DRAWING_FONT_SCALE;
+  const noteBeforeSymbolsGap = 7 * NOTES_DRAWING_FONT_SCALE;
+
   const { w, h } = model.viewBox;
   const a = model.planAccessories;
   const notes = model.planLegendNotes;
@@ -326,10 +334,13 @@ function appendFloorPlanConfigurationLegend(
     if (notes.bayClearSpanNote) noteLines.push(notes.bayClearSpanNote);
     if (notes.tunnelNote) noteLines.push(notes.tunnelNote);
   }
-  const notesBlockH = noteLines.length > 0 ? 22 + noteLines.length * 11.25 : 0;
+  const notesBlockH =
+    noteLines.length > 0
+      ? (22 + noteLines.length * 11.25) * NOTES_DRAWING_FONT_SCALE
+      : 0;
   /** Bloco de símbolos (mini esquemas + guardas + protetor de coluna) + rodapé. */
   const symbolBlockH = 180;
-  const boxH = Math.min(448, 26 + notesBlockH + symbolBlockH);
+  const boxH = Math.min(468, 26 + notesBlockH + symbolBlockH);
   const x0 = pad;
   const y0 = h - pad - boxH;
   parts.push(
@@ -339,16 +350,16 @@ function appendFloorPlanConfigurationLegend(
   const lx = x0 + 12;
   if (noteLines.length > 0) {
     parts.push(
-      `<text x="${lx}" y="${ly}" font-size="11.25px" fill="#334155" font-family="${SVG_FONT_FAMILY}" font-weight="700" letter-spacing="0.05em">NOTAS DO DESENHO</text>`
+      `<text x="${lx}" y="${ly}" font-size="${noteTitleFs}px" fill="#334155" font-family="${SVG_FONT_FAMILY}" font-weight="700" letter-spacing="0.05em">NOTAS DO DESENHO</text>`
     );
-    ly += 15;
+    ly += noteAfterTitleDy;
     for (const line of noteLines) {
       parts.push(
-        `<text x="${lx}" y="${ly}" font-size="9.25px" fill="#475569" font-family="${SVG_FONT_FAMILY}">${escapeXml(line)}</text>`
+        `<text x="${lx}" y="${ly}" font-size="${noteBodyFs}px" fill="#475569" font-family="${SVG_FONT_FAMILY}">${escapeXml(line)}</text>`
       );
-      ly += 11.25;
+      ly += noteLineDy;
     }
-    ly += 7;
+    ly += noteBeforeSymbolsGap;
   }
   parts.push(
     `<text x="${lx}" y="${ly}" font-size="11.25px" fill="#475569" font-family="${SVG_FONT_FAMILY}" font-weight="700" letter-spacing="0.05em">SÍMBOLOS (1.º nível · guardas · protetor de coluna)</text>`
