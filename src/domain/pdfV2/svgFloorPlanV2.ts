@@ -64,7 +64,7 @@ const COL_RESIDUAL_FILL = '#f4f4f5';
 const COL_RESIDUAL_STROKE = '#a1a1aa';
 const COL_DIM = '#111827';
 /** Reserva inferior do viewBox para legenda + cotas (encaixe global do desenho). */
-const FLOOR_PLAN_LEGEND_RESERVE_PX = 498;
+const FLOOR_PLAN_LEGEND_RESERVE_PX = 518;
 /** Contorno da **faixa da linha** (unidade contínua), desenhado por cima dos módulos. */
 const COL_ROW_ENVELOPE_STROKE = '#334155';
 const ROW_ENVELOPE_SW = 2.92;
@@ -315,34 +315,34 @@ function appendFloorPlanConfigurationLegend(
     if (notes.bayClearSpanNote) noteLines.push(notes.bayClearSpanNote);
     if (notes.tunnelNote) noteLines.push(notes.tunnelNote);
   }
-  const notesBlockH = noteLines.length > 0 ? 20 + noteLines.length * 10.5 : 0;
+  const notesBlockH = noteLines.length > 0 ? 22 + noteLines.length * 11.25 : 0;
   /** Bloco de símbolos (mini esquemas + guardas + protetor de coluna) + rodapé. */
-  const symbolBlockH = 168;
-  const boxH = Math.min(430, 24 + notesBlockH + symbolBlockH);
+  const symbolBlockH = 180;
+  const boxH = Math.min(448, 26 + notesBlockH + symbolBlockH);
   const x0 = pad;
   const y0 = h - pad - boxH;
   parts.push(
     `<rect x="${x0}" y="${y0}" width="${boxW}" height="${boxH}" rx="7" fill="#f8fafc" fill-opacity="0.97" stroke="#cbd5e1" stroke-width="0.95"/>`
   );
-  let ly = y0 + 16;
+  let ly = y0 + 17;
   const lx = x0 + 12;
   if (noteLines.length > 0) {
     parts.push(
-      `<text x="${lx}" y="${ly}" font-size="10.5px" fill="#334155" font-family="${SVG_FONT_FAMILY}" font-weight="700" letter-spacing="0.05em">NOTAS DO DESENHO</text>`
+      `<text x="${lx}" y="${ly}" font-size="11.25px" fill="#334155" font-family="${SVG_FONT_FAMILY}" font-weight="700" letter-spacing="0.05em">NOTAS DO DESENHO</text>`
     );
-    ly += 14;
+    ly += 15;
     for (const line of noteLines) {
       parts.push(
-        `<text x="${lx}" y="${ly}" font-size="8.75px" fill="#475569" font-family="${SVG_FONT_FAMILY}">${escapeXml(line)}</text>`
+        `<text x="${lx}" y="${ly}" font-size="9.25px" fill="#475569" font-family="${SVG_FONT_FAMILY}">${escapeXml(line)}</text>`
       );
-      ly += 10.5;
+      ly += 11.25;
     }
-    ly += 6;
+    ly += 7;
   }
   parts.push(
-    `<text x="${lx}" y="${ly}" font-size="10.5px" fill="#475569" font-family="${SVG_FONT_FAMILY}" font-weight="700" letter-spacing="0.05em">SÍMBOLOS (1.º nível · guardas · protetor de coluna)</text>`
+    `<text x="${lx}" y="${ly}" font-size="11.25px" fill="#475569" font-family="${SVG_FONT_FAMILY}" font-weight="700" letter-spacing="0.05em">SÍMBOLOS (1.º nível · guardas · protetor de coluna)</text>`
   );
-  ly += 18;
+  ly += 19;
   const onGround = a.firstLevelOnGround !== false;
   /** Mini esquema: linha do piso + 1.º feixe. */
   const miniGround = (
@@ -351,72 +351,72 @@ function appendFloorPlanConfigurationLegend(
     elevated: boolean,
     highlight: boolean
   ): string => {
-    const floorY = gy + 22;
-    const beamY = elevated ? gy + 8 : floorY;
+    const floorY = gy + 24;
+    const beamY = elevated ? gy + 9 : floorY;
     const bits: string[] = [];
     if (highlight) {
       bits.push(
-        `<rect x="${gx - 3}" y="${gy - 2}" width="58" height="30" rx="5" fill="none" stroke="${
+        `<rect x="${gx - 3}" y="${gy - 2}" width="60" height="31" rx="5" fill="none" stroke="${
           elevated ? '#ca8a04' : '#0d9488'
         }" stroke-width="1.65" opacity="0.95"/>`
       );
     }
     bits.push(
-      `<line x1="${gx}" y1="${floorY}" x2="${gx + 52}" y2="${floorY}" stroke="#334155" stroke-width="1.6" stroke-linecap="square"/>`
+      `<line x1="${gx}" y1="${floorY}" x2="${gx + 54}" y2="${floorY}" stroke="#334155" stroke-width="1.6" stroke-linecap="square"/>`
     );
     if (elevated) {
       bits.push(
-        `<rect x="${gx + 2}" y="${beamY}" width="48" height="${floorY - beamY}" fill="#fef9c3" fill-opacity="0.55" stroke="none"/>`,
-        `<line x1="${gx}" y1="${beamY}" x2="${gx + 52}" y2="${beamY}" stroke="#ca8a04" stroke-width="1.35" stroke-dasharray="4 3" opacity="0.9"/>`
+        `<rect x="${gx + 2}" y="${beamY}" width="50" height="${floorY - beamY}" fill="#fef9c3" fill-opacity="0.55" stroke="none"/>`,
+        `<line x1="${gx}" y1="${beamY}" x2="${gx + 54}" y2="${beamY}" stroke="#ca8a04" stroke-width="1.35" stroke-dasharray="4 3" opacity="0.9"/>`
       );
     } else {
       bits.push(
-        `<line x1="${gx}" y1="${beamY}" x2="${gx + 52}" y2="${beamY}" stroke="#0d9488" stroke-width="2.1" stroke-linecap="square" opacity="0.88"/>`
+        `<line x1="${gx}" y1="${beamY}" x2="${gx + 54}" y2="${beamY}" stroke="#0d9488" stroke-width="2.1" stroke-linecap="square" opacity="0.88"/>`
       );
     }
     return bits.join('');
   };
 
   parts.push(
-    `<text x="${lx}" y="${ly}" font-size="10px" fill="#64748b" font-family="${SVG_FONT_FAMILY}" font-weight="700">1.º eixo de feixe (destaque = opção do projeto)</text>`
+    `<text x="${lx}" y="${ly}" font-size="10.75px" fill="#64748b" font-family="${SVG_FONT_FAMILY}" font-weight="700">1.º eixo de feixe (destaque = opção do projeto)</text>`
   );
-  ly += 4;
+  ly += 5;
   parts.push(miniGround(lx, ly - 4, false, onGround));
   parts.push(
-    `<text x="${lx + 60}" y="${ly + 14}" font-size="9.5px" fill="#0f766e" font-family="${SVG_FONT_FAMILY}">Ao piso · sem vão útil inferior</text>`
+    `<text x="${lx + 62}" y="${ly + 15}" font-size="10.25px" fill="#0f766e" font-family="${SVG_FONT_FAMILY}">Ao piso · sem vão útil inferior</text>`
   );
-  parts.push(miniGround(lx + 228, ly - 4, true, !onGround));
+  parts.push(miniGround(lx + 234, ly - 4, true, !onGround));
   parts.push(
-    `<text x="${lx + 288}" y="${ly + 14}" font-size="9.5px" fill="#a16207" font-family="${SVG_FONT_FAMILY}">Elevado · folga sob o 1.º patamar</text>`
+    `<text x="${lx + 296}" y="${ly + 15}" font-size="10.25px" fill="#a16207" font-family="${SVG_FONT_FAMILY}">Elevado · folga sob o 1.º patamar</text>`
   );
-  ly += 34;
+  ly += 36;
 
   const hasGuard = a.guardRailSimple || a.guardRailDouble;
   if (hasGuard) {
     parts.push(
-      `<text x="${lx}" y="${ly}" font-size="10px" fill="#64748b" font-family="${SVG_FONT_FAMILY}" font-weight="700">Guardas ao longo do vão (extremidades do desenho)</text>`
+      `<text x="${lx}" y="${ly}" font-size="10.75px" fill="#64748b" font-family="${SVG_FONT_FAMILY}" font-weight="700">Guardas ao longo do vão (extremidades do desenho)</text>`
     );
-    ly += 14;
+    ly += 15;
     parts.push(
       `<line x1="${lx}" y1="${ly}" x2="${lx + 28}" y2="${ly}" stroke="#ca8a04" stroke-width="3.8" stroke-linecap="square"/>`,
-      `<text x="${lx + 36}" y="${ly + 4}" font-size="9.5px" fill="#713f12" font-family="${SVG_FONT_FAMILY}">Simples (1 rail)</text>`,
-      `<line x1="${lx + 148}" y1="${ly - 3}" x2="${lx + 176}" y2="${ly - 3}" stroke="#b91c1c" stroke-width="2.4" stroke-linecap="square"/>`,
-      `<line x1="${lx + 148}" y1="${ly + 3}" x2="${lx + 176}" y2="${ly + 3}" stroke="#b91c1c" stroke-width="2.4" stroke-linecap="square"/>`,
-      `<text x="${lx + 184}" y="${ly + 4}" font-size="9.5px" fill="#7f1d1d" font-family="${SVG_FONT_FAMILY}">Dupla (2 rails)</text>`
+      `<text x="${lx + 36}" y="${ly + 4}" font-size="10.25px" fill="#713f12" font-family="${SVG_FONT_FAMILY}">Simples (1 rail)</text>`,
+      `<line x1="${lx + 152}" y1="${ly - 3}" x2="${lx + 180}" y2="${ly - 3}" stroke="#b91c1c" stroke-width="2.4" stroke-linecap="square"/>`,
+      `<line x1="${lx + 152}" y1="${ly + 3}" x2="${lx + 180}" y2="${ly + 3}" stroke="#b91c1c" stroke-width="2.4" stroke-linecap="square"/>`,
+      `<text x="${lx + 188}" y="${ly + 4}" font-size="10.25px" fill="#7f1d1d" font-family="${SVG_FONT_FAMILY}">Dupla (2 rails)</text>`
     );
-    ly += 22;
+    ly += 24;
   }
 
   if (a.columnProtector) {
     parts.push(
-      `<rect x="${lx}" y="${ly - 8}" width="22" height="9" rx="1.5" fill="#ea580c" stroke="#9a3412" stroke-width="0.8"/>`,
-      `<text x="${lx + 30}" y="${ly}" font-size="9.5px" fill="#431407" font-family="${SVG_FONT_FAMILY}">Protetor de coluna (base dos montantes — cantos + faixas nas pegadas)</text>`
+      `<rect x="${lx}" y="${ly - 8}" width="23" height="9.5" rx="1.5" fill="#ea580c" stroke="#9a3412" stroke-width="0.8"/>`,
+      `<text x="${lx + 31}" y="${ly}" font-size="10.25px" fill="#431407" font-family="${SVG_FONT_FAMILY}">Protetor de coluna (base dos montantes — cantos + faixas nas pegadas)</text>`
     );
-    ly += 18;
+    ly += 19;
   }
 
   parts.push(
-    `<text x="${lx}" y="${y0 + boxH - 12}" font-size="8.5px" fill="#94a3b8" font-family="${SVG_FONT_FAMILY}">Convênio alinhado à vista frontal e ao resumo técnico.</text>`
+    `<text x="${lx}" y="${y0 + boxH - 11}" font-size="9.25px" fill="#94a3b8" font-family="${SVG_FONT_FAMILY}">Convênio alinhado à vista frontal e ao resumo técnico.</text>`
   );
 }
 
