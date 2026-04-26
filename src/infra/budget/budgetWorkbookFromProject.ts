@@ -68,7 +68,9 @@ export async function buildBudgetWorkbookFromProjectAnswers(
     hasGroundLevel: sol.metadata.hasGroundLevel,
   });
   const uprightH = resolveUprightHeightMmForProject(ans);
-  const bom = buildBillOfMaterials(sol, geo, accessories, structure, uprightH);
+  const bom = buildBillOfMaterials(sol, geo, accessories, structure, uprightH, {
+    longarinaTravaEnabled: ans['longarinaTrava'] === true,
+  });
 
   const clientName =
     typeof ans.clientName === 'string'

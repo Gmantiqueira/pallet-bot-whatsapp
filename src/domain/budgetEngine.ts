@@ -40,7 +40,8 @@ const BUDGET_ASSUMPTIONS_V1: string[] = [
 
 const BUDGET_ASSUMPTIONS_V2: string[] = [
   'Quantidades iguais à lista de materiais (geometria V2): montantes por prisma e vão; longarinas por segmento, baias e níveis com feixe;',
-  'Túnel: níveis ativos de armazenagem reduzem pares de longarinas;',
+  'Túnel: pares de longarinas = (N−T)×2 baias/orçamento, T = níveis ocupados pelo vão (1 por omissão);',
+  'Túnel: 1 unidade de guarda-corpo simples por módulo túnel, além do pedido de guardas do projeto.',
   'Meio módulo: factor 0,5 no comprimento ao longo do vão;',
   'Protetor de coluna (por montante); guardas por extremidade de fileira (conforme opções).',
   'Travamento superior automático entre fileiras (corredor) quando montantes &gt; 8 m — alinhado ao BOM.',
@@ -145,6 +146,11 @@ export function budgetResultFromBillOfMaterials(
       name: 'Travamento de fundo (costa)',
       quantity: travFundo,
     });
+  }
+
+  const trava = lineQty(bom, 'longarinaTrava');
+  if (trava > 0) {
+    items.push({ name: 'Trava de longarina', quantity: trava });
   }
 
   return {

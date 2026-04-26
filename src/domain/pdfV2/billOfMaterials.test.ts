@@ -12,7 +12,6 @@ import {
 } from './billOfMaterials';
 import type { ProjectAnswersV2 } from './answerMapping';
 import type { LayoutSolutionV2 } from './types';
-import { tunnelActiveStorageLevelsFromGlobal } from './elevationLevelGeometryV2';
 
 const base = (): ProjectAnswersV2 => ({
   lengthMm: 40_000,
@@ -76,9 +75,8 @@ describe('buildBillOfMaterials', () => {
     expect(bom.meta.beamBaySpanMm).toBe(sol.beamAlongModuleMm);
   });
 
-  it('countBeamPairsForLayoutSolution: túnel usa níveis ativos (menos pares que níveis globais)', () => {
+  it('countBeamPairsForLayoutSolution: túnel (N−T)×2 baias; T=1 por omissão (orçamento)', () => {
     const structuralLevels = 5;
-    const active = tunnelActiveStorageLevelsFromGlobal(structuralLevels);
     const rowShell = {
       id: 'r1',
       kind: 'single' as const,
@@ -128,7 +126,6 @@ describe('buildBillOfMaterials', () => {
     const modTunnel = {
       ...modNormal,
       variant: 'tunnel' as const,
-      activeStorageLevels: active,
     };
     const beamsNormal = countBeamPairsForLayoutSolution({
       ...shell,
@@ -139,7 +136,58 @@ describe('buildBillOfMaterials', () => {
       rows: [{ ...rowShell, modules: [modTunnel] }],
     });
     expect(beamsTunnel).toBeLessThan(beamsNormal);
-    expect(beamsTunnel).toBe(2 * active);
+    const T = 1;
+    expect(beamsTunnel).toBe(2 * (structuralLevels - T));
     expect(beamsNormal).toBe(2 * structuralLevels);
+  });
+
+  it('túnel com 3 níveis e T=1: 4 pares de longarinas (regra comercial de orçamento)', () => {
+    const N = 3;
+    const rowShell = {
+      id: 'r1',
+      kind: 'single' as const,
+      x0: 0,
+      x1: 1000,
+      y0: 0,
+      y1: 2700,
+    };
+    const shell: Omit<LayoutSolutionV2, 'rows'> = {
+      warehouse: { lengthMm: 1000, widthMm: 2700 },
+      orientation: 'along_length',
+      rackDepthMode: 'single',
+      beamSpanMm: 1000,
+      crossSpanMm: 2700,
+      moduleWidthMm: 1100,
+      moduleDepthMm: 2700,
+      beamAlongModuleMm: 1100,
+      moduleLengthAlongBeamMm: 2500,
+      rackDepthMm: 2700,
+      corridorMm: 3000,
+      corridors: [],
+      tunnels: [],
+      totals: { modules: 1, physicalPickingModules: 1, positions: 1, levels: N + 1 },
+      metadata: {
+        lineStrategy: 'APENAS_SIMPLES' as const,
+        optimizeWithHalfModule: false,
+        firstLevelOnGround: true,
+        structuralLevels: N,
+        hasGroundLevel: true,
+        hasTunnel: true,
+      },
+    };
+    const modTunnel = {
+      id: 'm1',
+      type: 'full' as const,
+      variant: 'tunnel' as const,
+      x0: 0,
+      x1: 500,
+      y0: 0,
+      y1: 2700,
+    };
+    const beams = countBeamPairsForLayoutSolution({
+      ...shell,
+      rows: [{ ...rowShell, modules: [modTunnel] }],
+    });
+    expect(beams).toBe((3 - 1) * 2);
   });
 });

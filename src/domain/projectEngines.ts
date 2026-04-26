@@ -70,7 +70,9 @@ function tryEnginesFromLayoutV2(
       hasGroundLevel: sol.metadata.hasGroundLevel,
     });
     const uprightH = resolveUprightHeightMmForProject(answers);
-    const bom = buildBillOfMaterials(sol, geo, accessories, structure, uprightH);
+    const bom = buildBillOfMaterials(sol, geo, accessories, structure, uprightH, {
+      longarinaTravaEnabled: answers['longarinaTrava'] === true,
+    });
     return {
       structure,
       budget: budgetResultFromBillOfMaterials(bom, sol, structure),

@@ -8,7 +8,11 @@ import {
   MODULE_PALLET_BAYS_PER_LEVEL,
   uprightWidthsMmForFrontBayCount,
 } from './rackModuleSpec';
-import { tunnelActiveStorageLevelsFromGlobal } from './elevationLevelGeometryV2';
+import {
+  buildBudgetModuleQuantityRows,
+  countBeamPairsForLayoutSolution,
+  countTunnelModuleSegments,
+} from './budgetQuantificationV2';
 import { splitModuleFootprintsFor3d } from './model3dV2';
 import { totalDistanciadorCountForDoubleRows } from './spineAndDistanciador';
 import {
@@ -36,7 +40,8 @@ export type BillOfMaterialsLineId =
   | 'guardRailDouble'
   | 'travamentoFundo'
   | 'travamentoSuperior'
-  | 'calco';
+  | 'calco'
+  | 'longarinaTrava';
 
 export type BillOfMaterialsLine = {
   id: BillOfMaterialsLineId;
@@ -64,7 +69,29 @@ export type BillOfMaterials = {
     uprightHeightMm: number;
     uprightType: StructureResult['uprightType'];
     loadTonPerModule: number;
+    /**
+     * Itens lógicos (quadro, base, trava, …) para orçamento; independente do PDF.
+     */
+    budgetModuleRows?: import('./budgetQuantificationV2').BudgetModuleQuantityRow[];
   };
+};
+
+export type { BudgetModuleQuantityRow } from './budgetQuantificationV2';
+
+export {
+  buildBudgetModuleQuantityRows,
+  countBeamPairsForLayoutSolution,
+  countTunnelModuleSegments,
+  storageLevelsWithBeamsForBudget,
+  TUNNEL_BUDGET_OCCUPIED_STORAGE_LEVELS,
+} from './budgetQuantificationV2';
+
+export type BuildBillOfMaterialsOptions = {
+  /**
+   * Quando as regras comerciais incluem trava em cada par de longarinas contado,
+   * a quantidade = pares de longarinas (orçamento).
+   */
+  longarinaTravaEnabled?: boolean;
 };
 
 function bayCountForModule(mod: RackModule): number {
@@ -157,30 +184,6 @@ export function countUprightsByThicknessFromGeometry(
   return { upright75, upright100 };
 }
 
-/**
- * Pares de longarinas: por segmento, (equiv. ao longo do vão) × baias na face × níveis com feixe.
- * Túnel: só {@link ModuleSegment.activeStorageLevels} patamares de armazenagem (menos longarinas ao nível do vão).
- * Meio módulo: equiv. 0,5 — meia “faixa” de longarinas em relação ao módulo completo.
- */
-export function countBeamPairsForLayoutSolution(
-  layoutSolution: LayoutSolutionV2
-): number {
-  const structuralLevels = Math.max(0, layoutSolution.metadata.structuralLevels);
-  let sum = 0;
-  for (const row of layoutSolution.rows) {
-    for (const seg of row.modules) {
-      const along = seg.type === 'half' ? 0.5 : 1;
-      const beamLevels =
-        seg.variant === 'tunnel'
-          ? seg.activeStorageLevels ??
-            tunnelActiveStorageLevelsFromGlobal(structuralLevels)
-          : structuralLevels;
-      sum += along * MODULE_PALLET_BAYS_PER_LEVEL * beamLevels;
-    }
-  }
-  return Math.round(sum);
-}
-
 function guardRailUnitCount(
   rowCount: number,
   enabled: boolean,
@@ -260,26 +263,32 @@ function tonLabel(t: StructureResult['uprightType']): string {
 
 /**
  * Lista de materiais para a planilha comercial, alinhada ao `layoutSolution` e à geometria PDF.
+ * Opções: travas de longarina (uma por par contado) quando a regra comercial estiver ativa.
  */
 export function buildBillOfMaterials(
   layoutSolution: LayoutSolutionV2,
   geometry: LayoutGeometry,
   accessories: FloorPlanAccessoriesV2,
   structure: StructureResult,
-  uprightHeightMm: number
+  uprightHeightMm: number,
+  options?: BuildBillOfMaterialsOptions
 ): BillOfMaterials {
   const { upright75, upright100 } = countUprightsByThicknessFromGeometry(geometry);
   const structuralLevels = Math.max(0, layoutSolution.metadata.structuralLevels);
   const modulesAlong = Math.max(0, layoutSolution.totals.modules);
+  const travaEnabled = options?.longarinaTravaEnabled === true;
 
   const beamPairs = countBeamPairsForLayoutSolution(layoutSolution);
+  const longarinaTravaQty = travaEnabled ? beamPairs : 0;
 
   const rowCount = geometry.rows.length;
-  const grSimple = guardRailUnitCount(
+  const grSimpleUser = guardRailUnitCount(
     rowCount,
     accessories.guardRailSimple,
     accessories.guardRailSimplePosition
   );
+  const grSimpleFromTunnel = countTunnelModuleSegments(layoutSolution);
+  const grSimple = grSimpleUser + grSimpleFromTunnel;
   const grDouble = guardRailUnitCount(
     rowCount,
     accessories.guardRailDouble,
@@ -342,7 +351,21 @@ export function buildBillOfMaterials(
       description: descTravSup,
     },
     { id: 'calco', quantity: 0 },
+    {
+      id: 'longarinaTrava',
+      quantity: longarinaTravaQty,
+      description:
+        longarinaTravaQty > 0
+          ? 'Trava de longarina (1 unidade por par de longarinas contado no orçamento).'
+          : undefined,
+    },
   ];
+
+  const budgetModuleRows = buildBudgetModuleQuantityRows(
+    layoutSolution,
+    lines,
+    { longarinaTravaEnabled: travaEnabled }
+  );
 
   const bom: BillOfMaterials = {
     lines,
@@ -358,6 +381,7 @@ export function buildBillOfMaterials(
       uprightHeightMm,
       uprightType: structure.uprightType,
       loadTonPerModule: structure.loadTonPerModule,
+      budgetModuleRows,
     },
   };
 
