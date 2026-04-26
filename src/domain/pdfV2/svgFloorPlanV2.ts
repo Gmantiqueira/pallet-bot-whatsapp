@@ -88,6 +88,39 @@ const ROW_ENVELOPE_SW = 2.92;
 const COL_ROW_ENVELOPE_SPINE_EDGE = '#94a3b8';
 const ROW_ENVELOPE_SPINE_EDGE_SW = 1.05;
 
+/** ~+12,5% face ao bloco base 228×58 (faixa pedida 10–15%). */
+const OPERATION_DIRECTION_INDICATOR_SCALE = 1.125;
+const COL_OP_DIRECTION_LABEL = '#0f172a';
+const COL_OP_DIRECTION_BOX_STROKE = '#64748b';
+const COL_OP_DIRECTION_SHAFT = '#0f172a';
+
+function operationDirectionIndicatorMetrics() {
+  const k = OPERATION_DIRECTION_INDICATOR_SCALE;
+  const r = (n: number) => Math.round(n * k);
+  return {
+    gw: r(228),
+    gh: r(58),
+    pad: r(12),
+    rx: Math.max(4, r(5)),
+    textInset: r(10),
+    textY: r(22),
+    arrowRowY: r(38),
+    shaftStartInset: r(8),
+    shaftEndInset: r(22),
+    headTipInset: r(14),
+    headBackInset: r(28),
+    headHalfSpan: r(10),
+    fontSize: Math.round(11.5 * k * 10) / 10,
+    boxStrokeW: Math.round(0.9 * k * 100) / 100,
+    shaftW: Math.round(2.6 * k * 100) / 100,
+    vertBottomInset: r(10),
+    vertTopInset: r(14),
+    vertTipY: r(6),
+    vertBaseY: r(18),
+    vertHalfW: r(8),
+  } as const;
+}
+
 const SEM_ORDER: Record<FloorPlanCirculationSemantic, number> = {
   residual: 0,
   cross_passage: 1,
@@ -181,9 +214,7 @@ function orientationArrowBounds(
   o: FloorPlanModelV2['warehouseOutline'],
   _beamAlong: 'x' | 'y'
 ): { minX: number; minY: number; maxX: number; maxY: number } {
-  const pad = 12;
-  const gw = 228;
-  const gh = 58;
+  const { gw, gh, pad } = operationDirectionIndicatorMetrics();
   const gx = o.x + o.w - gw - pad;
   const gy = o.y + o.h - gh - pad;
   return { minX: gx, minY: gy, maxX: gx + gw, maxY: gy + gh };
@@ -678,19 +709,19 @@ function orientationArrowSvg(
   o: FloorPlanModelV2['warehouseOutline'],
   beamAlong: 'x' | 'y'
 ): string {
-  const pad = 12;
-  const gw = 228;
-  const gh = 58;
+  const m = operationDirectionIndicatorMetrics();
+  const { gw, gh, pad } = m;
   const gx = o.x + o.w - gw - pad;
   const gy = o.y + o.h - gh - pad;
   const ax = gx + gw / 2;
+  const yArr = gy + m.arrowRowY;
   const shaft =
     beamAlong === 'x'
-      ? `<line x1="${gx + 8}" y1="${gy + 38}" x2="${gx + gw - 22}" y2="${gy + 38}" stroke="#0f172a" stroke-width="2.6"/><polygon points="${gx + gw - 14},${gy + 38} ${gx + gw - 28},${gy + 28} ${gx + gw - 28},${gy + 48}" fill="#0f172a"/>`
-      : `<line x1="${ax}" y1="${gy + gh - 10}" x2="${ax}" y2="${gy + 14}" stroke="#0f172a" stroke-width="2.6"/><polygon points="${ax},${gy + 6} ${ax - 8},${gy + 18} ${ax + 8},${gy + 18}" fill="#0f172a"/>`;
+      ? `<line x1="${gx + m.shaftStartInset}" y1="${yArr}" x2="${gx + gw - m.shaftEndInset}" y2="${yArr}" stroke="${COL_OP_DIRECTION_SHAFT}" stroke-width="${m.shaftW}"/><polygon points="${gx + gw - m.headTipInset},${yArr} ${gx + gw - m.headBackInset},${yArr - m.headHalfSpan} ${gx + gw - m.headBackInset},${yArr + m.headHalfSpan}" fill="${COL_OP_DIRECTION_SHAFT}"/>`
+      : `<line x1="${ax}" y1="${gy + gh - m.vertBottomInset}" x2="${ax}" y2="${gy + m.vertTopInset}" stroke="${COL_OP_DIRECTION_SHAFT}" stroke-width="${m.shaftW}"/><polygon points="${ax},${gy + m.vertTipY} ${ax - m.vertHalfW},${gy + m.vertBaseY} ${ax + m.vertHalfW},${gy + m.vertBaseY}" fill="${COL_OP_DIRECTION_SHAFT}"/>`;
   return `<g>
-    <rect x="${gx}" y="${gy}" width="${gw}" height="${gh}" rx="5" fill="#f8fafc" fill-opacity="0.96" stroke="#cbd5e1" stroke-width="0.9"/>
-    <text x="${gx + 10}" y="${gy + 22}" font-size="11.5px" fill="#334155" font-family="${SVG_FONT_FAMILY}" font-weight="700">Sentido de operação (empilhadeira)</text>
+    <rect x="${gx}" y="${gy}" width="${gw}" height="${gh}" rx="${m.rx}" fill="#f8fafc" fill-opacity="0.98" stroke="${COL_OP_DIRECTION_BOX_STROKE}" stroke-width="${m.boxStrokeW}"/>
+    <text x="${gx + m.textInset}" y="${gy + m.textY}" font-size="${m.fontSize}px" fill="${COL_OP_DIRECTION_LABEL}" font-family="${SVG_FONT_FAMILY}" font-weight="700">Sentido de operação (empilhadeira)</text>
     ${shaft}
   </g>`;
 }
