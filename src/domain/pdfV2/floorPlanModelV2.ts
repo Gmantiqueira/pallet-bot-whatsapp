@@ -35,7 +35,7 @@ const DIM_OUT = 16;
 /** Reserva à esquerda para cota de largura sem clip. */
 const PLAN_LEFT_DIM_MARGIN_PX = 54;
 /** Reserva inferior para cotas + legenda sem sobreposição ao desenho. */
-const PLAN_BOTTOM_STACK_RESERVE_PX = 236;
+const PLAN_BOTTOM_STACK_RESERVE_PX = 278;
 /** Espinha entre costas (mm) — igual a layoutGeometryV2 / model3dV2.splitModuleFootprintsFor3d. */
 
 function escapeXml(text: string): string {
@@ -445,7 +445,8 @@ export function buildFloorPlanModelV2(
   }
 
   const dimensionLines: FloorPlanDimension[] = [];
-  const dimY = by + boxH + 22;
+  /** Folga explícita abaixo do perímetro tracejado antes da cota horizontal (evita leitura colada ao limite). */
+  const dimY = by + boxH + 34;
   dimensionLines.push({
     id: 'dim-length',
     x1: bx,

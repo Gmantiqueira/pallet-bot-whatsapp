@@ -64,7 +64,7 @@ const COL_RESIDUAL_FILL = '#f4f4f5';
 const COL_RESIDUAL_STROKE = '#a1a1aa';
 const COL_DIM = '#111827';
 /** Reserva inferior do viewBox para legenda + cotas (encaixe global do desenho). */
-const FLOOR_PLAN_LEGEND_RESERVE_PX = 458;
+const FLOOR_PLAN_LEGEND_RESERVE_PX = 498;
 /** Contorno da **faixa da linha** (unidade contínua), desenhado por cima dos módulos. */
 const COL_ROW_ENVELOPE_STROKE = '#334155';
 const ROW_ENVELOPE_SW = 2.92;
@@ -129,7 +129,7 @@ function orientationArrowBounds(
   o: FloorPlanModelV2['warehouseOutline'],
   _beamAlong: 'x' | 'y'
 ): { minX: number; minY: number; maxX: number; maxY: number } {
-  const pad = 8;
+  const pad = 12;
   const gw = 228;
   const gh = 58;
   const gx = o.x + o.w - gw - pad;
@@ -604,7 +604,7 @@ function orientationArrowSvg(
   o: FloorPlanModelV2['warehouseOutline'],
   beamAlong: 'x' | 'y'
 ): string {
-  const pad = 8;
+  const pad = 12;
   const gw = 228;
   const gh = 58;
   const gx = o.x + o.w - gw - pad;
