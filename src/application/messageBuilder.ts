@@ -13,6 +13,9 @@ import type { StructureResult } from '../domain/structureEngine';
 export const GENERATING_DOC_WAIT_TEXT =
   '⏳ A gerar o projeto (PDF e desenhos). Isto pode demorar um pouco — aguarde.';
 
+export const GENERATING_TUNNEL_PREVIEW_WAIT_TEXT =
+  '⏳ A preparar a prévia do layout com módulos numerados — aguarde um momento.';
+
 export interface MessageContext {
   lastError?: string;
   statusOnly?: boolean;
@@ -224,6 +227,19 @@ const buildStateMessage = (session: Session): OutgoingMessage | null => {
         buttons: [
           { id: 'TUNNEL_SIM', label: 'Sim' },
           { id: 'TUNNEL_NAO', label: 'Não' },
+        ],
+      };
+
+    case 'CHOOSE_TUNNEL_STRATEGY':
+      return {
+        to: session.phone,
+        text:
+          'Como deseja definir *onde* ficam os túneis?\n\n' +
+            '• *Assistente* — indica quantos túneis e as posições (início / meio / fim) ao longo do vão, como antes.\n' +
+            '• *Manual* — de seguida recebe um PDF de pré-visualização com *todos os módulos de frente numerados*; responde com os números onde quer túnel (p.ex. 2, 5, 8). O desenho final mantém o mesmo padrão visual; a numeração é só apoio à escolha.',
+        buttons: [
+          { id: 'TUNNEL_STR_ASSISTED', label: 'Assistente' },
+          { id: 'TUNNEL_STR_MANUAL', label: 'Manual' },
         ],
       };
 
@@ -544,6 +560,23 @@ const buildStateMessage = (session: Session): OutgoingMessage | null => {
         text: GENERATING_DOC_WAIT_TEXT,
       };
 
+    case 'GENERATING_TUNNEL_PREVIEW':
+      return {
+        to: session.phone,
+        text: GENERATING_TUNNEL_PREVIEW_WAIT_TEXT,
+      };
+
+    case 'WAIT_TUNNEL_MODULE_NUMBERS':
+      return {
+        to: session.phone,
+        text:
+          '📄 *Prévia com módulos numerados*\n\n' +
+            'O PDF de pré-visualização (mesmo padrão de desenho, sem túneis) foi enviado em anexo.\n\n' +
+            'Cada *número* na planta = *um módulo de frente* (2 baias), na mesma ordem usada no projeto final.\n\n' +
+            '*Responda com os números* dos módulos onde pretende túnel. Exemplos: *2, 5, 8* ou *Módulos 2 e 6*.\n\n' +
+            'Números inválidos serão sinalizados; repetições contam uma vez.',
+      };
+
     default:
       return null;
   }
@@ -597,6 +630,10 @@ const buildSummary = (session: Session): string => {
   const lines: string[] = [];
 
   lines.push('📋 RESUMO DO PROJETO\n');
+
+  if (typeof a.tunnelInfoNote === 'string' && a.tunnelInfoNote.trim().length > 0) {
+    lines.push(a.tunnelInfoNote.trim());
+  }
 
   if (a.projectType) {
     lines.push(`Tipo de projeto: ${projectTypeLabel(a.projectType)}`);
@@ -667,6 +704,13 @@ const buildSummary = (session: Session): string => {
   }
   if (tunnelForSummary === true) {
     lines.push('Túnel para empilhador: Sim');
+    if (
+      Array.isArray(a.tunnelManualModuleIndices) &&
+      a.tunnelManualModuleIndices.length > 0
+    ) {
+      const nums = (a.tunnelManualModuleIndices as number[]).join(', ');
+      lines.push(`  • Definição: *manual* (módulos de frente com túnel: ${nums})`);
+    }
     const effOff = layoutForTunnel?.metadata.tunnelOffsetEffectiveMm;
     const fromMeta = layoutForTunnel?.metadata.tunnelPlacements;
     const fromAns = Array.isArray(a.tunnelPlacements)

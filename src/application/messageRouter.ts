@@ -11,6 +11,7 @@ import { OutgoingMessage } from '../types/messages';
 import {
   buildMessages,
   GENERATING_DOC_WAIT_TEXT,
+  GENERATING_TUNNEL_PREVIEW_WAIT_TEXT,
   MessageContext,
 } from './messageBuilder';
 import { PdfService } from '../infra/pdf/pdfService';
@@ -21,7 +22,10 @@ import { buildBudgetWorkbookFromProjectAnswers } from '../infra/budget/budgetWor
 import { buildBudgetArtifactAfterWrite } from '../infra/budget/budgetArtifact';
 import { resolveStoragePath } from '../config/storagePath';
 import { buildProjectAnswersV2 } from '../domain/pdfV2/answerMapping';
-import { buildLayoutSolutionV2 } from '../domain/pdfV2/layoutSolutionV2';
+import {
+  buildLayoutSolutionV2,
+  tunnelPreviewMaxDisplayIndex,
+} from '../domain/pdfV2/layoutSolutionV2';
 import {
   buildLayoutGeometry,
   validateLayoutGeometry,
@@ -320,6 +324,74 @@ async function executeProjectPdfGeneration(
   return { updatedSession, generatedPdf, deliveryError };
 }
 
+async function executeTunnelPreviewGeneration(
+  genSession: Session
+): Promise<{
+  updatedSession: Session;
+  generatedPdf?: GeneratedPdfArtifact;
+  deliveryError?: string;
+}> {
+  const storageDir = resolveStoragePath();
+  if (!fs.existsSync(storageDir)) {
+    fs.mkdirSync(storageDir, { recursive: true });
+  }
+  const finalized = finalizeSummaryAnswers({ ...genSession.answers });
+  const previewAns: Record<string, unknown> = {
+    ...finalized,
+    hasTunnel: false,
+  };
+  delete (previewAns as { tunnelManualModuleIndices?: unknown })
+    .tunnelManualModuleIndices;
+
+  let maxIdx = 0;
+  try {
+    const v2 = buildProjectAnswersV2(previewAns);
+    if (!v2) {
+      throw new Error('Respostas incompletas para a prévia');
+    }
+    const sol = buildLayoutSolutionV2({ ...v2, hasTunnel: false });
+    maxIdx = tunnelPreviewMaxDisplayIndex(sol, { ...previewAns, hasTunnel: false });
+
+    const pdfService = new PdfService(storageDir);
+    const previewSession: Session = {
+      ...genSession,
+      state: 'GENERATING_TUNNEL_PREVIEW',
+      answers: { ...previewAns },
+    };
+    const pdfResult = await pdfService.generatePdf(previewSession);
+    const fn = pdfResult.filename?.trim() ?? '';
+    if (!fn) {
+      throw new Error('Prévia PDF sem filename');
+    }
+    return {
+      updatedSession: {
+        ...genSession,
+        state: 'WAIT_TUNNEL_MODULE_NUMBERS',
+        updatedAt: Date.now(),
+        answers: {
+          ...finalized,
+          tunnelPreviewMaxIndex: maxIdx,
+          tunnelPreviewPdfFilename: fn,
+          tunnelPreviewPdfPath: pdfResult.absolutePath,
+        },
+      },
+      generatedPdf: pdfResult,
+    };
+  } catch (err) {
+    console.error('[diag] rt:tunnel-preview-err', err);
+    return {
+      updatedSession: {
+        ...genSession,
+        state: 'CHOOSE_COLUMN_PROTECTOR',
+        updatedAt: Date.now(),
+        answers: { ...genSession.answers },
+      },
+      deliveryError:
+        'Não foi possível gerar a prévia. Confirme os dados e tente *Protetor de coluna* de novo, ou *voltar* para rever os níveis.',
+    };
+  }
+}
+
 async function executeBudgetXlsxGeneration(
   genSession: Session
 ): Promise<{
@@ -360,46 +432,66 @@ export const routeIncoming = async (
   const inlinePdf = loadEnv().PALLET_BOT_INLINE_PDF;
 
   if (incoming.resumePdfGeneration === true) {
-    if (session.state !== 'GENERATING_DOC') {
-      const gp = generatedPdfFromSessionAnswers(session.answers);
-      const messages = buildMessages(session, {});
+    if (session.state === 'GENERATING_TUNNEL_PREVIEW') {
+      const genSess: Session = {
+        ...session,
+        answers: finalizeSummaryAnswers({ ...session.answers }),
+      };
+      const { updatedSession, generatedPdf, deliveryError } =
+        await executeTunnelPreviewGeneration(genSess);
+      const ctx: MessageContext = { lastError: deliveryError };
+      const messages = buildMessages(updatedSession, ctx);
+      const finalSession = { ...updatedSession, updatedAt: Date.now() };
+      if (persistSession) {
+        await sessionRepository.upsert(finalSession);
+      }
       return {
-        session,
+        session: finalSession,
         outgoingMessages: messages,
-        generatedPdf: gp,
+        generatedPdf,
       };
     }
 
-    const genSession: Session = {
-      ...session,
-      answers: finalizeSummaryAnswers({ ...session.answers }),
-    };
+    if (session.state === 'GENERATING_DOC') {
+      const genSession: Session = {
+        ...session,
+        answers: finalizeSummaryAnswers({ ...session.answers }),
+      };
 
-    const { updatedSession, generatedPdf, deliveryError } =
-      await executeProjectPdfGeneration(genSession);
+      const { updatedSession, generatedPdf, deliveryError } =
+        await executeProjectPdfGeneration(genSession);
 
-    const ctx: MessageContext = {
-      lastError: deliveryError,
-    };
+      const ctx: MessageContext = {
+        lastError: deliveryError,
+      };
 
-    if (
-      updatedSession.state === 'DONE' &&
-      typeof updatedSession.answers.pdfFilename === 'string' &&
-      updatedSession.answers.pdfFilename.trim().length > 0
-    ) {
-      ctx.pdfFilename = updatedSession.answers.pdfFilename.trim();
+      if (
+        updatedSession.state === 'DONE' &&
+        typeof updatedSession.answers.pdfFilename === 'string' &&
+        updatedSession.answers.pdfFilename.trim().length > 0
+      ) {
+        ctx.pdfFilename = updatedSession.answers.pdfFilename.trim();
+      }
+
+      const messages = buildMessages(updatedSession, ctx);
+      const finalSession = { ...updatedSession, updatedAt: Date.now() };
+      if (persistSession) {
+        await sessionRepository.upsert(finalSession);
+      }
+
+      return {
+        session: finalSession,
+        outgoingMessages: messages,
+        generatedPdf,
+      };
     }
 
-    const messages = buildMessages(updatedSession, ctx);
-    const finalSession = { ...updatedSession, updatedAt: Date.now() };
-    if (persistSession) {
-      await sessionRepository.upsert(finalSession);
-    }
-
+    const gp = generatedPdfFromSessionAnswers(session.answers);
+    const messages = buildMessages(session, {});
     return {
-      session: finalSession,
+      session,
       outgoingMessages: messages,
-      generatedPdf,
+      generatedPdf: gp,
     };
   }
 
@@ -412,6 +504,20 @@ export const routeIncoming = async (
           to: session.phone,
           type: 'text',
           text: GENERATING_DOC_WAIT_TEXT,
+        },
+      ],
+      generatedPdf: undefined,
+    };
+  }
+
+  if (session.state === 'GENERATING_TUNNEL_PREVIEW') {
+    return {
+      session,
+      outgoingMessages: [
+        {
+          to: session.phone,
+          type: 'text',
+          text: GENERATING_TUNNEL_PREVIEW_WAIT_TEXT,
         },
       ],
       generatedPdf: undefined,
@@ -499,6 +605,43 @@ export const routeIncoming = async (
     generatedPdf = outcome.generatedPdf;
     deliveryError = outcome.deliveryError;
     updatedSession = outcome.updatedSession;
+  }
+
+  const hasGenerateTunnelPreview = transitionResult.effects.some(
+    e => e.type === 'GENERATE_TUNNEL_PREVIEW'
+  );
+  if (
+    hasGenerateTunnelPreview &&
+    updatedSession.state === 'GENERATING_TUNNEL_PREVIEW'
+  ) {
+    const genSession: Session = {
+      ...updatedSession,
+      answers: finalizeSummaryAnswers({ ...updatedSession.answers }),
+    };
+    if (persistSession) {
+      await sessionRepository.upsert({
+        ...genSession,
+        updatedAt: Date.now(),
+      });
+    }
+    if (!inlinePdf) {
+      return {
+        session: genSession,
+        outgoingMessages: [
+          {
+            to: genSession.phone,
+            type: 'text',
+            text: GENERATING_TUNNEL_PREVIEW_WAIT_TEXT,
+          },
+        ],
+        generatedPdf: undefined,
+        resumePdfGeneration: true,
+      };
+    }
+    const previewOutcome = await executeTunnelPreviewGeneration(genSession);
+    deliveryError = previewOutcome.deliveryError;
+    generatedPdf = previewOutcome.generatedPdf;
+    updatedSession = previewOutcome.updatedSession;
   }
 
   const hasResendPdfEffect = transitionResult.effects.some(

@@ -444,13 +444,13 @@ describe('State Machine', () => {
       expect(r.session.answers.levelSpacingsMm).toEqual([1000, 1500]);
     });
 
-    it('TUNNEL_SIM: pergunta quantidade de túneis antes das posições', () => {
+    it('TUNNEL_SIM: abre passo de estratégia (assistente vs manual de módulos)', () => {
       const session = createSession('CHOOSE_TUNNEL', { hasTunnel: false });
       const r = transition(session, {
         type: 'BUTTON',
         value: 'TUNNEL_SIM',
       });
-      expect(r.session.state).toBe('CHOOSE_TUNNEL_COUNT');
+      expect(r.session.state).toBe('CHOOSE_TUNNEL_STRATEGY');
       expect(r.session.answers.hasTunnel).toBe(true);
     });
 

@@ -125,6 +125,21 @@ export function buildProjectAnswersV2(
     }
   }
 
+  const rawManual = (answers as { tunnelManualModuleIndices?: unknown })
+    .tunnelManualModuleIndices;
+  let tunnelManualModuleIndices: number[] | undefined;
+  if (Array.isArray(rawManual) && rawManual.length > 0) {
+    const m: number[] = [];
+    for (const x of rawManual) {
+      if (typeof x === 'number' && Number.isInteger(x) && x >= 1) {
+        m.push(x);
+      }
+    }
+    if (m.length > 0) {
+      tunnelManualModuleIndices = [...new Set(m)].sort((a, b) => a - b);
+    }
+  }
+
   return {
     lengthMm: answers.lengthMm,
     widthMm: answers.widthMm,
@@ -143,6 +158,9 @@ export function buildProjectAnswersV2(
         ? answers.customLineDoubleCount
         : undefined,
     hasTunnel: answers.hasTunnel === true,
+    ...(tunnelManualModuleIndices
+      ? { tunnelManualModuleIndices }
+      : {}),
     tunnelPlacements,
     tunnelPosition,
     tunnelOffsetMm:
@@ -220,6 +238,11 @@ export type ProjectAnswersV2 = {
   customLineSimpleCount?: number;
   customLineDoubleCount?: number;
   hasTunnel: boolean;
+  /**
+   * Túneis manuais: índices 1…n (módulo de frente na planta) a converter em módulo túnel
+   * sobre a solução sem túnel.
+   */
+  tunnelManualModuleIndices?: readonly number[];
   /**
    * Vários vãos de túnel ao longo do eixo do vão (cada INICIO/MEIO/FIM);
    * se omisso, usa-se `tunnelPosition` ou MEIO.

@@ -44,6 +44,29 @@ export const parseCommaSeparatedNumbers = (text: string): number[] | null => {
   return nums;
 };
 
+/**
+ * Extrai inteiros ≥ 1 a partir de texto (vírgulas, ponto e vírgula, "e", "módulos"…), para escolha de módulos.
+ */
+export const parseModuleIndexList = (text: string): number[] => {
+  const t = text.replace(/\u00a0/g, ' ').trim();
+  if (!t) return [];
+  const normalized = t
+    .replace(/módulos?/gi, ' ')
+    .replace(/\s*[,;]\s*/g, ' ')
+    .replace(/\s+e\s+/gi, ' ');
+  const nums: number[] = [];
+  for (const part of normalized.split(/\s+/)) {
+    if (!part) continue;
+    const d = part.replace(/[^\d]/g, '');
+    if (d.length === 0) continue;
+    const n = parseInt(d, 10);
+    if (Number.isInteger(n) && n >= 1) {
+      nums.push(n);
+    }
+  }
+  return [...new Set(nums)].sort((a, b) => a - b);
+};
+
 export const validateMm = (value: number): string | null => {
   if (value < MIN_MM || value > MAX_MM) {
     return `Valor deve estar entre ${MIN_MM} e ${MAX_MM} mm`;

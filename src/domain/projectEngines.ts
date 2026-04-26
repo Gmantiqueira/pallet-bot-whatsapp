@@ -231,6 +231,10 @@ export function finalizeSummaryAnswers(
   const stripped: Record<string, unknown> = { ...answers };
   delete (stripped as { heightMmAdjustedFrom?: unknown }).heightMmAdjustedFrom;
   delete (stripped as { tunnelSlotCount?: unknown }).tunnelSlotCount;
+  delete (stripped as { tunnelPreviewMaxIndex?: unknown }).tunnelPreviewMaxIndex;
+  delete (stripped as { tunnelPreviewPdfPath?: unknown }).tunnelPreviewPdfPath;
+  delete (stripped as { tunnelPreviewPdfFilename?: unknown })
+    .tunnelPreviewPdfFilename;
   if (typeof stripped.heightMm === 'number') {
     stripped.heightMm = normalizeUprightHeightMmToColumnStep(stripped.heightMm);
   }

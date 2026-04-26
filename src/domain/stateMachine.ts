@@ -4,6 +4,7 @@ import {
   MIN_MM,
   parseCommaSeparatedNumbers,
   parseNumber,
+  parseModuleIndexList,
   validateCorridor,
   validateCustomLineRowCount,
   validateKg,
@@ -37,9 +38,12 @@ export type State =
   | 'WAIT_LINE_CUSTOM_DUPLOS'
   | 'WAIT_SPINE_BACK_TO_BACK'
   | 'CHOOSE_TUNNEL'
+  | 'CHOOSE_TUNNEL_STRATEGY'
   | 'CHOOSE_TUNNEL_COUNT'
   | 'CHOOSE_TUNNEL_POSITION'
   | 'CHOOSE_TUNNEL_APPLIES'
+  | 'GENERATING_TUNNEL_PREVIEW'
+  | 'WAIT_TUNNEL_MODULE_NUMBERS'
   | 'CHOOSE_MODULE_DIMENSION_MODE'
   | 'WAIT_PALLET_DEPTH'
   | 'WAIT_PALLET_FRONT'
@@ -80,6 +84,8 @@ export type Effect =
   | { type: 'GENERATE_PDF' }
   /** Reenviar o PDF já gravado (botão "Baixar" em DONE). */
   | { type: 'RESEND_PDF' }
+  /** Prévia PDF (planta com módulos numerados) para escolha manual de túneis. */
+  | { type: 'GENERATE_TUNNEL_PREVIEW' }
   /** Gerar planilha de orçamento (.xlsx) a partir do layout (botão em DONE). */
   | { type: 'GENERATE_BUDGET_XLSX' };
 
@@ -589,7 +595,7 @@ export const transition = (
           newSession = goNext(
             newSession,
             { hasTunnel: true },
-            'CHOOSE_TUNNEL_COUNT'
+            'CHOOSE_TUNNEL_STRATEGY'
           );
         } else if (input.value === 'TUNNEL_NAO') {
           const cleared = { ...newSession.answers, hasTunnel: false };
@@ -597,6 +603,7 @@ export const transition = (
           delete (cleared as { tunnelAppliesTo?: unknown }).tunnelAppliesTo;
           delete (cleared as { tunnelPlacements?: unknown }).tunnelPlacements;
           delete (cleared as { tunnelSlotCount?: unknown }).tunnelSlotCount;
+          delete (cleared as { tunnelConfigMode?: unknown }).tunnelConfigMode;
           newSession = {
             ...newSession,
             answers: cleared,
@@ -609,6 +616,24 @@ export const transition = (
         }
         effects.push({ type: 'SEND' });
       }
+      return { session: newSession, effects };
+
+    case 'CHOOSE_TUNNEL_STRATEGY':
+      if (input.type !== 'BUTTON') {
+        return { session: newSession, effects };
+      }
+      if (input.value === 'TUNNEL_STR_ASSISTED') {
+        newSession = goNext(newSession, {}, 'CHOOSE_TUNNEL_COUNT');
+      } else if (input.value === 'TUNNEL_STR_MANUAL') {
+        newSession = goNext(
+          newSession,
+          { tunnelConfigMode: 'MANUAL' as const },
+          'CHOOSE_MODULE_DIMENSION_MODE'
+        );
+      } else {
+        return { session: newSession, effects };
+      }
+      effects.push({ type: 'SEND' });
       return { session: newSession, effects };
 
     case 'CHOOSE_MODULE_DIMENSION_MODE':
@@ -1197,7 +1222,55 @@ export const transition = (
           return { session: newSession, effects };
         }
         const hasTunnel = newSession.answers.hasTunnel === true;
-        if (hasTunnel) {
+        const isManual =
+          newSession.answers.tunnelConfigMode === 'MANUAL' && hasTunnel;
+        const levelsN =
+          typeof newSession.answers.levels === 'number'
+            ? newSession.answers.levels
+            : 0;
+        if (hasTunnel && isManual) {
+          if (levelsN < 2) {
+            const cleared: Record<string, unknown> = {
+              ...newSession.answers,
+              hasTunnel: false,
+              columnProtector: input.value === 'COL_SIM',
+              guardRailSimple: false,
+              guardRailDouble: false,
+              tunnelInfoNote:
+                'Túnel: com menos de 2 níveis estruturais, o túnel não aplica. O resumo segue sem túnel.',
+            };
+            delete (cleared as { tunnelConfigMode?: unknown }).tunnelConfigMode;
+            delete (cleared as { tunnelPlacements?: unknown })
+              .tunnelPlacements;
+            delete (cleared as { tunnelPosition?: unknown }).tunnelPosition;
+            delete (cleared as { tunnelAppliesTo?: unknown }).tunnelAppliesTo;
+            delete (cleared as { tunnelSlotCount?: unknown }).tunnelSlotCount;
+            newSession = {
+              ...newSession,
+              state: 'SUMMARY_CONFIRM',
+              stack: [...newSession.stack, newSession.state],
+              updatedAt: Date.now(),
+              answers: finalizeSummaryAnswers(cleared),
+            };
+          } else {
+            newSession = goNext(
+              newSession,
+              {
+                columnProtector: input.value === 'COL_SIM',
+                guardRailSimple: true,
+                guardRailSimplePosition: 'AMBOS',
+                guardRailDouble: true,
+                guardRailDoublePosition: 'AMBOS',
+              },
+              'GENERATING_TUNNEL_PREVIEW'
+            );
+            effects.push(
+              { type: 'SEND' },
+              { type: 'GENERATE_TUNNEL_PREVIEW' }
+            );
+            return { session: newSession, effects };
+          }
+        } else if (hasTunnel) {
           newSession = goNext(
             newSession,
             {
@@ -1216,6 +1289,63 @@ export const transition = (
             'CHOOSE_GUARD_RAIL_SIMPLE'
           );
         }
+        effects.push({ type: 'SEND' });
+      }
+      return { session: newSession, effects };
+
+    case 'WAIT_TUNNEL_MODULE_NUMBERS':
+      if (input.type !== 'TEXT') {
+        return { session: newSession, effects };
+      }
+      {
+        const parsed = parseModuleIndexList(input.value);
+        if (parsed.length === 0) {
+          return {
+            session: newSession,
+            effects,
+            error:
+              'Indique os números dos módulos, por exemplo: 2, 5, 8 ou *Módulos 2 e 6*',
+          };
+        }
+        const maxI =
+          typeof newSession.answers.tunnelPreviewMaxIndex === 'number'
+            ? newSession.answers.tunnelPreviewMaxIndex
+            : 0;
+        for (const n of parsed) {
+          if (n > maxI || n < 1) {
+            return {
+              session: newSession,
+              effects,
+              error: `Cada número deve estar entre 1 e ${maxI} (máximo na prévia). Corrija e envie de novo.`,
+            };
+          }
+        }
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const { buildProjectAnswersV2 } = require('./pdfV2/answerMapping') as typeof import('./pdfV2/answerMapping');
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const { buildLayoutSolutionV2 } = require('./pdfV2/layoutSolutionV2') as typeof import('./pdfV2/layoutSolutionV2');
+          const a = {
+            ...newSession.answers,
+            tunnelManualModuleIndices: parsed,
+            hasTunnel: true,
+          };
+          const v2 = buildProjectAnswersV2(a);
+          if (v2) {
+            buildLayoutSolutionV2({ ...v2, tunnelManualModuleIndices: parsed });
+          }
+        } catch (e) {
+          const msg =
+            e instanceof Error
+              ? e.message
+              : 'Não foi possível aplicar túneis a esses números. Corrija e envie de novo.';
+          return { session: newSession, effects, error: msg };
+        }
+        newSession = goNext(
+          newSession,
+          { tunnelManualModuleIndices: parsed },
+          'SUMMARY_CONFIRM'
+        );
         effects.push({ type: 'SEND' });
       }
       return { session: newSession, effects };

@@ -17,10 +17,13 @@ import {
 } from './tunnelBeamSpan';
 import {
   assertLayoutSolutionDoubleRowBilateralAccess,
+  buildLayoutGeometry,
   DoubleLineAccessValidationError,
   layoutSolutionPassesOperationalAccess,
   OPERATIONAL_ACCESS_TOL_MM,
+  validateLayoutGeometry,
 } from './layoutGeometryV2';
+import { buildFloorPlanModelV2 } from './floorPlanModelV2';
 import { normalizeSpineBackToBackMm } from './spineAndDistanciador';
 import type {
   CirculationZone,
@@ -64,7 +67,7 @@ function storageTiersForPositionCount(
  * Módulos de **frente** (1 frente = 2 baias, como na elevação): em dupla costas há duas frentes por
  * estação ao longo do vão; túnel conta como uma unidade.
  */
-function computePhysicalPickingModules(rows: RackRowSolution[]): number {
+export function computePhysicalPickingModules(rows: RackRowSolution[]): number {
   let sum = 0;
   for (const row of rows) {
     const ff = row.kind === 'double' ? 2 : 1;
@@ -80,7 +83,7 @@ function computePhysicalPickingModules(rows: RackRowSolution[]): number {
   return sum;
 }
 
-function computeTotalPalletPositions(
+export function computeTotalPalletPositions(
   rows: RackRowSolution[],
   structuralLevels: number,
   hasGroundLevel: boolean
@@ -1556,6 +1559,140 @@ function pickBestLayoutSolution(
   return best;
 }
 
+function baseModuleIdFromPlanRectId(id: string): string {
+  return id.replace(/-f\d+$/i, '');
+}
+
+/**
+ * Máximo n.º de módulo de frente na planta (1…n) — pré-visualização túnel manual.
+ */
+export function tunnelPreviewMaxDisplayIndex(
+  baseSolution: LayoutSolutionV2,
+  sessionAnswers: Record<string, unknown>
+): number {
+  const geom = buildLayoutGeometry(
+    { ...baseSolution } as LayoutSolutionV2,
+    { ...sessionAnswers, hasTunnel: false }
+  );
+  validateLayoutGeometry(geom);
+  return buildFloorPlanModelV2(geom, {} as Record<string, unknown>)
+    .structureRects.length;
+}
+
+/**
+ * Túneis manuais: aplica túneis às posições indicadas (mesma numeração que a planta).
+ */
+function applyManualTunnelToLayoutSolution(
+  baseSolution: LayoutSolutionV2,
+  displayIndices: readonly number[],
+  answers: BuildLayoutSolutionV2Input
+): LayoutSolutionV2 {
+  if (displayIndices.length === 0) {
+    return baseSolution;
+  }
+  const levels = Math.max(1, Math.floor(answers.levels));
+  if (levels < 2) {
+    throw new Error(
+      'Túnel manual: são necessários pelo menos 2 níveis estruturais com longarina.'
+    );
+  }
+  const sessionLike: Record<string, unknown> = {
+    ...(answers as unknown as Record<string, unknown>),
+    hasTunnel: false,
+  };
+  const geometryNoTun = buildLayoutGeometry(baseSolution, sessionLike);
+  validateLayoutGeometry(geometryNoTun);
+  const plan = buildFloorPlanModelV2(geometryNoTun, {});
+  const indexToBaseId = new Map<number, string>();
+  for (const s of plan.structureRects) {
+    if (s.displayIndex === undefined) continue;
+    indexToBaseId.set(s.displayIndex, baseModuleIdFromPlanRectId(s.id));
+  }
+  const maxIx = indexToBaseId.size;
+  const halfBases = new Set<string>();
+  for (const row of geometryNoTun.rows) {
+    for (const m of row.modules) {
+      if (m.segmentType === 'half') {
+        halfBases.add(m.id);
+      }
+    }
+  }
+  const uniqueSorted = [...new Set(displayIndices)]
+    .filter(n => Number.isInteger(n) && n >= 1)
+    .sort((a, b) => a - b);
+  for (const i of uniqueSorted) {
+    if (i < 1 || i > maxIx) {
+      throw new Error(
+        `Túnel manual: o número ${i} não corresponde a nenhum módulo (válido: 1 a ${maxIx}).`
+      );
+    }
+  }
+  const targetBaseIds = new Set<string>();
+  for (const i of uniqueSorted) {
+    const base = indexToBaseId.get(i);
+    if (base) {
+      if (halfBases.has(base)) {
+        throw new Error(
+          `Túnel manual: o módulo n.º ${i} é meio módulo — indique outro.`
+        );
+      }
+      targetBaseIds.add(base);
+    }
+  }
+  const corridorMm = Math.max(0, answers.corridorMm);
+  const newRows: RackRowSolution[] = baseSolution.rows.map(r => ({
+    ...r,
+    modules: r.modules.map(seg => {
+      if (!targetBaseIds.has(seg.id)) {
+        return seg;
+      }
+      if (seg.type === 'half') {
+        throw new Error('Túnel manual: meio módulo não é elegível');
+      }
+      if (seg.variant === 'tunnel') {
+        return seg;
+      }
+      const clearance = tunnelClearanceMmFromCorridor(corridorMm);
+      const activeStorageLevels =
+        tunnelActiveStorageLevelsFromGlobal(levels);
+      return {
+        ...seg,
+        type: 'full' as const,
+        variant: 'tunnel' as ModuleVariantV2,
+        tunnelClearanceMm: clearance,
+        activeStorageLevels,
+      };
+    }),
+  }));
+  if (!newRows.some(r => r.modules.some(m => m.variant === 'tunnel'))) {
+    return baseSolution;
+  }
+  const hasGroundLevel = answers.hasGroundLevel !== false;
+  const sol: LayoutSolutionV2 = {
+    ...baseSolution,
+    rows: newRows,
+    totals: {
+      ...baseSolution.totals,
+      physicalPickingModules: computePhysicalPickingModules(newRows),
+      positions: computeTotalPalletPositions(
+        newRows,
+        levels,
+        hasGroundLevel
+      ),
+      levels: baseSolution.totals.levels,
+      modules: baseSolution.totals.modules,
+    },
+    metadata: {
+      ...baseSolution.metadata,
+      hasTunnel: true,
+      tunnelPosition: undefined,
+      tunnelPlacements: undefined,
+    },
+  };
+  assertLayoutSolutionDoubleRowBilateralAccess(sol);
+  return sol;
+}
+
 /**
  * Escolhe a melhor combinação por capacidade real (lexicográfica, ver {@link layoutSolutionScoreTuple}).
  *
@@ -1573,6 +1710,24 @@ function pickBestLayoutSolution(
 export function buildLayoutSolutionV2(
   answers: BuildLayoutSolutionV2Input
 ): LayoutSolutionV2 {
+  const manualIdx = answers.tunnelManualModuleIndices;
+  if (
+    answers.hasTunnel &&
+    Array.isArray(manualIdx) &&
+    manualIdx.length > 0
+  ) {
+    const stripped: BuildLayoutSolutionV2Input = {
+      ...answers,
+      hasTunnel: false,
+      tunnelManualModuleIndices: undefined,
+      tunnelPlacements: undefined,
+      tunnelPosition: undefined,
+      tunnelOffsetMm: undefined,
+    };
+    const base = buildLayoutSolutionV2(stripped);
+    return applyManualTunnelToLayoutSolution(base, manualIdx, answers);
+  }
+
   const candidates = layoutSearchCandidates(answers);
   let best = pickBestLayoutSolution(answers, candidates);
 
