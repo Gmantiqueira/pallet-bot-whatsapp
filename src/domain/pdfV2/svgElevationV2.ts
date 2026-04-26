@@ -1633,10 +1633,12 @@ const ELEV_PAGE_LABEL_SCALE = 1.9 * ELEV_INTERIOR_TYPE_SCALE;
 const ELEV_LATERAL_LABEL_SCALE = ELEV_PAGE_LABEL_SCALE * 0.82;
 /**
  * Folha paisagem (~A4 landscape): duas colunas com área útil elevada.
- * Proporção próxima de 297/210 mm para encaixe no PDF.
+ * `COL_GAP` estreito + viewBox maior amplia frontal e lateral na mesma proporção.
  */
-const ELEV_SPREAD_W = 1960;
-const ELEV_SPREAD_H = 1280;
+const ELEV_SPREAD_FRAME_INSET = 18;
+const ELEV_SPREAD_COL_GAP_PX = 8;
+const ELEV_SPREAD_W = 2040;
+const ELEV_SPREAD_H = 1330;
 
 export type ElevationPageSvgs = {
   /** Paisagem: vista frontal (esq.) + vista lateral (dir.), módulo padrão. */
@@ -1656,8 +1658,8 @@ function wrapElevationLandscapeSpread(
 ): string {
   const width = ELEV_SPREAD_W;
   const height = ELEV_SPREAD_H;
-  const m = 20;
-  const gap = 20;
+  const m = ELEV_SPREAD_FRAME_INSET;
+  const gap = ELEV_SPREAD_COL_GAP_PX;
   const padTop = 16;
   const footerReserve = 52;
   const colInnerW = (width - 2 * m - gap) / 2;
@@ -1710,8 +1712,8 @@ export function serializeElevationPagesV2(
 ): ElevationPageSvgs {
   const dbg = options?.debug === true;
   const ls = ELEV_PAGE_LABEL_SCALE;
-  const m = 20;
-  const gap = 20;
+  const m = ELEV_SPREAD_FRAME_INSET;
+  const gap = ELEV_SPREAD_COL_GAP_PX;
   const padTop = 16;
   const footerReserve = 52;
   const colInnerW = (ELEV_SPREAD_W - 2 * m - gap) / 2;
