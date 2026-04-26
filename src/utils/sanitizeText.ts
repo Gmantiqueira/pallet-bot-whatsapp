@@ -8,8 +8,18 @@
 const INVISIBLE_AND_FORMAT_CHARS =
   /[\u00AD\u034F\u061C\u115F\u17B4\u17B5\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u2069\uFEFF\uFFF9-\uFFFB]/g;
 
-/** Unicode hyphen / minus variants → ASCII hyphen for stable PDF glyph layout. */
+/**
+ * Hífen / traço / menos matemático em Unicode → U+002D para saída PDF/SVG estável
+ * (DejaVu/PDFKit e texto colado de editores ricos).
+ */
+const UNICODE_HYPHEN_AND_DASH_TO_ASCII = /[\u2010-\u2015\uFE58\uFE63\uFF0D\u2212]/g;
+
+/** Unicode hyphen / minus variants (regex alternation) for pé-direito compound fix. */
 const PEDIREITO_HYPHEN_ALT = '(?:\u2010|\u2011|\u2012|\uFE63|\uFF0D)';
+
+function normalizeHyphensAndDashesToAscii(s: string): string {
+  return s.replace(UNICODE_HYPHEN_AND_DASH_TO_ASCII, '-');
+}
 
 /**
  * After stripping invisibles, "pé" + "direito" may merge as "pédireito"; NFKC may
@@ -45,6 +55,7 @@ export function sanitizeText(text: string): string {
   let s = text.normalize('NFKC');
   s = s.replace(/\uFFFD/g, '');
   s = s.replace(INVISIBLE_AND_FORMAT_CHARS, '');
+  s = normalizeHyphensAndDashesToAscii(s);
   s = normalizePedireitoCompound(s);
   return s;
 }
