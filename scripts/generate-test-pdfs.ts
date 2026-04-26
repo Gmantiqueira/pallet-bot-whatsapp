@@ -20,14 +20,10 @@
  * Debug no PDF (layoutSolution resumido; planta sem overlay se desligar):
  *   DEBUG_PDF=false npx tsx scripts/generate-test-pdfs.ts
  *
- * Conjunto **fixo de 11 casos** (revisão manual) cobrindo:
- * - medidas manuais vs. planta | só simples / só duplas | personalizado (1 dupla+1 simples)
- * - túnel assistido (meio, ambas) | **referência túnel manual** (log de índices, mesmo PDF que assistido) | pé-direito | CALC
- *
- * Nota: o PDF de *túnel manual* (substituir módulo por túnel por n.º) ainda conflita com
- * `validateModulesSpanLengthAxis` em alguns layouts; o caso 27 gera o mesmo túnel assistido
- * que o 06 e regista no stdout os n.ºs de módulo que a prévia manual resolveria.
- * - montante &gt; 8 m (travamento superior) | proteções (protetor + guardas) no desenho
+ * Conjunto **fixo de 10 casos** (revisão manual), cobrindo o essencial:
+ * - medidas (manual, planta) | estratégia de linhas: simples, duplas, personalizado, melhor
+ * - túnel (assistente) | pé-direito (níveis derivados) | CALC
+ * - montante &gt; 8 m (travamento) | proteções (protetor + guardas) no desenho
  * Para varrer mais variações, use `--only=…` com IDs adicionais ou alargue o script localmente.
  */
 
@@ -37,10 +33,7 @@ import {
   formatLayoutAuditReport,
   isLayoutAuditEnabled,
 } from '../src/domain/pdfV2/layoutAuditLog';
-import {
-  buildLayoutSolutionV2,
-  tunnelPreviewMaxDisplayIndex,
-} from '../src/domain/pdfV2/layoutSolutionV2';
+import { buildLayoutSolutionV2 } from '../src/domain/pdfV2/layoutSolutionV2';
 import { finalizeSummaryAnswers } from '../src/domain/projectEngines';
 import type { Session } from '../src/domain/session';
 import { PdfService } from '../src/infra/pdf/pdfService';
@@ -112,58 +105,6 @@ function tunnelCase(partial: Record<string, unknown>): Record<string, unknown> {
   });
 }
 
-/**
- * Índices de módulo de frente válidos para túnel manual, derivados do layout *sem* túnel
- * (alinhado a `tunnelPreviewMaxDisplayIndex` + `buildLayoutSolutionV2` com `tunnelManualModuleIndices`).
- */
-function resolveManualTunnelModuleIndices(
-  layoutAnswers: Record<string, unknown>
-): number[] {
-  const forNoTunnel: Record<string, unknown> = { ...layoutAnswers };
-  forNoTunnel.hasTunnel = false;
-  delete (forNoTunnel as { tunnelConfigMode?: unknown }).tunnelConfigMode;
-  delete (forNoTunnel as { tunnelManualModuleIndices?: unknown })
-    .tunnelManualModuleIndices;
-  delete (forNoTunnel as { tunnelPlacements?: unknown }).tunnelPlacements;
-  delete (forNoTunnel as { tunnelPosition?: unknown }).tunnelPosition;
-  delete (forNoTunnel as { tunnelAppliesTo?: unknown }).tunnelAppliesTo;
-  const v2 = buildProjectAnswersV2(forNoTunnel);
-  if (!v2) {
-    return [1];
-  }
-  const sol = buildLayoutSolutionV2({ ...v2, hasTunnel: false });
-  const n = tunnelPreviewMaxDisplayIndex(sol, {
-    ...forNoTunnel,
-    hasTunnel: false,
-  });
-  if (n < 1) {
-    return [1];
-  }
-  /** Um túnel por n.º (meio da sequência) — alinha melhor com validação de passo/ montante. */
-  const single = Math.max(1, Math.min(n, Math.ceil(n / 2)));
-  return [single];
-}
-
-/**
- * Respostas “como no WhatsApp (manual)” (sem posição assistida) — usadas só para calcular
- * `tunnelManualModuleIndices` e para *documentação* no log; o PDF de teste usa o caso assistido.
- */
-function manualTunnelStyleAnswersForIndexResolution(
-  partial: Record<string, unknown> = {}
-): Record<string, unknown> {
-  const base = tunnelCase({
-    hasTunnel: true,
-    lengthMm: 16_000,
-    widthMm: 12_000,
-    ...partial,
-  }) as Record<string, unknown>;
-  delete base.tunnelPosition;
-  delete base.tunnelPlacements;
-  delete base.tunnelAppliesTo;
-  base.tunnelConfigMode = 'MANUAL';
-  return base;
-}
-
 /** Modo CALC: `heightMm` directo é removido — altura do montante vem de loadHeightMm×levels. */
 function calcCase(partial: Record<string, unknown>): Record<string, unknown> {
   const b = manualCase(partial) as Record<string, unknown>;
@@ -184,7 +125,7 @@ function buildCaseGroups(): PdfCaseGroup[] {
   return [
     {
       groupKey: 'core',
-      title: 'Referência e linhas (11 casos no total)',
+      title: 'Referência e linhas (10 casos no total)',
       cases: [
         {
           id: '01-manual-base-standard',
@@ -238,19 +179,6 @@ function buildCaseGroups(): PdfCaseGroup[] {
           id: '06-tunnel-middle-both',
           label: 'Túnel no meio (ambas as fileiras)',
           objective: 'Módulo túnel, elevação túnel e planta; AMBOS.',
-          base: tunnelCase({
-            lengthMm: 16_000,
-            widthMm: 12_000,
-            hasTunnel: true,
-            tunnelPosition: 'MEIO',
-            tunnelAppliesTo: 'AMBOS',
-          }),
-        },
-        {
-          id: '27-tunnel-manual-index-reference',
-          label: 'Túnel assistido (igual 06) + log de n.ºs túnel manual',
-          objective:
-            'PDF/ BOM iguais ao 06. No stdout, índices de módulo de frente que a prévia manual resolveria (build sem túnel + tunnelPreviewMaxDisplayIndex).',
           base: tunnelCase({
             lengthMm: 16_000,
             widthMm: 12_000,
@@ -394,16 +322,6 @@ async function run(): Promise<void> {
     const sess = session(c.id, c.base);
     const started = Date.now();
     try {
-      if (c.id === '27-tunnel-manual-index-reference') {
-        const manualStyle = manualTunnelStyleAnswersForIndexResolution();
-        const ix = resolveManualTunnelModuleIndices(manualStyle);
-        console.log(
-          `   ↳ [túnel manual] N.ºs de módulo de frente numa prévia (layout sem túnel): [${ix.join(
-            ', '
-          )}] (fluxo WhatsApp; PDF desta linha = túnel assistido como 06).`
-        );
-      }
-
       if (isLayoutAuditEnabled()) {
         const v2 = buildProjectAnswersV2(sess.answers);
         if (v2) {
