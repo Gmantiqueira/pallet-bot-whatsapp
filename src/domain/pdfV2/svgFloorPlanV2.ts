@@ -3,6 +3,7 @@ import type {
   FloorPlanDimension,
   FloorPlanModelV2,
   GuardRailPositionCode,
+  ModuleSegmentType,
 } from './types';
 import { escapeXml } from './floorPlanModelV2';
 import { ELEV_PALLET_TIER_STROKE } from './elevationVisualTokens';
@@ -12,6 +13,21 @@ import {
 } from '../../config/pdfFonts';
 
 /** Ligação visual com a elevação (traços de baia = `ELEV_PALLET_TIER_STROKE`). */
+
+/**
+ * Rótulo do número na face do módulo na planta. Meio-módulo: uma linha (n−1)½ ou «Meio módulo»,
+ * em vez de inteiro + «1/2» desalinhados.
+ */
+export function planModuleFaceLabel(
+  displayIndex: number,
+  segmentType: ModuleSegmentType | undefined
+): string {
+  if (segmentType === 'half') {
+    if (displayIndex <= 1) return 'Meio módulo';
+    return `${displayIndex - 1}\u00BD`;
+  }
+  return String(displayIndex);
+}
 
 const COL_BG = '#ffffff';
 const COL_FRAME = '#e2e8f0';
@@ -985,25 +1001,18 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
     );
     const tcx = s.x + s.w / 2 + nudgeX;
     const tcy = s.y + s.h / 2 + nudgeY;
+    const label = planModuleFaceLabel(s.displayIndex, s.segmentType);
+    const cls = s.segmentType === 'half' ? 'fp-mod-half' : 'fp-mod-num';
+    let fs = fontPx;
+    if (s.segmentType === 'half') {
+      if (label.length > 10) {
+        fs = Math.max(10, fontPx * 0.66);
+      } else {
+        fs = Math.max(11, fontPx * 0.9);
+      }
+    }
     parts.push(
-      `<text x="${tcx}" y="${tcy}" text-anchor="middle" dominant-baseline="middle" class="fp-mod-num" font-size="${fontPx}px" opacity="${opacity}">${s.displayIndex}</text>`
-    );
-  }
-
-  for (const s of structureDraw) {
-    if (s.segmentType !== 'half' || s.displayIndex === undefined) continue;
-    const minSide = Math.min(s.w, s.h);
-    if (minSide < 18) continue;
-    const { fontPx, opacity, nudgeX, nudgeY } = moduleDisplayFontOpacity(
-      s,
-      moduleCount
-    );
-    const tcx = s.x + s.w / 2 + nudgeX;
-    const tcy = s.y + s.h / 2 + nudgeY;
-    const fsHalf = Math.max(6.5, Math.min(10, fontPx * 0.4));
-    const yHalf = tcy + fontPx * 0.42 + 1;
-    parts.push(
-      `<text x="${tcx}" y="${yHalf}" text-anchor="middle" dominant-baseline="middle" class="fp-mod-half" font-size="${fsHalf}px" opacity="${Math.min(0.96, opacity + 0.06)}">${escapeXml('1/2')}</text>`
+      `<text x="${tcx}" y="${tcy}" text-anchor="middle" dominant-baseline="middle" class="${cls}" font-size="${fs}px" opacity="${opacity}">${escapeXml(label)}</text>`
     );
   }
 
