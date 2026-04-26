@@ -1688,11 +1688,12 @@ function wrapElevationLandscapeSpread(
   );
   parts.push(leftInner);
   parts.push(rightInner);
+  const footFill = '#334155';
   parts.push(
-    `<text x="${cxLeft}" y="${height - 16}" text-anchor="middle" font-size="${fsFoot}px" fill="#475569" font-family="${SVG_FONT_FAMILY}">${escapeXml(footerLeft)}</text>`
+    `<text x="${cxLeft}" y="${height - 16}" text-anchor="middle" font-size="${fsFoot}px" fill="${footFill}" font-family="${SVG_FONT_FAMILY}" font-weight="600">${escapeXml(footerLeft)}</text>`
   );
   parts.push(
-    `<text x="${cxRight}" y="${height - 16}" text-anchor="middle" font-size="${fsFoot}px" fill="#475569" font-family="${SVG_FONT_FAMILY}">${escapeXml(footerRight)}</text>`
+    `<text x="${cxRight}" y="${height - 16}" text-anchor="middle" font-size="${fsFoot}px" fill="${footFill}" font-family="${SVG_FONT_FAMILY}" font-weight="600">${escapeXml(footerRight)}</text>`
   );
   parts.push('</svg>');
   return parts.join('');
