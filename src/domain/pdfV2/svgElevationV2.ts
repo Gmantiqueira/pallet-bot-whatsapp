@@ -57,11 +57,12 @@ const COL_BRACE_STROKE = '#475569';
  * rótulos em duas linhas (pt-BR) sem sobreposição nem truncagem no encaixe da folha.
  */
 const ELEV_VERTICAL_DIM_STEP_LS = 14;
-const ELEV_VERTICAL_DIM_RIGHT_GUTTER_PX = 140;
+/** Calha à direita da última coluna de cota (rótulos auxiliares + encaixe no painel). */
+const ELEV_VERTICAL_DIM_RIGHT_GUTTER_PX = 172;
 /** Reserva horizontal antes de calcular `rackMaxW` na vista frontal (depende do n.º de troços). */
-const ELEV_FRONT_DIM_CHAIN_CAP_PX = 330;
-const ELEV_FRONT_DIM_CHAIN_BASE_PX = 138;
-const ELEV_FRONT_DIM_CHAIN_PER_SEG_LS = 13.5;
+const ELEV_FRONT_DIM_CHAIN_CAP_PX = 392;
+const ELEV_FRONT_DIM_CHAIN_BASE_PX = 162;
+const ELEV_FRONT_DIM_CHAIN_PER_SEG_LS = 14.5;
 
 function escapeXml(text: string): string {
   return sanitizeText(text)
@@ -935,7 +936,7 @@ function drawFrontRack(
     ELEV_FRONT_DIM_CHAIN_BASE_PX +
       ELEV_FRONT_DIM_CHAIN_PER_SEG_LS * ls * (estSegCount + 1)
   );
-  const rackMaxW = Math.max(210, pw - 22 - 48 - dimChainRightPx);
+  const rackMaxW = Math.max(210, pw - 22 - 62 - dimChainRightPx);
   const rackMaxH = Math.max(
     120,
     ph - Math.round(78 / ls) - frontRackBelowFloorReservePx(ls)
