@@ -2066,10 +2066,20 @@ const ELEV_SPREAD_LS_PRIMARY = ELEV_PAGE_LABEL_SCALE * 1.12 * 1.12;
 const ELEV_SPREAD_LS_MINOR = ELEV_PAGE_LABEL_SCALE * 0.72 * 1.12;
 const ELEV_SPREAD_LS_LAT_PRIMARY = ELEV_LATERAL_LABEL_SCALE * 1.12 * 1.12;
 const ELEV_SPREAD_LS_LAT_MINOR = ELEV_LATERAL_LABEL_SCALE * 0.72 * 1.12;
-/** ViewBox alargado ~proporcional à altura (≈mesmo aspect que legado) para menos letterboxing no PDF. */
-const ELEV_SPREAD_W = 2142;
-/** Altura total SVG — prioriza área do par ortográfico; rodapé compacto na base. */
+/**
+ * Proporção do viewBox = caixa onde o PNG é colocado no PDF A4 paisagem.
+ * Se o SVG for mais «alto» que isto, {@link fitRasterInBox} limita pela altura e ficam
+ * faixas brancas à direita e por baixo (ver `pdfV2Service` embedFullWidthDrawing).
+ * Valores em pt: largura útil = 841.89 − 2×24; altura útil = pageBottom − yImg − 3 após
+ * `beginDrawingSheetHeader` (~64.5 pt desde o topo até yImg).
+ */
+const ELEV_PDF_LS_USABLE_W_PT = 841.89 - 48;
+const ELEV_PDF_LS_AVAIL_H_PT = 595.28 - 24 - 64.5 - 3;
+/** Largura × altura do SVG; W/H derivado da zona útil do PDF (não alterar só um eixo). */
 const ELEV_SPREAD_H = 1500;
+const ELEV_SPREAD_W = Math.round(
+  ELEV_SPREAD_H * (ELEV_PDF_LS_USABLE_W_PT / ELEV_PDF_LS_AVAIL_H_PT)
+);
 /** Faixa de notas mínima; topo do desenho ganha altura (rodapé colado a `height − m`). */
 const ELEV_SPREAD_FOOTER_BAND_PX = 70;
 /** Margem interna do texto de rodapé à moldura. */

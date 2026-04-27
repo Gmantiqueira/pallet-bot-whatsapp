@@ -60,7 +60,10 @@ function ptToPx(pt: number): number {
  * Orçamento vertical do cabeçalho (bloco à esquerda + traço) em pt — alinhado ao
  * cabeçalho real em {@link renderPdfV2} para a proporção do PNG ≈ caixa no PDF.
  */
-/** Alinhado ao bloco real em {@link renderPdfV2} (título à esquerda + nota + traço). */
+/**
+ * Orçamento vertical até ao traço do cabeçalho (planta/3D). Em elevações paisagem o `yImg`
+ * real ≈ 64,5 pt desde o topo — alinhado a `ELEV_PDF_LS_AVAIL_H_PT` em `svgElevationV2.ts`.
+ */
 const DRAWING_SHEET_HEADER_BUDGET_PT = 38;
 const DRAWING_SHEET_BOTTOM_PAD_PT = 2;
 
@@ -84,11 +87,11 @@ function elevationLandscapeDrawingRasterPixelSize(): { pxW: number; pxH: number 
   const pageH = 595.28;
   const usableW = pageW - 2 * PAGE_MARGIN_PT;
   const pageBottom = pageH - PAGE_MARGIN_PT;
-  const imgTop = PAGE_MARGIN_PT + DRAWING_SHEET_HEADER_BUDGET_PT;
-  const imgBoxH = pageBottom - imgTop - DRAWING_SHEET_BOTTOM_PAD_PT;
+  /** Mesmo `availH` que `embedFullWidthDrawing` (svgElevationV2: yImg ≈ 64,5 pt). */
+  const imgAvailH = pageBottom - 64.5 - 3;
   return {
     pxW: ptToPx(Math.round(usableW * 1.08)),
-    pxH: ptToPx(Math.max(120, imgBoxH * 1.22)),
+    pxH: ptToPx(Math.max(120, imgAvailH * 1.22)),
   };
 }
 
