@@ -2055,14 +2055,23 @@ const ELEV_SPREAD_LS_LAT_MINOR =
  * faixas brancas à direita e por baixo (ver `pdfV2Service` embedFullWidthDrawing).
  * Valores em pt: largura útil = 841.89 − 2×24; altura útil = pageBottom − yImg − bottomPad.
  * Distância do topo da folha até onde começa o bitmap (cabeçalho + traço + folga).
- * Se for **menor** que o `doc.y` real após `beginDrawingSheetHeader`, o SVG fica «mais alto»
- * que a caixa útil → {@link fitRasterInBox} limita pela altura → **faixas brancas à direita**.
+ * Deve bater com `beginDrawingSheetHeader` em modo compacto de elevações.
  */
-export const ELEV_PDF_LS_YIMG_FROM_TOP_PT = 100;
-export const ELEV_PDF_LS_IMGBOTTOM_PAD_PT = 1;
+export const ELEV_PDF_LS_YIMG_FROM_TOP_PT = 74;
+/**
+ * Folga mínima até ao fim **físico** da folha paisagem (não à margem inferior do PDFKit),
+ * para a prancha usar quase toda a altura — maior `availH` em pt → bitmap maior no papel.
+ */
+export const ELEV_PDF_LS_IMAGE_BOTTOM_BLEED_PT = 2;
+/** @deprecated Usar `ELEV_PDF_LS_IMAGE_BOTTOM_BLEED_PT`; mantido para raster legado. */
+export const ELEV_PDF_LS_IMGBOTTOM_PAD_PT = ELEV_PDF_LS_IMAGE_BOTTOM_BLEED_PT;
+/** Altura da página A4 em paisagem (pt). */
+export const ELEV_PDF_LS_PAGE_HEIGHT_PT = 595.28;
 const ELEV_PDF_LS_USABLE_W_PT = 841.89 - 48;
 const ELEV_PDF_LS_AVAIL_H_PT =
-  595.28 - 24 - ELEV_PDF_LS_YIMG_FROM_TOP_PT - ELEV_PDF_LS_IMGBOTTOM_PAD_PT;
+  ELEV_PDF_LS_PAGE_HEIGHT_PT -
+  ELEV_PDF_LS_YIMG_FROM_TOP_PT -
+  ELEV_PDF_LS_IMAGE_BOTTOM_BLEED_PT;
 /**
  * Fator do viewBox e das áreas úteis dos painéis (moldura/rodapé mantêm px fixos → desenho relativo cresce).
  * O raster em `pdfV2Service` deve usar o mesmo fator para manter proporção e nitidez.
@@ -2074,8 +2083,8 @@ const ELEV_SPREAD_H = Math.round(ELEV_SPREAD_BASE_H * ELEV_SPREAD_CANVAS_SCALE);
 const ELEV_SPREAD_W = Math.round(
   ELEV_SPREAD_H * (ELEV_PDF_LS_USABLE_W_PT / ELEV_PDF_LS_AVAIL_H_PT)
 );
-/** Faixa de notas compacta — menos altura em faixa = mais `innerH` para escala (~+20% vs. antes). */
-const ELEV_SPREAD_FOOTER_BAND_PX = 54;
+/** Faixa de notas compacta — menos altura em faixa = mais `innerH` para escala. */
+const ELEV_SPREAD_FOOTER_BAND_PX = 36;
 /** Margem interna do texto de rodapé à moldura. */
 const ELEV_SPREAD_FOOTER_SIDE_PAD_PX = 10;
 /** Evita que notas de rodapé invadam o eixo da junta entre vistas. */
@@ -2103,16 +2112,16 @@ const ELEV_SPREAD_PANEL_FIT_MAX_SCALE =
  * interior (~88–92% da área do painel). Estrutura + anotações escalam em conjunto (bbox).
  */
 const ELEV_SPREAD_PREMIUM_ANNOTATION_INSET_PX = {
-  l: 8,
-  r: 76,
-  t: 36,
-  b: 28,
+  l: 6,
+  r: 62,
+  t: 26,
+  b: 20,
 } as const;
 
 /**
- * 1 = usar toda a escala de encaixe do bbox; a folga anti-clipping fica nos insets + bbox conservador.
+ * Multiplicador extra sobre a escala de encaixe do par ortográfico (desenho maior dentro da prancha).
  */
-const ELEV_SPREAD_BBOX_FIT_HEADROOM = 1;
+const ELEV_SPREAD_BBOX_FIT_HEADROOM = 1.1;
 
 type SpreadInset = {
   l: number;

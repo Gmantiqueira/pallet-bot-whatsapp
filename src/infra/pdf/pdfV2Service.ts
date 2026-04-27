@@ -15,7 +15,8 @@ import { buildFloorPlanModelV2 } from '../../domain/pdfV2/floorPlanModelV2';
 import { serializeFloorPlanSvgV2 } from '../../domain/pdfV2/svgFloorPlanV2';
 import { buildElevationModelV2 } from '../../domain/pdfV2/elevationModelV2';
 import {
-  ELEV_PDF_LS_IMGBOTTOM_PAD_PT,
+  ELEV_PDF_LS_IMAGE_BOTTOM_BLEED_PT,
+  ELEV_PDF_LS_PAGE_HEIGHT_PT,
   ELEV_PDF_LS_YIMG_FROM_TOP_PT,
   ELEV_SPREAD_CANVAS_SCALE,
   serializeElevationPagesV2,
@@ -89,12 +90,11 @@ function elevationLandscapeDrawingRasterPixelSize(): { pxW: number; pxH: number 
   const pageW = 841.89;
   const pageH = 595.28;
   const usableW = pageW - 2 * PAGE_MARGIN_PT;
-  const pageBottom = pageH - PAGE_MARGIN_PT;
-  /** Mesmos orçamentos que `ELEV_PDF_LS_AVAIL_H_PT` em `svgElevationV2` (evita letterboxing). */
+  /** Mesmo `ELEV_PDF_LS_AVAIL_H_PT` que o viewBox em `svgElevationV2` (altura até quase ao fim da folha). */
   const imgAvailH =
-    pageBottom -
+    ELEV_PDF_LS_PAGE_HEIGHT_PT -
     ELEV_PDF_LS_YIMG_FROM_TOP_PT -
-    ELEV_PDF_LS_IMGBOTTOM_PAD_PT;
+    ELEV_PDF_LS_IMAGE_BOTTOM_BLEED_PT;
   const pxW = ptToPx(Math.round(usableW * 1.08));
   const pxH = ptToPx(Math.max(120, imgAvailH * 1.22));
   return {
@@ -439,11 +439,18 @@ export async function renderPdfV2(
       widthPx: number;
       heightPx: number;
     },
-    opts?: { bottomPadPt?: number }
+    opts?: {
+      bottomPadPt?: number;
+      /** Elevações: usar altura até quase ao fim da folha (maior área em pt que só `pageBottom`). */
+      useFullPageHeightFromY?: boolean;
+    }
   ): void => {
     const yImg = doc.y + 0.5;
     const bottomPad = opts?.bottomPadPt ?? imgBottomPad;
-    const availH = pageBottom - yImg - bottomPad;
+    const availH =
+      opts?.useFullPageHeightFromY === true
+        ? doc.page.height - yImg - ELEV_PDF_LS_IMAGE_BOTTOM_BLEED_PT
+        : pageBottom - yImg - bottomPad;
     const { dw, dh } = fitRasterInBox(
       raster.widthPx,
       raster.heightPx,
@@ -466,23 +473,40 @@ export async function renderPdfV2(
       titleSize?: number;
       /** Menos folga sob o subtítulo e até ao desenho (ex.: prancha de elevações). */
       compactDrawingGap?: boolean;
+      /** Cabeçalho mais baixo + tipos menores — maximiza `availH` da prancha no PDF. */
+      elevationSheet?: boolean;
     }
   ): void => {
+    const elev = options?.elevationSheet === true;
     const compact = options?.compactDrawingGap === true;
     const titleT = sanitizeText(title);
     const subT =
       options?.subtitle !== undefined ? sanitizeText(options.subtitle) : '';
-    const tSize = options?.titleSize ?? 11.5;
+    const tSize =
+      options?.titleSize ?? (elev ? 10.25 : 11.5);
+    const subSize = elev ? 7.85 : 9;
     let y = doc.page.margins.top + 2;
     doc.font(PDFKIT_FONT_BOLD).fontSize(tSize).fillColor(COL_INK);
     const hTitle = doc.heightOfString(titleT, { width: usableW });
     doc.text(titleT, left, y, { width: usableW, align: 'left' });
-    y += hTitle + (options?.subtitle ? (compact ? 2 : 3) : (compact ? 4 : 5));
+    y +=
+      hTitle +
+      (options?.subtitle
+        ? elev
+          ? 1.5
+          : compact
+            ? 2
+            : 3
+        : elev
+          ? 2.5
+          : compact
+            ? 4
+            : 5);
     if (options?.subtitle) {
-      doc.font(PDFKIT_FONT_REGULAR).fontSize(9).fillColor(COL_MUTED);
+      doc.font(PDFKIT_FONT_REGULAR).fontSize(subSize).fillColor(COL_MUTED);
       const hSub = doc.heightOfString(subT, { width: usableW });
       doc.text(subT, left, y, { width: usableW, align: 'left' });
-      y += hSub + (compact ? 2 : 4);
+      y += hSub + (elev ? 1.5 : compact ? 2 : 4);
     }
     const ruleY = y;
     doc
@@ -491,7 +515,7 @@ export async function renderPdfV2(
       .moveTo(left, ruleY)
       .lineTo(left + usableW, ruleY)
       .stroke();
-    doc.y = ruleY + (compact ? 3 : 5);
+    doc.y = ruleY + (elev ? 2 : compact ? 3 : 5);
   };
 
   const labelColW = 154;
@@ -664,8 +688,12 @@ export async function renderPdfV2(
     subtitle:
       'Vista frontal (esquerda) e vista lateral (direita) · cotas em mm',
     compactDrawingGap: true,
+    elevationSheet: true,
   });
-  embedFullWidthDrawing(elevLandscapeStdRaster, { bottomPadPt: 1 });
+  embedFullWidthDrawing(elevLandscapeStdRaster, {
+    bottomPadPt: 0,
+    useFullPageHeightFromY: true,
+  });
 
   if (hasTunnel) {
     doc.addPage({ size: 'A4', layout: 'landscape', margins: pageMargins });
@@ -674,9 +702,13 @@ export async function renderPdfV2(
         ? 'Vista frontal (esquerda) e vista lateral (direita) · vão de passagem inferior'
         : undefined,
       compactDrawingGap: true,
+      elevationSheet: true,
     });
     if (elevLandscapeTunRaster) {
-      embedFullWidthDrawing(elevLandscapeTunRaster, { bottomPadPt: 1 });
+      embedFullWidthDrawing(elevLandscapeTunRaster, {
+        bottomPadPt: 0,
+        useFullPageHeightFromY: true,
+      });
     } else {
       drawCentered('Não aplicável neste projeto (sem módulo túnel).', {
         size: 11,
