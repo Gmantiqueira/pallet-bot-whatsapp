@@ -1005,24 +1005,6 @@ function drawUprightWidthDims(
   return parts.join('');
 }
 
-function computePanelFitScaleUncapped(
-  panel: { ox: number; oy: number; pw: number; ph: number },
-  content: { minX: number; minY: number; maxX: number; maxY: number },
-  margin: number,
-  maxScale = 1
-): number {
-  const { ox, oy, pw, ph } = panel;
-  const safeL = ox + margin;
-  const safeT = oy + margin;
-  const safeR = ox + pw - margin;
-  const safeB = oy + ph - margin;
-  const bw = Math.max(1, content.maxX - content.minX);
-  const bh = Math.max(1, content.maxY - content.minY);
-  const rw = (safeR - safeL) / bw;
-  const rh = (safeB - safeT) / bh;
-  return Math.min(Math.max(0.001, maxScale), rw, rh);
-}
-
 /** Encaixa o desenho no painel: bbox → escala uniforme → centragem (evita clipping). */
 function wrapSvgContentWithPanelFit(
   inner: string,
@@ -1064,39 +1046,6 @@ type SvgBBox = {
   maxY: number;
 };
 
-function computeStructuralPanelTransform(
-  panel: { ox: number; oy: number; pw: number; ph: number },
-  structural: SvgBBox,
-  fitBox: SvgBBox,
-  margin: number,
-  fitOpts?: { maxUniformScale?: number; uniformScale?: number }
-): { s: number; tx: number; ty: number } {
-  const { ox, oy, pw, ph } = panel;
-  const safeL = ox + margin;
-  const safeT = oy + margin;
-  const safeR = ox + pw - margin;
-  const safeB = oy + ph - margin;
-  const bw = Math.max(1, fitBox.maxX - fitBox.minX);
-  const bh = Math.max(1, fitBox.maxY - fitBox.minY);
-  const rw = (safeR - safeL) / bw;
-  const rh = (safeB - safeT) / bh;
-  const maxS =
-    fitOpts?.maxUniformScale != null && fitOpts.maxUniformScale > 0
-      ? fitOpts.maxUniformScale
-      : 1;
-  let s = Math.min(maxS, rw, rh);
-  if (typeof fitOpts?.uniformScale === 'number') {
-    s = Math.min(s, fitOpts.uniformScale);
-  }
-  const cx = (structural.minX + structural.maxX) / 2;
-  const cy = (structural.minY + structural.maxY) / 2;
-  const tcx = (safeL + safeR) / 2;
-  const tcy = (safeT + safeB) / 2;
-  const tx = tcx - s * cx;
-  const ty = tcy - s * cy;
-  return { s, tx, ty };
-}
-
 /** Linhas-guia horizontais discretas (coordenadas da folha, após transform da vista esq.). */
 function buildElevationSpreadGuideLinesSvg(
   width: number,
@@ -1136,9 +1085,9 @@ type ElevationPanelDeferredWrap = {
   inner: string;
   /** Bbox completo (inclui anotações), útil para debug. */
   bbox: SvgBBox;
-  /** Silhueta da estrutura (montantes, longarinas, piso) — define centragem. */
+  /** Silhueta da estrutura (montantes, longarinas, piso). */
   structuralBbox: SvgBBox;
-  /** Estrutura + margens fixas à volta para cotas/legendas (não depende do texto medido). */
+  /** Legado: estrutura + folga; o encaixe da prancha paisagem usa {@link bbox} + insets. */
   fitBox: SvgBBox;
   /** Referências Y locais (pré-transform) para linhas-guia na prancha paisagem. */
   guideYsLocal: { top: number; floor: number; beams: number[] };
@@ -1601,7 +1550,16 @@ function drawFrontRack(
   const maxY = Math.max(rackBottom + 76 * ls, floorTop + 16, oy + ph * 0.98);
   const minX = Math.min(rx - floorPad - 4, faceSpanLeft - 30, ox + 4);
   const maxX = Math.max(dimRight, ox + pw - 6, rackRight + floorPad + 8);
-  const bbox = { minX, minY, maxX, maxY };
+  const bboxBase = { minX, minY, maxX, maxY };
+  /** Folga extra ao bbox para «H total», níveis longos e cotas — encaixe usa bbox completo. */
+  const bbox = prem
+    ? {
+        minX: bboxBase.minX - 12 * ls,
+        minY: bboxBase.minY - 24 * ls,
+        maxX: bboxBase.maxX + 54 * ls,
+        maxY: bboxBase.maxY + 22 * ls,
+      }
+    : bboxBase;
   const structuralMinY =
     data.topTravamentoSuperior === true ? Math.min(ry, ry - 2.85) : ry;
   const structuralBbox: SvgBBox = {
@@ -2002,7 +1960,16 @@ function drawLateral(
   const maxXL = Math.max(dimRightLat, ox + pw - 6);
   const minYL = Math.min(y0 - 10 * ls, oy + (hideHeader ? 4 : 8));
   const maxYL = Math.max(floorTopLat + 44 * ls, oy + ph * 0.97);
-  const bboxLat = { minX: minXL, minY: minYL, maxX: maxXL, maxY: maxYL };
+  const bboxLatBase = { minX: minXL, minY: minYL, maxX: maxXL, maxY: maxYL };
+  const bboxLat =
+    prem && opts?.orthoSpread
+      ? {
+          minX: bboxLatBase.minX - 12 * ls,
+          minY: bboxLatBase.minY - 22 * ls,
+          maxX: bboxLatBase.maxX + 50 * ls,
+          maxY: bboxLatBase.maxY + 20 * ls,
+        }
+      : bboxLatBase;
   let latStructMaxX = x0 + dw + 6;
   if (data.fundoTravamento === true && !isDouble) {
     latStructMaxX += FUNDO_TRAVAMENTO_WIDTH_MM * depthScalePxPerMm;
@@ -2119,6 +2086,61 @@ const ELEV_SPREAD_FOOTER_FS_SHRINK = 0.91;
 const ELEV_SPREAD_FOOTER_FS_MIN = 6.45;
 /** Tecto de escala uniforme do par ortográfico (só eficaz com fitBox que o permita). */
 const ELEV_SPREAD_PANEL_FIT_MAX_SCALE = ELEV_SPREAD_ORTHO_REFINE;
+
+/**
+ * Reserva *dentro de cada meia-coluna* para cotas e textos — o encaixe usa só o retângulo
+ * interior (~88–92% da área do painel). Estrutura + anotações escalam em conjunto (bbox).
+ */
+const ELEV_SPREAD_PREMIUM_ANNOTATION_INSET_PX = {
+  l: 10,
+  r: 108,
+  t: 48,
+  b: 38,
+} as const;
+
+/** Após escala ótima do bbox: −5% para não cortar rótulos (H total, níveis, piso, etc.). */
+const ELEV_SPREAD_BBOX_FIT_HEADROOM = 0.95;
+
+type SpreadInset = {
+  l: number;
+  r: number;
+  t: number;
+  b: number;
+};
+
+function computeSpreadBboxFitScale(
+  panel: { ox: number; oy: number; pw: number; ph: number },
+  bbox: SvgBBox,
+  inset: SpreadInset,
+  maxScale: number
+): number {
+  const safeL = panel.ox + inset.l;
+  const safeR = panel.ox + panel.pw - inset.r;
+  const safeT = panel.oy + inset.t;
+  const safeB = panel.oy + panel.ph - inset.b;
+  const bw = Math.max(1, bbox.maxX - bbox.minX);
+  const bh = Math.max(1, bbox.maxY - bbox.minY);
+  const rw = (safeR - safeL) / bw;
+  const rh = (safeB - safeT) / bh;
+  return Math.min(Math.max(0.001, maxScale), rw, rh);
+}
+
+function computeSpreadBboxTransform(
+  panel: { ox: number; oy: number; pw: number; ph: number },
+  bbox: SvgBBox,
+  inset: SpreadInset,
+  s: number
+): { s: number; tx: number; ty: number } {
+  const safeL = panel.ox + inset.l;
+  const safeR = panel.ox + panel.pw - inset.r;
+  const safeT = panel.oy + inset.t;
+  const safeB = panel.oy + panel.ph - inset.b;
+  const cx = (bbox.minX + bbox.maxX) / 2;
+  const cy = (bbox.minY + bbox.maxY) / 2;
+  const tcx = (safeL + safeR) / 2;
+  const tcy = (safeT + safeB) / 2;
+  return { s, tx: tcx - s * cx, ty: tcy - s * cy };
+}
 
 function elevationSpreadLayoutMetrics(): {
   m: number;
@@ -2362,15 +2384,15 @@ function orthoSpreadPairVerticalNudgePx(
   right: ElevationPanelDeferredWrap,
   tLeft: { tx: number; ty: number; s: number },
   tRight: { tx: number; ty: number; s: number },
-  margin: number
+  inset: SpreadInset
 ): number {
   const slack = (
     t: { ty: number; s: number },
     bbox: SvgBBox,
     panel: { oy: number; ph: number }
   ): { slackTop: number; slackBot: number } => {
-    const safeT = panel.oy + margin;
-    const safeB = panel.oy + panel.ph - margin;
+    const safeT = panel.oy + inset.t;
+    const safeB = panel.oy + panel.ph - inset.b;
     const top = t.ty + t.s * bbox.minY;
     const bot = t.ty + t.s * bbox.maxY;
     return { slackTop: top - safeT, slackBot: safeB - bot };
@@ -2381,7 +2403,7 @@ function orthoSpreadPairVerticalNudgePx(
   const nMin = Math.max(-L.slackTop, -R.slackTop) + eps;
   const nMax = Math.min(L.slackBot, R.slackBot) - eps;
   if (nMax < nMin) return 0;
-  /** Encostar o bloco cotas+desenho ao rodapé da coluna (menos «mar» branco interno). */
+  /** Encostar cotas+desenho à zona inferior útil (coerente com insets de rodapé). */
   return Math.max(nMin, Math.min(nMax, nMax - 0.25));
 }
 
@@ -2395,43 +2417,23 @@ function finalizeOrthoSpreadPanels(
   rightSvg: string;
   guideLinesSvg: string;
 } {
-  /** Margem mínima no painel; labels/cotas ficam dentro do fitBox (não cortar). */
-  const panelFitMargin = 6;
-  const s = Math.min(
-    computePanelFitScaleUncapped(
-      left.panel,
-      left.fitBox,
-      panelFitMargin,
-      panelCap
-    ),
-    computePanelFitScaleUncapped(
-      right.panel,
-      right.fitBox,
-      panelFitMargin,
-      panelCap
-    )
+  const inset: SpreadInset = { ...ELEV_SPREAD_PREMIUM_ANNOTATION_INSET_PX };
+  const sRaw = Math.min(
+    computeSpreadBboxFitScale(left.panel, left.bbox, inset, panelCap),
+    computeSpreadBboxFitScale(right.panel, right.bbox, inset, panelCap)
   );
-  const fit = { uniformScale: s, maxUniformScale: panelCap };
-  let tLeft = computeStructuralPanelTransform(
-    left.panel,
-    left.structuralBbox,
-    left.fitBox,
-    panelFitMargin,
-    fit
-  );
-  let tRight = computeStructuralPanelTransform(
-    right.panel,
-    right.structuralBbox,
-    right.fitBox,
-    panelFitMargin,
-    fit
-  );
+  const s = sRaw * ELEV_SPREAD_BBOX_FIT_HEADROOM;
+  let tLeft = computeSpreadBboxTransform(left.panel, left.bbox, inset, s);
+  let tRight = computeSpreadBboxTransform(right.panel, right.bbox, inset, s);
+  const floorL = left.guideYsLocal.floor;
+  const floorR = right.guideYsLocal.floor;
+  tRight = { ...tRight, ty: tLeft.ty + s * (floorL - floorR) };
   const nudge = orthoSpreadPairVerticalNudgePx(
     left,
     right,
     tLeft,
     tRight,
-    panelFitMargin
+    inset
   );
   if (nudge !== 0) {
     tLeft = { ...tLeft, ty: tLeft.ty + nudge };
