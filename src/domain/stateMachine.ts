@@ -84,6 +84,8 @@ export type Effect =
   | { type: 'GENERATE_PDF' }
   /** Reenviar o PDF já gravado (botão "Baixar" em DONE). */
   | { type: 'RESEND_PDF' }
+  /** Reenviar a prévia com módulos numerados (botão em WAIT_TUNNEL_MODULE_NUMBERS). */
+  | { type: 'RESEND_TUNNEL_PREVIEW_PDF' }
   /** Prévia PDF (planta com módulos numerados) para escolha manual de túneis. */
   | { type: 'GENERATE_TUNNEL_PREVIEW' }
   /** Gerar planilha de orçamento (.xlsx) a partir do layout (botão em DONE). */
@@ -1294,6 +1296,11 @@ export const transition = (
       return { session: newSession, effects };
 
     case 'WAIT_TUNNEL_MODULE_NUMBERS':
+      if (input.type === 'BUTTON' && input.value === 'BAIXAR_PREVIA_PDF') {
+        effects.push({ type: 'RESEND_TUNNEL_PREVIEW_PDF' });
+        effects.push({ type: 'SEND' });
+        return { session: newSession, effects };
+      }
       if (input.type !== 'TEXT') {
         return { session: newSession, effects };
       }

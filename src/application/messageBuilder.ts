@@ -25,6 +25,8 @@ export interface MessageContext {
   pdfFilename?: string;
   /** Utilizador pediu reenvio do PDF (botão Baixar no estado DONE). */
   doneResendPdf?: boolean;
+  /** Reenvio da prévia com módulos numerados (botão Baixar nesse passo). */
+  tunnelPreviewResendPdf?: boolean;
   /** Mensagem curta após gerar o Excel de orçamento no mesmo pedido. */
   budgetSuccessMessage?: string;
   /** Falha ao gerar orçamento (estado DONE; PDF pode estar ok). */
@@ -62,6 +64,18 @@ export const buildMessages = (
       to: session.phone,
       type: 'text',
       text: `✅ Imagem recebida. Dimensões detetadas (revisão):\nComprimento: ${length} mm\nLargura: ${width} mm\n\nConfirme ou corrija manualmente.`,
+    });
+  }
+
+  if (
+    ctx.tunnelPreviewResendPdf === true &&
+    session.state === 'WAIT_TUNNEL_MODULE_NUMBERS'
+  ) {
+    messages.push({
+      to: session.phone,
+      type: 'text',
+      text:
+        '📎 A reenviar o PDF da prévia. O integrador WhatsApp deve voltar a anexar o mesmo ficheiro.',
     });
   }
 
@@ -572,9 +586,11 @@ const buildStateMessage = (session: Session): OutgoingMessage | null => {
         text:
           '📄 *Prévia com módulos numerados*\n\n' +
             'O PDF de pré-visualização (mesmo padrão de desenho, sem túneis) foi enviado em anexo.\n\n' +
+            'Se *não vir o documento*, toque em *Baixar PDF* para o integrador reenviar o ficheiro.\n\n' +
             'Cada *número* na planta = *um módulo de frente* (2 baias), na mesma ordem usada no projeto final.\n\n' +
             '*Responda com os números* dos módulos onde pretende túnel. Exemplos: *2, 5, 8* ou *Módulos 2 e 6*.\n\n' +
             'Números inválidos serão sinalizados; repetições contam uma vez.',
+        buttons: [{ id: 'BAIXAR_PREVIA_PDF', label: 'Baixar PDF' }],
       };
 
     default:

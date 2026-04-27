@@ -450,7 +450,7 @@
     }
 
     function sendButtonClick(buttonId) {
-      if (buttonId === 'BAIXAR_PDF') {
+      if (buttonId === 'BAIXAR_PDF' || buttonId === 'BAIXAR_PREVIA_PDF') {
         if (lastPdfBase64 && lastPdfFilename) {
           downloadPdfFromBase64(lastPdfBase64, lastPdfFilename);
           return;

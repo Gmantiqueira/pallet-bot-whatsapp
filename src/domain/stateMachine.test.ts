@@ -190,6 +190,23 @@ describe('State Machine', () => {
       expect(result.effects.some(e => e.type === 'RESEND_PDF')).toBe(true);
     });
 
+    it('WAIT_TUNNEL_MODULE_NUMBERS + BAIXAR_PREVIA_PDF mantém estado e pede reenvio da prévia', () => {
+      const session = createSession('WAIT_TUNNEL_MODULE_NUMBERS', {
+        tunnelPreviewMaxIndex: 4,
+        tunnelPreviewPdfFilename: 'previa.pdf',
+        tunnelPreviewPdfPath: '/tmp/previa.pdf',
+      });
+      const result = transition(session, {
+        type: 'BUTTON',
+        value: 'BAIXAR_PREVIA_PDF',
+      });
+
+      expect(result.session.state).toBe('WAIT_TUNNEL_MODULE_NUMBERS');
+      expect(
+        result.effects.some(e => e.type === 'RESEND_TUNNEL_PREVIEW_PDF')
+      ).toBe(true);
+    });
+
     it('FINAL_CONFIRM + TEXT goes to MENU', () => {
       const session = createSession('FINAL_CONFIRM', { lengthMm: 1000 });
       const result = transition(session, { type: 'TEXT', value: 'ola' });

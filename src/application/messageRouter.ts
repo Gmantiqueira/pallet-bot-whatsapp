@@ -114,6 +114,35 @@ function generatedPdfFromSessionAnswers(
   }
 }
 
+function generatedTunnelPreviewPdfFromAnswers(
+  answers: Session['answers']
+): GeneratedPdfArtifact | undefined {
+  const fn =
+    typeof answers.tunnelPreviewPdfFilename === 'string'
+      ? answers.tunnelPreviewPdfFilename.trim()
+      : '';
+  const abs =
+    typeof answers.tunnelPreviewPdfPath === 'string'
+      ? answers.tunnelPreviewPdfPath.trim()
+      : '';
+  if (!fn || !abs) return undefined;
+  try {
+    if (!fs.existsSync(abs)) return undefined;
+    const stat = fs.statSync(abs);
+    const storageDir = resolveStoragePath();
+    const rel = path.relative(storageDir, abs);
+    return {
+      filename: fn,
+      absolutePath: abs,
+      mimeType: 'application/pdf',
+      sizeBytes: stat.size,
+      storageRelativePath: rel,
+    };
+  } catch {
+    return undefined;
+  }
+}
+
 const isGlobalCommand = (text: string): boolean => {
   const normalized = text.trim().toLowerCase();
   return GLOBAL_COMMANDS.includes(normalized);
@@ -642,6 +671,19 @@ export const routeIncoming = async (
     }
   }
 
+  const hasResendTunnelPreviewPdf = transitionResult.effects.some(
+    e => e.type === 'RESEND_TUNNEL_PREVIEW_PDF'
+  );
+  if (
+    hasResendTunnelPreviewPdf &&
+    updatedSession.state === 'WAIT_TUNNEL_MODULE_NUMBERS'
+  ) {
+    const resent = generatedTunnelPreviewPdfFromAnswers(updatedSession.answers);
+    if (resent) {
+      generatedPdf = resent;
+    }
+  }
+
   const hasBudgetEffect = transitionResult.effects.some(
     e => e.type === 'GENERATE_BUDGET_XLSX'
   );
@@ -663,6 +705,7 @@ export const routeIncoming = async (
     previousState,
     lastError: deliveryError,
     doneResendPdf: hasResendPdfEffect,
+    tunnelPreviewResendPdf: hasResendTunnelPreviewPdf,
     budgetError,
     budgetSuccessMessage: generatedBudget
       ? `📊 Orçamento Excel: ${generatedBudget.filename} (preços editáveis; totais com fórmulas).`

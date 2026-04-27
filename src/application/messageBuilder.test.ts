@@ -174,6 +174,34 @@ describe('MessageBuilder', () => {
       expect(messages[0].buttons?.[0].id).toBe('CONTINUAR');
     });
 
+    it('should build WAIT_TUNNEL_MODULE_NUMBERS with Baixar PDF button', () => {
+      const session = createSession('WAIT_TUNNEL_MODULE_NUMBERS', {
+        tunnelPreviewMaxIndex: 3,
+      });
+      const messages = buildMessages(session, {});
+
+      expect(messages).toHaveLength(1);
+      expect(messages[0].text).toContain('Prévia com módulos numerados');
+      expect(messages[0].text).toMatch(/não vir o documento|Baixar PDF/i);
+      expect(messages[0].buttons).toEqual([
+        { id: 'BAIXAR_PREVIA_PDF', label: 'Baixar PDF' },
+      ]);
+    });
+
+    it('should prepend resend notice when tunnelPreviewResendPdf', () => {
+      const session = createSession('WAIT_TUNNEL_MODULE_NUMBERS', {
+        tunnelPreviewMaxIndex: 3,
+      });
+      const messages = buildMessages(session, { tunnelPreviewResendPdf: true });
+
+      expect(messages.length).toBeGreaterThanOrEqual(2);
+      expect(messages[0].text).toContain('A reenviar o PDF da prévia');
+      const withBtn = messages.find(m => m.buttons?.length);
+      expect(
+        withBtn?.buttons?.some(b => b.id === 'BAIXAR_PREVIA_PDF')
+      ).toBe(true);
+    });
+
     it('should build DONE com botão Baixar PDF (integrador envia PDF)', () => {
       const session = createSession('DONE');
       const messages = buildMessages(session, {
