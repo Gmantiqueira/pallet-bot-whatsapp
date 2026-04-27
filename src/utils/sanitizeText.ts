@@ -4,9 +4,13 @@
  * (JavaScript strings are UTF-16 code units; output is stable valid Unicode).
  */
 
-/** Characters with no glyph width that often corrupt PDF/SVG text layout. */
+/**
+ * Characters with no glyph width that often corrupt PDF/SVG text layout.
+ * Includes BMP non-characters (U+FDD0–FDEF, U+FFFE–FFFF) that some stacks render
+ * as “pé￾direito” between syllables.
+ */
 const INVISIBLE_AND_FORMAT_CHARS =
-  /[\u00AD\u034F\u061C\u115F\u17B4\u17B5\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u2069\uFEFF\uFFF9-\uFFFB]/g;
+  /[\u00AD\u034F\u061C\u115F\u17B4\u17B5\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u2069\uFEFF\uFFF9-\uFFFB\uFDD0-\uFDEF\uFFFE\uFFFF]/g;
 
 /**
  * Hífen / traço / menos matemático em Unicode → U+002D para saída PDF/SVG estável

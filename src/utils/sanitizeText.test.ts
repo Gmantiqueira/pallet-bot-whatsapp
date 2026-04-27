@@ -13,6 +13,11 @@ describe('sanitizeText', () => {
     expect(sanitizeText('pé\u00ADdireito')).toBe('pé-direito');
   });
 
+  it('removes BMP non-character U+FFFE between pé and direito (PDF glyph bug)', () => {
+    expect(sanitizeText('pé\uFFFEdireito útil')).toBe('pé-direito útil');
+    expect(sanitizeText('Pé\uFFFEdireito total')).toBe('Pé-direito total');
+  });
+
   it('removes U+FFFD replacement character', () => {
     expect(sanitizeText('ok\uFFFD!')).toBe('ok!');
   });
