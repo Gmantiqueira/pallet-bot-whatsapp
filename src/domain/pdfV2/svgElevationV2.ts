@@ -67,18 +67,18 @@ const ELEV_INTERIOR_TYPE_SCALE = 1.16 * 1.1;
  * rótulos em duas linhas (pt-BR) sem sobreposição nem truncagem no encaixe da folha.
  */
 const ELEV_VERTICAL_DIM_STEP_LS = 15.25;
-/** Calha à direita da última coluna de cota — cresce com o fator de tipografia. */
+/** Calha à direita da última coluna — espaço para «H total», patamares e notas sem encostar à moldura. */
 const ELEV_VERTICAL_DIM_RIGHT_GUTTER_PX = Math.round(
-  190 * ELEV_INTERIOR_TYPE_SCALE
+  238 * ELEV_INTERIOR_TYPE_SCALE
 );
-/** Reserva horizontal antes de calcular `rackMaxW` na vista frontal (depende do n.º de troços). */
+/** Reserva horizontal antes de `rackMaxW` na frontal: toda a cadeia de cotas + rótulos à direita do vão. */
 const ELEV_FRONT_DIM_CHAIN_CAP_PX = Math.round(
-  392 * ELEV_INTERIOR_TYPE_SCALE
+  448 * ELEV_INTERIOR_TYPE_SCALE
 );
 const ELEV_FRONT_DIM_CHAIN_BASE_PX = Math.round(
-  162 * ELEV_INTERIOR_TYPE_SCALE
+  192 * ELEV_INTERIOR_TYPE_SCALE
 );
-const ELEV_FRONT_DIM_CHAIN_PER_SEG_LS = 14.5;
+const ELEV_FRONT_DIM_CHAIN_PER_SEG_LS = 15.25;
 
 function escapeXml(text: string): string {
   return sanitizeText(text)
@@ -1699,7 +1699,8 @@ function drawLateral(
   const sliceMm = Math.max(1, data.lateralProfileDepthMm);
   const isDouble = data.rackDepthMode === 'double';
 
-  const dimReservePx = 78;
+  /** Reserva à direita do perfil para a cadeia vertical de cotas e textos de altura. */
+  const dimReservePx = 102;
   const rackW = Math.min(
     Math.max(130, pw - 36 - dimReservePx),
     Math.max(118, pw * 0.52)
