@@ -15,7 +15,6 @@ import { buildFloorPlanModelV2 } from '../../domain/pdfV2/floorPlanModelV2';
 import { serializeFloorPlanSvgV2 } from '../../domain/pdfV2/svgFloorPlanV2';
 import { buildElevationModelV2 } from '../../domain/pdfV2/elevationModelV2';
 import {
-  ELEV_PDF_ELEVATION_EMBED_ZOOM,
   ELEV_PDF_LS_IMAGE_BOTTOM_BLEED_PT,
   ELEV_PDF_LS_PAGE_HEIGHT_PT,
   ELEV_PDF_LS_YIMG_FROM_TOP_PT,
@@ -89,18 +88,17 @@ function drawingRasterPixelSize(): { pxW: number; pxH: number } {
 /** Raster para prancha de elevações em A4 paisagem (frontal + lateral). */
 function elevationLandscapeDrawingRasterPixelSize(): { pxW: number; pxH: number } {
   const pageW = 841.89;
-  const pageH = 595.28;
   const usableW = pageW - 2 * PAGE_MARGIN_PT;
-  /** Mesmo `ELEV_PDF_LS_AVAIL_H_PT` que o viewBox em `svgElevationV2` (altura até quase ao fim da folha). */
+  /** Mesmo `ELEV_PDF_LS_AVAIL_H_PT` que o viewBox em `svgElevationV2`. */
   const imgAvailH =
     ELEV_PDF_LS_PAGE_HEIGHT_PT -
     ELEV_PDF_LS_YIMG_FROM_TOP_PT -
     ELEV_PDF_LS_IMAGE_BOTTOM_BLEED_PT;
-  const pxW = ptToPx(Math.round(usableW * 1.08));
-  const pxH = ptToPx(Math.max(120, imgAvailH * 1.22));
+  /** Proporção idêntica à caixa útil (Sharp `fit: inside` sem alterar razão do bitmap vs PDF). */
+  const oversample = 1.08 * ELEV_SPREAD_CANVAS_SCALE;
   return {
-    pxW: Math.max(1, Math.round(pxW * ELEV_SPREAD_CANVAS_SCALE)),
-    pxH: Math.max(1, Math.round(pxH * ELEV_SPREAD_CANVAS_SCALE)),
+    pxW: Math.max(1, Math.round(ptToPx(usableW * oversample))),
+    pxH: Math.max(1, Math.round(ptToPx(imgAvailH * oversample))),
   };
 }
 
@@ -464,52 +462,6 @@ export async function renderPdfV2(
   };
 
   /**
-   * Elevações: escala extra sobre o bitmap já encaixado (zoom centrado; clip na área útil).
-   * O `fitRasterInBox` sozinho não pode ultrapassar a caixa — este passo simula «zoom na página».
-   */
-  const embedElevationSheetRaster = (raster: {
-    buffer: Buffer;
-    widthPx: number;
-    heightPx: number;
-  }): void => {
-    const yImg = doc.y + 0.5;
-    const availH =
-      doc.page.height - yImg - ELEV_PDF_LS_IMAGE_BOTTOM_BLEED_PT;
-    const { dw, dh } = fitRasterInBox(
-      raster.widthPx,
-      raster.heightPx,
-      usableW,
-      availH
-    );
-    const zoom = ELEV_PDF_ELEVATION_EMBED_ZOOM;
-    if (zoom <= 1.001) {
-      const ix = left + (usableW - dw) / 2;
-      doc.image(raster.buffer, ix, yImg, { width: dw, height: dh });
-      doc.y = yImg + dh;
-      return;
-    }
-    const dwZ = dw * zoom;
-    const dhZ = dh * zoom;
-    const slackW = usableW - dwZ;
-    /**
-     * dwZ > usableW: centrar faz ix < left e corta a vista frontal à esquerda — ancora ao x da margem.
-     * dwZ < usableW: viés > 0,5 desloca a prancha para a direita (menos branco à direita).
-     */
-    const ix =
-      slackW < -0.5
-        ? left
-        : slackW > 0.5
-          ? left + slackW * 0.68
-          : left;
-    const iy = yImg + (availH - dhZ) / 2;
-    doc.save();
-    doc.rect(left, yImg, usableW, availH).clip();
-    doc.image(raster.buffer, ix, iy, { width: dwZ, height: dhZ });
-    doc.restore();
-    doc.y = yImg + availH;
-  };
-
-  /**
    * Cabeçalho de folha de desenho — título à esquerda, traço total, tipografia uniforme
    * (prancha técnica, não faixa centrada).
    */
@@ -737,7 +689,9 @@ export async function renderPdfV2(
     compactDrawingGap: true,
     elevationSheet: true,
   });
-  embedElevationSheetRaster(elevLandscapeStdRaster);
+  embedFullWidthDrawing(elevLandscapeStdRaster, {
+    useFullPageHeightFromY: true,
+  });
 
   if (hasTunnel) {
     doc.addPage({ size: 'A4', layout: 'landscape', margins: pageMargins });
@@ -749,7 +703,9 @@ export async function renderPdfV2(
       elevationSheet: true,
     });
     if (elevLandscapeTunRaster) {
-      embedElevationSheetRaster(elevLandscapeTunRaster);
+      embedFullWidthDrawing(elevLandscapeTunRaster, {
+        useFullPageHeightFromY: true,
+      });
     } else {
       drawCentered('Não aplicável neste projeto (sem módulo túnel).', {
         size: 11,

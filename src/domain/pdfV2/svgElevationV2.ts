@@ -2050,11 +2050,10 @@ const ELEV_SPREAD_LS_LAT_PRIMARY =
 const ELEV_SPREAD_LS_LAT_MINOR =
   ELEV_LATERAL_LABEL_SCALE * 0.72 * 1.12 * ELEV_SPREAD_ORTHO_REFINE;
 /**
- * Proporção base do viewBox vs. caixa A4 paisagem; `ELEV_SPREAD_VIEWBOX_WIDTH_BIAS` alarga a prancha
- * para o raster limitar pela **largura** (evita faixas brancas laterais como na planta).
- * Valores em pt: largura útil = 841.89 − 2×24; altura útil = pageBottom − yImg − bottomPad.
- * Distância do topo da folha até onde começa o bitmap (cabeçalho + traço + folga).
- * Deve bater com `beginDrawingSheetHeader` em modo compacto de elevações.
+ * ViewBox da prancha: **mesma proporção** que a caixa útil no PDF (largura × altura em pt),
+ * para o PNG encaixar sem letterbox nem zoom com clip — limites SVG = limites da folha.
+ * Largura útil = 841.89 − 2×24; altura útil = `ELEV_PDF_LS_AVAIL_H_PT`.
+ * `ELEV_PDF_LS_YIMG_FROM_TOP_PT` deve bater com `beginDrawingSheetHeader` (elevações compactas).
  */
 export const ELEV_PDF_LS_YIMG_FROM_TOP_PT = 74;
 /**
@@ -2076,23 +2075,11 @@ const ELEV_PDF_LS_AVAIL_H_PT =
  * O raster em `pdfV2Service` deve usar o mesmo fator para manter proporção e nitidez.
  */
 export const ELEV_SPREAD_CANVAS_SCALE = 1.45;
-/**
- * Zoom uniforme ao embutir a prancha de elevações no PDF (após `fitRasterInBox`).
- * Valores &gt; 1 ampliam todo o desenho na área útil; o excesso é cortado (clip), como zoom no viewer.
- */
-export const ELEV_PDF_ELEVATION_EMBED_ZOOM = 1.28;
 const ELEV_SPREAD_BASE_H = 1500;
-/** Largura × altura do SVG; W/H derivado da zona útil do PDF (não alterar só um eixo). */
+/** Largura × altura do SVG; W/H = caixa útil A4 paisagem (mesma razão que `fitRasterInBox` no PDF). */
 const ELEV_SPREAD_H = Math.round(ELEV_SPREAD_BASE_H * ELEV_SPREAD_CANVAS_SCALE);
-/**
- * Prancha mais larga que a caixa teórica A4 → PNG mais «achatado» → {@link fitRasterInBox}
- * limita pela **largura** (comportamento semelhante à planta), em vez de pela altura com margens laterais enormes.
- */
-const ELEV_SPREAD_VIEWBOX_WIDTH_BIAS = 1.32;
 const ELEV_SPREAD_W = Math.round(
-  ELEV_SPREAD_H *
-    (ELEV_PDF_LS_USABLE_W_PT / ELEV_PDF_LS_AVAIL_H_PT) *
-    ELEV_SPREAD_VIEWBOX_WIDTH_BIAS
+  ELEV_SPREAD_H * (ELEV_PDF_LS_USABLE_W_PT / ELEV_PDF_LS_AVAIL_H_PT)
 );
 /** Faixa de notas compacta — menos altura em faixa = mais `innerH` para escala. */
 const ELEV_SPREAD_FOOTER_BAND_PX = 36;
