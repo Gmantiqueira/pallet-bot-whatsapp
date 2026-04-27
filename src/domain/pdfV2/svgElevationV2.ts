@@ -907,7 +907,8 @@ function wrapSvgContentWithPanelFit(
   inner: string,
   panel: { ox: number; oy: number; pw: number; ph: number },
   content: { minX: number; minY: number; maxX: number; maxY: number },
-  margin: number
+  margin: number,
+  fitOpts?: { maxUniformScale?: number }
 ): string {
   const { ox, oy, pw, ph } = panel;
   const safeL = ox + margin;
@@ -916,7 +917,11 @@ function wrapSvgContentWithPanelFit(
   const safeB = oy + ph - margin;
   const bw = Math.max(1, content.maxX - content.minX);
   const bh = Math.max(1, content.maxY - content.minY);
-  const s = Math.min(1, (safeR - safeL) / bw, (safeB - safeT) / bh);
+  let s = Math.min(1, (safeR - safeL) / bw, (safeB - safeT) / bh);
+  const cap = fitOpts?.maxUniformScale;
+  if (typeof cap === 'number' && cap > 0 && cap < 1) {
+    s = Math.min(s, cap);
+  }
   const cx = (content.minX + content.maxX) / 2;
   const cy = (content.minY + content.maxY) / 2;
   const tcx = (safeL + safeR) / 2;
@@ -935,7 +940,12 @@ function drawFrontRack(
   data: ElevationPanelPayload,
   sectionTitle: string,
   subtitle?: string,
-  options?: { labelScale?: number; debug?: boolean }
+  options?: {
+    labelScale?: number;
+    debug?: boolean;
+    /** Prancha paisagem: até 95% da escala de encaixe para reservar folga ao rodapé. */
+    panelFitMaxScale?: number;
+  }
 ): string {
   const ls = options?.labelScale ?? 1;
   const nMod = FV_FRONT_BAY_COUNT;
@@ -1323,7 +1333,10 @@ function drawFrontRack(
     inner,
     { ox, oy, pw, ph },
     { minX, minY, maxX, maxY },
-    12
+    12,
+    options?.panelFitMaxScale != null
+      ? { maxUniformScale: options.panelFitMaxScale }
+      : undefined
   );
 }
 
@@ -1348,7 +1361,12 @@ function drawLateral(
   pw: number,
   ph: number,
   data: ElevationPanelPayload,
-  opts?: { labelScale?: number; hideHeader?: boolean; debug?: boolean }
+  opts?: {
+    labelScale?: number;
+    hideHeader?: boolean;
+    debug?: boolean;
+    panelFitMaxScale?: number;
+  }
 ): string {
   const ls = opts?.labelScale ?? 1;
   const hideHeader = opts?.hideHeader === true;
@@ -1623,7 +1641,10 @@ function drawLateral(
     innerLat,
     { ox, oy, pw, ph },
     { minX: minXL, minY: minYL, maxX: maxXL, maxY: maxYL },
-    12
+    12,
+    opts?.panelFitMaxScale != null
+      ? { maxUniformScale: opts.panelFitMaxScale }
+      : undefined
   );
 }
 
@@ -1639,6 +1660,105 @@ const ELEV_SPREAD_FRAME_INSET = 18;
 const ELEV_SPREAD_COL_GAP_PX = 8;
 const ELEV_SPREAD_W = 2040;
 const ELEV_SPREAD_H = 1330;
+/** Faixa inferior exclusiva para textos explicativos (sem sobreposição com desenhos). */
+const ELEV_SPREAD_FOOTER_BAND_PX = 92;
+/** Margem mínima entre rodapé e moldura da coluna. */
+const ELEV_SPREAD_FOOTER_SIDE_PAD_PX = 14;
+/** Até 95% da escala de encaixe: folga de 5% antes de invadir a faixa de rodapé. */
+const ELEV_SPREAD_PANEL_FIT_MAX_SCALE = 0.95;
+
+function elevationSpreadLayoutMetrics(): {
+  m: number;
+  gap: number;
+  padTop: number;
+  footerBand: number;
+  width: number;
+  height: number;
+  colInnerW: number;
+  innerH: number;
+  footerTextMaxW: number;
+  yFooterBandTop: number;
+} {
+  const m = ELEV_SPREAD_FRAME_INSET;
+  const gap = ELEV_SPREAD_COL_GAP_PX;
+  const padTop = 16;
+  const footerBand = ELEV_SPREAD_FOOTER_BAND_PX;
+  const width = ELEV_SPREAD_W;
+  const height = ELEV_SPREAD_H;
+  const colInnerW = (width - 2 * m - gap) / 2;
+  const innerH = height - m - footerBand - padTop;
+  const footerTextMaxW = Math.max(
+    96,
+    colInnerW - 2 * ELEV_SPREAD_FOOTER_SIDE_PAD_PX
+  );
+  const yFooterBandTop = height - m - footerBand;
+  return {
+    m,
+    gap,
+    padTop,
+    footerBand,
+    width,
+    height,
+    colInnerW,
+    innerH,
+    footerTextMaxW,
+    yFooterBandTop,
+  };
+}
+
+/** Quebra texto do rodapé por largura útil (por coluna, independente). */
+function wrapFooterTextToLines(
+  text: string,
+  maxWidthPx: number,
+  fs: number
+): string[] {
+  const avgCharPx = fs * 0.52;
+  const maxChars = Math.max(18, Math.floor(maxWidthPx / avgCharPx));
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) {
+    return [''];
+  }
+  const lines: string[] = [];
+  let cur = '';
+  for (const w of words) {
+    const trial = cur ? `${cur} ${w}` : w;
+    if (trial.length > maxChars && cur.length > 0) {
+      lines.push(cur);
+      cur = w;
+    } else {
+      cur = trial;
+    }
+  }
+  if (cur) {
+    lines.push(cur);
+  }
+  return lines;
+}
+
+function elevationSpreadFooterColumnSvg(
+  cx: number,
+  yBandTop: number,
+  bandH: number,
+  maxTextW: number,
+  fs: number,
+  fill: string,
+  body: string
+): string {
+  const lines = wrapFooterTextToLines(body, maxTextW, fs);
+  const lh = fs * 1.16;
+  const blockH = lines.length * lh;
+  const weight = svgFontWeightForSvgAttr('600');
+  const yFirst =
+    yBandTop + Math.max(fs * 0.72, (bandH - blockH) / 2 + fs * 0.72);
+  const inner = lines
+    .map((line, i) =>
+      i === 0
+        ? `<tspan>${escapeXml(line)}</tspan>`
+        : `<tspan x="${cx}" dy="${lh}">${escapeXml(line)}</tspan>`
+    )
+    .join('');
+  return `<text x="${cx}" y="${yFirst}" text-anchor="middle" font-size="${fs}px" fill="${fill}" font-family="${SVG_FONT_FAMILY}" font-weight="${weight}">${inner}</text>`;
+}
 
 export type ElevationPageSvgs = {
   /** Paisagem: vista frontal (esq.) + vista lateral (dir.), módulo padrão. */
@@ -1656,19 +1776,25 @@ function wrapElevationLandscapeSpread(
   footerLeft: string,
   footerRight: string
 ): string {
-  const width = ELEV_SPREAD_W;
-  const height = ELEV_SPREAD_H;
-  const m = ELEV_SPREAD_FRAME_INSET;
-  const gap = ELEV_SPREAD_COL_GAP_PX;
-  const padTop = 16;
-  const footerReserve = 52;
-  const colInnerW = (width - 2 * m - gap) / 2;
+  const L = elevationSpreadLayoutMetrics();
+  const {
+    m,
+    gap,
+    padTop,
+    footerBand,
+    width,
+    height,
+    colInnerW,
+    footerTextMaxW,
+    yFooterBandTop,
+  } = L;
   const fsFoot =
     Math.round(11.25 * ELEV_PAGE_LABEL_SCALE * 10) / 10;
   const fsCol = Math.round(9.2 * ELEV_PAGE_LABEL_SCALE * 10) / 10;
   const cxLeft = m + colInnerW / 2;
   const cxRight = m + colInnerW + gap + colInnerW / 2;
   const sepX = m + colInnerW + gap / 2;
+  const footFill = '#334155';
   const parts: string[] = [];
   parts.push(
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">`
@@ -1678,7 +1804,7 @@ function wrapElevationLandscapeSpread(
     `<rect x="${m}" y="${m}" width="${width - 2 * m}" height="${height - 2 * m}" fill="none" stroke="${COL_FRAME}" stroke-width="0.45"/>`
   );
   parts.push(
-    `<line x1="${sepX}" y1="${m + padTop + 2}" x2="${sepX}" y2="${height - m - footerReserve + 4}" stroke="#e2e8f0" stroke-width="0.55" opacity="0.92" pointer-events="none"/>`
+    `<line x1="${sepX}" y1="${m + padTop + 2}" x2="${sepX}" y2="${yFooterBandTop}" stroke="#e2e8f0" stroke-width="0.55" opacity="0.92" pointer-events="none"/>`
   );
   parts.push(
     `<text x="${cxLeft}" y="${m + 13}" text-anchor="middle" font-size="${fsCol}px" fill="#64748b" font-family="${SVG_FONT_FAMILY}" font-weight="600">${escapeXml('Vista frontal')}</text>`
@@ -1688,12 +1814,27 @@ function wrapElevationLandscapeSpread(
   );
   parts.push(leftInner);
   parts.push(rightInner);
-  const footFill = '#334155';
   parts.push(
-    `<text x="${cxLeft}" y="${height - 16}" text-anchor="middle" font-size="${fsFoot}px" fill="${footFill}" font-family="${SVG_FONT_FAMILY}" font-weight="600">${escapeXml(footerLeft)}</text>`
+    elevationSpreadFooterColumnSvg(
+      cxLeft,
+      yFooterBandTop,
+      footerBand,
+      footerTextMaxW,
+      fsFoot,
+      footFill,
+      footerLeft
+    )
   );
   parts.push(
-    `<text x="${cxRight}" y="${height - 16}" text-anchor="middle" font-size="${fsFoot}px" fill="${footFill}" font-family="${SVG_FONT_FAMILY}" font-weight="600">${escapeXml(footerRight)}</text>`
+    elevationSpreadFooterColumnSvg(
+      cxRight,
+      yFooterBandTop,
+      footerBand,
+      footerTextMaxW,
+      fsFoot,
+      footFill,
+      footerRight
+    )
   );
   parts.push('</svg>');
   return parts.join('');
@@ -1713,12 +1854,9 @@ export function serializeElevationPagesV2(
 ): ElevationPageSvgs {
   const dbg = options?.debug === true;
   const ls = ELEV_PAGE_LABEL_SCALE;
-  const m = ELEV_SPREAD_FRAME_INSET;
-  const gap = ELEV_SPREAD_COL_GAP_PX;
-  const padTop = 16;
-  const footerReserve = 52;
-  const colInnerW = (ELEV_SPREAD_W - 2 * m - gap) / 2;
-  const innerH = ELEV_SPREAD_H - padTop - footerReserve - m;
+  const L = elevationSpreadLayoutMetrics();
+  const { m, gap, padTop, colInnerW, innerH } = L;
+  const panelCap = ELEV_SPREAD_PANEL_FIT_MAX_SCALE;
 
   const std = model.frontWithoutTunnel;
   const leftStd = drawFrontRack(
@@ -1732,6 +1870,7 @@ export function serializeElevationPagesV2(
     {
       labelScale: ls,
       debug: dbg,
+      panelFitMaxScale: panelCap,
     }
   );
   const rightStd = drawLateral(
@@ -1744,6 +1883,7 @@ export function serializeElevationPagesV2(
       labelScale: ELEV_LATERAL_LABEL_SCALE,
       hideHeader: true,
       debug: dbg,
+      panelFitMaxScale: panelCap,
     }
   );
   const landscapeStandard = wrapElevationLandscapeSpread(
@@ -1765,7 +1905,7 @@ export function serializeElevationPagesV2(
       tun,
       '',
       buildElevationAccessorySubtitle(tun),
-      { labelScale: ls, debug: dbg }
+      { labelScale: ls, debug: dbg, panelFitMaxScale: panelCap }
     );
     const rightTun = drawLateral(
       m + colInnerW + gap,
@@ -1777,6 +1917,7 @@ export function serializeElevationPagesV2(
         labelScale: ELEV_LATERAL_LABEL_SCALE,
         hideHeader: true,
         debug: dbg,
+        panelFitMaxScale: panelCap,
       }
     );
     landscapeTunnel = wrapElevationLandscapeSpread(
