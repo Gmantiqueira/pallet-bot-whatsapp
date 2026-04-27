@@ -48,8 +48,8 @@ const COL_FLOOR_FILL = '#f1f5f9';
 
 /** Cotas: hierarquia — principal / secundária. */
 const DIM_MAJOR = '#0f172a';
-/** Cotas secundárias: um pouco mais escuras para leitura em impressão/PDF. */
-const DIM_MINOR = '#475569';
+/** Cotas e rótulos secundários — ligeiramente mais escuros para leitura em PDF/impressão. */
+const DIM_MINOR = '#3f4b5c';
 const COL_BRACE_STROKE = '#475569';
 
 /**
@@ -673,7 +673,7 @@ function drawVerticalDimChain(
           ? [`${segLabel(k)} · ${formatMmPtBr(mmRounded)}`]
           : [segLabel(k), formatMmPtBr(mmRounded)],
         {
-          fontSize: (compact ? 8.1 : 9) * ls,
+          fontSize: (compact ? 9.1 : 9) * ls,
           fill: DIM_MINOR,
           fontWeight: '500',
         }
@@ -1481,7 +1481,7 @@ function drawFrontRack(
 
   const palletKg = resolvePalletCapacityKg(data);
   const pairKg = beamPairCapacityKg(data);
-  const capFsSmall = 6.85 * lsMinor;
+  const capFsSmall = 7.65 * lsMinor;
   const capLinePallet = `CAPACIDADE = ${formatKgCapacityPtBr(palletKg)} kg por palete`;
   parts.push(
     `<text x="${(faceSpanLeft + faceSpanRight) / 2}" y="${dimTopY - 20 * ls}" text-anchor="middle" font-size="${capFsSmall}px" fill="${DIM_MINOR}" stroke="${COL_BG}" stroke-width="${0.28 * ls}" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="600">${escapeXml(
@@ -1941,7 +1941,7 @@ function drawLateral(
 
   const palletKgLat = resolvePalletCapacityKg(data);
   const pairKgLat = beamPairCapacityKg(data);
-  const capLatFs = 6.75 * lsMinor;
+  const capLatFs = 7.55 * lsMinor;
   const mxLat = (bayLeft + bayRight) / 2;
   parts.push(
     `<text x="${mxLat}" y="${y0 - 8 * ls}" text-anchor="middle" font-size="${capLatFs}px" fill="${DIM_MINOR}" stroke="${COL_BG}" stroke-width="${0.25 * ls}" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="600">${escapeXml(
@@ -1972,7 +1972,7 @@ function drawLateral(
     dimensionLineHArrows(x0, floorTopLat + 22 * ls, x0 + dw, DIM_MINOR)
   );
   parts.push(
-    `<text x="${x0 + dw / 2}" y="${floorTopLat + 38 * ls}" text-anchor="middle" font-size="${8.25 * ls}px" fill="#64748b" font-family="${SVG_FONT_FAMILY}">${escapeXml(
+    `<text x="${x0 + dw / 2}" y="${floorTopLat + 38 * ls}" text-anchor="middle" font-size="${9.2 * ls}px" fill="${DIM_MINOR}" font-family="${SVG_FONT_FAMILY}" font-weight="600">${escapeXml(
       isDouble
         ? `Profundidade da costa: ${formatMmPtBr(Math.round(sliceMm))} (dupla costas em planta)`
         : `Profundidade da costa: ${formatMmPtBr(Math.round(sliceMm))}`
@@ -2103,12 +2103,12 @@ const ELEV_LATERAL_LABEL_SCALE = ELEV_PAGE_LABEL_SCALE * 0.82;
 const ELEV_SPREAD_FRAME_INSET = 18;
 /** Espaço entre colunas (~10% mais estreito que 6px): aproxima vistas, amplia área útil. */
 const ELEV_SPREAD_COL_GAP_PX = 5;
-/** Textos técnicos principais na prancha (+12%). */
-const ELEV_SPREAD_LS_PRIMARY = ELEV_PAGE_LABEL_SCALE * 1.12;
-/** Legendas secundárias (capacidade por patamar, etc.): ~−30% vs. principal. */
-const ELEV_SPREAD_LS_MINOR = ELEV_PAGE_LABEL_SCALE * 0.72;
-const ELEV_SPREAD_LS_LAT_PRIMARY = ELEV_LATERAL_LABEL_SCALE * 1.12;
-const ELEV_SPREAD_LS_LAT_MINOR = ELEV_LATERAL_LABEL_SCALE * 0.72;
+/** Textos técnicos principais na prancha (+12% sobre o passo anterior ≈ +25% vs. escala de página). */
+const ELEV_SPREAD_LS_PRIMARY = ELEV_PAGE_LABEL_SCALE * 1.12 * 1.12;
+/** Capacidade / legendas auxiliares: mantém hierarquia (~58% da página × +12%). */
+const ELEV_SPREAD_LS_MINOR = ELEV_PAGE_LABEL_SCALE * 0.72 * 1.12;
+const ELEV_SPREAD_LS_LAT_PRIMARY = ELEV_LATERAL_LABEL_SCALE * 1.12 * 1.12;
+const ELEV_SPREAD_LS_LAT_MINOR = ELEV_LATERAL_LABEL_SCALE * 0.72 * 1.12;
 const ELEV_SPREAD_W = 2040;
 const ELEV_SPREAD_H = 1330;
 /** Faixa de notas: ligeiramente mais baixa para ganhar altura útil do desenho; texto ancorado ao topo da faixa. */
