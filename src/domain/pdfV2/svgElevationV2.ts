@@ -2115,9 +2115,14 @@ const ELEV_SPREAD_H = 1330;
 const ELEV_SPREAD_FOOTER_BAND_PX = 78;
 /** Margem mínima entre rodapé e moldura da coluna. */
 const ELEV_SPREAD_FOOTER_SIDE_PAD_PX = 14;
+/** Faixa neutra à volta do eixo central — texto do rodapé não entra nesta zona. */
+const ELEV_SPREAD_FOOTER_CENTER_CLEAR_PX = 12;
 /** Folga inferior confortável dentro da faixa de notas (evita texto “esmagado”). */
-const ELEV_SPREAD_FOOTER_TEXT_PAD_BOTTOM = 22;
+const ELEV_SPREAD_FOOTER_TEXT_PAD_BOTTOM = 24;
 const ELEV_SPREAD_FOOTER_TEXT_PAD_TOP = 10;
+/** Se o bloco não caber na altura útil, reduzir tipografia do rodapé (~8%). */
+const ELEV_SPREAD_FOOTER_FS_SHRINK = 0.92;
+const ELEV_SPREAD_FOOTER_FS_MIN = 7.1;
 /** Até ~96% da escala de encaixe: ligeiramente maior que antes, com margem ao rodapé. */
 const ELEV_SPREAD_PANEL_FIT_MAX_SCALE = 0.96;
 
@@ -2130,7 +2135,6 @@ function elevationSpreadLayoutMetrics(): {
   height: number;
   colInnerW: number;
   innerH: number;
-  footerTextMaxW: number;
   yFooterBandTop: number;
 } {
   const m = ELEV_SPREAD_FRAME_INSET;
@@ -2141,10 +2145,6 @@ function elevationSpreadLayoutMetrics(): {
   const height = ELEV_SPREAD_H;
   const colInnerW = (width - 2 * m - gap) / 2;
   const innerH = height - m - footerBand - padTop;
-  const footerTextMaxW = Math.max(
-    96,
-    colInnerW - 2 * ELEV_SPREAD_FOOTER_SIDE_PAD_PX
-  );
   const yFooterBandTop = height - m - footerBand;
   return {
     m,
@@ -2155,19 +2155,21 @@ function elevationSpreadLayoutMetrics(): {
     height,
     colInnerW,
     innerH,
-    footerTextMaxW,
     yFooterBandTop,
   };
 }
 
-/** Quebra texto do rodapé por largura útil (por coluna, independente). */
+/**
+ * Quebra texto do rodapé por largura máxima em px (estimativa por caractere).
+ * Palavras longas são partidas para não ultrapassar a coluna.
+ */
 function wrapFooterTextToLines(
   text: string,
   maxWidthPx: number,
   fs: number
 ): string[] {
   const avgCharPx = fs * 0.52;
-  const maxChars = Math.max(18, Math.floor(maxWidthPx / avgCharPx));
+  const maxChars = Math.max(8, Math.floor(maxWidthPx / avgCharPx));
   const words = text.trim().split(/\s+/).filter(Boolean);
   if (words.length === 0) {
     return [''];
@@ -2175,49 +2177,74 @@ function wrapFooterTextToLines(
   const lines: string[] = [];
   let cur = '';
   for (const w of words) {
-    const trial = cur ? `${cur} ${w}` : w;
-    if (trial.length > maxChars && cur.length > 0) {
-      lines.push(cur);
-      cur = w;
-    } else {
-      cur = trial;
+    let remaining = w;
+    while (remaining.length > 0) {
+      const chunk =
+        remaining.length <= maxChars
+          ? remaining
+          : remaining.slice(0, maxChars);
+      remaining = remaining.slice(chunk.length);
+      if (cur.length === 0) {
+        cur = chunk;
+      } else if (`${cur} ${chunk}`.length <= maxChars) {
+        cur = `${cur} ${chunk}`;
+      } else {
+        lines.push(cur);
+        cur = chunk;
+      }
     }
   }
-  if (cur) {
+  if (cur.length > 0) {
     lines.push(cur);
   }
   return lines;
 }
 
-function elevationSpreadFooterColumnSvg(
-  cx: number,
+/**
+ * Bloco de rodapé numa coluna fixa: alinhado à esquerda, largura máxima, sem cruzar o centro.
+ */
+function elevationSpreadFooterBlockSvg(
+  xBlockLeft: number,
   yBandTop: number,
   bandH: number,
   maxTextW: number,
-  fs: number,
+  fsBase: number,
   fill: string,
   body: string
 ): string {
-  const lines = wrapFooterTextToLines(body, maxTextW, fs);
-  const lh = fs * 1.14;
-  const blockH = lines.length * lh;
-  const weight = svgFontWeightForSvgAttr('600');
   const yMaxContent = yBandTop + bandH - ELEV_SPREAD_FOOTER_TEXT_PAD_BOTTOM;
-  let yFirst = yBandTop + ELEV_SPREAD_FOOTER_TEXT_PAD_TOP + fs * 0.55;
-  if (yFirst + blockH > yMaxContent) {
-    yFirst = Math.max(
-      yBandTop + ELEV_SPREAD_FOOTER_TEXT_PAD_TOP,
-      yMaxContent - blockH
-    );
+  const yAnchor = yBandTop + ELEV_SPREAD_FOOTER_TEXT_PAD_TOP;
+  const availableH = yMaxContent - yAnchor;
+
+  let fs = fsBase;
+  let lines = wrapFooterTextToLines(body, maxTextW, fs);
+  let lh = fs * 1.14;
+  let blockH = lines.length * lh;
+
+  while (
+    fs > ELEV_SPREAD_FOOTER_FS_MIN &&
+    blockH > availableH - fs * 0.45
+  ) {
+    fs = Math.max(ELEV_SPREAD_FOOTER_FS_MIN, fs * ELEV_SPREAD_FOOTER_FS_SHRINK);
+    lines = wrapFooterTextToLines(body, maxTextW, fs);
+    lh = fs * 1.14;
+    blockH = lines.length * lh;
   }
+
+  let yFirst = yAnchor + fs * 0.35;
+  if (yFirst + blockH > yMaxContent) {
+    yFirst = Math.max(yAnchor, yMaxContent - blockH);
+  }
+
+  const weight = svgFontWeightForSvgAttr('600');
   const inner = lines
     .map((line, i) =>
       i === 0
         ? `<tspan>${escapeXml(line)}</tspan>`
-        : `<tspan x="${cx}" dy="${lh}">${escapeXml(line)}</tspan>`
+        : `<tspan x="${xBlockLeft}" dy="${lh}">${escapeXml(line)}</tspan>`
     )
     .join('');
-  return `<text x="${cx}" y="${yFirst}" text-anchor="middle" font-size="${fs}px" fill="${fill}" font-family="${SVG_FONT_FAMILY}" font-weight="${weight}">${inner}</text>`;
+  return `<text x="${xBlockLeft}" y="${yFirst}" text-anchor="start" font-size="${fs}px" fill="${fill}" font-family="${SVG_FONT_FAMILY}" font-weight="${weight}">${inner}</text>`;
 }
 
 export type ElevationPageSvgs = {
@@ -2246,7 +2273,6 @@ function wrapElevationLandscapeSpread(
     width,
     height,
     colInnerW,
-    footerTextMaxW,
     yFooterBandTop,
   } = L;
   const fsFoot =
@@ -2256,6 +2282,18 @@ function wrapElevationLandscapeSpread(
   const cxLeft = m + colInnerW / 2;
   const cxRight = m + colInnerW + gap + colInnerW / 2;
   const sepX = m + colInnerW + gap / 2;
+  const side = ELEV_SPREAD_FOOTER_SIDE_PAD_PX;
+  const midClear = ELEV_SPREAD_FOOTER_CENTER_CLEAR_PX;
+  const leftFooterX = m + side;
+  const leftFooterMaxW = Math.max(
+    80,
+    sepX - midClear - leftFooterX
+  );
+  const rightFooterX = sepX + midClear;
+  const rightFooterMaxW = Math.max(
+    80,
+    width - m - side - rightFooterX
+  );
   const footFill = '#334155';
   const parts: string[] = [];
   parts.push(
@@ -2280,22 +2318,22 @@ function wrapElevationLandscapeSpread(
     parts.push(guideLinesSvg);
   }
   parts.push(
-    elevationSpreadFooterColumnSvg(
-      cxLeft,
+    elevationSpreadFooterBlockSvg(
+      leftFooterX,
       yFooterBandTop,
       footerBand,
-      footerTextMaxW,
+      leftFooterMaxW,
       fsFoot,
       footFill,
       footerLeft
     )
   );
   parts.push(
-    elevationSpreadFooterColumnSvg(
-      cxRight,
+    elevationSpreadFooterBlockSvg(
+      rightFooterX,
       yFooterBandTop,
       footerBand,
-      footerTextMaxW,
+      rightFooterMaxW,
       fsFoot,
       footFill,
       footerRight
