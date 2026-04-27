@@ -54,9 +54,10 @@ const COL_BRACE_STROKE = '#475569';
 
 /**
  * Tipografia interna das pranchas de elevação (cotas, rótulos técnicos, capacidades).
- * Faixa pedida 12–18%; ~16% num único fator mantém proporções relativas (via `ls` nos desenhos).
+ * Hierarquia preservada: tudo escala com `ls`; lateral segue `ELEV_LATERAL_LABEL_SCALE` (= ×0,82).
+ * Inclui +10% face ao passo anterior (1,16 × 1,10).
  */
-const ELEV_INTERIOR_TYPE_SCALE = 1.16;
+const ELEV_INTERIOR_TYPE_SCALE = 1.16 * 1.1;
 
 /**
  * Cotas verticais à direita (frontal e lateral): colunas mais afastadas e calha larga para
