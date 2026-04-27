@@ -119,6 +119,12 @@ function guardKindAtFrontEdge(
   return 'none';
 }
 
+/**
+ * Elevação: guardas mais discretas que o rack (~−20% espessura e opacidade).
+ * A planta (svgFloorPlanV2) mantém destaque inalterado.
+ */
+const ELEV_GUARD_RAIL_MARKER_VISUAL = 0.8;
+
 /** Marcadores junto à face de armazenagem (símbolo de guarda nas extremidades do vão). */
 function drawFrontGuardRailMarkers(
   faceSpanLeft: number,
@@ -133,18 +139,19 @@ function drawFrontGuardRailMarkers(
   const y1 = rackBottom - 38 * ls;
   const y2 = rackBottom + 1;
   const parts: string[] = [];
+  const gv = ELEV_GUARD_RAIL_MARKER_VISUAL;
   const post = (x: number, kind: 'simple' | 'double') => {
     const col = kind === 'double' ? '#991b1b' : '#a16207';
-    const wMain = kind === 'double' ? 3.4 : 5.4;
-    const wBack = wMain + 4.2;
+    const wMain = (kind === 'double' ? 3.4 : 5.4) * gv;
+    const wBack = wMain + 4.2 * gv;
     const xs =
       kind === 'double' ? ([x - 3.2, x + 3.2] as const) : ([x] as const);
     for (const xv of xs) {
       parts.push(
-        `<line x1="${xv}" y1="${y1}" x2="${xv}" y2="${y2}" stroke="#f8fafc" stroke-width="${wBack}" stroke-linecap="round" opacity="0.96"/>`
+        `<line x1="${xv}" y1="${y1}" x2="${xv}" y2="${y2}" stroke="#f8fafc" stroke-width="${wBack}" stroke-linecap="round" opacity="${(0.96 * gv).toFixed(3)}"/>`
       );
       parts.push(
-        `<line x1="${xv}" y1="${y1}" x2="${xv}" y2="${y2}" stroke="${col}" stroke-width="${wMain}" stroke-linecap="square" opacity="1"/>`
+        `<line x1="${xv}" y1="${y1}" x2="${xv}" y2="${y2}" stroke="${col}" stroke-width="${wMain}" stroke-linecap="square" opacity="${gv.toFixed(3)}"/>`
       );
     }
     const span = y2 - y1;
@@ -154,7 +161,7 @@ function drawFrontGuardRailMarkers(
     const half = kind === 'double' ? 11 : 9;
     for (const ry of [r1, rm, r2]) {
       parts.push(
-        `<line x1="${x - half}" y1="${ry}" x2="${x + half}" y2="${ry}" stroke="${col}" stroke-width="${2.1 * ls}" stroke-linecap="square" opacity="0.93"/>`
+        `<line x1="${x - half}" y1="${ry}" x2="${x + half}" y2="${ry}" stroke="${col}" stroke-width="${2.1 * ls * gv}" stroke-linecap="square" opacity="${(0.93 * gv).toFixed(3)}"/>`
       );
     }
   };
@@ -165,13 +172,13 @@ function drawFrontGuardRailMarkers(
   if (left !== 'none') {
     const col = left === 'double' ? '#991b1b' : '#a16207';
     parts.push(
-      `<text x="${faceSpanLeft - 24}" y="${(y1 + y2) / 2 + 3.2 * ls}" text-anchor="end" font-size="${9.2 * ls}px" fill="${col}" stroke="#ffffff" stroke-width="${0.42 * ls}" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="700">${tag(left)}</text>`
+      `<text x="${faceSpanLeft - 24}" y="${(y1 + y2) / 2 + 3.2 * ls}" text-anchor="end" font-size="${9.2 * ls * gv}px" fill="${col}" stroke="#ffffff" stroke-width="${0.42 * ls * gv}" opacity="${gv.toFixed(3)}" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="700">${tag(left)}</text>`
     );
   }
   if (right !== 'none') {
     const col = right === 'double' ? '#991b1b' : '#a16207';
     parts.push(
-      `<text x="${faceSpanRight + 24}" y="${(y1 + y2) / 2 + 3.2 * ls}" text-anchor="start" font-size="${9.2 * ls}px" fill="${col}" stroke="#ffffff" stroke-width="${0.42 * ls}" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="700">${tag(right)}</text>`
+      `<text x="${faceSpanRight + 24}" y="${(y1 + y2) / 2 + 3.2 * ls}" text-anchor="start" font-size="${9.2 * ls * gv}px" fill="${col}" stroke="#ffffff" stroke-width="${0.42 * ls * gv}" opacity="${gv.toFixed(3)}" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="700">${tag(right)}</text>`
     );
   }
   return parts.join('');
@@ -192,18 +199,19 @@ function drawLateralGuardRailMarkers(
   const y1 = rackTop + 26 * ls;
   const y2 = rackBottom + 1;
   const parts: string[] = [];
+  const gv = ELEV_GUARD_RAIL_MARKER_VISUAL;
   const post = (x: number, kind: 'simple' | 'double') => {
     const col = kind === 'double' ? '#991b1b' : '#a16207';
-    const wMain = kind === 'double' ? 3.4 : 5.4;
-    const wBack = wMain + 4.2;
+    const wMain = (kind === 'double' ? 3.4 : 5.4) * gv;
+    const wBack = wMain + 4.2 * gv;
     const xs =
       kind === 'double' ? ([x - 3.2, x + 3.2] as const) : ([x] as const);
     for (const xv of xs) {
       parts.push(
-        `<line x1="${xv}" y1="${y1}" x2="${xv}" y2="${y2}" stroke="#f8fafc" stroke-width="${wBack}" stroke-linecap="round" opacity="0.96"/>`
+        `<line x1="${xv}" y1="${y1}" x2="${xv}" y2="${y2}" stroke="#f8fafc" stroke-width="${wBack}" stroke-linecap="round" opacity="${(0.96 * gv).toFixed(3)}"/>`
       );
       parts.push(
-        `<line x1="${xv}" y1="${y1}" x2="${xv}" y2="${y2}" stroke="${col}" stroke-width="${wMain}" stroke-linecap="square" opacity="1"/>`
+        `<line x1="${xv}" y1="${y1}" x2="${xv}" y2="${y2}" stroke="${col}" stroke-width="${wMain}" stroke-linecap="square" opacity="${gv.toFixed(3)}"/>`
       );
     }
     const span = y2 - y1;
@@ -213,7 +221,7 @@ function drawLateralGuardRailMarkers(
     const half = kind === 'double' ? 11 : 9;
     for (const ry of [r1, rm, r2]) {
       parts.push(
-        `<line x1="${x - half}" y1="${ry}" x2="${x + half}" y2="${ry}" stroke="${col}" stroke-width="${2.1 * ls}" stroke-linecap="square" opacity="0.93"/>`
+        `<line x1="${x - half}" y1="${ry}" x2="${x + half}" y2="${ry}" stroke="${col}" stroke-width="${2.1 * ls * gv}" stroke-linecap="square" opacity="${(0.93 * gv).toFixed(3)}"/>`
       );
     }
   };
@@ -224,13 +232,13 @@ function drawLateralGuardRailMarkers(
   if (left !== 'none') {
     const col = left === 'double' ? '#991b1b' : '#a16207';
     parts.push(
-      `<text x="${xLeftOuter - 24}" y="${(y1 + y2) / 2 + 3.2 * ls}" text-anchor="end" font-size="${9.2 * ls}px" fill="${col}" stroke="#ffffff" stroke-width="${0.42 * ls}" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="700">${tag(left)}</text>`
+      `<text x="${xLeftOuter - 24}" y="${(y1 + y2) / 2 + 3.2 * ls}" text-anchor="end" font-size="${9.2 * ls * gv}px" fill="${col}" stroke="#ffffff" stroke-width="${0.42 * ls * gv}" opacity="${gv.toFixed(3)}" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="700">${tag(left)}</text>`
     );
   }
   if (right !== 'none') {
     const col = right === 'double' ? '#991b1b' : '#a16207';
     parts.push(
-      `<text x="${xRightOuter + 24}" y="${(y1 + y2) / 2 + 3.2 * ls}" text-anchor="start" font-size="${9.2 * ls}px" fill="${col}" stroke="#ffffff" stroke-width="${0.42 * ls}" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="700">${tag(right)}</text>`
+      `<text x="${xRightOuter + 24}" y="${(y1 + y2) / 2 + 3.2 * ls}" text-anchor="start" font-size="${9.2 * ls * gv}px" fill="${col}" stroke="#ffffff" stroke-width="${0.42 * ls * gv}" opacity="${gv.toFixed(3)}" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="700">${tag(right)}</text>`
     );
   }
   return parts.join('');
