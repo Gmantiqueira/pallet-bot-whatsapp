@@ -1008,7 +1008,8 @@ function drawUprightWidthDims(
 function computePanelFitScaleUncapped(
   panel: { ox: number; oy: number; pw: number; ph: number },
   content: { minX: number; minY: number; maxX: number; maxY: number },
-  margin: number
+  margin: number,
+  maxScale = 1
 ): number {
   const { ox, oy, pw, ph } = panel;
   const safeL = ox + margin;
@@ -1017,7 +1018,9 @@ function computePanelFitScaleUncapped(
   const safeB = oy + ph - margin;
   const bw = Math.max(1, content.maxX - content.minX);
   const bh = Math.max(1, content.maxY - content.minY);
-  return Math.min(1, (safeR - safeL) / bw, (safeB - safeT) / bh);
+  const rw = (safeR - safeL) / bw;
+  const rh = (safeB - safeT) / bh;
+  return Math.min(Math.max(0.001, maxScale), rw, rh);
 }
 
 /** Encaixa o desenho no painel: bbox → escala uniforme → centragem (evita clipping). */
@@ -1035,14 +1038,15 @@ function wrapSvgContentWithPanelFit(
   const safeB = oy + ph - margin;
   const bw = Math.max(1, content.maxX - content.minX);
   const bh = Math.max(1, content.maxY - content.minY);
-  const fitUncapped = Math.min(1, (safeR - safeL) / bw, (safeB - safeT) / bh);
-  let s = fitUncapped;
+  const rw = (safeR - safeL) / bw;
+  const rh = (safeB - safeT) / bh;
+  const maxS =
+    fitOpts?.maxUniformScale != null && fitOpts.maxUniformScale > 0
+      ? fitOpts.maxUniformScale
+      : 1;
+  let s = Math.min(maxS, rw, rh);
   if (typeof fitOpts?.uniformScale === 'number') {
-    s = Math.min(fitOpts.uniformScale, fitUncapped);
-  }
-  const cap = fitOpts?.maxUniformScale;
-  if (typeof cap === 'number' && cap > 0 && cap < 1) {
-    s = Math.min(s, cap);
+    s = Math.min(s, fitOpts.uniformScale);
   }
   const cx = (content.minX + content.maxX) / 2;
   const cy = (content.minY + content.maxY) / 2;
@@ -1074,14 +1078,15 @@ function computeStructuralPanelTransform(
   const safeB = oy + ph - margin;
   const bw = Math.max(1, fitBox.maxX - fitBox.minX);
   const bh = Math.max(1, fitBox.maxY - fitBox.minY);
-  const fitUncapped = Math.min(1, (safeR - safeL) / bw, (safeB - safeT) / bh);
-  let s = fitUncapped;
+  const rw = (safeR - safeL) / bw;
+  const rh = (safeB - safeT) / bh;
+  const maxS =
+    fitOpts?.maxUniformScale != null && fitOpts.maxUniformScale > 0
+      ? fitOpts.maxUniformScale
+      : 1;
+  let s = Math.min(maxS, rw, rh);
   if (typeof fitOpts?.uniformScale === 'number') {
-    s = Math.min(fitOpts.uniformScale, fitUncapped);
-  }
-  const cap = fitOpts?.maxUniformScale;
-  if (typeof cap === 'number' && cap > 0 && cap < 1) {
-    s = Math.min(s, cap);
+    s = Math.min(s, fitOpts.uniformScale);
   }
   const cx = (structural.minX + structural.maxX) / 2;
   const cy = (structural.minY + structural.maxY) / 2;
@@ -1190,6 +1195,7 @@ function drawFrontRack(
   const ls = options?.labelScale ?? 1;
   const lsMinor = options?.labelMinorScale ?? ls;
   const prem = options?.spreadPremium === true;
+  const lsPad = prem ? ls / ELEV_SPREAD_ORTHO_REFINE : ls;
   const nMod = FV_FRONT_BAY_COUNT;
   /** Uma baia no desenho: duas posições de palete no mesmo vão (linha central). */
   const splitPalateLanesInClearSpan = nMod === 1;
@@ -1604,10 +1610,10 @@ function drawFrontRack(
     minY: structuralMinY,
     maxY: floorTop + 11,
   };
-  const fitPadTop = prem ? 38 * ls + 26 : 62 * ls + 52;
-  const fitPadBottom = prem ? 46 * ls + 16 : 74 * ls + 32;
-  const fitPadLeft = prem ? 11 + 6.5 * ls : 22 + 10 * ls;
-  const fitPadRight = dimRight - rackRight + (prem ? 8 : 18);
+  const fitPadTop = prem ? 36 * lsPad + 24 : 62 * ls + 52;
+  const fitPadBottom = prem ? 43 * lsPad + 15 : 74 * ls + 32;
+  const fitPadLeft = prem ? 10 + 6 * lsPad : 22 + 10 * ls;
+  const fitPadRight = dimRight - rackRight + (prem ? 7 : 18);
   const fitBox: SvgBBox = {
     minX: structuralBbox.minX - fitPadLeft,
     minY: structuralBbox.minY - fitPadTop,
@@ -1691,6 +1697,7 @@ function drawLateral(
   const ls = opts?.labelScale ?? 1;
   const lsMinor = opts?.labelMinorScale ?? ls;
   const prem = opts?.spreadPremium === true;
+  const lsPad = prem ? ls / ELEV_SPREAD_ORTHO_REFINE : ls;
   const hideHeader = opts?.hideHeader === true;
   const rackMaxW = Math.min(pw - 48, Math.max(120, pw * 0.54));
   const rackMaxH = ph - Math.round(72 / ls);
@@ -2006,10 +2013,10 @@ function drawLateral(
     minY: data.topTravamentoSuperior === true ? Math.min(y0, y0 - 2.85) : y0,
     maxY: floorTopLat + 11,
   };
-  const fitPadTopLat = prem ? 8.5 * ls + 24 : 14 * ls + 44;
-  const fitPadBottomLat = prem ? 30 * ls + 14 : 48 * ls + 26;
-  const fitPadLeftLat = prem ? 12 : 20;
-  const fitPadRightLat = dimRightLat - (x0 + dw) + (prem ? 8 : 16);
+  const fitPadTopLat = prem ? 8 * lsPad + 21 : 14 * ls + 44;
+  const fitPadBottomLat = prem ? 28 * lsPad + 12 : 48 * ls + 26;
+  const fitPadLeftLat = prem ? 10 : 20;
+  const fitPadRightLat = dimRightLat - (x0 + dw) + (prem ? 7 : 16);
   const fitBoxLat: SvgBBox = {
     minX: structuralBboxLat.minX - fitPadLeftLat,
     minY: structuralBboxLat.minY - fitPadTopLat,
@@ -2058,30 +2065,39 @@ const ELEV_LATERAL_LABEL_SCALE = ELEV_PAGE_LABEL_SCALE * 0.82;
 const ELEV_SPREAD_FRAME_INSET = 5;
 /** Junta frontal/lateral sem faixa — máxima largura por coluna. */
 const ELEV_SPREAD_COL_GAP_PX = 0;
-/** Respiro mínimo entre títulos de coluna e painel de desenho. */
-const ELEV_SPREAD_CONTENT_PAD_TOP_PX = 3;
-/** Textos técnicos principais na prancha (+12% sobre o passo anterior ≈ +25% vs. escala de página). */
-const ELEV_SPREAD_LS_PRIMARY = ELEV_PAGE_LABEL_SCALE * 1.12 * 1.12;
-/** Capacidade / legendas auxiliares: mantém hierarquia (~58% da página × +12%). */
-const ELEV_SPREAD_LS_MINOR = ELEV_PAGE_LABEL_SCALE * 0.72 * 1.12;
-const ELEV_SPREAD_LS_LAT_PRIMARY = ELEV_LATERAL_LABEL_SCALE * 1.12 * 1.12;
-const ELEV_SPREAD_LS_LAT_MINOR = ELEV_LATERAL_LABEL_SCALE * 0.72 * 1.12;
+/** Respiro mínimo entre rótulos «Vista …» e painel (desenho sobe). */
+const ELEV_SPREAD_CONTENT_PAD_TOP_PX = 1;
+/**
+ * Ganho final do par ortográfico (~5–8%) + cotas/textos proporcionais.
+ * `lsPad = ls / ORTHO_REFINE` nos fitPad premium evita absorver o ganho em folga do fitBox.
+ */
+const ELEV_SPREAD_ORTHO_REFINE = 1.065;
+/** Textos técnicos principais na prancha (+12% × refinamento ortográfico). */
+const ELEV_SPREAD_LS_PRIMARY =
+  ELEV_PAGE_LABEL_SCALE * 1.12 * 1.12 * ELEV_SPREAD_ORTHO_REFINE;
+/** Capacidade / legendas auxiliares. */
+const ELEV_SPREAD_LS_MINOR =
+  ELEV_PAGE_LABEL_SCALE * 0.72 * 1.12 * ELEV_SPREAD_ORTHO_REFINE;
+const ELEV_SPREAD_LS_LAT_PRIMARY =
+  ELEV_LATERAL_LABEL_SCALE * 1.12 * 1.12 * ELEV_SPREAD_ORTHO_REFINE;
+const ELEV_SPREAD_LS_LAT_MINOR =
+  ELEV_LATERAL_LABEL_SCALE * 0.72 * 1.12 * ELEV_SPREAD_ORTHO_REFINE;
 /**
  * Proporção do viewBox = caixa onde o PNG é colocado no PDF A4 paisagem.
  * Se o SVG for mais «alto» que isto, {@link fitRasterInBox} limita pela altura e ficam
  * faixas brancas à direita e por baixo (ver `pdfV2Service` embedFullWidthDrawing).
  * Valores em pt: largura útil = 841.89 − 2×24; altura útil = pageBottom − yImg − 3 após
- * `beginDrawingSheetHeader` (~64.5 pt desde o topo até yImg).
+ * `beginDrawingSheetHeader` com `compactDrawingGap` (~59.5 pt até yImg).
  */
 const ELEV_PDF_LS_USABLE_W_PT = 841.89 - 48;
-const ELEV_PDF_LS_AVAIL_H_PT = 595.28 - 24 - 64.5 - 3;
+const ELEV_PDF_LS_AVAIL_H_PT = 595.28 - 24 - 59.5 - 3;
 /** Largura × altura do SVG; W/H derivado da zona útil do PDF (não alterar só um eixo). */
 const ELEV_SPREAD_H = 1500;
 const ELEV_SPREAD_W = Math.round(
   ELEV_SPREAD_H * (ELEV_PDF_LS_USABLE_W_PT / ELEV_PDF_LS_AVAIL_H_PT)
 );
-/** Faixa de notas mínima; topo do desenho ganha altura (rodapé colado a `height − m`). */
-const ELEV_SPREAD_FOOTER_BAND_PX = 70;
+/** Faixa de notas compacta — rodapé sobe, mais altura útil para o desenho. */
+const ELEV_SPREAD_FOOTER_BAND_PX = 62;
 /** Margem interna do texto de rodapé à moldura. */
 const ELEV_SPREAD_FOOTER_SIDE_PAD_PX = 10;
 /** Evita que notas de rodapé invadam o eixo da junta entre vistas. */
@@ -2091,12 +2107,13 @@ const ELEV_SPREAD_FOOTER_TEXT_PAD_BOTTOM = 28;
 const ELEV_SPREAD_FOOTER_TEXT_PAD_TOP = 8;
 /** Tipografia do rodapé: pequena e legível (independente da escala das cotas). */
 const ELEV_SPREAD_FOOTER_FS_BASE =
-  Math.round(7.85 * ELEV_INTERIOR_TYPE_SCALE * 10) / 10;
+  Math.round(7.85 * ELEV_INTERIOR_TYPE_SCALE * ELEV_SPREAD_ORTHO_REFINE * 10) /
+  10;
 /** Se o bloco não caber na altura útil, reduzir tipografia do rodapé. */
 const ELEV_SPREAD_FOOTER_FS_SHRINK = 0.91;
 const ELEV_SPREAD_FOOTER_FS_MIN = 6.45;
-/** Encaixe total na zona segura do painel (margem anti-clipping em finalizeOrthoSpreadPanels). */
-const ELEV_SPREAD_PANEL_FIT_MAX_SCALE = 1;
+/** Tecto de escala uniforme do par ortográfico (só eficaz com fitBox que o permita). */
+const ELEV_SPREAD_PANEL_FIT_MAX_SCALE = ELEV_SPREAD_ORTHO_REFINE;
 
 function elevationSpreadLayoutMetrics(): {
   m: number;
@@ -2254,7 +2271,9 @@ function wrapElevationLandscapeSpread(
     yFooterBandTop,
   } = L;
   const fsCol =
-    Math.round(9.45 * ELEV_PAGE_LABEL_SCALE * 1.1 * 0.86 * 10) / 10;
+    Math.round(
+      9.45 * ELEV_PAGE_LABEL_SCALE * 1.1 * 0.86 * ELEV_SPREAD_ORTHO_REFINE * 10
+    ) / 10;
   const cxLeft = m + colInnerW / 2;
   const cxRight = m + colInnerW + gap + colInnerW / 2;
   const sepX = m + colInnerW + gap / 2;
@@ -2281,7 +2300,7 @@ function wrapElevationLandscapeSpread(
   parts.push(
     `<line x1="${sepX}" y1="${m + padTop + 0.5}" x2="${sepX}" y2="${yFooterBandTop}" stroke="#e2e8f0" stroke-width="0.55" opacity="0.92" pointer-events="none"/>`
   );
-  const yColTitle = m + 8;
+  const yColTitle = m + 6;
   parts.push(
     `<text x="${cxLeft}" y="${yColTitle}" text-anchor="middle" font-size="${fsCol}px" fill="#64748b" font-family="${SVG_FONT_FAMILY}" font-weight="600">${escapeXml('Vista frontal')}</text>`
   );
@@ -2373,13 +2392,22 @@ function finalizeOrthoSpreadPanels(
   guideLinesSvg: string;
 } {
   /** Margem mínima no painel; labels/cotas ficam dentro do fitBox (não cortar). */
-  const panelFitMargin = 8;
+  const panelFitMargin = 6;
   const s = Math.min(
-    computePanelFitScaleUncapped(left.panel, left.fitBox, panelFitMargin),
-    computePanelFitScaleUncapped(right.panel, right.fitBox, panelFitMargin),
-    panelCap
+    computePanelFitScaleUncapped(
+      left.panel,
+      left.fitBox,
+      panelFitMargin,
+      panelCap
+    ),
+    computePanelFitScaleUncapped(
+      right.panel,
+      right.fitBox,
+      panelFitMargin,
+      panelCap
+    )
   );
-  const fit = { uniformScale: s };
+  const fit = { uniformScale: s, maxUniformScale: panelCap };
   let tLeft = computeStructuralPanelTransform(
     left.panel,
     left.structuralBbox,

@@ -62,7 +62,7 @@ function ptToPx(pt: number): number {
  */
 /**
  * Orçamento vertical até ao traço do cabeçalho (planta/3D). Em elevações paisagem o `yImg`
- * real ≈ 64,5 pt desde o topo — alinhado a `ELEV_PDF_LS_AVAIL_H_PT` em `svgElevationV2.ts`.
+ * real ≈ 59,5 pt (elevações com `compactDrawingGap`) — ver `ELEV_PDF_LS_AVAIL_H_PT` em `svgElevationV2.ts`.
  */
 const DRAWING_SHEET_HEADER_BUDGET_PT = 38;
 const DRAWING_SHEET_BOTTOM_PAD_PT = 2;
@@ -87,8 +87,8 @@ function elevationLandscapeDrawingRasterPixelSize(): { pxW: number; pxH: number 
   const pageH = 595.28;
   const usableW = pageW - 2 * PAGE_MARGIN_PT;
   const pageBottom = pageH - PAGE_MARGIN_PT;
-  /** Mesmo `availH` que `embedFullWidthDrawing` (svgElevationV2: yImg ≈ 64,5 pt). */
-  const imgAvailH = pageBottom - 64.5 - 3;
+  /** Mesmo `availH` que `embedFullWidthDrawing` (elevações: cabeçalho compacto, yImg ≈ 59,5 pt). */
+  const imgAvailH = pageBottom - 59.5 - 3;
   return {
     pxW: ptToPx(Math.round(usableW * 1.08)),
     pxH: ptToPx(Math.max(120, imgAvailH * 1.22)),
@@ -453,8 +453,14 @@ export async function renderPdfV2(
    */
   const beginDrawingSheetHeader = (
     title: string,
-    options?: { subtitle?: string; titleSize?: number }
+    options?: {
+      subtitle?: string;
+      titleSize?: number;
+      /** Menos folga sob o subtítulo e até ao desenho (ex.: prancha de elevações). */
+      compactDrawingGap?: boolean;
+    }
   ): void => {
+    const compact = options?.compactDrawingGap === true;
     const titleT = sanitizeText(title);
     const subT =
       options?.subtitle !== undefined ? sanitizeText(options.subtitle) : '';
@@ -463,12 +469,12 @@ export async function renderPdfV2(
     doc.font(PDFKIT_FONT_BOLD).fontSize(tSize).fillColor(COL_INK);
     const hTitle = doc.heightOfString(titleT, { width: usableW });
     doc.text(titleT, left, y, { width: usableW, align: 'left' });
-    y += hTitle + (options?.subtitle ? 3 : 5);
+    y += hTitle + (options?.subtitle ? (compact ? 2 : 3) : (compact ? 4 : 5));
     if (options?.subtitle) {
       doc.font(PDFKIT_FONT_REGULAR).fontSize(9).fillColor(COL_MUTED);
       const hSub = doc.heightOfString(subT, { width: usableW });
       doc.text(subT, left, y, { width: usableW, align: 'left' });
-      y += hSub + 4;
+      y += hSub + (compact ? 2 : 4);
     }
     const ruleY = y;
     doc
@@ -477,7 +483,7 @@ export async function renderPdfV2(
       .moveTo(left, ruleY)
       .lineTo(left + usableW, ruleY)
       .stroke();
-    doc.y = ruleY + 5;
+    doc.y = ruleY + (compact ? 3 : 5);
   };
 
   const labelColW = 154;
@@ -649,6 +655,7 @@ export async function renderPdfV2(
   beginDrawingSheetHeader('Elevações — módulo padrão', {
     subtitle:
       'Vista frontal (esquerda) e vista lateral (direita) · cotas em mm',
+    compactDrawingGap: true,
   });
   embedFullWidthDrawing(elevLandscapeStdRaster);
 
@@ -658,6 +665,7 @@ export async function renderPdfV2(
       subtitle: elevLandscapeTunRaster
         ? 'Vista frontal (esquerda) e vista lateral (direita) · vão de passagem inferior'
         : undefined,
+      compactDrawingGap: true,
     });
     if (elevLandscapeTunRaster) {
       embedFullWidthDrawing(elevLandscapeTunRaster);
