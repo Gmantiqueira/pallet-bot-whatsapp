@@ -490,7 +490,17 @@ export async function renderPdfV2(
     }
     const dwZ = dw * zoom;
     const dhZ = dh * zoom;
-    const ix = left + (usableW - dwZ) / 2;
+    const slackW = usableW - dwZ;
+    /**
+     * dwZ > usableW: centrar faz ix < left e corta a vista frontal à esquerda — ancora ao x da margem.
+     * dwZ < usableW: viés > 0,5 desloca a prancha para a direita (menos branco à direita).
+     */
+    const ix =
+      slackW < -0.5
+        ? left
+        : slackW > 0.5
+          ? left + slackW * 0.68
+          : left;
     const iy = yImg + (availH - dhZ) / 2;
     doc.save();
     doc.rect(left, yImg, usableW, availH).clip();
