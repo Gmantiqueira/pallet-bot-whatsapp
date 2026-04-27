@@ -147,4 +147,31 @@ describe('serializeElevationPagesV2', () => {
     expect(tunLabels.length).toBeGreaterThanOrEqual(2);
     expect(pages.landscapeTunnel!).toMatch(/Vão túnel/i);
   });
+
+  it('prancha paisagem: frontal e lateral partilham a mesma escala uniforme de painel (ortográfica)', () => {
+    const a: ProjectAnswersV2 = {
+      lengthMm: 12_000,
+      widthMm: 10_000,
+      corridorMm: 3000,
+      moduleDepthMm: 1000,
+      moduleWidthMm: 1100,
+      levels: 5,
+      capacityKg: 1200,
+      lineStrategy: 'APENAS_SIMPLES',
+      hasTunnel: false,
+      halfModuleOptimization: false,
+      firstLevelOnGround: true,
+      heightMode: 'DIRECT',
+      heightMm: 5040,
+    };
+    const layout = buildLayoutSolutionV2(a);
+    const session = answersToSession(a);
+    const geo = buildLayoutGeometry(layout, session);
+    validateLayoutGeometry(geo);
+    const model = buildElevationModelV2(session, geo);
+    const svg = serializeElevationPagesV2(model).landscapeStandard;
+    const scales = [...svg.matchAll(/scale\(([\d.]+)\)/g)].map(m => m[1]!);
+    expect(scales.length).toBe(2);
+    expect(scales[0]).toBe(scales[1]);
+  });
 });

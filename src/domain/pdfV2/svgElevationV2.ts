@@ -773,6 +773,113 @@ function buildBeamGeometry(
   };
 }
 
+/**
+ * Geometria com altura útil fixa em px (escala Y comum entre vistas em prancha paisagem).
+ * Escala horizontal só encolhe vãos / montantes para caber em `rackMaxW`.
+ */
+function buildBeamGeometryFixedInnerH(
+  data: ElevationPanelPayload,
+  rackMaxW: number,
+  innerHFixed: number,
+  ox: number,
+  oy: number,
+  pw: number,
+  nMod: number = FV_FRONT_BAY_COUNT
+): BeamGeometry {
+  const levels = Math.max(1, Math.min(32, Math.floor(data.levels)));
+  const uprightH = Math.max(1, data.uprightHeightMm);
+  const beamL = Math.max(1, data.beamLengthMm);
+  const bayCount = Math.max(1, Math.min(4, Math.floor(nMod)));
+  const widthsMm = uprightWidthsMmForFrontBayCount(
+    bayCount,
+    data.tunnel === true
+  );
+  const gapTotalMm = INTER_BAY_GAP_WITHIN_MODULE_MM;
+  const sumUprightsMm = widthsMm.reduce((a, b) => a + b, 0);
+  const totalRackMm =
+    sumUprightsMm + bayCount * beamL + (bayCount - 1) * gapTotalMm;
+
+  const applyScaleX = (s: number) => ({
+    uprightWidthsPx: widthsMm.map(w => w * s),
+    beamPx: beamL * s,
+    gapPx: gapTotalMm * s,
+  });
+
+  let scale = rackMaxW / totalRackMm;
+  let { uprightWidthsPx, beamPx, gapPx } = applyScaleX(scale);
+  let totalW =
+    uprightWidthsPx.reduce((a, b) => a + b, 0) +
+    bayCount * beamPx +
+    (bayCount - 1) * gapPx;
+  if (totalW > rackMaxW) {
+    scale *= rackMaxW / totalW;
+    ({ uprightWidthsPx, beamPx, gapPx } = applyScaleX(scale));
+    totalW = rackMaxW;
+  }
+
+  const innerH = innerHFixed;
+
+  const rawBeamH = data.beamElevationsMm;
+  const rawBeamOk =
+    Array.isArray(rawBeamH) &&
+    rawBeamH.length >= 2 &&
+    rawBeamH.every(x => typeof x === 'number' && Number.isFinite(x));
+
+  const beamH =
+    rawBeamOk && rawBeamH.length >= levels + 1
+      ? rawBeamH
+      : Array.from({ length: levels + 1 }, (_, k) => (k / levels) * uprightH);
+
+  const nBeamAxes = beamH.length;
+  const maxIntervals = Math.max(0, nBeamAxes - 1);
+  const storageTiers = Math.max(1, Math.min(levels, maxIntervals));
+
+  const axisGapsMm: number[] = [];
+  for (let i = 0; i < nBeamAxes - 1; i++) {
+    axisGapsMm.push(beamH[i + 1]! - beamH[i]!);
+  }
+
+  const ry = oy + 44;
+  const rackBottom = ry + innerH;
+  const beamYsPx = beamH.map(hmm => rackBottom - (hmm / uprightH) * innerH);
+  const rx = ox + (pw - totalW) / 2;
+
+  return {
+    levels,
+    storageTiers,
+    uprightH,
+    beamH,
+    beamYsPx,
+    innerH,
+    rackBottom,
+    ry,
+    rx,
+    totalW,
+    uprightWidthsPx,
+    beamPx,
+    gapPx,
+    axisGapsMm,
+    totalWidthMm: totalRackMm,
+    uprightWidthsMm: widthsMm,
+  };
+}
+
+/** Altura útil (px) partilhada entre frontal e lateral na mesma prancha — limitada pelo orçamento vertical de ambas. */
+function computeOrthoSpreadSharedInnerHPx(ph: number, ls: number): number {
+  const frontRackMaxH = Math.max(
+    120,
+    ph - Math.round(78 / ls) - frontRackBelowFloorReservePx(ls)
+  );
+  const lateralRackMaxH = Math.max(
+    120,
+    ph -
+      Math.round(44 / ls) -
+      Math.round(10 * ls) -
+      Math.round(22 * ls + 38 * ls + 28)
+  );
+  return Math.max(80, Math.min(frontRackMaxH, lateralRackMaxH));
+}
+
 type BaySpan = { left: number; right: number };
 
 /**
@@ -903,13 +1010,28 @@ function drawUprightWidthDims(
   return parts.join('');
 }
 
+function computePanelFitScaleUncapped(
+  panel: { ox: number; oy: number; pw: number; ph: number },
+  content: { minX: number; minY: number; maxX: number; maxY: number },
+  margin: number
+): number {
+  const { ox, oy, pw, ph } = panel;
+  const safeL = ox + margin;
+  const safeT = oy + margin;
+  const safeR = ox + pw - margin;
+  const safeB = oy + ph - margin;
+  const bw = Math.max(1, content.maxX - content.minX);
+  const bh = Math.max(1, content.maxY - content.minY);
+  return Math.min(1, (safeR - safeL) / bw, (safeB - safeT) / bh);
+}
+
 /** Encaixa o desenho no painel: bbox → escala uniforme → centragem (evita clipping). */
 function wrapSvgContentWithPanelFit(
   inner: string,
   panel: { ox: number; oy: number; pw: number; ph: number },
   content: { minX: number; minY: number; maxX: number; maxY: number },
   margin: number,
-  fitOpts?: { maxUniformScale?: number }
+  fitOpts?: { maxUniformScale?: number; uniformScale?: number }
 ): string {
   const { ox, oy, pw, ph } = panel;
   const safeL = ox + margin;
@@ -918,7 +1040,11 @@ function wrapSvgContentWithPanelFit(
   const safeB = oy + ph - margin;
   const bw = Math.max(1, content.maxX - content.minX);
   const bh = Math.max(1, content.maxY - content.minY);
-  let s = Math.min(1, (safeR - safeL) / bw, (safeB - safeT) / bh);
+  const fitUncapped = Math.min(1, (safeR - safeL) / bw, (safeB - safeT) / bh);
+  let s = fitUncapped;
+  if (typeof fitOpts?.uniformScale === 'number') {
+    s = Math.min(fitOpts.uniformScale, fitUncapped);
+  }
   const cap = fitOpts?.maxUniformScale;
   if (typeof cap === 'number' && cap > 0 && cap < 1) {
     s = Math.min(s, cap);
@@ -932,6 +1058,25 @@ function wrapSvgContentWithPanelFit(
   return `<g transform="translate(${tx.toFixed(3)},${ty.toFixed(3)}) scale(${s.toFixed(5)})">${inner}</g>`;
 }
 
+type ElevationPanelDeferredWrap = {
+  deferred: true;
+  inner: string;
+  bbox: { minX: number; minY: number; maxX: number; maxY: number };
+  panel: { ox: number; oy: number; pw: number; ph: number };
+  fitOpts?: { maxUniformScale?: number };
+};
+
+type DrawFrontRackOptions = {
+  labelScale?: number;
+  debug?: boolean;
+  /** Prancha paisagem: até 95% da escala de encaixe para reservar folga ao rodapé. */
+  panelFitMaxScale?: number;
+  /** Altura útil fixa (px) alinhada à vista lateral na mesma prancha. */
+  orthoSpread?: { innerH: number };
+  /** Devolve conteúdo + bbox para aplicar escala uniforme partilhada com a outra coluna. */
+  deferredWrap?: boolean;
+};
+
 /** Vista frontal: estrutura, longarinas, piso, cotas e carga (kg) centrada acima de cada nível. */
 function drawFrontRack(
   ox: number,
@@ -941,13 +1086,28 @@ function drawFrontRack(
   data: ElevationPanelPayload,
   sectionTitle: string,
   subtitle?: string,
-  options?: {
-    labelScale?: number;
-    debug?: boolean;
-    /** Prancha paisagem: até 95% da escala de encaixe para reservar folga ao rodapé. */
-    panelFitMaxScale?: number;
-  }
-): string {
+  options?: Omit<DrawFrontRackOptions, 'deferredWrap'> & { deferredWrap?: false }
+): string;
+function drawFrontRack(
+  ox: number,
+  oy: number,
+  pw: number,
+  ph: number,
+  data: ElevationPanelPayload,
+  sectionTitle: string,
+  subtitle: string | undefined,
+  options: DrawFrontRackOptions & { deferredWrap: true }
+): ElevationPanelDeferredWrap;
+function drawFrontRack(
+  ox: number,
+  oy: number,
+  pw: number,
+  ph: number,
+  data: ElevationPanelPayload,
+  sectionTitle: string,
+  subtitle?: string,
+  options?: DrawFrontRackOptions
+): string | ElevationPanelDeferredWrap {
   const ls = options?.labelScale ?? 1;
   const nMod = FV_FRONT_BAY_COUNT;
   const levelsEst = Math.max(1, Math.min(32, Math.floor(data.levels)));
@@ -964,7 +1124,17 @@ function drawFrontRack(
     120,
     ph - Math.round(78 / ls) - frontRackBelowFloorReservePx(ls)
   );
-  const g = buildBeamGeometry(data, rackMaxW, rackMaxH, ox, oy, pw, ph);
+  const g = options?.orthoSpread
+    ? buildBeamGeometryFixedInnerH(
+        data,
+        rackMaxW,
+        options.orthoSpread.innerH,
+        ox,
+        oy,
+        pw,
+        nMod
+      )
+    : buildBeamGeometry(data, rackMaxW, rackMaxH, ox, oy, pw, ph);
   const slimmed = frontSlimUprightsWidenBay(g.uprightWidthsPx, g.beamPx, nMod);
   const uprightWidthsPx = slimmed.uprightWidthsPx;
   const beamWithFrontVis = slimmed.beamPx;
@@ -1330,15 +1500,22 @@ function drawFrontRack(
   const maxY = Math.max(rackBottom + 76 * ls, floorTop + 16, oy + ph * 0.98);
   const minX = Math.min(rx - floorPad - 4, faceSpanLeft - 30, ox + 4);
   const maxX = Math.max(dimRight, ox + pw - 6, rackRight + floorPad + 8);
-  return wrapSvgContentWithPanelFit(
-    inner,
-    { ox, oy, pw, ph },
-    { minX, minY, maxX, maxY },
-    12,
+  const bbox = { minX, minY, maxX, maxY };
+  const panel = { ox, oy, pw, ph };
+  const wrapFit =
     options?.panelFitMaxScale != null
       ? { maxUniformScale: options.panelFitMaxScale }
-      : undefined
-  );
+      : undefined;
+  if (options?.deferredWrap === true) {
+    return {
+      deferred: true,
+      inner,
+      bbox,
+      panel,
+      fitOpts: wrapFit,
+    };
+  }
+  return wrapSvgContentWithPanelFit(inner, panel, bbox, 12, wrapFit);
 }
 
 /** Treliça diagonal entre dois níveis de vigas. */
@@ -1355,6 +1532,15 @@ function braceBetween(
   return `<line x1="${xa}" y1="${yLow}" x2="${xb}" y2="${yHigh}" stroke="${COL_BRACE_STROKE}" stroke-width="1.05" opacity="${strokeOpacity}"/>`;
 }
 
+type DrawLateralOptions = {
+  labelScale?: number;
+  hideHeader?: boolean;
+  debug?: boolean;
+  panelFitMaxScale?: number;
+  orthoSpread?: { innerH: number };
+  deferredWrap?: boolean;
+};
+
 /** Vista lateral: um só perfil (faixa total), treliça única; dupla costas = espinha ao centro (sem duplicar pórticos). */
 function drawLateral(
   ox: number,
@@ -1362,31 +1548,28 @@ function drawLateral(
   pw: number,
   ph: number,
   data: ElevationPanelPayload,
-  opts?: {
-    labelScale?: number;
-    hideHeader?: boolean;
-    debug?: boolean;
-    panelFitMaxScale?: number;
-  }
-): string {
+  opts?: Omit<DrawLateralOptions, 'deferredWrap'> & { deferredWrap?: false }
+): string;
+function drawLateral(
+  ox: number,
+  oy: number,
+  pw: number,
+  ph: number,
+  data: ElevationPanelPayload,
+  opts: DrawLateralOptions & { deferredWrap: true }
+): ElevationPanelDeferredWrap;
+function drawLateral(
+  ox: number,
+  oy: number,
+  pw: number,
+  ph: number,
+  data: ElevationPanelPayload,
+  opts?: DrawLateralOptions
+): string | ElevationPanelDeferredWrap {
   const ls = opts?.labelScale ?? 1;
   const hideHeader = opts?.hideHeader === true;
   const rackMaxW = Math.min(pw - 48, Math.max(120, pw * 0.54));
   const rackMaxH = ph - Math.round(72 / ls);
-  /** Um perfil de profundidade (uma baia visível); níveis vêm do mesmo payload. */
-  const g = buildBeamGeometry(
-    data,
-    rackMaxW * 0.98,
-    rackMaxH,
-    ox,
-    oy,
-    pw,
-    ph,
-    1
-  );
-
-  const { storageTiers, uprightH, beamH, uprightWidthsPx } = g;
-  const nBeamAxes = beamH.length;
 
   /** Uma costa em profundidade — nunca a faixa dupla inteira (evita perfil largo com duas baias). */
   const sliceMm = Math.max(1, data.lateralProfileDepthMm);
@@ -1397,25 +1580,68 @@ function drawLateral(
     Math.max(130, pw - 36 - dimReservePx),
     Math.max(118, pw * 0.52)
   );
-  const rackH = ph - Math.round((hideHeader ? 44 : 72) / ls);
-  const sx = rackW / sliceMm;
-  const sy = rackH / uprightH;
-  const s = Math.min(sx, sy);
-  const dw = sliceMm * s;
-  const dh = uprightH * s;
-  const x0 = ox + (pw - dw) / 2;
-  const headerPad = hideHeader ? 18 : 36;
-  const y0 = oy + headerPad + (rackH - dh) / 2;
 
-  const scaleY = dh / uprightH;
-  const beamYLocal = (j: number) => y0 + dh - (beamH[j]! / uprightH) * dh;
+  let g: BeamGeometry;
+  let x0: number;
+  let dw: number;
+  let y0: number;
+  let dh: number;
+  let floorTopLat: number;
+  let scaleY: number;
+  let beamAt: (j: number) => number;
+
+  if (opts?.orthoSpread) {
+    const innerH = opts.orthoSpread.innerH;
+    g = buildBeamGeometryFixedInnerH(
+      data,
+      rackMaxW * 0.98,
+      innerH,
+      ox,
+      oy,
+      pw,
+      1
+    );
+    dw = Math.min(rackW, rackMaxW * 0.98);
+    x0 = ox + (pw - dw) / 2;
+    y0 = g.ry;
+    dh = g.innerH;
+    floorTopLat = g.rackBottom;
+    scaleY = dh / g.uprightH;
+    beamAt = (j: number) => g.beamYsPx[j]!;
+  } else {
+    g = buildBeamGeometry(
+      data,
+      rackMaxW * 0.98,
+      rackMaxH,
+      ox,
+      oy,
+      pw,
+      ph,
+      1
+    );
+    const rackH = ph - Math.round((hideHeader ? 44 : 72) / ls);
+    const sx = rackW / sliceMm;
+    const sy = rackH / g.uprightH;
+    const s = Math.min(sx, sy);
+    dw = sliceMm * s;
+    dh = g.uprightH * s;
+    x0 = ox + (pw - dw) / 2;
+    const headerPad = hideHeader ? 18 : 36;
+    y0 = oy + headerPad + (rackH - dh) / 2;
+    floorTopLat = y0 + dh;
+    scaleY = dh / g.uprightH;
+    beamAt = (j: number) => y0 + dh - (g.beamH[j]! / g.uprightH) * dh;
+  }
+
+  const { storageTiers, uprightH, beamH, uprightWidthsPx } = g;
+  const nBeamAxes = beamH.length;
 
   const showTunnelOpening =
     data.tunnel === true && typeof data.tunnelClearanceMm === 'number';
   const clearanceMm = showTunnelOpening
     ? Math.max(0, data.tunnelClearanceMm!)
     : 0;
-  const floorTopLat = y0 + dh;
+  const depthScalePxPerMm = dw / sliceMm;
   const yPassTop =
     showTunnelOpening && clearanceMm > 0
       ? floorTopLat - (clearanceMm / uprightH) * dh
@@ -1459,7 +1685,7 @@ function drawLateral(
   );
 
   if (data.fundoTravamento === true && !isDouble) {
-    const wFundoPx = FUNDO_TRAVAMENTO_WIDTH_MM * s;
+    const wFundoPx = FUNDO_TRAVAMENTO_WIDTH_MM * depthScalePxPerMm;
     const hFundoPx = 0.5 * dh;
     const xFundo = x0 + dw;
     const yFundo = floorTopLat - hFundoPx;
@@ -1504,7 +1730,7 @@ function drawLateral(
     }
   }
 
-  const yB0Lat = beamYLocal(0);
+  const yB0Lat = beamAt(0);
   if (
     data.firstLevelOnGround === true &&
     !showTunnelOpening &&
@@ -1529,7 +1755,7 @@ function drawLateral(
   const nLatBeams = Math.max(0, nBeamAxes - 1);
   const bhLat = Math.max(2, 2.2 * scaleY);
   for (let j = 0; j < nLatBeams; j++) {
-    const yy = beamYLocal(j);
+    const yy = beamAt(j);
     if (showTunnelOpening && yy >= yPassTop - bhLat * 0.55) {
       continue;
     }
@@ -1548,7 +1774,7 @@ function drawLateral(
     )}</text>`
   );
   for (let j = 0; j < nLatBeams; j++) {
-    const yy = beamYLocal(j);
+    const yy = beamAt(j);
     if (showTunnelOpening && yy >= yPassTop - bhLat * 0.55) {
       continue;
     }
@@ -1562,8 +1788,8 @@ function drawLateral(
   }
 
   for (let j = 0; j < storageTiers; j++) {
-    const yLo = beamYLocal(j);
-    const yHi = beamYLocal(j + 1);
+    const yLo = beamAt(j);
+    const yHi = beamAt(j + 1);
     parts.push(braceBetween(bayLeft, bayRight, yLo, yHi, j % 2 === 0, 0.62));
   }
 
@@ -1578,7 +1804,7 @@ function drawLateral(
     )}</text>`
   );
 
-  const beamYsLat = beamH.map((_, j) => beamYLocal(j));
+  const beamYsLat = beamH.map((_, j) => beamAt(j));
   const clearanceLatMm =
     showTunnelOpening && typeof data.tunnelClearanceMm === 'number'
       ? Math.max(0, data.tunnelClearanceMm)
@@ -1638,14 +1864,27 @@ function drawLateral(
   const maxXL = Math.max(dimRightLat, ox + pw - 6);
   const minYL = Math.min(y0 - 10 * ls, oy + (hideHeader ? 4 : 8));
   const maxYL = Math.max(floorTopLat + 44 * ls, oy + ph * 0.97);
-  return wrapSvgContentWithPanelFit(
-    innerLat,
-    { ox, oy, pw, ph },
-    { minX: minXL, minY: minYL, maxX: maxXL, maxY: maxYL },
-    12,
+  const bboxLat = { minX: minXL, minY: minYL, maxX: maxXL, maxY: maxYL };
+  const panelLat = { ox, oy, pw, ph };
+  const wrapFitLat =
     opts?.panelFitMaxScale != null
       ? { maxUniformScale: opts.panelFitMaxScale }
-      : undefined
+      : undefined;
+  if (opts?.deferredWrap === true) {
+    return {
+      deferred: true,
+      inner: innerLat,
+      bbox: bboxLat,
+      panel: panelLat,
+      fitOpts: wrapFitLat,
+    };
+  }
+  return wrapSvgContentWithPanelFit(
+    innerLat,
+    panelLat,
+    bboxLat,
+    12,
+    wrapFitLat
   );
 }
 
@@ -1849,6 +2088,35 @@ export type SerializeElevationPagesOptions = {
   debug?: boolean;
 };
 
+function finalizeOrthoSpreadPanels(
+  left: ElevationPanelDeferredWrap,
+  right: ElevationPanelDeferredWrap,
+  panelCap: number
+): { leftSvg: string; rightSvg: string } {
+  const s = Math.min(
+    computePanelFitScaleUncapped(left.panel, left.bbox, 12),
+    computePanelFitScaleUncapped(right.panel, right.bbox, 12),
+    panelCap
+  );
+  const fit = { uniformScale: s };
+  return {
+    leftSvg: wrapSvgContentWithPanelFit(
+      left.inner,
+      left.panel,
+      left.bbox,
+      12,
+      fit
+    ),
+    rightSvg: wrapSvgContentWithPanelFit(
+      right.inner,
+      right.panel,
+      right.bbox,
+      12,
+      fit
+    ),
+  };
+}
+
 export function serializeElevationPagesV2(
   model: ElevationModelV2,
   options?: SerializeElevationPagesOptions
@@ -1858,9 +2126,10 @@ export function serializeElevationPagesV2(
   const L = elevationSpreadLayoutMetrics();
   const { m, gap, padTop, colInnerW, innerH } = L;
   const panelCap = ELEV_SPREAD_PANEL_FIT_MAX_SCALE;
+  const sharedInnerH = computeOrthoSpreadSharedInnerHPx(innerH, ls);
 
   const std = model.frontWithoutTunnel;
-  const leftStd = drawFrontRack(
+  const leftStdDef = drawFrontRack(
     m,
     padTop,
     colInnerW,
@@ -1872,9 +2141,11 @@ export function serializeElevationPagesV2(
       labelScale: ls,
       debug: dbg,
       panelFitMaxScale: panelCap,
+      orthoSpread: { innerH: sharedInnerH },
+      deferredWrap: true,
     }
   );
-  const rightStd = drawLateral(
+  const rightStdDef = drawLateral(
     m + colInnerW + gap,
     padTop,
     colInnerW,
@@ -1885,7 +2156,22 @@ export function serializeElevationPagesV2(
       hideHeader: true,
       debug: dbg,
       panelFitMaxScale: panelCap,
+      orthoSpread: { innerH: sharedInnerH },
+      deferredWrap: true,
     }
+  );
+  if (
+    typeof leftStdDef !== 'object' ||
+    leftStdDef.deferred !== true ||
+    typeof rightStdDef !== 'object' ||
+    rightStdDef.deferred !== true
+  ) {
+    throw new Error('serializeElevationPagesV2: expected deferred ortho panels');
+  }
+  const { leftSvg: leftStd, rightSvg: rightStd } = finalizeOrthoSpreadPanels(
+    leftStdDef,
+    rightStdDef,
+    panelCap
   );
   const landscapeStandard = wrapElevationLandscapeSpread(
     leftStd,
@@ -1898,7 +2184,7 @@ export function serializeElevationPagesV2(
   if (model.frontWithTunnel && model.lateralWithTunnel) {
     const tun = model.frontWithTunnel;
     const latTun = model.lateralWithTunnel;
-    const leftTun = drawFrontRack(
+    const leftTunDef = drawFrontRack(
       m,
       padTop,
       colInnerW,
@@ -1906,9 +2192,15 @@ export function serializeElevationPagesV2(
       tun,
       '',
       buildElevationAccessorySubtitle(tun),
-      { labelScale: ls, debug: dbg, panelFitMaxScale: panelCap }
+      {
+        labelScale: ls,
+        debug: dbg,
+        panelFitMaxScale: panelCap,
+        orthoSpread: { innerH: sharedInnerH },
+        deferredWrap: true,
+      }
     );
-    const rightTun = drawLateral(
+    const rightTunDef = drawLateral(
       m + colInnerW + gap,
       padTop,
       colInnerW,
@@ -1919,7 +2211,22 @@ export function serializeElevationPagesV2(
         hideHeader: true,
         debug: dbg,
         panelFitMaxScale: panelCap,
+        orthoSpread: { innerH: sharedInnerH },
+        deferredWrap: true,
       }
+    );
+    if (
+      typeof leftTunDef !== 'object' ||
+      leftTunDef.deferred !== true ||
+      typeof rightTunDef !== 'object' ||
+      rightTunDef.deferred !== true
+    ) {
+      throw new Error('serializeElevationPagesV2: expected deferred tunnel panels');
+    }
+    const { leftSvg: leftTun, rightSvg: rightTun } = finalizeOrthoSpreadPanels(
+      leftTunDef,
+      rightTunDef,
+      panelCap
     );
     landscapeTunnel = wrapElevationLandscapeSpread(
       leftTun,
