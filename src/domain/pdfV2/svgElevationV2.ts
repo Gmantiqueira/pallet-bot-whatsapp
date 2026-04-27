@@ -540,10 +540,10 @@ function drawVerticalDimChain(
   parts.push(
     textLines(
       xTotal + 5,
-      (yTop + yFloor) / 2 - 11.5 * ls,
+      (yTop + yFloor) / 2 - 12.2 * ls,
       ['H total', formatMmPtBr(Math.round(uprightH))],
       {
-        fontSize: 11.85 * ls,
+        fontSize: 12.45 * ls,
         fill: DIM_MAJOR,
         fontWeight: '600',
       }
@@ -619,12 +619,12 @@ function drawVerticalDimChain(
     parts.push(
       textLines(
         xDim + 4.5,
-        midY - (compact ? 8.25 : 9.25) * ls,
+        midY - (compact ? 9.1 : 10.1) * ls,
         compact
           ? [`${segLabel(k)} · ${formatMmPtBr(mmRounded)}`]
           : [segLabel(k), formatMmPtBr(mmRounded)],
         {
-          fontSize: (compact ? 10.35 : 10.15) * ls,
+          fontSize: (compact ? 11.45 : 11.2) * ls,
           fill: DIM_MINOR,
           fontWeight: '500',
         }
@@ -1434,7 +1434,7 @@ function drawFrontRack(
 
   const palletKg = resolvePalletCapacityKg(data);
   const pairKg = beamPairCapacityKg(data);
-  const capFsSmall = 7.65 * lsMinor;
+  const capFsSmall = 8.85 * lsMinor;
   const capLinePallet = `CAPACIDADE = ${formatKgCapacityPtBr(palletKg)} kg por palete`;
   parts.push(
     `<text x="${(faceSpanLeft + faceSpanRight) / 2}" y="${dimTopY - 20 * ls}" text-anchor="middle" font-size="${capFsSmall}px" fill="${DIM_MINOR}" stroke="${COL_BG}" stroke-width="${0.28 * ls}" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="600">${escapeXml(
@@ -1895,7 +1895,7 @@ function drawLateral(
 
   const palletKgLat = resolvePalletCapacityKg(data);
   const pairKgLat = beamPairCapacityKg(data);
-  const capLatFs = 7.55 * lsMinor;
+  const capLatFs = 8.75 * lsMinor;
   const mxLat = (bayLeft + bayRight) / 2;
   parts.push(
     `<text x="${mxLat}" y="${y0 - 8 * ls}" text-anchor="middle" font-size="${capLatFs}px" fill="${DIM_MINOR}" stroke="${COL_BG}" stroke-width="${0.25 * ls}" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="600">${escapeXml(
