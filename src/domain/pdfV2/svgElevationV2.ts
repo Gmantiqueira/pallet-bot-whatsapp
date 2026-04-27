@@ -1111,8 +1111,8 @@ function buildElevationSpreadGuideLinesSvg(
       uniq.push(y);
     }
   }
-  const x1 = frameInset + 4;
-  const x2 = width - frameInset - 4;
+  const x1 = frameInset + 3;
+  const x2 = width - frameInset - 3;
   const parts: string[] = [
     `<g id="el-spread-guides" pointer-events="none" opacity="1">`,
   ];
@@ -1604,10 +1604,10 @@ function drawFrontRack(
     minY: structuralMinY,
     maxY: floorTop + 11,
   };
-  const fitPadTop = prem ? 45 * ls + 32 : 62 * ls + 52;
-  const fitPadBottom = prem ? 54 * ls + 20 : 74 * ls + 32;
-  const fitPadLeft = prem ? 14 + 8 * ls : 22 + 10 * ls;
-  const fitPadRight = dimRight - rackRight + (prem ? 10 : 18);
+  const fitPadTop = prem ? 38 * ls + 26 : 62 * ls + 52;
+  const fitPadBottom = prem ? 46 * ls + 16 : 74 * ls + 32;
+  const fitPadLeft = prem ? 11 + 6.5 * ls : 22 + 10 * ls;
+  const fitPadRight = dimRight - rackRight + (prem ? 8 : 18);
   const fitBox: SvgBBox = {
     minX: structuralBbox.minX - fitPadLeft,
     minY: structuralBbox.minY - fitPadTop,
@@ -2006,10 +2006,10 @@ function drawLateral(
     minY: data.topTravamentoSuperior === true ? Math.min(y0, y0 - 2.85) : y0,
     maxY: floorTopLat + 11,
   };
-  const fitPadTopLat = prem ? 10 * ls + 28 : 14 * ls + 44;
-  const fitPadBottomLat = prem ? 36 * ls + 18 : 48 * ls + 26;
-  const fitPadLeftLat = prem ? 14 : 20;
-  const fitPadRightLat = dimRightLat - (x0 + dw) + (prem ? 10 : 16);
+  const fitPadTopLat = prem ? 8.5 * ls + 24 : 14 * ls + 44;
+  const fitPadBottomLat = prem ? 30 * ls + 14 : 48 * ls + 26;
+  const fitPadLeftLat = prem ? 12 : 20;
+  const fitPadRightLat = dimRightLat - (x0 + dw) + (prem ? 8 : 16);
   const fitBoxLat: SvgBBox = {
     minX: structuralBboxLat.minX - fitPadLeftLat,
     minY: structuralBboxLat.minY - fitPadTopLat,
@@ -2054,30 +2054,31 @@ const ELEV_LATERAL_LABEL_SCALE = ELEV_PAGE_LABEL_SCALE * 0.82;
  * Folha paisagem (~A4 landscape): duas colunas com área útil elevada.
  * Margens e gap mínimos libertam largura/altura para escala do par ortográfico.
  */
-/** Moldura interna mínima segura — maximiza colInnerW e área vertical do par ortográfico. */
-const ELEV_SPREAD_FRAME_INSET = 10;
-/** Sem faixa entre meias-folhas: separador desenhado no eixo da junta (mais escala horizontal). */
+/** Moldura mínima (prancha quase full-page; traço 0,45 pt ainda dentro da área útil). */
+const ELEV_SPREAD_FRAME_INSET = 5;
+/** Junta frontal/lateral sem faixa — máxima largura por coluna. */
 const ELEV_SPREAD_COL_GAP_PX = 0;
-/** Espaço sob «Vista frontal / lateral» até ao painel (cabeçalho compacto ~−15% vs. antes). */
-const ELEV_SPREAD_CONTENT_PAD_TOP_PX = 7;
+/** Respiro mínimo entre títulos de coluna e painel de desenho. */
+const ELEV_SPREAD_CONTENT_PAD_TOP_PX = 3;
 /** Textos técnicos principais na prancha (+12% sobre o passo anterior ≈ +25% vs. escala de página). */
 const ELEV_SPREAD_LS_PRIMARY = ELEV_PAGE_LABEL_SCALE * 1.12 * 1.12;
 /** Capacidade / legendas auxiliares: mantém hierarquia (~58% da página × +12%). */
 const ELEV_SPREAD_LS_MINOR = ELEV_PAGE_LABEL_SCALE * 0.72 * 1.12;
 const ELEV_SPREAD_LS_LAT_PRIMARY = ELEV_LATERAL_LABEL_SCALE * 1.12 * 1.12;
 const ELEV_SPREAD_LS_LAT_MINOR = ELEV_LATERAL_LABEL_SCALE * 0.72 * 1.12;
-const ELEV_SPREAD_W = 2040;
-/** ViewBox mais alto: área de desenho maior antes do rodapé (raster PDF mantém aspect ratio). */
-const ELEV_SPREAD_H = 1428;
-/** Faixa do rodapé ancorada à base da moldura interna (altura útil máxima para desenhos). */
-const ELEV_SPREAD_FOOTER_BAND_PX = 88;
-/** Margem mínima entre rodapé e moldura da coluna. */
-const ELEV_SPREAD_FOOTER_SIDE_PAD_PX = 12;
-/** Zona neutra em torno do eixo vertical central — texto do rodapé não entra aqui. */
-const ELEV_SPREAD_FOOTER_CENTER_CLEAR_PX = 14;
-/** Folga inferior segura dentro da faixa de notas. */
-const ELEV_SPREAD_FOOTER_TEXT_PAD_BOTTOM = 34;
-const ELEV_SPREAD_FOOTER_TEXT_PAD_TOP = 11;
+/** ViewBox alargado ~proporcional à altura (≈mesmo aspect que legado) para menos letterboxing no PDF. */
+const ELEV_SPREAD_W = 2142;
+/** Altura total SVG — prioriza área do par ortográfico; rodapé compacto na base. */
+const ELEV_SPREAD_H = 1500;
+/** Faixa de notas mínima; topo do desenho ganha altura (rodapé colado a `height − m`). */
+const ELEV_SPREAD_FOOTER_BAND_PX = 70;
+/** Margem interna do texto de rodapé à moldura. */
+const ELEV_SPREAD_FOOTER_SIDE_PAD_PX = 10;
+/** Evita que notas de rodapé invadam o eixo da junta entre vistas. */
+const ELEV_SPREAD_FOOTER_CENTER_CLEAR_PX = 11;
+/** Folgas verticais dentro da faixa de rodapé. */
+const ELEV_SPREAD_FOOTER_TEXT_PAD_BOTTOM = 28;
+const ELEV_SPREAD_FOOTER_TEXT_PAD_TOP = 8;
 /** Tipografia do rodapé: pequena e legível (independente da escala das cotas). */
 const ELEV_SPREAD_FOOTER_FS_BASE =
   Math.round(7.85 * ELEV_INTERIOR_TYPE_SCALE * 10) / 10;
@@ -2268,9 +2269,9 @@ function wrapElevationLandscapeSpread(
     `<rect x="${m}" y="${m}" width="${width - 2 * m}" height="${height - 2 * m}" fill="none" stroke="${COL_FRAME}" stroke-width="0.45"/>`
   );
   parts.push(
-    `<line x1="${sepX}" y1="${m + padTop + 1}" x2="${sepX}" y2="${yFooterBandTop}" stroke="#e2e8f0" stroke-width="0.55" opacity="0.92" pointer-events="none"/>`
+    `<line x1="${sepX}" y1="${m + padTop + 0.5}" x2="${sepX}" y2="${yFooterBandTop}" stroke="#e2e8f0" stroke-width="0.55" opacity="0.92" pointer-events="none"/>`
   );
-  const yColTitle = m + 10.5;
+  const yColTitle = m + 8;
   parts.push(
     `<text x="${cxLeft}" y="${yColTitle}" text-anchor="middle" font-size="${fsCol}px" fill="#64748b" font-family="${SVG_FONT_FAMILY}" font-weight="600">${escapeXml('Vista frontal')}</text>`
   );
@@ -2361,8 +2362,8 @@ function finalizeOrthoSpreadPanels(
   rightSvg: string;
   guideLinesSvg: string;
 } {
-  /** Margem mínima no retângulo do painel; cotas têm reserva no fitBox. */
-  const panelFitMargin = 10;
+  /** Margem mínima no painel; labels/cotas ficam dentro do fitBox (não cortar). */
+  const panelFitMargin = 8;
   const s = Math.min(
     computePanelFitScaleUncapped(left.panel, left.fitBox, panelFitMargin),
     computePanelFitScaleUncapped(right.panel, right.fitBox, panelFitMargin),
