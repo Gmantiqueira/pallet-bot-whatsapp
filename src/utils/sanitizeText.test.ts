@@ -18,6 +18,16 @@ describe('sanitizeText', () => {
     expect(sanitizeText('Pé\uFFFEdireito total')).toBe('Pé-direito total');
   });
 
+  it('removes combining grapheme joiner (Cf) between pé and direito', () => {
+    expect(sanitizeText('pé\u034Fdireito útil')).toBe('pé-direito útil');
+  });
+
+  it('normalizes spaced pé direito to hyphenated form', () => {
+    expect(sanitizeText('Pé direito útil informado:')).toBe(
+      'Pé-direito útil informado:'
+    );
+  });
+
   it('removes U+FFFD replacement character', () => {
     expect(sanitizeText('ok\uFFFD!')).toBe('ok!');
   });

@@ -66,10 +66,10 @@ const ELEV_INTERIOR_TYPE_SCALE = 1.16 * 1.1;
  * Cotas verticais à direita (frontal e lateral): colunas mais afastadas e calha larga para
  * rótulos em duas linhas (pt-BR) sem sobreposição nem truncagem no encaixe da folha.
  */
-const ELEV_VERTICAL_DIM_STEP_LS = 14;
+const ELEV_VERTICAL_DIM_STEP_LS = 15.25;
 /** Calha à direita da última coluna de cota — cresce com o fator de tipografia. */
 const ELEV_VERTICAL_DIM_RIGHT_GUTTER_PX = Math.round(
-  172 * ELEV_INTERIOR_TYPE_SCALE
+  190 * ELEV_INTERIOR_TYPE_SCALE
 );
 /** Reserva horizontal antes de calcular `rackMaxW` na vista frontal (depende do n.º de troços). */
 const ELEV_FRONT_DIM_CHAIN_CAP_PX = Math.round(
@@ -170,20 +170,6 @@ function drawFrontGuardRailMarkers(
   };
   if (left !== 'none') post(faceSpanLeft - 5, left);
   if (right !== 'none') post(faceSpanRight + 5, right);
-  const tag = (kind: 'simple' | 'double') =>
-    kind === 'double' ? 'Dupla' : 'Simples';
-  if (left !== 'none') {
-    const col = left === 'double' ? '#991b1b' : '#a16207';
-    parts.push(
-      `<text x="${faceSpanLeft - 24}" y="${(y1 + y2) / 2 + 3.2 * ls}" text-anchor="end" font-size="${9.2 * ls * gv}px" fill="${col}" stroke="#ffffff" stroke-width="${0.42 * ls * gv}" opacity="${gv.toFixed(3)}" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="700">${tag(left)}</text>`
-    );
-  }
-  if (right !== 'none') {
-    const col = right === 'double' ? '#991b1b' : '#a16207';
-    parts.push(
-      `<text x="${faceSpanRight + 24}" y="${(y1 + y2) / 2 + 3.2 * ls}" text-anchor="start" font-size="${9.2 * ls * gv}px" fill="${col}" stroke="#ffffff" stroke-width="${0.42 * ls * gv}" opacity="${gv.toFixed(3)}" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="700">${tag(right)}</text>`
-    );
-  }
   return parts.join('');
 }
 
@@ -230,20 +216,6 @@ function drawLateralGuardRailMarkers(
   };
   if (left !== 'none') post(xLeftOuter - 5, left);
   if (right !== 'none') post(xRightOuter + 5, right);
-  const tag = (kind: 'simple' | 'double') =>
-    kind === 'double' ? 'Dupla' : 'Simples';
-  if (left !== 'none') {
-    const col = left === 'double' ? '#991b1b' : '#a16207';
-    parts.push(
-      `<text x="${xLeftOuter - 24}" y="${(y1 + y2) / 2 + 3.2 * ls}" text-anchor="end" font-size="${9.2 * ls * gv}px" fill="${col}" stroke="#ffffff" stroke-width="${0.42 * ls * gv}" opacity="${gv.toFixed(3)}" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="700">${tag(left)}</text>`
-    );
-  }
-  if (right !== 'none') {
-    const col = right === 'double' ? '#991b1b' : '#a16207';
-    parts.push(
-      `<text x="${xRightOuter + 24}" y="${(y1 + y2) / 2 + 3.2 * ls}" text-anchor="start" font-size="${9.2 * ls * gv}px" fill="${col}" stroke="#ffffff" stroke-width="${0.42 * ls * gv}" opacity="${gv.toFixed(3)}" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="700">${tag(right)}</text>`
-    );
-  }
   return parts.join('');
 }
 
@@ -257,38 +229,6 @@ export function buildElevationAccessorySubtitle(
     bits.push(
       compact === true ? 'Prot. de coluna' : 'Protetores de coluna na base'
     );
-  }
-  if (data.guardRailSimple === true && data.guardRailSimplePosition) {
-    const p = data.guardRailSimplePosition;
-    if (compact === true) {
-      bits.push(
-        p === 'AMBOS'
-          ? 'Guarda simples — ambas'
-          : `Guarda simples — ${p === 'INICIO' ? 'início' : 'fim'}`
-      );
-    } else {
-      bits.push(
-        p === 'AMBOS'
-          ? 'Guarda simples — ambas as extremidades'
-          : `Guarda simples — ${p === 'INICIO' ? 'início' : 'fim'} do vão`
-      );
-    }
-  }
-  if (data.guardRailDouble === true && data.guardRailDoublePosition) {
-    const p = data.guardRailDoublePosition;
-    if (compact === true) {
-      bits.push(
-        p === 'AMBOS'
-          ? 'Guarda dupla — ambas'
-          : `Guarda dupla — ${p === 'INICIO' ? 'início' : 'fim'}`
-      );
-    } else {
-      bits.push(
-        p === 'AMBOS'
-          ? 'Guarda dupla — ambas as extremidades'
-          : `Guarda dupla — ${p === 'INICIO' ? 'início' : 'fim'} do vão`
-      );
-    }
   }
   bits.push(
     data.firstLevelOnGround
@@ -600,10 +540,10 @@ function drawVerticalDimChain(
   parts.push(
     textLines(
       xTotal + 5,
-      (yTop + yFloor) / 2 - 10 * ls,
+      (yTop + yFloor) / 2 - 11.5 * ls,
       ['H total', formatMmPtBr(Math.round(uprightH))],
       {
-        fontSize: 10 * ls,
+        fontSize: 11.85 * ls,
         fill: DIM_MAJOR,
         fontWeight: '600',
       }
@@ -611,14 +551,14 @@ function drawVerticalDimChain(
   );
 
   if (appendRightLines && appendRightLines.length > 0) {
-    let yN = (yTop + yFloor) / 2 + 14 * ls;
+    let yN = (yTop + yFloor) / 2 + 16 * ls;
     for (const line of appendRightLines) {
       parts.push(
-        `<text x="${xTotal + 5}" y="${yN}" font-size="${7 * ls}px" fill="${DIM_MINOR}" font-family="${SVG_FONT_FAMILY}" font-weight="600">${escapeXml(
+        `<text x="${xTotal + 5}" y="${yN}" font-size="${8.75 * ls}px" fill="${DIM_MINOR}" font-family="${SVG_FONT_FAMILY}" font-weight="600">${escapeXml(
           line
         )}</text>`
       );
-      yN += 9 * ls;
+      yN += 10.5 * ls;
     }
   }
 
@@ -679,12 +619,12 @@ function drawVerticalDimChain(
     parts.push(
       textLines(
         xDim + 4.5,
-        midY - (compact ? 7 : 8) * ls,
+        midY - (compact ? 8.25 : 9.25) * ls,
         compact
           ? [`${segLabel(k)} · ${formatMmPtBr(mmRounded)}`]
           : [segLabel(k), formatMmPtBr(mmRounded)],
         {
-          fontSize: (compact ? 9.1 : 9) * ls,
+          fontSize: (compact ? 10.35 : 10.15) * ls,
           fill: DIM_MINOR,
           fontWeight: '500',
         }
@@ -1985,7 +1925,7 @@ function drawLateral(
     dimensionLineHArrows(x0, floorTopLat + 22 * ls, x0 + dw, DIM_MINOR)
   );
   parts.push(
-    `<text x="${x0 + dw / 2}" y="${floorTopLat + 38 * ls}" text-anchor="middle" font-size="${9.2 * ls}px" fill="${DIM_MINOR}" font-family="${SVG_FONT_FAMILY}" font-weight="600">${escapeXml(
+    `<text x="${x0 + dw / 2}" y="${floorTopLat + 38 * ls}" text-anchor="middle" font-size="${10.5 * ls}px" fill="${DIM_MINOR}" font-family="${SVG_FONT_FAMILY}" font-weight="600">${escapeXml(
       isDouble
         ? `Profundidade da costa: ${formatMmPtBr(Math.round(sliceMm))} (dupla costas em planta)`
         : `Profundidade da costa: ${formatMmPtBr(Math.round(sliceMm))}`
@@ -2124,18 +2064,16 @@ const ELEV_SPREAD_LS_LAT_PRIMARY = ELEV_LATERAL_LABEL_SCALE * 1.12 * 1.12;
 const ELEV_SPREAD_LS_LAT_MINOR = ELEV_LATERAL_LABEL_SCALE * 0.72 * 1.12;
 const ELEV_SPREAD_W = 2040;
 const ELEV_SPREAD_H = 1330;
-/** Faixa de notas: ligeiramente mais baixa para ganhar altura útil do desenho; texto ancorado ao topo da faixa. */
-const ELEV_SPREAD_FOOTER_BAND_PX = 78;
+/** Faixa de notas do rodapé — altura suficiente para duas colunas com quebras sem invadir o desenho. */
+const ELEV_SPREAD_FOOTER_BAND_PX = 102;
 /** Margem mínima entre rodapé e moldura da coluna. */
-const ELEV_SPREAD_FOOTER_SIDE_PAD_PX = 14;
-/** Faixa neutra à volta do eixo central — texto do rodapé não entra nesta zona. */
-const ELEV_SPREAD_FOOTER_CENTER_CLEAR_PX = 12;
+const ELEV_SPREAD_FOOTER_SIDE_PAD_PX = 12;
 /** Folga inferior confortável dentro da faixa de notas (evita texto “esmagado”). */
-const ELEV_SPREAD_FOOTER_TEXT_PAD_BOTTOM = 24;
-const ELEV_SPREAD_FOOTER_TEXT_PAD_TOP = 10;
+const ELEV_SPREAD_FOOTER_TEXT_PAD_BOTTOM = 30;
+const ELEV_SPREAD_FOOTER_TEXT_PAD_TOP = 12;
 /** Se o bloco não caber na altura útil, reduzir tipografia do rodapé (~8%). */
 const ELEV_SPREAD_FOOTER_FS_SHRINK = 0.92;
-const ELEV_SPREAD_FOOTER_FS_MIN = 7.1;
+const ELEV_SPREAD_FOOTER_FS_MIN = 7.65;
 /** Até ~97% da escala de encaixe: aproveita espaço libertado pela frontal mais estreita. */
 const ELEV_SPREAD_PANEL_FIT_MAX_SCALE = 0.97;
 
@@ -2181,7 +2119,7 @@ function wrapFooterTextToLines(
   maxWidthPx: number,
   fs: number
 ): string[] {
-  const avgCharPx = fs * 0.52;
+  const avgCharPx = fs * 0.48;
   const maxChars = Math.max(8, Math.floor(maxWidthPx / avgCharPx));
   const words = text.trim().split(/\s+/).filter(Boolean);
   if (words.length === 0) {
@@ -2296,17 +2234,11 @@ function wrapElevationLandscapeSpread(
   const cxRight = m + colInnerW + gap + colInnerW / 2;
   const sepX = m + colInnerW + gap / 2;
   const side = ELEV_SPREAD_FOOTER_SIDE_PAD_PX;
-  const midClear = ELEV_SPREAD_FOOTER_CENTER_CLEAR_PX;
+  /** Largura fixa por meia-folha: nunca usar a faixa central nem ultrapassar a coluna do desenho. */
   const leftFooterX = m + side;
-  const leftFooterMaxW = Math.max(
-    80,
-    sepX - midClear - leftFooterX
-  );
-  const rightFooterX = sepX + midClear;
-  const rightFooterMaxW = Math.max(
-    80,
-    width - m - side - rightFooterX
-  );
+  const leftFooterMaxW = Math.max(72, colInnerW - 2 * side);
+  const rightFooterX = m + colInnerW + gap + side;
+  const rightFooterMaxW = Math.max(72, colInnerW - 2 * side);
   const footFill = '#334155';
   const parts: string[] = [];
   parts.push(

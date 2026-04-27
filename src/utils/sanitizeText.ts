@@ -31,6 +31,9 @@ function normalizeHyphensAndDashesToAscii(s: string): string {
  */
 function normalizePedireitoCompound(s: string): string {
   return s
+    .replace(/\bPÉ\s+DIREITO\b/g, 'PÉ-DIREITO')
+    .replace(/\bPé\s+direito\b/g, 'Pé-direito')
+    .replace(/\bpé\s+direito\b/g, 'pé-direito')
     .replace(
       new RegExp(`PÉ${PEDIREITO_HYPHEN_ALT}DIREITO`, 'g'),
       'PÉ-DIREITO'
@@ -59,6 +62,8 @@ export function sanitizeText(text: string): string {
   let s = text.normalize('NFKC');
   s = s.replace(/\uFFFD/g, '');
   s = s.replace(INVISIBLE_AND_FORMAT_CHARS, '');
+  /** U+034F CGJ, word joiners, etc. — remove residual format chars that survive the list above. */
+  s = s.replace(/\p{Cf}/gu, '');
   s = normalizeHyphensAndDashesToAscii(s);
   s = normalizePedireitoCompound(s);
   return s;
