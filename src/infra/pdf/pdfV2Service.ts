@@ -15,6 +15,7 @@ import { buildFloorPlanModelV2 } from '../../domain/pdfV2/floorPlanModelV2';
 import { serializeFloorPlanSvgV2 } from '../../domain/pdfV2/svgFloorPlanV2';
 import { buildElevationModelV2 } from '../../domain/pdfV2/elevationModelV2';
 import {
+  ELEV_SPREAD_CANVAS_SCALE,
   serializeElevationPagesV2,
   type ElevationPageSvgs,
 } from '../../domain/pdfV2/svgElevationV2';
@@ -89,9 +90,11 @@ function elevationLandscapeDrawingRasterPixelSize(): { pxW: number; pxH: number 
   const pageBottom = pageH - PAGE_MARGIN_PT;
   /** Alinhado a `ELEV_PDF_LS_AVAIL_H_PT` / `embedFullWidthDrawing` nas páginas de elevação. */
   const imgAvailH = pageBottom - 70 - 1;
+  const pxW = ptToPx(Math.round(usableW * 1.08));
+  const pxH = ptToPx(Math.max(120, imgAvailH * 1.22));
   return {
-    pxW: ptToPx(Math.round(usableW * 1.08)),
-    pxH: ptToPx(Math.max(120, imgAvailH * 1.22)),
+    pxW: Math.max(1, Math.round(pxW * ELEV_SPREAD_CANVAS_SCALE)),
+    pxH: Math.max(1, Math.round(pxH * ELEV_SPREAD_CANVAS_SCALE)),
   };
 }
 

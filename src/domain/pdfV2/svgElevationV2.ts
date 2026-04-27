@@ -2063,8 +2063,14 @@ const ELEV_PDF_LS_IMGBOTTOM_PAD_PT = 1;
 const ELEV_PDF_LS_USABLE_W_PT = 841.89 - 48;
 const ELEV_PDF_LS_AVAIL_H_PT =
   595.28 - 24 - ELEV_PDF_LS_YIMG_FROM_TOP_PT - ELEV_PDF_LS_IMGBOTTOM_PAD_PT;
+/**
+ * Fator do viewBox e das áreas úteis dos painéis (moldura/rodapé mantêm px fixos → desenho relativo cresce).
+ * O raster em `pdfV2Service` deve usar o mesmo fator para manter proporção e nitidez.
+ */
+export const ELEV_SPREAD_CANVAS_SCALE = 1.2;
+const ELEV_SPREAD_BASE_H = 1500;
 /** Largura × altura do SVG; W/H derivado da zona útil do PDF (não alterar só um eixo). */
-const ELEV_SPREAD_H = 1500;
+const ELEV_SPREAD_H = Math.round(ELEV_SPREAD_BASE_H * ELEV_SPREAD_CANVAS_SCALE);
 const ELEV_SPREAD_W = Math.round(
   ELEV_SPREAD_H * (ELEV_PDF_LS_USABLE_W_PT / ELEV_PDF_LS_AVAIL_H_PT)
 );
@@ -2086,9 +2092,11 @@ const ELEV_SPREAD_FOOTER_FS_SHRINK = 0.91;
 const ELEV_SPREAD_FOOTER_FS_MIN = 6.45;
 /**
  * Tecto de escala do par ortográfico (independente de `ELEV_SPREAD_ORTHO_REFINE` na tipografia,
- * para não inflacionar o bbox só por aumentar `ls`).
+ * para não inflacionar o bbox só por aumentar `ls`). Escala com o canvas para não ficar preso a 1.22.
  */
-const ELEV_SPREAD_PANEL_FIT_MAX_SCALE = 1.22;
+const ELEV_SPREAD_PANEL_FIT_MAX_BASE = 1.22;
+const ELEV_SPREAD_PANEL_FIT_MAX_SCALE =
+  ELEV_SPREAD_PANEL_FIT_MAX_BASE * ELEV_SPREAD_CANVAS_SCALE;
 
 /**
  * Reserva *dentro de cada meia-coluna* para cotas e textos — o encaixe usa só o retângulo
