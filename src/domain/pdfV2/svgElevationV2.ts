@@ -2086,11 +2086,16 @@ const ELEV_SPREAD_LS_LAT_MINOR =
  * Proporção do viewBox = caixa onde o PNG é colocado no PDF A4 paisagem.
  * Se o SVG for mais «alto» que isto, {@link fitRasterInBox} limita pela altura e ficam
  * faixas brancas à direita e por baixo (ver `pdfV2Service` embedFullWidthDrawing).
- * Valores em pt: largura útil = 841.89 − 2×24; altura útil = pageBottom − yImg − 3 após
- * `beginDrawingSheetHeader` com `compactDrawingGap` (~59.5 pt até yImg).
+ * Valores em pt: largura útil = 841.89 − 2×24; altura útil = pageBottom − yImg − bottomPad.
+ * `yImg` usa orçamento *conservador* (título + subtítulo com quebra de linha). Se subestimarmos,
+ * o retângulo útil no PDF fica mais «largo» que o PNG → {@link fitRasterInBox} limita pela
+ * largura e fica uma faixa branca grande *por baixo* da prancha.
  */
+const ELEV_PDF_LS_YIMG_FROM_TOP_PT = 74;
+const ELEV_PDF_LS_IMGBOTTOM_PAD_PT = 1;
 const ELEV_PDF_LS_USABLE_W_PT = 841.89 - 48;
-const ELEV_PDF_LS_AVAIL_H_PT = 595.28 - 24 - 59.5 - 3;
+const ELEV_PDF_LS_AVAIL_H_PT =
+  595.28 - 24 - ELEV_PDF_LS_YIMG_FROM_TOP_PT - ELEV_PDF_LS_IMGBOTTOM_PAD_PT;
 /** Largura × altura do SVG; W/H derivado da zona útil do PDF (não alterar só um eixo). */
 const ELEV_SPREAD_H = 1500;
 const ELEV_SPREAD_W = Math.round(
@@ -2372,13 +2377,12 @@ function orthoSpreadPairVerticalNudgePx(
   };
   const L = slack(tLeft, left.bbox, left.panel);
   const R = slack(tRight, right.bbox, right.panel);
-  const ideal =
-    (L.slackBot - L.slackTop + (R.slackBot - R.slackTop)) / 4;
   const eps = 0.75;
   const nMin = Math.max(-L.slackTop, -R.slackTop) + eps;
   const nMax = Math.min(L.slackBot, R.slackBot) - eps;
   if (nMax < nMin) return 0;
-  return Math.max(nMin, Math.min(nMax, ideal));
+  /** Encostar o bloco cotas+desenho ao rodapé da coluna (menos «mar» branco interno). */
+  return Math.max(nMin, Math.min(nMax, nMax - 0.25));
 }
 
 function finalizeOrthoSpreadPanels(

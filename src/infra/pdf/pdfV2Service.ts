@@ -62,7 +62,7 @@ function ptToPx(pt: number): number {
  */
 /**
  * Orçamento vertical até ao traço do cabeçalho (planta/3D). Em elevações paisagem o `yImg`
- * real ≈ 59,5 pt (elevações com `compactDrawingGap`) — ver `ELEV_PDF_LS_AVAIL_H_PT` em `svgElevationV2.ts`.
+ * Elevações: ver `ELEV_PDF_LS_YIMG_FROM_TOP_PT` em `svgElevationV2.ts` (orçamento conservador).
  */
 const DRAWING_SHEET_HEADER_BUDGET_PT = 38;
 const DRAWING_SHEET_BOTTOM_PAD_PT = 2;
@@ -87,8 +87,8 @@ function elevationLandscapeDrawingRasterPixelSize(): { pxW: number; pxH: number 
   const pageH = 595.28;
   const usableW = pageW - 2 * PAGE_MARGIN_PT;
   const pageBottom = pageH - PAGE_MARGIN_PT;
-  /** Mesmo `availH` que `embedFullWidthDrawing` (elevações: cabeçalho compacto, yImg ≈ 59,5 pt). */
-  const imgAvailH = pageBottom - 59.5 - 3;
+  /** Alinhado a `ELEV_PDF_LS_AVAIL_H_PT` / `embedFullWidthDrawing` nas páginas de elevação. */
+  const imgAvailH = pageBottom - 74 - 1;
   return {
     pxW: ptToPx(Math.round(usableW * 1.08)),
     pxH: ptToPx(Math.max(120, imgAvailH * 1.22)),
@@ -657,7 +657,7 @@ export async function renderPdfV2(
       'Vista frontal (esquerda) e vista lateral (direita) · cotas em mm',
     compactDrawingGap: true,
   });
-  embedFullWidthDrawing(elevLandscapeStdRaster);
+  embedFullWidthDrawing(elevLandscapeStdRaster, { bottomPadPt: 1 });
 
   if (hasTunnel) {
     doc.addPage({ size: 'A4', layout: 'landscape', margins: pageMargins });
@@ -668,7 +668,7 @@ export async function renderPdfV2(
       compactDrawingGap: true,
     });
     if (elevLandscapeTunRaster) {
-      embedFullWidthDrawing(elevLandscapeTunRaster);
+      embedFullWidthDrawing(elevLandscapeTunRaster, { bottomPadPt: 1 });
     } else {
       drawCentered('Não aplicável neste projeto (sem módulo túnel).', {
         size: 11,
