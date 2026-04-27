@@ -1111,8 +1111,8 @@ function buildElevationSpreadGuideLinesSvg(
       uniq.push(y);
     }
   }
-  const x1 = frameInset + 8;
-  const x2 = width - frameInset - 8;
+  const x1 = frameInset + 4;
+  const x2 = width - frameInset - 4;
   const parts: string[] = [
     `<g id="el-spread-guides" pointer-events="none" opacity="1">`,
   ];
@@ -1604,10 +1604,10 @@ function drawFrontRack(
     minY: structuralMinY,
     maxY: floorTop + 11,
   };
-  const fitPadTop = prem ? 52 * ls + 40 : 62 * ls + 52;
-  const fitPadBottom = prem ? 62 * ls + 26 : 74 * ls + 32;
-  const fitPadLeft = prem ? 18 + 9 * ls : 22 + 10 * ls;
-  const fitPadRight = dimRight - rackRight + (prem ? 14 : 18);
+  const fitPadTop = prem ? 45 * ls + 32 : 62 * ls + 52;
+  const fitPadBottom = prem ? 54 * ls + 20 : 74 * ls + 32;
+  const fitPadLeft = prem ? 14 + 8 * ls : 22 + 10 * ls;
+  const fitPadRight = dimRight - rackRight + (prem ? 10 : 18);
   const fitBox: SvgBBox = {
     minX: structuralBbox.minX - fitPadLeft,
     minY: structuralBbox.minY - fitPadTop,
@@ -2006,10 +2006,10 @@ function drawLateral(
     minY: data.topTravamentoSuperior === true ? Math.min(y0, y0 - 2.85) : y0,
     maxY: floorTopLat + 11,
   };
-  const fitPadTopLat = prem ? 12 * ls + 36 : 14 * ls + 44;
-  const fitPadBottomLat = prem ? 42 * ls + 22 : 48 * ls + 26;
-  const fitPadLeftLat = prem ? 18 : 20;
-  const fitPadRightLat = dimRightLat - (x0 + dw) + (prem ? 14 : 16);
+  const fitPadTopLat = prem ? 10 * ls + 28 : 14 * ls + 44;
+  const fitPadBottomLat = prem ? 36 * ls + 18 : 48 * ls + 26;
+  const fitPadLeftLat = prem ? 14 : 20;
+  const fitPadRightLat = dimRightLat - (x0 + dw) + (prem ? 10 : 16);
   const fitBoxLat: SvgBBox = {
     minX: structuralBboxLat.minX - fitPadLeftLat,
     minY: structuralBboxLat.minY - fitPadTopLat,
@@ -2054,11 +2054,12 @@ const ELEV_LATERAL_LABEL_SCALE = ELEV_PAGE_LABEL_SCALE * 0.82;
  * Folha paisagem (~A4 landscape): duas colunas com área útil elevada.
  * Margens e gap mínimos libertam largura/altura para escala do par ortográfico.
  */
-const ELEV_SPREAD_FRAME_INSET = 14;
-/** Espaço entre colunas — mínimo para maximizar colInnerW e a escala horizontal partilhada. */
-const ELEV_SPREAD_COL_GAP_PX = 2;
-/** Espaço sob os rótulos «Vista frontal / lateral» até ao painel de desenho. */
-const ELEV_SPREAD_CONTENT_PAD_TOP_PX = 10;
+/** Moldura interna mínima segura — maximiza colInnerW e área vertical do par ortográfico. */
+const ELEV_SPREAD_FRAME_INSET = 10;
+/** Sem faixa entre meias-folhas: separador desenhado no eixo da junta (mais escala horizontal). */
+const ELEV_SPREAD_COL_GAP_PX = 0;
+/** Espaço sob «Vista frontal / lateral» até ao painel (cabeçalho compacto ~−15% vs. antes). */
+const ELEV_SPREAD_CONTENT_PAD_TOP_PX = 7;
 /** Textos técnicos principais na prancha (+12% sobre o passo anterior ≈ +25% vs. escala de página). */
 const ELEV_SPREAD_LS_PRIMARY = ELEV_PAGE_LABEL_SCALE * 1.12 * 1.12;
 /** Capacidade / legendas auxiliares: mantém hierarquia (~58% da página × +12%). */
@@ -2067,9 +2068,9 @@ const ELEV_SPREAD_LS_LAT_PRIMARY = ELEV_LATERAL_LABEL_SCALE * 1.12 * 1.12;
 const ELEV_SPREAD_LS_LAT_MINOR = ELEV_LATERAL_LABEL_SCALE * 0.72 * 1.12;
 const ELEV_SPREAD_W = 2040;
 /** ViewBox mais alto: área de desenho maior antes do rodapé (raster PDF mantém aspect ratio). */
-const ELEV_SPREAD_H = 1395;
-/** Faixa de notas do rodapé — texto confortável sem roubar demasiado ao bloco técnico. */
-const ELEV_SPREAD_FOOTER_BAND_PX = 96;
+const ELEV_SPREAD_H = 1428;
+/** Faixa do rodapé ancorada à base da moldura interna (altura útil máxima para desenhos). */
+const ELEV_SPREAD_FOOTER_BAND_PX = 88;
 /** Margem mínima entre rodapé e moldura da coluna. */
 const ELEV_SPREAD_FOOTER_SIDE_PAD_PX = 12;
 /** Zona neutra em torno do eixo vertical central — texto do rodapé não entra aqui. */
@@ -2083,8 +2084,8 @@ const ELEV_SPREAD_FOOTER_FS_BASE =
 /** Se o bloco não caber na altura útil, reduzir tipografia do rodapé. */
 const ELEV_SPREAD_FOOTER_FS_SHRINK = 0.91;
 const ELEV_SPREAD_FOOTER_FS_MIN = 6.45;
-/** Quase 100% do encaixe na coluna: protagonizar desenhos (folga mínima anti-clipping). */
-const ELEV_SPREAD_PANEL_FIT_MAX_SCALE = 0.994;
+/** Encaixe total na zona segura do painel (margem anti-clipping em finalizeOrthoSpreadPanels). */
+const ELEV_SPREAD_PANEL_FIT_MAX_SCALE = 1;
 
 function elevationSpreadLayoutMetrics(): {
   m: number;
@@ -2242,7 +2243,7 @@ function wrapElevationLandscapeSpread(
     yFooterBandTop,
   } = L;
   const fsCol =
-    Math.round(9.45 * ELEV_PAGE_LABEL_SCALE * 1.1 * 10) / 10;
+    Math.round(9.45 * ELEV_PAGE_LABEL_SCALE * 1.1 * 0.86 * 10) / 10;
   const cxLeft = m + colInnerW / 2;
   const cxRight = m + colInnerW + gap + colInnerW / 2;
   const sepX = m + colInnerW + gap / 2;
@@ -2267,13 +2268,14 @@ function wrapElevationLandscapeSpread(
     `<rect x="${m}" y="${m}" width="${width - 2 * m}" height="${height - 2 * m}" fill="none" stroke="${COL_FRAME}" stroke-width="0.45"/>`
   );
   parts.push(
-    `<line x1="${sepX}" y1="${m + padTop + 2}" x2="${sepX}" y2="${yFooterBandTop}" stroke="#e2e8f0" stroke-width="0.55" opacity="0.92" pointer-events="none"/>`
+    `<line x1="${sepX}" y1="${m + padTop + 1}" x2="${sepX}" y2="${yFooterBandTop}" stroke="#e2e8f0" stroke-width="0.55" opacity="0.92" pointer-events="none"/>`
+  );
+  const yColTitle = m + 10.5;
+  parts.push(
+    `<text x="${cxLeft}" y="${yColTitle}" text-anchor="middle" font-size="${fsCol}px" fill="#64748b" font-family="${SVG_FONT_FAMILY}" font-weight="600">${escapeXml('Vista frontal')}</text>`
   );
   parts.push(
-    `<text x="${cxLeft}" y="${m + 13}" text-anchor="middle" font-size="${fsCol}px" fill="#64748b" font-family="${SVG_FONT_FAMILY}" font-weight="600">${escapeXml('Vista frontal')}</text>`
-  );
-  parts.push(
-    `<text x="${cxRight}" y="${m + 13}" text-anchor="middle" font-size="${fsCol}px" fill="#64748b" font-family="${SVG_FONT_FAMILY}" font-weight="600">${escapeXml('Vista lateral')}</text>`
+    `<text x="${cxRight}" y="${yColTitle}" text-anchor="middle" font-size="${fsCol}px" fill="#64748b" font-family="${SVG_FONT_FAMILY}" font-weight="600">${escapeXml('Vista lateral')}</text>`
   );
   parts.push(leftInner);
   parts.push(rightInner);
@@ -2359,10 +2361,11 @@ function finalizeOrthoSpreadPanels(
   rightSvg: string;
   guideLinesSvg: string;
 } {
-  const margin = 12;
+  /** Margem mínima no retângulo do painel; cotas têm reserva no fitBox. */
+  const panelFitMargin = 10;
   const s = Math.min(
-    computePanelFitScaleUncapped(left.panel, left.fitBox, margin),
-    computePanelFitScaleUncapped(right.panel, right.fitBox, margin),
+    computePanelFitScaleUncapped(left.panel, left.fitBox, panelFitMargin),
+    computePanelFitScaleUncapped(right.panel, right.fitBox, panelFitMargin),
     panelCap
   );
   const fit = { uniformScale: s };
@@ -2370,14 +2373,14 @@ function finalizeOrthoSpreadPanels(
     left.panel,
     left.structuralBbox,
     left.fitBox,
-    margin,
+    panelFitMargin,
     fit
   );
   let tRight = computeStructuralPanelTransform(
     right.panel,
     right.structuralBbox,
     right.fitBox,
-    margin,
+    panelFitMargin,
     fit
   );
   const nudge = orthoSpreadPairVerticalNudgePx(
@@ -2385,7 +2388,7 @@ function finalizeOrthoSpreadPanels(
     right,
     tLeft,
     tRight,
-    margin
+    panelFitMargin
   );
   if (nudge !== 0) {
     tLeft = { ...tLeft, ty: tLeft.ty + nudge };
