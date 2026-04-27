@@ -88,7 +88,7 @@ function elevationLandscapeDrawingRasterPixelSize(): { pxW: number; pxH: number 
   const usableW = pageW - 2 * PAGE_MARGIN_PT;
   const pageBottom = pageH - PAGE_MARGIN_PT;
   /** Alinhado a `ELEV_PDF_LS_AVAIL_H_PT` / `embedFullWidthDrawing` nas páginas de elevação. */
-  const imgAvailH = pageBottom - 74 - 1;
+  const imgAvailH = pageBottom - 70 - 1;
   return {
     pxW: ptToPx(Math.round(usableW * 1.08)),
     pxH: ptToPx(Math.max(120, imgAvailH * 1.22)),

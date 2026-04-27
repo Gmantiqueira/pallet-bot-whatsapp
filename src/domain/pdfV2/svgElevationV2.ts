@@ -1554,10 +1554,10 @@ function drawFrontRack(
   /** Folga extra ao bbox para «H total», níveis longos e cotas — encaixe usa bbox completo. */
   const bbox = prem
     ? {
-        minX: bboxBase.minX - 12 * ls,
-        minY: bboxBase.minY - 24 * ls,
-        maxX: bboxBase.maxX + 54 * ls,
-        maxY: bboxBase.maxY + 22 * ls,
+        minX: bboxBase.minX - 8 * ls,
+        minY: bboxBase.minY - 16 * ls,
+        maxX: bboxBase.maxX + 36 * ls,
+        maxY: bboxBase.maxY + 14 * ls,
       }
     : bboxBase;
   const structuralMinY =
@@ -1964,10 +1964,10 @@ function drawLateral(
   const bboxLat =
     prem && opts?.orthoSpread
       ? {
-          minX: bboxLatBase.minX - 12 * ls,
-          minY: bboxLatBase.minY - 22 * ls,
-          maxX: bboxLatBase.maxX + 50 * ls,
-          maxY: bboxLatBase.maxY + 20 * ls,
+          minX: bboxLatBase.minX - 8 * ls,
+          minY: bboxLatBase.minY - 16 * ls,
+          maxX: bboxLatBase.maxX + 38 * ls,
+          maxY: bboxLatBase.maxY + 14 * ls,
         }
       : bboxLatBase;
   let latStructMaxX = x0 + dw + 6;
@@ -2029,7 +2029,7 @@ const ELEV_LATERAL_LABEL_SCALE = ELEV_PAGE_LABEL_SCALE * 0.82;
  * Margens e gap mínimos libertam largura/altura para escala do par ortográfico.
  */
 /** Moldura mínima (prancha quase full-page; traço 0,45 pt ainda dentro da área útil). */
-const ELEV_SPREAD_FRAME_INSET = 5;
+const ELEV_SPREAD_FRAME_INSET = 4;
 /** Junta frontal/lateral sem faixa — máxima largura por coluna. */
 const ELEV_SPREAD_COL_GAP_PX = 0;
 /** Respiro mínimo entre rótulos «Vista …» e painel (desenho sobe). */
@@ -2058,7 +2058,7 @@ const ELEV_SPREAD_LS_LAT_MINOR =
  * o retângulo útil no PDF fica mais «largo» que o PNG → {@link fitRasterInBox} limita pela
  * largura e fica uma faixa branca grande *por baixo* da prancha.
  */
-const ELEV_PDF_LS_YIMG_FROM_TOP_PT = 74;
+const ELEV_PDF_LS_YIMG_FROM_TOP_PT = 70;
 const ELEV_PDF_LS_IMGBOTTOM_PAD_PT = 1;
 const ELEV_PDF_LS_USABLE_W_PT = 841.89 - 48;
 const ELEV_PDF_LS_AVAIL_H_PT =
@@ -2068,8 +2068,8 @@ const ELEV_SPREAD_H = 1500;
 const ELEV_SPREAD_W = Math.round(
   ELEV_SPREAD_H * (ELEV_PDF_LS_USABLE_W_PT / ELEV_PDF_LS_AVAIL_H_PT)
 );
-/** Faixa de notas compacta — rodapé sobe, mais altura útil para o desenho. */
-const ELEV_SPREAD_FOOTER_BAND_PX = 62;
+/** Faixa de notas compacta — menos altura em faixa = mais `innerH` para escala (~+20% vs. antes). */
+const ELEV_SPREAD_FOOTER_BAND_PX = 54;
 /** Margem interna do texto de rodapé à moldura. */
 const ELEV_SPREAD_FOOTER_SIDE_PAD_PX = 10;
 /** Evita que notas de rodapé invadam o eixo da junta entre vistas. */
@@ -2084,22 +2084,27 @@ const ELEV_SPREAD_FOOTER_FS_BASE =
 /** Se o bloco não caber na altura útil, reduzir tipografia do rodapé. */
 const ELEV_SPREAD_FOOTER_FS_SHRINK = 0.91;
 const ELEV_SPREAD_FOOTER_FS_MIN = 6.45;
-/** Tecto de escala uniforme do par ortográfico (só eficaz com fitBox que o permita). */
-const ELEV_SPREAD_PANEL_FIT_MAX_SCALE = ELEV_SPREAD_ORTHO_REFINE;
+/**
+ * Tecto de escala do par ortográfico (independente de `ELEV_SPREAD_ORTHO_REFINE` na tipografia,
+ * para não inflacionar o bbox só por aumentar `ls`).
+ */
+const ELEV_SPREAD_PANEL_FIT_MAX_SCALE = 1.22;
 
 /**
  * Reserva *dentro de cada meia-coluna* para cotas e textos — o encaixe usa só o retângulo
  * interior (~88–92% da área do painel). Estrutura + anotações escalam em conjunto (bbox).
  */
 const ELEV_SPREAD_PREMIUM_ANNOTATION_INSET_PX = {
-  l: 10,
-  r: 108,
-  t: 48,
-  b: 38,
+  l: 8,
+  r: 84,
+  t: 36,
+  b: 28,
 } as const;
 
-/** Após escala ótima do bbox: −5% para não cortar rótulos (H total, níveis, piso, etc.). */
-const ELEV_SPREAD_BBOX_FIT_HEADROOM = 0.95;
+/**
+ * 1 = usar toda a escala de encaixe do bbox; a folga anti-clipping fica nos insets + bbox conservador.
+ */
+const ELEV_SPREAD_BBOX_FIT_HEADROOM = 1;
 
 type SpreadInset = {
   l: number;
