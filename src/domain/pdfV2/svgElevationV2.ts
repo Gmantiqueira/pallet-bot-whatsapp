@@ -1046,40 +1046,6 @@ type SvgBBox = {
   maxY: number;
 };
 
-/** Linhas-guia horizontais discretas (coordenadas da folha, após transform da vista esq.). */
-function buildElevationSpreadGuideLinesSvg(
-  width: number,
-  frameInset: number,
-  tLeft: { tx: number; ty: number; s: number },
-  guideYsLocal: { top: number; floor: number; beams: number[] }
-): string {
-  const ysLoc = [guideYsLocal.top, ...guideYsLocal.beams, guideYsLocal.floor].sort(
-    (a, b) => a - b
-  );
-  const uniq: number[] = [];
-  for (const y of ysLoc) {
-    if (
-      uniq.length === 0 ||
-      Math.abs(y - uniq[uniq.length - 1]!) > 1.1
-    ) {
-      uniq.push(y);
-    }
-  }
-  const x1 = frameInset + 3;
-  const x2 = width - frameInset - 3;
-  const parts: string[] = [
-    `<g id="el-spread-guides" pointer-events="none" opacity="1">`,
-  ];
-  for (const yLoc of uniq) {
-    const y = tLeft.ty + tLeft.s * yLoc;
-    parts.push(
-      `<line x1="${x1}" y1="${y.toFixed(3)}" x2="${x2}" y2="${y.toFixed(3)}" stroke="#cbd5e1" stroke-width="0.26" opacity="0.38"/>`
-    );
-  }
-  parts.push('</g>');
-  return parts.join('');
-}
-
 type ElevationPanelDeferredWrap = {
   deferred: true;
   inner: string;
@@ -2025,13 +1991,10 @@ const ELEV_PAGE_LABEL_SCALE = 1.9 * ELEV_INTERIOR_TYPE_SCALE;
 /** Vista lateral: mais discreta que a frontal (mesma hierarquia relativa). */
 const ELEV_LATERAL_LABEL_SCALE = ELEV_PAGE_LABEL_SCALE * 0.82;
 /**
- * Folha paisagem (~A4 landscape): duas colunas com área útil elevada.
- * Margens e gap mínimos libertam largura/altura para escala do par ortográfico.
+ * Folha A4 retrato no PDF: frontal e lateral empilhadas; viewBox alinhado à zona útil.
  */
 /** Moldura mínima (prancha quase full-page; traço 0,45 pt ainda dentro da área útil). */
 const ELEV_SPREAD_FRAME_INSET = 4;
-/** Junta frontal/lateral sem faixa — máxima largura por coluna. */
-const ELEV_SPREAD_COL_GAP_PX = 0;
 /** Respiro mínimo entre rótulos «Vista …» e painel (desenho sobe). */
 const ELEV_SPREAD_CONTENT_PAD_TOP_PX = 1;
 /**
@@ -2050,23 +2013,19 @@ const ELEV_SPREAD_LS_LAT_PRIMARY =
 const ELEV_SPREAD_LS_LAT_MINOR =
   ELEV_LATERAL_LABEL_SCALE * 0.72 * 1.12 * ELEV_SPREAD_ORTHO_REFINE;
 /**
- * Proporção do viewBox = caixa onde o PNG é colocado no PDF A4 paisagem.
- * Se o SVG for mais «alto» que isto, {@link fitRasterInBox} limita pela altura e ficam
- * faixas brancas à direita e por baixo (ver `pdfV2Service` embedFullWidthDrawing).
- * Valores em pt: largura útil = 841.89 − 2×24; altura útil = pageBottom − yImg − bottomPad.
- * `yImg` usa orçamento *conservador* (título + subtítulo com quebra de linha). Se subestimarmos,
- * o retângulo útil no PDF fica mais «largo» que o PNG → {@link fitRasterInBox} limita pela
- * largura e fica uma faixa branca grande *por baixo* da prancha.
+ * Orçamento vertical até à imagem no PDF (cabeçalho de folha + traço) — alinhado ao
+ * raster em `pdfV2Service` para o viewBox bater com a caixa útil.
  */
 const ELEV_PDF_LS_YIMG_FROM_TOP_PT = 70;
 const ELEV_PDF_LS_IMGBOTTOM_PAD_PT = 1;
-const ELEV_PDF_LS_USABLE_W_PT = 841.89 - 48;
-const ELEV_PDF_LS_AVAIL_H_PT =
-  595.28 - 24 - ELEV_PDF_LS_YIMG_FROM_TOP_PT - ELEV_PDF_LS_IMGBOTTOM_PAD_PT;
-/** Largura × altura do SVG; W/H derivado da zona útil do PDF (não alterar só um eixo). */
-const ELEV_SPREAD_H = 1500;
-const ELEV_SPREAD_W = Math.round(
-  ELEV_SPREAD_H * (ELEV_PDF_LS_USABLE_W_PT / ELEV_PDF_LS_AVAIL_H_PT)
+/** A4 retrato: largura/altura útil do bloco de imagem (alinhado a `pdfV2Service` elevações). */
+const ELEV_PDF_PT_USABLE_W_PT = 595.28 - 48;
+const ELEV_PDF_PT_AVAIL_H_PT =
+  841.89 - 24 - ELEV_PDF_LS_YIMG_FROM_TOP_PT - ELEV_PDF_LS_IMGBOTTOM_PAD_PT;
+/** Largura × altura do SVG em retrato; W/H = zona útil PT (uma só escala com o raster PDF). */
+const ELEV_STACK_H = 1800;
+const ELEV_STACK_W = Math.round(
+  ELEV_STACK_H * (ELEV_PDF_PT_USABLE_W_PT / ELEV_PDF_PT_AVAIL_H_PT)
 );
 /** Faixa de notas compacta — menos altura em faixa = mais `innerH` para escala (~+20% vs. antes). */
 const ELEV_SPREAD_FOOTER_BAND_PX = 54;
@@ -2147,35 +2106,49 @@ function computeSpreadBboxTransform(
   return { s, tx: tcx - s * cx, ty: tcy - s * cy };
 }
 
-function elevationSpreadLayoutMetrics(): {
+/** A4 retrato: frontal (cima) + lateral (baixo); `rowInnerH` partilhado para escala ortográfica. */
+function elevationStackLayoutMetrics(): {
   m: number;
-  gap: number;
   padTop: number;
   footerBand: number;
   width: number;
   height: number;
   colInnerW: number;
-  innerH: number;
+  rowTitleH: number;
+  rowGap: number;
+  rowInnerH: number;
+  topPanelOy: number;
+  botPanelOy: number;
   yFooterBandTop: number;
 } {
   const m = ELEV_SPREAD_FRAME_INSET;
-  const gap = ELEV_SPREAD_COL_GAP_PX;
   const padTop = ELEV_SPREAD_CONTENT_PAD_TOP_PX;
   const footerBand = ELEV_SPREAD_FOOTER_BAND_PX;
-  const width = ELEV_SPREAD_W;
-  const height = ELEV_SPREAD_H;
-  const colInnerW = (width - 2 * m - gap) / 2;
-  const innerH = height - m - footerBand - padTop;
+  const width = ELEV_STACK_W;
+  const height = ELEV_STACK_H;
+  const colInnerW = width - 2 * m;
+  const innerTotalH = height - m - footerBand - padTop;
+  const rowTitleH = 20;
+  const rowGap = 10;
+  const rowInnerH = Math.max(
+    130,
+    (innerTotalH - 2 * rowTitleH - rowGap) / 2
+  );
   const yFooterBandTop = height - m - footerBand;
+  const topPanelOy = m + padTop + rowTitleH;
+  const botPanelOy = topPanelOy + rowInnerH + rowGap + rowTitleH;
   return {
     m,
-    gap,
     padTop,
     footerBand,
     width,
     height,
     colInnerW,
-    innerH,
+    rowTitleH,
+    rowGap,
+    rowInnerH,
+    topPanelOy,
+    botPanelOy,
     yFooterBandTop,
   };
 }
@@ -2275,52 +2248,53 @@ function elevationSpreadFooterColumnSvg(opts: {
 }
 
 export type ElevationPageSvgs = {
-  /** Paisagem: vista frontal (esq.) + vista lateral (dir.), módulo padrão. */
+  /** A4 retrato: frontal (acima) + lateral (abaixo), módulo padrão (`landscape*` = nome legado). */
   landscapeStandard: string;
-  /** Paisagem: frontal e lateral do módulo com túnel — null sem módulo túnel. */
+  /** Retrato: módulo com túnel — null se não aplicável. */
   landscapeTunnel: string | null;
 };
 
 /**
- * Folha paisagem: frontal à esquerda, lateral à direita — mesma escala gráfica que as páginas antigas.
+ * Moldura + rótulos de linha + rodapé em duas colunas (mesma lógica que a prancha antiga).
  */
-function wrapElevationLandscapeSpread(
-  leftInner: string,
-  rightInner: string,
+function wrapElevationPortraitStack(
+  topInner: string,
+  bottomInner: string,
   footerLeft: string,
-  footerRight: string,
-  guideLinesSvg?: string
+  footerRight: string
 ): string {
-  const L = elevationSpreadLayoutMetrics();
+  const L = elevationStackLayoutMetrics();
   const {
     m,
-    gap,
     padTop,
     footerBand,
     width,
     height,
     colInnerW,
+    rowGap,
+    rowInnerH,
+    topPanelOy,
+    botPanelOy,
     yFooterBandTop,
   } = L;
   const fsCol =
     Math.round(
       9.45 * ELEV_PAGE_LABEL_SCALE * 1.1 * 0.86 * ELEV_SPREAD_ORTHO_REFINE * 10
     ) / 10;
-  const cxLeft = m + colInnerW / 2;
-  const cxRight = m + colInnerW + gap + colInnerW / 2;
-  const sepX = m + colInnerW + gap / 2;
+  const cx = m + colInnerW / 2;
+  const sepX = width / 2;
   const side = ELEV_SPREAD_FOOTER_SIDE_PAD_PX;
   const dead = ELEV_SPREAD_FOOTER_CENTER_CLEAR_PX;
   const leftColLeft = m + side;
-  const leftColMaxW = Math.max(
-    64,
-    sepX - dead - leftColLeft
-  );
-  const rightColRight = m + colInnerW + gap + colInnerW - side;
+  const leftColMaxW = Math.max(64, sepX - dead - leftColLeft);
+  const rightColRight = width - m - side;
   const rightColLeft = sepX + dead;
   const rightColMaxW = Math.max(64, rightColRight - rightColLeft);
   const footFill = '#475569';
   const fsFoot = ELEV_SPREAD_FOOTER_FS_BASE;
+  const yTitleFront = m + padTop + 13;
+  const ySep = topPanelOy + rowInnerH + rowGap / 2;
+  const yTitleLat = botPanelOy - 7;
   const parts: string[] = [];
   parts.push(
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">`
@@ -2330,22 +2304,18 @@ function wrapElevationLandscapeSpread(
     `<rect x="${m}" y="${m}" width="${width - 2 * m}" height="${height - 2 * m}" fill="none" stroke="${COL_FRAME}" stroke-width="0.45"/>`
   );
   parts.push(
-    `<line x1="${sepX}" y1="${m + padTop + 0.5}" x2="${sepX}" y2="${yFooterBandTop}" stroke="#e2e8f0" stroke-width="0.55" opacity="0.92" pointer-events="none"/>`
-  );
-  const yColTitle = m + 6;
-  parts.push(
-    `<text x="${cxLeft}" y="${yColTitle}" text-anchor="middle" font-size="${fsCol}px" fill="#64748b" font-family="${SVG_FONT_FAMILY}" font-weight="600">${escapeXml('Vista frontal')}</text>`
+    `<line x1="${m + 3}" y1="${ySep}" x2="${width - m - 3}" y2="${ySep}" stroke="#e2e8f0" stroke-width="0.55" opacity="0.92" pointer-events="none"/>`
   );
   parts.push(
-    `<text x="${cxRight}" y="${yColTitle}" text-anchor="middle" font-size="${fsCol}px" fill="#64748b" font-family="${SVG_FONT_FAMILY}" font-weight="600">${escapeXml('Vista lateral')}</text>`
+    `<text x="${cx}" y="${yTitleFront}" text-anchor="middle" font-size="${fsCol}px" fill="#64748b" font-family="${SVG_FONT_FAMILY}" font-weight="600">${escapeXml('Vista frontal')}</text>`
   );
-  parts.push(leftInner);
-  parts.push(rightInner);
-  if (guideLinesSvg) {
-    parts.push(guideLinesSvg);
-  }
   parts.push(
-    `<g id="el-spread-footer" pointer-events="none">`,
+    `<text x="${cx}" y="${yTitleLat}" text-anchor="middle" font-size="${fsCol}px" fill="#64748b" font-family="${SVG_FONT_FAMILY}" font-weight="600">${escapeXml('Vista lateral')}</text>`
+  );
+  parts.push(topInner);
+  parts.push(bottomInner);
+  parts.push(
+    `<g id="el-stack-footer" pointer-events="none">`,
     elevationSpreadFooterColumnSvg({
       yBandTop: yFooterBandTop,
       bandH: footerBand,
@@ -2372,88 +2342,54 @@ function wrapElevationLandscapeSpread(
   return parts.join('');
 }
 
-/**
- * Pranchas paisagem: frontal + lateral lado a lado (padrão; segunda prancha se houver túnel).
- * Títulos de folha ficam no PDF; aqui rótulos de coluna discretos e rodapés.
- */
+/** Títulos de folha no PDF; aqui rótulos por linha e rodapés. */
 export type SerializeElevationPagesOptions = {
   debug?: boolean;
 };
 
-/**
- * Deslocamento Y comum para equilibrar o espaço livre acima/abaixo do bbox completo (cotas incl.),
- * sem alterar escala nem o alinhamento relativo entre as duas vistas.
- */
-function orthoSpreadPairVerticalNudgePx(
-  left: ElevationPanelDeferredWrap,
-  right: ElevationPanelDeferredWrap,
-  tLeft: { tx: number; ty: number; s: number },
-  tRight: { tx: number; ty: number; s: number },
+function orthoStackPanelBottomAlignNudgePx(
+  t: { ty: number; s: number },
+  bbox: SvgBBox,
+  panel: { oy: number; ph: number },
   inset: SpreadInset
 ): number {
-  const slack = (
-    t: { ty: number; s: number },
-    bbox: SvgBBox,
-    panel: { oy: number; ph: number }
-  ): { slackTop: number; slackBot: number } => {
-    const safeT = panel.oy + inset.t;
-    const safeB = panel.oy + panel.ph - inset.b;
-    const top = t.ty + t.s * bbox.minY;
-    const bot = t.ty + t.s * bbox.maxY;
-    return { slackTop: top - safeT, slackBot: safeB - bot };
-  };
-  const L = slack(tLeft, left.bbox, left.panel);
-  const R = slack(tRight, right.bbox, right.panel);
+  const safeT = panel.oy + inset.t;
+  const safeB = panel.oy + panel.ph - inset.b;
+  const top = t.ty + t.s * bbox.minY;
+  const bot = t.ty + t.s * bbox.maxY;
+  const slackTop = top - safeT;
+  const slackBot = safeB - bot;
   const eps = 0.75;
-  const nMin = Math.max(-L.slackTop, -R.slackTop) + eps;
-  const nMax = Math.min(L.slackBot, R.slackBot) - eps;
+  const nMin = -slackTop + eps;
+  const nMax = slackBot - eps;
   if (nMax < nMin) return 0;
-  /** Encostar cotas+desenho à zona inferior útil (coerente com insets de rodapé). */
   return Math.max(nMin, Math.min(nMax, nMax - 0.25));
 }
 
-function finalizeOrthoSpreadPanels(
-  left: ElevationPanelDeferredWrap,
-  right: ElevationPanelDeferredWrap,
-  panelCap: number,
-  layout: ReturnType<typeof elevationSpreadLayoutMetrics>
-): {
-  leftSvg: string;
-  rightSvg: string;
-  guideLinesSvg: string;
-} {
+function finalizeOrthoStackPanels(
+  top: ElevationPanelDeferredWrap,
+  bottom: ElevationPanelDeferredWrap,
+  panelCap: number
+): { topSvg: string; bottomSvg: string } {
   const inset: SpreadInset = { ...ELEV_SPREAD_PREMIUM_ANNOTATION_INSET_PX };
   const sRaw = Math.min(
-    computeSpreadBboxFitScale(left.panel, left.bbox, inset, panelCap),
-    computeSpreadBboxFitScale(right.panel, right.bbox, inset, panelCap)
+    computeSpreadBboxFitScale(top.panel, top.bbox, inset, panelCap),
+    computeSpreadBboxFitScale(bottom.panel, bottom.bbox, inset, panelCap)
   );
   const s = sRaw * ELEV_SPREAD_BBOX_FIT_HEADROOM;
-  let tLeft = computeSpreadBboxTransform(left.panel, left.bbox, inset, s);
-  let tRight = computeSpreadBboxTransform(right.panel, right.bbox, inset, s);
-  const floorL = left.guideYsLocal.floor;
-  const floorR = right.guideYsLocal.floor;
-  tRight = { ...tRight, ty: tLeft.ty + s * (floorL - floorR) };
-  const nudge = orthoSpreadPairVerticalNudgePx(
-    left,
-    right,
-    tLeft,
-    tRight,
-    inset
-  );
-  if (nudge !== 0) {
-    tLeft = { ...tLeft, ty: tLeft.ty + nudge };
-    tRight = { ...tRight, ty: tRight.ty + nudge };
+  let tTop = computeSpreadBboxTransform(top.panel, top.bbox, inset, s);
+  let tBot = computeSpreadBboxTransform(bottom.panel, bottom.bbox, inset, s);
+  const nTop = orthoStackPanelBottomAlignNudgePx(tTop, top.bbox, top.panel, inset);
+  const nBot = orthoStackPanelBottomAlignNudgePx(tBot, bottom.bbox, bottom.panel, inset);
+  if (nTop !== 0) {
+    tTop = { ...tTop, ty: tTop.ty + nTop };
   }
-  const guideLinesSvg = buildElevationSpreadGuideLinesSvg(
-    layout.width,
-    layout.m,
-    tLeft,
-    left.guideYsLocal
-  );
+  if (nBot !== 0) {
+    tBot = { ...tBot, ty: tBot.ty + nBot };
+  }
   return {
-    leftSvg: `<g transform="translate(${tLeft.tx.toFixed(3)},${tLeft.ty.toFixed(3)}) scale(${tLeft.s.toFixed(5)})">${left.inner}</g>`,
-    rightSvg: `<g transform="translate(${tRight.tx.toFixed(3)},${tRight.ty.toFixed(3)}) scale(${tRight.s.toFixed(5)})">${right.inner}</g>`,
-    guideLinesSvg,
+    topSvg: `<g transform="translate(${tTop.tx.toFixed(3)},${tTop.ty.toFixed(3)}) scale(${tTop.s.toFixed(5)})">${top.inner}</g>`,
+    bottomSvg: `<g transform="translate(${tBot.tx.toFixed(3)},${tBot.ty.toFixed(3)}) scale(${tBot.s.toFixed(5)})">${bottom.inner}</g>`,
   };
 }
 
@@ -2466,17 +2402,17 @@ export function serializeElevationPagesV2(
   const lsMinor = ELEV_SPREAD_LS_MINOR;
   const lsLat = ELEV_SPREAD_LS_LAT_PRIMARY;
   const lsLatMinor = ELEV_SPREAD_LS_LAT_MINOR;
-  const L = elevationSpreadLayoutMetrics();
-  const { m, gap, padTop, colInnerW, innerH } = L;
+  const L = elevationStackLayoutMetrics();
+  const { m, colInnerW, rowInnerH, topPanelOy, botPanelOy } = L;
   const panelCap = ELEV_SPREAD_PANEL_FIT_MAX_SCALE;
-  const sharedInnerH = computeOrthoSpreadSharedInnerHPx(innerH, ls);
+  const sharedInnerH = computeOrthoSpreadSharedInnerHPx(rowInnerH, ls);
 
   const std = model.frontWithoutTunnel;
-  const leftStdDef = drawFrontRack(
+  const topStdDef = drawFrontRack(
     m,
-    padTop,
+    topPanelOy,
     colInnerW,
-    innerH,
+    rowInnerH,
     std,
     '',
     buildElevationAccessorySubtitle(std, true),
@@ -2490,11 +2426,11 @@ export function serializeElevationPagesV2(
       deferredWrap: true,
     }
   );
-  const rightStdDef = drawLateral(
-    m + colInnerW + gap,
-    padTop,
+  const botStdDef = drawLateral(
+    m,
+    botPanelOy,
     colInnerW,
-    innerH,
+    rowInnerH,
     model.lateral,
     {
       labelScale: lsLat,
@@ -2508,35 +2444,34 @@ export function serializeElevationPagesV2(
     }
   );
   if (
-    typeof leftStdDef !== 'object' ||
-    leftStdDef.deferred !== true ||
-    typeof rightStdDef !== 'object' ||
-    rightStdDef.deferred !== true
+    typeof topStdDef !== 'object' ||
+    topStdDef.deferred !== true ||
+    typeof botStdDef !== 'object' ||
+    botStdDef.deferred !== true
   ) {
     throw new Error('serializeElevationPagesV2: expected deferred ortho panels');
   }
-  const {
-    leftSvg: leftStd,
-    rightSvg: rightStd,
-    guideLinesSvg: guidesStd,
-  } = finalizeOrthoSpreadPanels(leftStdDef, rightStdDef, panelCap, L);
-  const landscapeStandard = wrapElevationLandscapeSpread(
-    leftStd,
-    rightStd,
+  const { topSvg: topStd, bottomSvg: botStd } = finalizeOrthoStackPanels(
+    topStdDef,
+    botStdDef,
+    panelCap
+  );
+  const landscapeStandard = wrapElevationPortraitStack(
+    topStd,
+    botStd,
     'Cotas em mm · armazenagem (referência comum ao desenho com túnel, se existir).',
-    'Perfil de uma costa; dupla costas apenas em planta, quando aplicável.',
-    guidesStd
+    'Perfil de uma costa; dupla costas apenas em planta, quando aplicável.'
   );
 
   let landscapeTunnel: string | null = null;
   if (model.frontWithTunnel && model.lateralWithTunnel) {
     const tun = model.frontWithTunnel;
     const latTun = model.lateralWithTunnel;
-    const leftTunDef = drawFrontRack(
+    const topTunDef = drawFrontRack(
       m,
-      padTop,
+      topPanelOy,
       colInnerW,
-      innerH,
+      rowInnerH,
       tun,
       '',
       buildElevationAccessorySubtitle(tun, true),
@@ -2550,11 +2485,11 @@ export function serializeElevationPagesV2(
         deferredWrap: true,
       }
     );
-    const rightTunDef = drawLateral(
-      m + colInnerW + gap,
-      padTop,
+    const botTunDef = drawLateral(
+      m,
+      botPanelOy,
       colInnerW,
-      innerH,
+      rowInnerH,
       latTun,
       {
         labelScale: lsLat,
@@ -2568,24 +2503,23 @@ export function serializeElevationPagesV2(
       }
     );
     if (
-      typeof leftTunDef !== 'object' ||
-      leftTunDef.deferred !== true ||
-      typeof rightTunDef !== 'object' ||
-      rightTunDef.deferred !== true
+      typeof topTunDef !== 'object' ||
+      topTunDef.deferred !== true ||
+      typeof botTunDef !== 'object' ||
+      botTunDef.deferred !== true
     ) {
       throw new Error('serializeElevationPagesV2: expected deferred tunnel panels');
     }
-    const {
-      leftSvg: leftTun,
-      rightSvg: rightTun,
-      guideLinesSvg: guidesTun,
-    } = finalizeOrthoSpreadPanels(leftTunDef, rightTunDef, panelCap, L);
-    landscapeTunnel = wrapElevationLandscapeSpread(
-      leftTun,
-      rightTun,
+    const { topSvg: topTun, bottomSvg: botTun } = finalizeOrthoStackPanels(
+      topTunDef,
+      botTunDef,
+      panelCap
+    );
+    landscapeTunnel = wrapElevationPortraitStack(
+      topTun,
+      botTun,
       'Cotas em mm · túnel: passagem entre longarinas no nível inferior.',
-      'Lateral · vão inferior do túnel; níveis alinhados à vista frontal.',
-      guidesTun
+      'Lateral · vão inferior do túnel; níveis alinhados à vista frontal.'
     );
   }
 
