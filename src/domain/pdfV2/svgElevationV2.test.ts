@@ -148,7 +148,7 @@ describe('serializeElevationPagesV2', () => {
     expect(pages.landscapeTunnel!).toMatch(/Vão túnel/i);
   });
 
-  it('prancha A4 retrato: mesma escala nas duas vistas (frontal e lateral empilhadas)', () => {
+  it('prancha paisagem: mesma escala e mesmo translate Y (alinhamento ortográfico piso/topo)', () => {
     const a: ProjectAnswersV2 = {
       lengthMm: 12_000,
       widthMm: 10_000,
@@ -177,6 +177,7 @@ describe('serializeElevationPagesV2', () => {
     ];
     expect(transforms.length).toBe(2);
     expect(transforms[0]![3]).toBe(transforms[1]![3]);
-    expect(svg).toContain('id="el-stack-footer"');
+    expect(transforms[0]![2]).toBe(transforms[1]![2]);
+    expect(svg).toContain('id="el-spread-guides"');
   });
 });

@@ -62,7 +62,7 @@ function ptToPx(pt: number): number {
  */
 /**
  * Orçamento vertical até ao traço do cabeçalho (planta/3D). Em elevações paisagem o `yImg`
- * Elevações (A4 retrato): ver `ELEV_PDF_LS_YIMG_FROM_TOP_PT` em `svgElevationV2.ts`.
+ * Elevações: ver `ELEV_PDF_LS_YIMG_FROM_TOP_PT` em `svgElevationV2.ts` (orçamento conservador).
  */
 const DRAWING_SHEET_HEADER_BUDGET_PT = 38;
 const DRAWING_SHEET_BOTTOM_PAD_PT = 2;
@@ -81,13 +81,13 @@ function drawingRasterPixelSize(): { pxW: number; pxH: number } {
   };
 }
 
-/** Raster para prancha de elevações em A4 retrato (frontal acima, lateral abaixo). */
-function elevationPortraitDrawingRasterPixelSize(): { pxW: number; pxH: number } {
-  const pageW = 595.28;
-  const pageH = 841.89;
+/** Raster para prancha de elevações em A4 paisagem (frontal + lateral). */
+function elevationLandscapeDrawingRasterPixelSize(): { pxW: number; pxH: number } {
+  const pageW = 841.89;
+  const pageH = 595.28;
   const usableW = pageW - 2 * PAGE_MARGIN_PT;
   const pageBottom = pageH - PAGE_MARGIN_PT;
-  /** Alinhado a `ELEV_PDF_PT_AVAIL_H_PT` / `embedFullWidthDrawing` na folha de elevação. */
+  /** Alinhado a `ELEV_PDF_LS_AVAIL_H_PT` / `embedFullWidthDrawing` nas páginas de elevação. */
   const imgAvailH = pageBottom - 70 - 1;
   return {
     pxW: ptToPx(Math.round(usableW * 1.08)),
@@ -304,7 +304,7 @@ export type GenerateProjectPdfV2Input = {
   /** Fonte única para o resumo técnico (alinhado à planta/elevações V2). */
   layoutGeometry: LayoutGeometry;
   floorPlanSvg: string;
-  /** Pranchas SVG de elevação A4 retrato (padrão; + túnel quando aplicável). */
+  /** Pranchas SVG de elevação em paisagem (padrão; + túnel quando aplicável). */
   elevationPages: ElevationPageSvgs;
   /** Vista 3D isométrica (wireframe) alinhada ao layout V2. */
   view3dSvg: string;
@@ -331,16 +331,16 @@ export async function renderPdfV2(
   const hasTunnel = input.layoutGeometry.metadata.hasTunnel === true;
 
   const { pxW, pxH } = drawingRasterPixelSize();
-  const { pxW: elPtW, pxH: elPtH } = elevationPortraitDrawingRasterPixelSize();
+  const { pxW: elLsW, pxH: elLsH } = elevationLandscapeDrawingRasterPixelSize();
   const { pxW: v3W, pxH: v3H } = view3dRasterPixelSize();
 
   let floorRaster: { buffer: Buffer; widthPx: number; heightPx: number };
-  let elevPortraitStdRaster: {
+  let elevLandscapeStdRaster: {
     buffer: Buffer;
     widthPx: number;
     heightPx: number;
   };
-  let elevPortraitTunRaster: {
+  let elevLandscapeTunRaster: {
     buffer: Buffer;
     widthPx: number;
     heightPx: number;
@@ -350,15 +350,15 @@ export async function renderPdfV2(
     const tunSpreadSvg = hasTunnel ? input.elevationPages.landscapeTunnel : null;
     const rasterAll = await Promise.all([
       svgRasterToPng(input.floorPlanSvg, pxW, pxH),
-      svgRasterToPng(input.elevationPages.landscapeStandard, elPtW, elPtH),
+      svgRasterToPng(input.elevationPages.landscapeStandard, elLsW, elLsH),
       svgRasterToPng(input.view3dSvg, v3W, v3H),
-      ...(tunSpreadSvg ? [svgRasterToPng(tunSpreadSvg, elPtW, elPtH)] : []),
+      ...(tunSpreadSvg ? [svgRasterToPng(tunSpreadSvg, elLsW, elLsH)] : []),
     ]);
     let i = 0;
     floorRaster = rasterAll[i++]!;
-    elevPortraitStdRaster = rasterAll[i++]!;
+    elevLandscapeStdRaster = rasterAll[i++]!;
     view3dRaster = rasterAll[i++]!;
-    elevPortraitTunRaster = tunSpreadSvg ? rasterAll[i++]! : null;
+    elevLandscapeTunRaster = tunSpreadSvg ? rasterAll[i++]! : null;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     throw new Error(`Falha ao rasterizar SVG para PDF: ${msg}`);
@@ -651,24 +651,24 @@ export async function renderPdfV2(
   });
   embedFullWidthDrawing(floorRaster, { bottomPadPt: 2 });
 
-  doc.addPage({ size: 'A4', layout: 'portrait', margins: pageMargins });
+  doc.addPage({ size: 'A4', layout: 'landscape', margins: pageMargins });
   beginDrawingSheetHeader('Elevações — módulo padrão', {
     subtitle:
-      'Vista frontal (acima) e vista lateral (abaixo) · cotas em mm · folha A4',
+      'Vista frontal (esquerda) e vista lateral (direita) · cotas em mm',
     compactDrawingGap: true,
   });
-  embedFullWidthDrawing(elevPortraitStdRaster, { bottomPadPt: 1 });
+  embedFullWidthDrawing(elevLandscapeStdRaster, { bottomPadPt: 1 });
 
   if (hasTunnel) {
-    doc.addPage({ size: 'A4', layout: 'portrait', margins: pageMargins });
+    doc.addPage({ size: 'A4', layout: 'landscape', margins: pageMargins });
     beginDrawingSheetHeader('Elevações — módulo com túnel', {
-      subtitle: elevPortraitTunRaster
-        ? 'Vista frontal (acima) e vista lateral (abaixo) · vão de passagem inferior'
+      subtitle: elevLandscapeTunRaster
+        ? 'Vista frontal (esquerda) e vista lateral (direita) · vão de passagem inferior'
         : undefined,
       compactDrawingGap: true,
     });
-    if (elevPortraitTunRaster) {
-      embedFullWidthDrawing(elevPortraitTunRaster, { bottomPadPt: 1 });
+    if (elevLandscapeTunRaster) {
+      embedFullWidthDrawing(elevLandscapeTunRaster, { bottomPadPt: 1 });
     } else {
       drawCentered('Não aplicável neste projeto (sem módulo túnel).', {
         size: 11,

@@ -279,13 +279,13 @@ async function executeProjectPdfGeneration(
         'utf8'
       );
       fs.writeFileSync(
-        path.join(storageDir, `elevacao-a4-padrao-${phone}-${ts}.svg`),
+        path.join(storageDir, `elevacao-paisagem-padrao-${phone}-${ts}.svg`),
         elevPages.landscapeStandard,
         'utf8'
       );
       if (elevPages.landscapeTunnel) {
         fs.writeFileSync(
-          path.join(storageDir, `elevacao-a4-tunel-${phone}-${ts}.svg`),
+          path.join(storageDir, `elevacao-paisagem-tunel-${phone}-${ts}.svg`),
           elevPages.landscapeTunnel,
           'utf8'
         );

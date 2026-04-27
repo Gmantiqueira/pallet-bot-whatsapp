@@ -300,7 +300,7 @@ describe('MessageRouter', () => {
       ).toBe(true);
       expect(
         names.some(
-          f => f.startsWith('elevacao-a4-padrao-') && f.endsWith('.svg')
+          f => f.startsWith('elevacao-paisagem-padrao-') && f.endsWith('.svg')
         )
       ).toBe(true);
       expect(
