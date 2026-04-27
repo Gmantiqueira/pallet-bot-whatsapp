@@ -2054,12 +2054,12 @@ const ELEV_SPREAD_LS_LAT_MINOR =
  * Se o SVG for mais «alto» que isto, {@link fitRasterInBox} limita pela altura e ficam
  * faixas brancas à direita e por baixo (ver `pdfV2Service` embedFullWidthDrawing).
  * Valores em pt: largura útil = 841.89 − 2×24; altura útil = pageBottom − yImg − bottomPad.
- * `yImg` usa orçamento *conservador* (título + subtítulo com quebra de linha). Se subestimarmos,
- * o retângulo útil no PDF fica mais «largo» que o PNG → {@link fitRasterInBox} limita pela
- * largura e fica uma faixa branca grande *por baixo* da prancha.
+ * Distância do topo da folha até onde começa o bitmap (cabeçalho + traço + folga).
+ * Se for **menor** que o `doc.y` real após `beginDrawingSheetHeader`, o SVG fica «mais alto»
+ * que a caixa útil → {@link fitRasterInBox} limita pela altura → **faixas brancas à direita**.
  */
-const ELEV_PDF_LS_YIMG_FROM_TOP_PT = 70;
-const ELEV_PDF_LS_IMGBOTTOM_PAD_PT = 1;
+export const ELEV_PDF_LS_YIMG_FROM_TOP_PT = 100;
+export const ELEV_PDF_LS_IMGBOTTOM_PAD_PT = 1;
 const ELEV_PDF_LS_USABLE_W_PT = 841.89 - 48;
 const ELEV_PDF_LS_AVAIL_H_PT =
   595.28 - 24 - ELEV_PDF_LS_YIMG_FROM_TOP_PT - ELEV_PDF_LS_IMGBOTTOM_PAD_PT;
@@ -2067,7 +2067,7 @@ const ELEV_PDF_LS_AVAIL_H_PT =
  * Fator do viewBox e das áreas úteis dos painéis (moldura/rodapé mantêm px fixos → desenho relativo cresce).
  * O raster em `pdfV2Service` deve usar o mesmo fator para manter proporção e nitidez.
  */
-export const ELEV_SPREAD_CANVAS_SCALE = 1.2;
+export const ELEV_SPREAD_CANVAS_SCALE = 1.45;
 const ELEV_SPREAD_BASE_H = 1500;
 /** Largura × altura do SVG; W/H derivado da zona útil do PDF (não alterar só um eixo). */
 const ELEV_SPREAD_H = Math.round(ELEV_SPREAD_BASE_H * ELEV_SPREAD_CANVAS_SCALE);
@@ -2104,7 +2104,7 @@ const ELEV_SPREAD_PANEL_FIT_MAX_SCALE =
  */
 const ELEV_SPREAD_PREMIUM_ANNOTATION_INSET_PX = {
   l: 8,
-  r: 84,
+  r: 76,
   t: 36,
   b: 28,
 } as const;

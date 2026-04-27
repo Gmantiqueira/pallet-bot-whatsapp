@@ -15,6 +15,8 @@ import { buildFloorPlanModelV2 } from '../../domain/pdfV2/floorPlanModelV2';
 import { serializeFloorPlanSvgV2 } from '../../domain/pdfV2/svgFloorPlanV2';
 import { buildElevationModelV2 } from '../../domain/pdfV2/elevationModelV2';
 import {
+  ELEV_PDF_LS_IMGBOTTOM_PAD_PT,
+  ELEV_PDF_LS_YIMG_FROM_TOP_PT,
   ELEV_SPREAD_CANVAS_SCALE,
   serializeElevationPagesV2,
   type ElevationPageSvgs,
@@ -88,8 +90,11 @@ function elevationLandscapeDrawingRasterPixelSize(): { pxW: number; pxH: number 
   const pageH = 595.28;
   const usableW = pageW - 2 * PAGE_MARGIN_PT;
   const pageBottom = pageH - PAGE_MARGIN_PT;
-  /** Alinhado a `ELEV_PDF_LS_AVAIL_H_PT` / `embedFullWidthDrawing` nas páginas de elevação. */
-  const imgAvailH = pageBottom - 70 - 1;
+  /** Mesmos orçamentos que `ELEV_PDF_LS_AVAIL_H_PT` em `svgElevationV2` (evita letterboxing). */
+  const imgAvailH =
+    pageBottom -
+    ELEV_PDF_LS_YIMG_FROM_TOP_PT -
+    ELEV_PDF_LS_IMGBOTTOM_PAD_PT;
   const pxW = ptToPx(Math.round(usableW * 1.08));
   const pxH = ptToPx(Math.max(120, imgAvailH * 1.22));
   return {
