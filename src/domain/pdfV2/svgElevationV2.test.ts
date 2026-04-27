@@ -45,8 +45,8 @@ describe('serializeElevationPagesV2', () => {
     expect(svg).toMatch(/vão/);
     expect(svg).toMatch(/CAPACIDADE = 1\.200 kg por palete/);
     const pairLabels = svg.match(/PAR DE LONGARINAS/g) ?? [];
-    // Frontal: 2 baias × níveis; lateral: 1 coluna × níveis (mesma prancha paisagem).
-    expect(pairLabels.length).toBe(a.levels * 2 + a.levels);
+    // Prancha premium: uma legenda por par de longarinas por nível (frontal centrada; lateral).
+    expect(pairLabels.length).toBe(a.levels * 2);
     const orangeBeams = svg.match(/fill="#fb923c"/g) ?? [];
     expect(orangeBeams.length).toBe(a.levels * 2 + a.levels);
   });
@@ -178,5 +178,6 @@ describe('serializeElevationPagesV2', () => {
     expect(transforms.length).toBe(2);
     expect(transforms[0]![3]).toBe(transforms[1]![3]);
     expect(transforms[0]![2]).toBe(transforms[1]![2]);
+    expect(svg).toContain('id="el-spread-guides"');
   });
 });

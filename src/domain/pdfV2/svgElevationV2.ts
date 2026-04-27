@@ -238,32 +238,55 @@ function drawLateralGuardRailMarkers(
 
 /** Nota de rodapé do desenho: alinha com as opções do projeto. */
 export function buildElevationAccessorySubtitle(
-  data: ElevationPanelPayload
+  data: ElevationPanelPayload,
+  compact?: boolean
 ): string | undefined {
   const bits: string[] = [];
   if (data.columnProtector === true) {
-    bits.push('Protetores de coluna na base');
+    bits.push(
+      compact === true ? 'Prot. de coluna' : 'Protetores de coluna na base'
+    );
   }
   if (data.guardRailSimple === true && data.guardRailSimplePosition) {
     const p = data.guardRailSimplePosition;
-    bits.push(
-      p === 'AMBOS'
-        ? 'Guarda simples — ambas as extremidades'
-        : `Guarda simples — ${p === 'INICIO' ? 'início' : 'fim'} do vão`
-    );
+    if (compact === true) {
+      bits.push(
+        p === 'AMBOS'
+          ? 'Guarda simples — ambas'
+          : `Guarda simples — ${p === 'INICIO' ? 'início' : 'fim'}`
+      );
+    } else {
+      bits.push(
+        p === 'AMBOS'
+          ? 'Guarda simples — ambas as extremidades'
+          : `Guarda simples — ${p === 'INICIO' ? 'início' : 'fim'} do vão`
+      );
+    }
   }
   if (data.guardRailDouble === true && data.guardRailDoublePosition) {
     const p = data.guardRailDoublePosition;
-    bits.push(
-      p === 'AMBOS'
-        ? 'Guarda dupla — ambas as extremidades'
-        : `Guarda dupla — ${p === 'INICIO' ? 'início' : 'fim'} do vão`
-    );
+    if (compact === true) {
+      bits.push(
+        p === 'AMBOS'
+          ? 'Guarda dupla — ambas'
+          : `Guarda dupla — ${p === 'INICIO' ? 'início' : 'fim'}`
+      );
+    } else {
+      bits.push(
+        p === 'AMBOS'
+          ? 'Guarda dupla — ambas as extremidades'
+          : `Guarda dupla — ${p === 'INICIO' ? 'início' : 'fim'} do vão`
+      );
+    }
   }
   bits.push(
     data.firstLevelOnGround
-      ? '1.º eixo de feixe ao piso'
-      : '1.º eixo elevado (folga sob o primeiro patamar)'
+      ? compact === true
+        ? '1.º feixe ao piso'
+        : '1.º eixo de feixe ao piso'
+      : compact === true
+        ? '1.º eixo elevado'
+        : '1.º eixo elevado (folga sob o primeiro patamar)'
   );
   return bits.join(' · ');
 }
@@ -469,9 +492,11 @@ function drawVerticalDimChain(
   tunnelDim?: { clearanceMm: number; yPassTop: number },
   hasGroundLevel?: boolean,
   structuralTopMm?: number,
-  appendRightLines?: string[]
+  appendRightLines?: string[],
+  compactSegLabels?: boolean
 ): string {
   const ls = labelScale;
+  const compact = compactSegLabels === true;
   const nB = beamYsPx.length;
   if (nB < 1 || beamH.length < 1) {
     return '';
@@ -588,6 +613,14 @@ function drawVerticalDimChain(
 
   const segLabel = (idx: number): string => {
     if (tunnelSplit) {
+      if (compact) {
+        if (idx === 0) return 'Vão túnel';
+        if (idx === 1) return 'Até 1.º eixo';
+        if (idx === detailCount - 1) {
+          return typeof structuralTopMm === 'number' ? 'Ao topo coluna' : 'Ao topo';
+        }
+        return `Nív. ${idx - 1}–${idx}`;
+      }
       if (idx === 0) return 'Vão túnel';
       if (idx === 1) return 'Até 1.º eixo';
       if (idx === detailCount - 1) {
@@ -596,6 +629,15 @@ function drawVerticalDimChain(
           : 'Topo / tampo';
       }
       return `Espaço entre eixos (nív. ${idx - 1}–${idx})`;
+    }
+    if (compact) {
+      if (idx === 0) {
+        return hasGroundLevel ? 'Piso → 1.º eixo' : '1.º eixo';
+      }
+      if (idx === detailCount - 1) {
+        return typeof structuralTopMm === 'number' ? 'Ao topo coluna' : 'Ao topo';
+      }
+      return `Nív. ${idx}–${idx + 1}`;
     }
     if (idx === 0) {
       return hasGroundLevel ? 'Piso → 1.º eixo (sem long.)' : '1.º eixo';
@@ -626,10 +668,12 @@ function drawVerticalDimChain(
     parts.push(
       textLines(
         xDim + 4.5,
-        midY - 8 * ls,
-        [segLabel(k), formatMmPtBr(mmRounded)],
+        midY - (compact ? 7 : 8) * ls,
+        compact
+          ? [`${segLabel(k)} · ${formatMmPtBr(mmRounded)}`]
+          : [segLabel(k), formatMmPtBr(mmRounded)],
         {
-          fontSize: 9 * ls,
+          fontSize: (compact ? 8.1 : 9) * ls,
           fill: DIM_MINOR,
           fontWeight: '500',
         }
@@ -1065,18 +1109,13 @@ type SvgBBox = {
   maxY: number;
 };
 
-/**
- * Escala e encaixa usando `fitBox` (estrutura + reservas fixas para anotações),
- * mas centra pelo centroide de `structural` para o desenho não “seguir” textos/cotas.
- */
-function wrapSvgStructuralPanelFit(
-  inner: string,
+function computeStructuralPanelTransform(
   panel: { ox: number; oy: number; pw: number; ph: number },
   structural: SvgBBox,
   fitBox: SvgBBox,
   margin: number,
   fitOpts?: { maxUniformScale?: number; uniformScale?: number }
-): string {
+): { s: number; tx: number; ty: number } {
   const { ox, oy, pw, ph } = panel;
   const safeL = ox + margin;
   const safeT = oy + margin;
@@ -1099,7 +1138,41 @@ function wrapSvgStructuralPanelFit(
   const tcy = (safeT + safeB) / 2;
   const tx = tcx - s * cx;
   const ty = tcy - s * cy;
-  return `<g transform="translate(${tx.toFixed(3)},${ty.toFixed(3)}) scale(${s.toFixed(5)})">${inner}</g>`;
+  return { s, tx, ty };
+}
+
+/** Linhas-guia horizontais discretas (coordenadas da folha, após transform da vista esq.). */
+function buildElevationSpreadGuideLinesSvg(
+  width: number,
+  frameInset: number,
+  tLeft: { tx: number; ty: number; s: number },
+  guideYsLocal: { top: number; floor: number; beams: number[] }
+): string {
+  const ysLoc = [guideYsLocal.top, ...guideYsLocal.beams, guideYsLocal.floor].sort(
+    (a, b) => a - b
+  );
+  const uniq: number[] = [];
+  for (const y of ysLoc) {
+    if (
+      uniq.length === 0 ||
+      Math.abs(y - uniq[uniq.length - 1]!) > 1.1
+    ) {
+      uniq.push(y);
+    }
+  }
+  const x1 = frameInset + 8;
+  const x2 = width - frameInset - 8;
+  const parts: string[] = [
+    `<g id="el-spread-guides" pointer-events="none" opacity="1">`,
+  ];
+  for (const yLoc of uniq) {
+    const y = tLeft.ty + tLeft.s * yLoc;
+    parts.push(
+      `<line x1="${x1}" y1="${y.toFixed(3)}" x2="${x2}" y2="${y.toFixed(3)}" stroke="#cbd5e1" stroke-width="0.26" opacity="0.38"/>`
+    );
+  }
+  parts.push('</g>');
+  return parts.join('');
 }
 
 type ElevationPanelDeferredWrap = {
@@ -1111,12 +1184,18 @@ type ElevationPanelDeferredWrap = {
   structuralBbox: SvgBBox;
   /** Estrutura + margens fixas à volta para cotas/legendas (não depende do texto medido). */
   fitBox: SvgBBox;
+  /** Referências Y locais (pré-transform) para linhas-guia na prancha paisagem. */
+  guideYsLocal: { top: number; floor: number; beams: number[] };
   panel: { ox: number; oy: number; pw: number; ph: number };
   fitOpts?: { maxUniformScale?: number };
 };
 
 type DrawFrontRackOptions = {
   labelScale?: number;
+  /** Escala para legendas secundárias (capacidade por patamar, etc.). */
+  labelMinorScale?: number;
+  /** Prancha paisagem premium: menos repetição, cotas compactas, sem cotas de largura de montante. */
+  spreadPremium?: boolean;
   debug?: boolean;
   /** Prancha paisagem: até 95% da escala de encaixe para reservar folga ao rodapé. */
   panelFitMaxScale?: number;
@@ -1158,6 +1237,8 @@ function drawFrontRack(
   options?: DrawFrontRackOptions
 ): string | ElevationPanelDeferredWrap {
   const ls = options?.labelScale ?? 1;
+  const lsMinor = options?.labelMinorScale ?? ls;
+  const prem = options?.spreadPremium === true;
   const nMod = FV_FRONT_BAY_COUNT;
   const levelsEst = Math.max(1, Math.min(32, Math.floor(data.levels)));
   const tunnelExtraSeg =
@@ -1400,29 +1481,38 @@ function drawFrontRack(
 
   const palletKg = resolvePalletCapacityKg(data);
   const pairKg = beamPairCapacityKg(data);
-  const capFsSmall = 6.85 * ls;
+  const capFsSmall = 6.85 * lsMinor;
   const capLinePallet = `CAPACIDADE = ${formatKgCapacityPtBr(palletKg)} kg por palete`;
   parts.push(
     `<text x="${(faceSpanLeft + faceSpanRight) / 2}" y="${dimTopY - 20 * ls}" text-anchor="middle" font-size="${capFsSmall}px" fill="${DIM_MINOR}" stroke="${COL_BG}" stroke-width="${0.28 * ls}" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="600">${escapeXml(
       capLinePallet
     )}</text>`
   );
+  const cxFace = (faceSpanLeft + faceSpanRight) / 2;
   for (let j = 0; j < nStorageBeams; j++) {
     const yy = beamYsPx[j]!;
     if (showTunnelOpening && yy >= yPassTop - beamTh * 0.55) {
       continue;
     }
     const bh = Math.max(beamTh, 2.2);
-    const ty = yy - bh / 2 - 3.2 * ls;
+    const ty = yy - bh / 2 - 3.2 * lsMinor;
     const ord = j + 1;
     const pairLine = `${ord}\u00BA PAR DE LONGARINAS = ${formatKgCapacityPtBr(pairKg)} kg`;
-    for (const bay of bays) {
-      const cx = (bay.left + bay.right) / 2;
+    if (prem) {
       parts.push(
-        `<text x="${cx}" y="${ty}" text-anchor="middle" font-size="${capFsSmall}px" fill="${DIM_MINOR}" stroke="${COL_BG}" stroke-width="${0.25 * ls}" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="600">${escapeXmlPreserveOrdinal(
+        `<text x="${cxFace}" y="${ty}" text-anchor="middle" font-size="${capFsSmall}px" fill="${DIM_MINOR}" stroke="${COL_BG}" stroke-width="${0.25 * ls}" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="600">${escapeXmlPreserveOrdinal(
           pairLine
         )}</text>`
       );
+    } else {
+      for (const bay of bays) {
+        const cx = (bay.left + bay.right) / 2;
+        parts.push(
+          `<text x="${cx}" y="${ty}" text-anchor="middle" font-size="${capFsSmall}px" fill="${DIM_MINOR}" stroke="${COL_BG}" stroke-width="${0.25 * ls}" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="600">${escapeXmlPreserveOrdinal(
+            pairLine
+          )}</text>`
+        );
+      }
     }
   }
 
@@ -1464,15 +1554,17 @@ function drawFrontRack(
     `<text x="${rx + totalW / 2}" y="${rackBottom + 44 * ls}" text-anchor="middle" font-size="${9 * ls}px" fill="#334155" font-family="${SVG_FONT_FAMILY}">Largura total da face: ${escapeXml(formatMmPtBr(Math.round(totalWidthMm)))}</text>`
   );
 
-  parts.push(
-    drawUprightWidthDims(
-      uprightXs,
-      uprightWidthsPx,
-      uprightWidthsMm,
-      rackBottom + 58 * ls,
-      ls
-    )
-  );
+  if (!prem) {
+    parts.push(
+      drawUprightWidthDims(
+        uprightXs,
+        uprightWidthsPx,
+        uprightWidthsMm,
+        rackBottom + 58 * ls,
+        ls
+      )
+    );
+  }
 
   parts.push(
     drawVerticalDimChain(
@@ -1487,7 +1579,8 @@ function drawFrontRack(
       showTunnelOpening ? { clearanceMm: clearanceMm, yPassTop } : undefined,
       data.hasGroundLevel === true,
       data.structuralTopMm,
-      frontOperationalAnnotationLines(data)
+      prem ? undefined : frontOperationalAnnotationLines(data),
+      prem
     )
   );
 
@@ -1580,6 +1673,11 @@ function drawFrontRack(
       bbox,
       structuralBbox,
       fitBox,
+      guideYsLocal: {
+        top: ry,
+        floor: floorTop,
+        beams: beamYsPx.slice(),
+      },
       panel,
       fitOpts: wrapFit,
     };
@@ -1603,6 +1701,8 @@ function braceBetween(
 
 type DrawLateralOptions = {
   labelScale?: number;
+  labelMinorScale?: number;
+  spreadPremium?: boolean;
   hideHeader?: boolean;
   debug?: boolean;
   panelFitMaxScale?: number;
@@ -1636,6 +1736,8 @@ function drawLateral(
   opts?: DrawLateralOptions
 ): string | ElevationPanelDeferredWrap {
   const ls = opts?.labelScale ?? 1;
+  const lsMinor = opts?.labelMinorScale ?? ls;
+  const prem = opts?.spreadPremium === true;
   const hideHeader = opts?.hideHeader === true;
   const rackMaxW = Math.min(pw - 48, Math.max(120, pw * 0.54));
   const rackMaxH = ph - Math.round(72 / ls);
@@ -1790,7 +1892,11 @@ function drawLateral(
     parts.push(
       `<line x1="${bayLeft}" y1="${yPassTop}" x2="${bayRight}" y2="${yPassTop}" stroke="#94a3b8" stroke-width="0.4" opacity="0.52"/>`
     );
-    if (tw > 32 && floorTopLat - yPassTop > 24) {
+    if (
+      !prem &&
+      tw > 32 &&
+      floorTopLat - yPassTop > 24
+    ) {
       const yMid = (yPassTop + floorTopLat) / 2;
       const cxBay = (bayLeft + bayRight) / 2;
       parts.push(
@@ -1835,7 +1941,7 @@ function drawLateral(
 
   const palletKgLat = resolvePalletCapacityKg(data);
   const pairKgLat = beamPairCapacityKg(data);
-  const capLatFs = 6.75 * ls;
+  const capLatFs = 6.75 * lsMinor;
   const mxLat = (bayLeft + bayRight) / 2;
   parts.push(
     `<text x="${mxLat}" y="${y0 - 8 * ls}" text-anchor="middle" font-size="${capLatFs}px" fill="${DIM_MINOR}" stroke="${COL_BG}" stroke-width="${0.25 * ls}" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="600">${escapeXml(
@@ -1847,7 +1953,7 @@ function drawLateral(
     if (showTunnelOpening && yy >= yPassTop - bhLat * 0.55) {
       continue;
     }
-    const ty = yy - bhLat / 2 - 2.8 * ls;
+    const ty = yy - bhLat / 2 - 2.8 * lsMinor;
     const pairLineLat = `${j + 1}\u00BA PAR DE LONGARINAS = ${formatKgCapacityPtBr(pairKgLat)} kg`;
     parts.push(
       `<text x="${mxLat}" y="${ty}" text-anchor="middle" font-size="${capLatFs}px" fill="${DIM_MINOR}" stroke="${COL_BG}" stroke-width="${0.22 * ls}" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="600">${escapeXmlPreserveOrdinal(
@@ -1890,7 +1996,9 @@ function drawLateral(
       ls,
       clearanceLatMm > 0 ? { clearanceMm: clearanceLatMm, yPassTop } : undefined,
       data.hasGroundLevel === true,
-      data.structuralTopMm
+      data.structuralTopMm,
+      undefined,
+      prem
     )
   );
 
@@ -1966,6 +2074,11 @@ function drawLateral(
       bbox: bboxLat,
       structuralBbox: structuralBboxLat,
       fitBox: fitBoxLat,
+      guideYsLocal: {
+        top: y0,
+        floor: floorTopLat,
+        beams: beamH.map((_, j) => beamAt(j)),
+      },
       panel: panelLat,
       fitOpts: wrapFitLat,
     };
@@ -1988,21 +2101,25 @@ const ELEV_LATERAL_LABEL_SCALE = ELEV_PAGE_LABEL_SCALE * 0.82;
  * `COL_GAP` estreito + viewBox maior amplia frontal e lateral na mesma proporção.
  */
 const ELEV_SPREAD_FRAME_INSET = 18;
-/** Espaço entre colunas: mais estreito aproxima as vistas sem alterar escala estrutural. */
-const ELEV_SPREAD_COL_GAP_PX = 6;
-/**
- * Reduz tipografia auxiliar na prancha paisagem (cotas, legendas) para ganhar folga
- * sem mudar geometria mm→px da estrutura.
- */
-const ELEV_SPREAD_LABEL_SHRINK = 0.9;
+/** Espaço entre colunas (~10% mais estreito que 6px): aproxima vistas, amplia área útil. */
+const ELEV_SPREAD_COL_GAP_PX = 5;
+/** Textos técnicos principais na prancha (+12%). */
+const ELEV_SPREAD_LS_PRIMARY = ELEV_PAGE_LABEL_SCALE * 1.12;
+/** Legendas secundárias (capacidade por patamar, etc.): ~−30% vs. principal. */
+const ELEV_SPREAD_LS_MINOR = ELEV_PAGE_LABEL_SCALE * 0.72;
+const ELEV_SPREAD_LS_LAT_PRIMARY = ELEV_LATERAL_LABEL_SCALE * 1.12;
+const ELEV_SPREAD_LS_LAT_MINOR = ELEV_LATERAL_LABEL_SCALE * 0.72;
 const ELEV_SPREAD_W = 2040;
 const ELEV_SPREAD_H = 1330;
-/** Faixa inferior exclusiva para textos explicativos (sem sobreposição com desenhos). */
-const ELEV_SPREAD_FOOTER_BAND_PX = 92;
+/** Faixa de notas: ligeiramente mais baixa para ganhar altura útil do desenho; texto ancorado ao topo da faixa. */
+const ELEV_SPREAD_FOOTER_BAND_PX = 78;
 /** Margem mínima entre rodapé e moldura da coluna. */
 const ELEV_SPREAD_FOOTER_SIDE_PAD_PX = 14;
-/** Até 95% da escala de encaixe: folga de 5% antes de invadir a faixa de rodapé. */
-const ELEV_SPREAD_PANEL_FIT_MAX_SCALE = 0.95;
+/** Folga inferior confortável dentro da faixa de notas (evita texto “esmagado”). */
+const ELEV_SPREAD_FOOTER_TEXT_PAD_BOTTOM = 22;
+const ELEV_SPREAD_FOOTER_TEXT_PAD_TOP = 10;
+/** Até ~96% da escala de encaixe: ligeiramente maior que antes, com margem ao rodapé. */
+const ELEV_SPREAD_PANEL_FIT_MAX_SCALE = 0.96;
 
 function elevationSpreadLayoutMetrics(): {
   m: number;
@@ -2082,11 +2199,17 @@ function elevationSpreadFooterColumnSvg(
   body: string
 ): string {
   const lines = wrapFooterTextToLines(body, maxTextW, fs);
-  const lh = fs * 1.16;
+  const lh = fs * 1.14;
   const blockH = lines.length * lh;
   const weight = svgFontWeightForSvgAttr('600');
-  const yFirst =
-    yBandTop + Math.max(fs * 0.72, (bandH - blockH) / 2 + fs * 0.72);
+  const yMaxContent = yBandTop + bandH - ELEV_SPREAD_FOOTER_TEXT_PAD_BOTTOM;
+  let yFirst = yBandTop + ELEV_SPREAD_FOOTER_TEXT_PAD_TOP + fs * 0.55;
+  if (yFirst + blockH > yMaxContent) {
+    yFirst = Math.max(
+      yBandTop + ELEV_SPREAD_FOOTER_TEXT_PAD_TOP,
+      yMaxContent - blockH
+    );
+  }
   const inner = lines
     .map((line, i) =>
       i === 0
@@ -2111,7 +2234,8 @@ function wrapElevationLandscapeSpread(
   leftInner: string,
   rightInner: string,
   footerLeft: string,
-  footerRight: string
+  footerRight: string,
+  guideLinesSvg?: string
 ): string {
   const L = elevationSpreadLayoutMetrics();
   const {
@@ -2126,11 +2250,9 @@ function wrapElevationLandscapeSpread(
     yFooterBandTop,
   } = L;
   const fsFoot =
-    Math.round(11.25 * ELEV_PAGE_LABEL_SCALE * ELEV_SPREAD_LABEL_SHRINK * 10) /
-    10;
+    Math.round(10.9 * ELEV_PAGE_LABEL_SCALE * 1.08 * 10) / 10;
   const fsCol =
-    Math.round(9.2 * ELEV_PAGE_LABEL_SCALE * ELEV_SPREAD_LABEL_SHRINK * 10) /
-    10;
+    Math.round(9.45 * ELEV_PAGE_LABEL_SCALE * 1.1 * 10) / 10;
   const cxLeft = m + colInnerW / 2;
   const cxRight = m + colInnerW + gap + colInnerW / 2;
   const sepX = m + colInnerW + gap / 2;
@@ -2154,6 +2276,9 @@ function wrapElevationLandscapeSpread(
   );
   parts.push(leftInner);
   parts.push(rightInner);
+  if (guideLinesSvg) {
+    parts.push(guideLinesSvg);
+  }
   parts.push(
     elevationSpreadFooterColumnSvg(
       cxLeft,
@@ -2191,31 +2316,43 @@ export type SerializeElevationPagesOptions = {
 function finalizeOrthoSpreadPanels(
   left: ElevationPanelDeferredWrap,
   right: ElevationPanelDeferredWrap,
-  panelCap: number
-): { leftSvg: string; rightSvg: string } {
+  panelCap: number,
+  layout: ReturnType<typeof elevationSpreadLayoutMetrics>
+): {
+  leftSvg: string;
+  rightSvg: string;
+  guideLinesSvg: string;
+} {
   const s = Math.min(
     computePanelFitScaleUncapped(left.panel, left.fitBox, 12),
     computePanelFitScaleUncapped(right.panel, right.fitBox, 12),
     panelCap
   );
   const fit = { uniformScale: s };
+  const tLeft = computeStructuralPanelTransform(
+    left.panel,
+    left.structuralBbox,
+    left.fitBox,
+    12,
+    fit
+  );
+  const tRight = computeStructuralPanelTransform(
+    right.panel,
+    right.structuralBbox,
+    right.fitBox,
+    12,
+    fit
+  );
+  const guideLinesSvg = buildElevationSpreadGuideLinesSvg(
+    layout.width,
+    layout.m,
+    tLeft,
+    left.guideYsLocal
+  );
   return {
-    leftSvg: wrapSvgStructuralPanelFit(
-      left.inner,
-      left.panel,
-      left.structuralBbox,
-      left.fitBox,
-      12,
-      fit
-    ),
-    rightSvg: wrapSvgStructuralPanelFit(
-      right.inner,
-      right.panel,
-      right.structuralBbox,
-      right.fitBox,
-      12,
-      fit
-    ),
+    leftSvg: `<g transform="translate(${tLeft.tx.toFixed(3)},${tLeft.ty.toFixed(3)}) scale(${tLeft.s.toFixed(5)})">${left.inner}</g>`,
+    rightSvg: `<g transform="translate(${tRight.tx.toFixed(3)},${tRight.ty.toFixed(3)}) scale(${tRight.s.toFixed(5)})">${right.inner}</g>`,
+    guideLinesSvg,
   };
 }
 
@@ -2224,8 +2361,10 @@ export function serializeElevationPagesV2(
   options?: SerializeElevationPagesOptions
 ): ElevationPageSvgs {
   const dbg = options?.debug === true;
-  const ls = ELEV_PAGE_LABEL_SCALE * ELEV_SPREAD_LABEL_SHRINK;
-  const lsLat = ELEV_LATERAL_LABEL_SCALE * ELEV_SPREAD_LABEL_SHRINK;
+  const ls = ELEV_SPREAD_LS_PRIMARY;
+  const lsMinor = ELEV_SPREAD_LS_MINOR;
+  const lsLat = ELEV_SPREAD_LS_LAT_PRIMARY;
+  const lsLatMinor = ELEV_SPREAD_LS_LAT_MINOR;
   const L = elevationSpreadLayoutMetrics();
   const { m, gap, padTop, colInnerW, innerH } = L;
   const panelCap = ELEV_SPREAD_PANEL_FIT_MAX_SCALE;
@@ -2239,9 +2378,11 @@ export function serializeElevationPagesV2(
     innerH,
     std,
     '',
-    buildElevationAccessorySubtitle(std),
+    buildElevationAccessorySubtitle(std, true),
     {
       labelScale: ls,
+      labelMinorScale: lsMinor,
+      spreadPremium: true,
       debug: dbg,
       panelFitMaxScale: panelCap,
       orthoSpread: { innerH: sharedInnerH },
@@ -2256,6 +2397,8 @@ export function serializeElevationPagesV2(
     model.lateral,
     {
       labelScale: lsLat,
+      labelMinorScale: lsLatMinor,
+      spreadPremium: true,
       hideHeader: true,
       debug: dbg,
       panelFitMaxScale: panelCap,
@@ -2271,16 +2414,17 @@ export function serializeElevationPagesV2(
   ) {
     throw new Error('serializeElevationPagesV2: expected deferred ortho panels');
   }
-  const { leftSvg: leftStd, rightSvg: rightStd } = finalizeOrthoSpreadPanels(
-    leftStdDef,
-    rightStdDef,
-    panelCap
-  );
+  const {
+    leftSvg: leftStd,
+    rightSvg: rightStd,
+    guideLinesSvg: guidesStd,
+  } = finalizeOrthoSpreadPanels(leftStdDef, rightStdDef, panelCap, L);
   const landscapeStandard = wrapElevationLandscapeSpread(
     leftStd,
     rightStd,
-    'Cotas em mm · referência de armazenagem (mesmo modelo que o túnel, quando aplicável)',
-    'Perfil de uma costa — planta mostra dupla costas completa, se aplicável'
+    'Cotas em mm · armazenagem (referência comum ao desenho com túnel, se existir).',
+    'Perfil de uma costa; dupla costas apenas em planta, quando aplicável.',
+    guidesStd
   );
 
   let landscapeTunnel: string | null = null;
@@ -2294,9 +2438,11 @@ export function serializeElevationPagesV2(
       innerH,
       tun,
       '',
-      buildElevationAccessorySubtitle(tun),
+      buildElevationAccessorySubtitle(tun, true),
       {
         labelScale: ls,
+        labelMinorScale: lsMinor,
+        spreadPremium: true,
         debug: dbg,
         panelFitMaxScale: panelCap,
         orthoSpread: { innerH: sharedInnerH },
@@ -2311,6 +2457,8 @@ export function serializeElevationPagesV2(
       latTun,
       {
         labelScale: lsLat,
+        labelMinorScale: lsLatMinor,
+        spreadPremium: true,
         hideHeader: true,
         debug: dbg,
         panelFitMaxScale: panelCap,
@@ -2326,16 +2474,17 @@ export function serializeElevationPagesV2(
     ) {
       throw new Error('serializeElevationPagesV2: expected deferred tunnel panels');
     }
-    const { leftSvg: leftTun, rightSvg: rightTun } = finalizeOrthoSpreadPanels(
-      leftTunDef,
-      rightTunDef,
-      panelCap
-    );
+    const {
+      leftSvg: leftTun,
+      rightSvg: rightTun,
+      guideLinesSvg: guidesTun,
+    } = finalizeOrthoSpreadPanels(leftTunDef, rightTunDef, panelCap, L);
     landscapeTunnel = wrapElevationLandscapeSpread(
       leftTun,
       rightTun,
-      'Cotas em mm · zona túnel (passagem entre longarinas no nível inferior)',
-      'Perfil lateral · vão inferior do túnel; níveis ativos alinhados ao frontal'
+      'Cotas em mm · túnel: passagem entre longarinas no nível inferior.',
+      'Lateral · vão inferior do túnel; níveis alinhados à vista frontal.',
+      guidesTun
     );
   }
 
