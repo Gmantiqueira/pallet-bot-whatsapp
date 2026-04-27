@@ -15,6 +15,7 @@ import { buildFloorPlanModelV2 } from '../../domain/pdfV2/floorPlanModelV2';
 import { serializeFloorPlanSvgV2 } from '../../domain/pdfV2/svgFloorPlanV2';
 import { buildElevationModelV2 } from '../../domain/pdfV2/elevationModelV2';
 import {
+  ELEV_PDF_ELEVATION_EMBED_ZOOM,
   ELEV_PDF_LS_IMAGE_BOTTOM_BLEED_PT,
   ELEV_PDF_LS_PAGE_HEIGHT_PT,
   ELEV_PDF_LS_YIMG_FROM_TOP_PT,
@@ -463,6 +464,42 @@ export async function renderPdfV2(
   };
 
   /**
+   * Elevações: escala extra sobre o bitmap já encaixado (zoom centrado; clip na área útil).
+   * O `fitRasterInBox` sozinho não pode ultrapassar a caixa — este passo simula «zoom na página».
+   */
+  const embedElevationSheetRaster = (raster: {
+    buffer: Buffer;
+    widthPx: number;
+    heightPx: number;
+  }): void => {
+    const yImg = doc.y + 0.5;
+    const availH =
+      doc.page.height - yImg - ELEV_PDF_LS_IMAGE_BOTTOM_BLEED_PT;
+    const { dw, dh } = fitRasterInBox(
+      raster.widthPx,
+      raster.heightPx,
+      usableW,
+      availH
+    );
+    const zoom = ELEV_PDF_ELEVATION_EMBED_ZOOM;
+    if (zoom <= 1.001) {
+      const ix = left + (usableW - dw) / 2;
+      doc.image(raster.buffer, ix, yImg, { width: dw, height: dh });
+      doc.y = yImg + dh;
+      return;
+    }
+    const dwZ = dw * zoom;
+    const dhZ = dh * zoom;
+    const ix = left + (usableW - dwZ) / 2;
+    const iy = yImg + (availH - dhZ) / 2;
+    doc.save();
+    doc.rect(left, yImg, usableW, availH).clip();
+    doc.image(raster.buffer, ix, iy, { width: dwZ, height: dhZ });
+    doc.restore();
+    doc.y = yImg + availH;
+  };
+
+  /**
    * Cabeçalho de folha de desenho — título à esquerda, traço total, tipografia uniforme
    * (prancha técnica, não faixa centrada).
    */
@@ -690,10 +727,7 @@ export async function renderPdfV2(
     compactDrawingGap: true,
     elevationSheet: true,
   });
-  embedFullWidthDrawing(elevLandscapeStdRaster, {
-    bottomPadPt: 0,
-    useFullPageHeightFromY: true,
-  });
+  embedElevationSheetRaster(elevLandscapeStdRaster);
 
   if (hasTunnel) {
     doc.addPage({ size: 'A4', layout: 'landscape', margins: pageMargins });
@@ -705,10 +739,7 @@ export async function renderPdfV2(
       elevationSheet: true,
     });
     if (elevLandscapeTunRaster) {
-      embedFullWidthDrawing(elevLandscapeTunRaster, {
-        bottomPadPt: 0,
-        useFullPageHeightFromY: true,
-      });
+      embedElevationSheetRaster(elevLandscapeTunRaster);
     } else {
       drawCentered('Não aplicável neste projeto (sem módulo túnel).', {
         size: 11,

@@ -2076,6 +2076,11 @@ const ELEV_PDF_LS_AVAIL_H_PT =
  * O raster em `pdfV2Service` deve usar o mesmo fator para manter proporção e nitidez.
  */
 export const ELEV_SPREAD_CANVAS_SCALE = 1.45;
+/**
+ * Zoom uniforme ao embutir a prancha de elevações no PDF (após `fitRasterInBox`).
+ * Valores &gt; 1 ampliam todo o desenho na área útil; o excesso é cortado (clip), como zoom no viewer.
+ */
+export const ELEV_PDF_ELEVATION_EMBED_ZOOM = 1.28;
 const ELEV_SPREAD_BASE_H = 1500;
 /** Largura × altura do SVG; W/H derivado da zona útil do PDF (não alterar só um eixo). */
 const ELEV_SPREAD_H = Math.round(ELEV_SPREAD_BASE_H * ELEV_SPREAD_CANVAS_SCALE);
