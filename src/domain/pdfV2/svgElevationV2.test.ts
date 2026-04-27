@@ -148,7 +148,7 @@ describe('serializeElevationPagesV2', () => {
     expect(pages.landscapeTunnel!).toMatch(/Vão túnel/i);
   });
 
-  it('prancha paisagem: frontal e lateral partilham a mesma escala uniforme de painel (ortográfica)', () => {
+  it('prancha paisagem: mesma escala e mesmo translate Y (alinhamento ortográfico piso/topo)', () => {
     const a: ProjectAnswersV2 = {
       lengthMm: 12_000,
       widthMm: 10_000,
@@ -170,8 +170,13 @@ describe('serializeElevationPagesV2', () => {
     validateLayoutGeometry(geo);
     const model = buildElevationModelV2(session, geo);
     const svg = serializeElevationPagesV2(model).landscapeStandard;
-    const scales = [...svg.matchAll(/scale\(([\d.]+)\)/g)].map(m => m[1]!);
-    expect(scales.length).toBe(2);
-    expect(scales[0]).toBe(scales[1]);
+    const transforms = [
+      ...svg.matchAll(
+        /<g transform="translate\(([^,]+),([^)]+)\) scale\(([^)]+)\)">/g
+      ),
+    ];
+    expect(transforms.length).toBe(2);
+    expect(transforms[0]![3]).toBe(transforms[1]![3]);
+    expect(transforms[0]![2]).toBe(transforms[1]![2]);
   });
 });

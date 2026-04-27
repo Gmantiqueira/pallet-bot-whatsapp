@@ -1058,10 +1058,59 @@ function wrapSvgContentWithPanelFit(
   return `<g transform="translate(${tx.toFixed(3)},${ty.toFixed(3)}) scale(${s.toFixed(5)})">${inner}</g>`;
 }
 
+type SvgBBox = {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+};
+
+/**
+ * Escala e encaixa usando `fitBox` (estrutura + reservas fixas para anotações),
+ * mas centra pelo centroide de `structural` para o desenho não “seguir” textos/cotas.
+ */
+function wrapSvgStructuralPanelFit(
+  inner: string,
+  panel: { ox: number; oy: number; pw: number; ph: number },
+  structural: SvgBBox,
+  fitBox: SvgBBox,
+  margin: number,
+  fitOpts?: { maxUniformScale?: number; uniformScale?: number }
+): string {
+  const { ox, oy, pw, ph } = panel;
+  const safeL = ox + margin;
+  const safeT = oy + margin;
+  const safeR = ox + pw - margin;
+  const safeB = oy + ph - margin;
+  const bw = Math.max(1, fitBox.maxX - fitBox.minX);
+  const bh = Math.max(1, fitBox.maxY - fitBox.minY);
+  const fitUncapped = Math.min(1, (safeR - safeL) / bw, (safeB - safeT) / bh);
+  let s = fitUncapped;
+  if (typeof fitOpts?.uniformScale === 'number') {
+    s = Math.min(fitOpts.uniformScale, fitUncapped);
+  }
+  const cap = fitOpts?.maxUniformScale;
+  if (typeof cap === 'number' && cap > 0 && cap < 1) {
+    s = Math.min(s, cap);
+  }
+  const cx = (structural.minX + structural.maxX) / 2;
+  const cy = (structural.minY + structural.maxY) / 2;
+  const tcx = (safeL + safeR) / 2;
+  const tcy = (safeT + safeB) / 2;
+  const tx = tcx - s * cx;
+  const ty = tcy - s * cy;
+  return `<g transform="translate(${tx.toFixed(3)},${ty.toFixed(3)}) scale(${s.toFixed(5)})">${inner}</g>`;
+}
+
 type ElevationPanelDeferredWrap = {
   deferred: true;
   inner: string;
-  bbox: { minX: number; minY: number; maxX: number; maxY: number };
+  /** Bbox completo (inclui anotações), útil para debug. */
+  bbox: SvgBBox;
+  /** Silhueta da estrutura (montantes, longarinas, piso) — define centragem. */
+  structuralBbox: SvgBBox;
+  /** Estrutura + margens fixas à volta para cotas/legendas (não depende do texto medido). */
+  fitBox: SvgBBox;
   panel: { ox: number; oy: number; pw: number; ph: number };
   fitOpts?: { maxUniformScale?: number };
 };
@@ -1501,6 +1550,24 @@ function drawFrontRack(
   const minX = Math.min(rx - floorPad - 4, faceSpanLeft - 30, ox + 4);
   const maxX = Math.max(dimRight, ox + pw - 6, rackRight + floorPad + 8);
   const bbox = { minX, minY, maxX, maxY };
+  const structuralMinY =
+    data.topTravamentoSuperior === true ? Math.min(ry, ry - 2.85) : ry;
+  const structuralBbox: SvgBBox = {
+    minX: Math.min(rx - floorPad, faceSpanLeft),
+    maxX: Math.max(rackRight + floorPad, faceSpanRight),
+    minY: structuralMinY,
+    maxY: floorTop + 11,
+  };
+  const fitPadTop = 62 * ls + 52;
+  const fitPadBottom = 74 * ls + 32;
+  const fitPadLeft = 22 + 10 * ls;
+  const fitPadRight = dimRight - rackRight + 18;
+  const fitBox: SvgBBox = {
+    minX: structuralBbox.minX - fitPadLeft,
+    minY: structuralBbox.minY - fitPadTop,
+    maxX: structuralBbox.maxX + fitPadRight,
+    maxY: structuralBbox.maxY + fitPadBottom,
+  };
   const panel = { ox, oy, pw, ph };
   const wrapFit =
     options?.panelFitMaxScale != null
@@ -1511,6 +1578,8 @@ function drawFrontRack(
       deferred: true,
       inner,
       bbox,
+      structuralBbox,
+      fitBox,
       panel,
       fitOpts: wrapFit,
     };
@@ -1865,6 +1934,26 @@ function drawLateral(
   const minYL = Math.min(y0 - 10 * ls, oy + (hideHeader ? 4 : 8));
   const maxYL = Math.max(floorTopLat + 44 * ls, oy + ph * 0.97);
   const bboxLat = { minX: minXL, minY: minYL, maxX: maxXL, maxY: maxYL };
+  let latStructMaxX = x0 + dw + 6;
+  if (data.fundoTravamento === true && !isDouble) {
+    latStructMaxX += FUNDO_TRAVAMENTO_WIDTH_MM * depthScalePxPerMm;
+  }
+  const structuralBboxLat: SvgBBox = {
+    minX: Math.min(x0 - 6, bayLeft),
+    maxX: latStructMaxX,
+    minY: data.topTravamentoSuperior === true ? Math.min(y0, y0 - 2.85) : y0,
+    maxY: floorTopLat + 11,
+  };
+  const fitPadTopLat = 14 * ls + 44;
+  const fitPadBottomLat = 48 * ls + 26;
+  const fitPadLeftLat = 20;
+  const fitPadRightLat = dimRightLat - (x0 + dw) + 16;
+  const fitBoxLat: SvgBBox = {
+    minX: structuralBboxLat.minX - fitPadLeftLat,
+    minY: structuralBboxLat.minY - fitPadTopLat,
+    maxX: structuralBboxLat.maxX + fitPadRightLat,
+    maxY: structuralBboxLat.maxY + fitPadBottomLat,
+  };
   const panelLat = { ox, oy, pw, ph };
   const wrapFitLat =
     opts?.panelFitMaxScale != null
@@ -1875,6 +1964,8 @@ function drawLateral(
       deferred: true,
       inner: innerLat,
       bbox: bboxLat,
+      structuralBbox: structuralBboxLat,
+      fitBox: fitBoxLat,
       panel: panelLat,
       fitOpts: wrapFitLat,
     };
@@ -1897,7 +1988,13 @@ const ELEV_LATERAL_LABEL_SCALE = ELEV_PAGE_LABEL_SCALE * 0.82;
  * `COL_GAP` estreito + viewBox maior amplia frontal e lateral na mesma proporção.
  */
 const ELEV_SPREAD_FRAME_INSET = 18;
-const ELEV_SPREAD_COL_GAP_PX = 8;
+/** Espaço entre colunas: mais estreito aproxima as vistas sem alterar escala estrutural. */
+const ELEV_SPREAD_COL_GAP_PX = 6;
+/**
+ * Reduz tipografia auxiliar na prancha paisagem (cotas, legendas) para ganhar folga
+ * sem mudar geometria mm→px da estrutura.
+ */
+const ELEV_SPREAD_LABEL_SHRINK = 0.9;
 const ELEV_SPREAD_W = 2040;
 const ELEV_SPREAD_H = 1330;
 /** Faixa inferior exclusiva para textos explicativos (sem sobreposição com desenhos). */
@@ -2029,8 +2126,11 @@ function wrapElevationLandscapeSpread(
     yFooterBandTop,
   } = L;
   const fsFoot =
-    Math.round(11.25 * ELEV_PAGE_LABEL_SCALE * 10) / 10;
-  const fsCol = Math.round(9.2 * ELEV_PAGE_LABEL_SCALE * 10) / 10;
+    Math.round(11.25 * ELEV_PAGE_LABEL_SCALE * ELEV_SPREAD_LABEL_SHRINK * 10) /
+    10;
+  const fsCol =
+    Math.round(9.2 * ELEV_PAGE_LABEL_SCALE * ELEV_SPREAD_LABEL_SHRINK * 10) /
+    10;
   const cxLeft = m + colInnerW / 2;
   const cxRight = m + colInnerW + gap + colInnerW / 2;
   const sepX = m + colInnerW + gap / 2;
@@ -2094,23 +2194,25 @@ function finalizeOrthoSpreadPanels(
   panelCap: number
 ): { leftSvg: string; rightSvg: string } {
   const s = Math.min(
-    computePanelFitScaleUncapped(left.panel, left.bbox, 12),
-    computePanelFitScaleUncapped(right.panel, right.bbox, 12),
+    computePanelFitScaleUncapped(left.panel, left.fitBox, 12),
+    computePanelFitScaleUncapped(right.panel, right.fitBox, 12),
     panelCap
   );
   const fit = { uniformScale: s };
   return {
-    leftSvg: wrapSvgContentWithPanelFit(
+    leftSvg: wrapSvgStructuralPanelFit(
       left.inner,
       left.panel,
-      left.bbox,
+      left.structuralBbox,
+      left.fitBox,
       12,
       fit
     ),
-    rightSvg: wrapSvgContentWithPanelFit(
+    rightSvg: wrapSvgStructuralPanelFit(
       right.inner,
       right.panel,
-      right.bbox,
+      right.structuralBbox,
+      right.fitBox,
       12,
       fit
     ),
@@ -2122,7 +2224,8 @@ export function serializeElevationPagesV2(
   options?: SerializeElevationPagesOptions
 ): ElevationPageSvgs {
   const dbg = options?.debug === true;
-  const ls = ELEV_PAGE_LABEL_SCALE;
+  const ls = ELEV_PAGE_LABEL_SCALE * ELEV_SPREAD_LABEL_SHRINK;
+  const lsLat = ELEV_LATERAL_LABEL_SCALE * ELEV_SPREAD_LABEL_SHRINK;
   const L = elevationSpreadLayoutMetrics();
   const { m, gap, padTop, colInnerW, innerH } = L;
   const panelCap = ELEV_SPREAD_PANEL_FIT_MAX_SCALE;
@@ -2152,7 +2255,7 @@ export function serializeElevationPagesV2(
     innerH,
     model.lateral,
     {
-      labelScale: ELEV_LATERAL_LABEL_SCALE,
+      labelScale: lsLat,
       hideHeader: true,
       debug: dbg,
       panelFitMaxScale: panelCap,
@@ -2207,7 +2310,7 @@ export function serializeElevationPagesV2(
       innerH,
       latTun,
       {
-        labelScale: ELEV_LATERAL_LABEL_SCALE,
+        labelScale: lsLat,
         hideHeader: true,
         debug: dbg,
         panelFitMaxScale: panelCap,
