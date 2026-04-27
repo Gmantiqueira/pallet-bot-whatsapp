@@ -33,8 +33,11 @@ import { SVG_FONT_FAMILY, svgFontWeightForSvgAttr } from '../../config/pdfFonts'
 import { sanitizeText } from '../../utils/sanitizeText';
 import { FUNDO_TRAVAMENTO_WIDTH_MM } from './fundoTravamento';
 
-/** Um módulo frontal = duas baias lado a lado (3 montantes), como desenho técnico tipo 2× vão. */
-const FV_FRONT_BAY_COUNT = 2;
+/**
+ * Vista frontal na prancha: **uma** baia (2 montantes, 1 vão) para leitura mais clara.
+ * O projeto continua com 2 baias por módulo (orçamento, planta, 3D); só o desenho frontal simplifica.
+ */
+const FV_FRONT_BAY_COUNT = 1;
 /**
  * Montantes exteriores: mais estreitos em px; largura ganha o vão.
  * Interiores (entre baias): fator maior para o pórtico central ler claramente no desenho.
@@ -1248,6 +1251,8 @@ function drawFrontRack(
   const lsMinor = options?.labelMinorScale ?? ls;
   const prem = options?.spreadPremium === true;
   const nMod = FV_FRONT_BAY_COUNT;
+  /** Uma baia no desenho: duas posições de palete no mesmo vão (linha central). */
+  const splitPalateLanesInClearSpan = nMod === 1;
   const levelsEst = Math.max(1, Math.min(32, Math.floor(data.levels)));
   const tunnelExtraSeg =
     data.tunnel === true && typeof data.tunnelClearanceMm === 'number' ? 1 : 0;
@@ -1443,7 +1448,7 @@ function drawFrontRack(
           rackBottom,
           ry + 1,
           rackBottom - 1,
-          false
+          splitPalateLanesInClearSpan
         )
       );
     }
@@ -1458,7 +1463,7 @@ function drawFrontRack(
         beamTh,
         ry + 1,
         rackBottom - 1,
-        false
+        splitPalateLanesInClearSpan
       )
     );
   }
@@ -1548,7 +1553,7 @@ function drawFrontRack(
   parts.push(
     dimensionLineHArrows(faceSpanLeft, dimTopY, faceSpanRight, DIM_MINOR)
   );
-  const faceTitle = `2 baias · vão ${escapeXml(
+  const faceTitle = `Vão ${escapeXml(
     formatMmPtBr(Math.round(beamL))
   )}/baia · face de carga`;
   parts.push(
@@ -2109,8 +2114,8 @@ const ELEV_LATERAL_LABEL_SCALE = ELEV_PAGE_LABEL_SCALE * 0.82;
  * `COL_GAP` estreito + viewBox maior amplia frontal e lateral na mesma proporção.
  */
 const ELEV_SPREAD_FRAME_INSET = 18;
-/** Espaço entre colunas (~10% mais estreito que 6px): aproxima vistas, amplia área útil. */
-const ELEV_SPREAD_COL_GAP_PX = 5;
+/** Espaço entre colunas: estreito para aproximar frontal e lateral e dar mais área útil ao desenho. */
+const ELEV_SPREAD_COL_GAP_PX = 4;
 /** Textos técnicos principais na prancha (+12% sobre o passo anterior ≈ +25% vs. escala de página). */
 const ELEV_SPREAD_LS_PRIMARY = ELEV_PAGE_LABEL_SCALE * 1.12 * 1.12;
 /** Capacidade / legendas auxiliares: mantém hierarquia (~58% da página × +12%). */
@@ -2131,8 +2136,8 @@ const ELEV_SPREAD_FOOTER_TEXT_PAD_TOP = 10;
 /** Se o bloco não caber na altura útil, reduzir tipografia do rodapé (~8%). */
 const ELEV_SPREAD_FOOTER_FS_SHRINK = 0.92;
 const ELEV_SPREAD_FOOTER_FS_MIN = 7.1;
-/** Até ~96% da escala de encaixe: ligeiramente maior que antes, com margem ao rodapé. */
-const ELEV_SPREAD_PANEL_FIT_MAX_SCALE = 0.96;
+/** Até ~97% da escala de encaixe: aproveita espaço libertado pela frontal mais estreita. */
+const ELEV_SPREAD_PANEL_FIT_MAX_SCALE = 0.97;
 
 function elevationSpreadLayoutMetrics(): {
   m: number;

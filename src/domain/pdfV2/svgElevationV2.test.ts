@@ -13,7 +13,7 @@ const answersToSession = (a: ProjectAnswersV2): Record<string, unknown> => ({
 });
 
 describe('serializeElevationPagesV2', () => {
-  it('página sem túnel: piso, H total, cotas e carga (kg) por baia (centrada no vão, sem sobrepor o montante)', () => {
+  it('página sem túnel: piso, H total, cotas e carga (kg); frontal 1 baia, legenda centrada no vão', () => {
     const a: ProjectAnswersV2 = {
       lengthMm: 12_000,
       widthMm: 10_000,
@@ -41,14 +41,14 @@ describe('serializeElevationPagesV2', () => {
     expect(svg).toContain('id="fundo-travamento-lateral"');
     expect(svg).toContain('PISO');
     expect(svg).toContain('H total');
-    expect(svg).toMatch(/2 baias/);
-    expect(svg).toMatch(/vão/);
+    expect(svg).toMatch(/Vão [\d.]+ mm\/baia · face de carga/);
     expect(svg).toMatch(/CAPACIDADE = 1\.200 kg por palete/);
     const pairLabels = svg.match(/PAR DE LONGARINAS/g) ?? [];
     // Prancha premium: uma legenda por par de longarinas por nível (frontal centrada; lateral).
     expect(pairLabels.length).toBe(a.levels * 2);
     const orangeBeams = svg.match(/fill="#fb923c"/g) ?? [];
-    expect(orangeBeams.length).toBe(a.levels * 2 + a.levels);
+    // Frontal 1 baia + lateral: um feixe por nível em cada vista.
+    expect(orangeBeams.length).toBe(a.levels * 2);
   });
 
   it('travamento superior: traço discreto na frontal e na lateral quando regra BOM aplica', () => {
@@ -144,7 +144,7 @@ describe('serializeElevationPagesV2', () => {
     expect(pages.landscapeTunnel).toBeDefined();
     expect(pages.landscapeStandard).not.toContain('Vão túnel');
     const tunLabels = pages.landscapeTunnel!.match(/Vão túnel/g) ?? [];
-    expect(tunLabels.length).toBeGreaterThanOrEqual(2);
+    expect(tunLabels.length).toBeGreaterThanOrEqual(1);
     expect(pages.landscapeTunnel!).toMatch(/Vão túnel/i);
   });
 

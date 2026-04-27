@@ -233,7 +233,7 @@ export function validateElevationModelV2(
 
 const ELEV_AXIS_TOL_MM = 2.5;
 
-/** Garante que frontal usa o vão por baia (2 baias desenhadas na face) e profundidade = eixo transversal na planta. */
+/** Garante que o payload usa o vão por baia (coerente com o layout) e profundidade = eixo transversal na planta. */
 export function validateElevationAxesAgainstGeometry(
   model: ElevationModelV2,
   geometry: LayoutGeometry,
