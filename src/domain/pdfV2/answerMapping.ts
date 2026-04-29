@@ -13,15 +13,13 @@ import {
 } from '../warehouseHeightDerive';
 import { maxFullModulesInBeamRun } from './rackModuleSpec';
 import { normalizeSpineBackToBackMm } from './spineAndDistanciador';
+import { isTunnelPositionCode } from '../../core/tunnelSelector';
 import type {
   LayoutOrientationV2,
   LineStrategyCode,
   TunnelAppliesCode,
   TunnelPositionCode,
 } from './types';
-
-const isTunnelPos = (s: string): s is TunnelPositionCode =>
-  s === 'INICIO' || s === 'MEIO' || s === 'FIM';
 
 /** Mapeia respostas do fluxo (state machine) para entradas estáveis da V2. */
 /** Constrói o objeto de respostas V2 a partir das answers da sessão (campos do fluxo). */
@@ -116,7 +114,7 @@ export function buildProjectAnswersV2(
   if (Array.isArray(rawPlacements) && rawPlacements.length > 0) {
     const parsed: TunnelPositionCode[] = [];
     for (const x of rawPlacements) {
-      if (typeof x === 'string' && isTunnelPos(x)) {
+      if (typeof x === 'string' && isTunnelPositionCode(x)) {
         parsed.push(x);
       }
     }
@@ -352,22 +350,7 @@ function rowBandsSingleDepth(
   );
 }
 
-/**
- * Indica se **esta** faixa de fileira deve usar segmentação ao longo do vão com módulo túnel
- * (`beamSegs` com troço `tunnel`), em vez de uma única corrida normal em todo o vão.
- *
- * `UMA`: apenas `rowBandIndex === 0` (primeira fileira na ordem em que o motor as gera).
- */
-export function tunnelAppliesToRow(
-  applies: TunnelAppliesCode | undefined,
-  rowKind: 'single' | 'double',
-  rowBandIndex: number
-): boolean {
-  if (!applies) return true;
-  if (applies === 'UMA') {
-    return rowBandIndex === 0;
-  }
-  if (applies === 'AMBOS') return true;
-  if (applies === 'LINHAS_SIMPLES') return rowKind === 'single';
-  return rowKind === 'double';
-}
+export {
+  tunnelAppliesToRow,
+  isTunnelPositionCode,
+} from '../../core/tunnelSelector';

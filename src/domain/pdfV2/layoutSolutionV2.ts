@@ -1,4 +1,5 @@
-import { tunnelAppliesToRow, type ProjectAnswersV2 } from './answerMapping';
+import type { ProjectAnswersV2 } from './answerMapping';
+import { tunnelAppliesToRow } from '../../core/tunnelSelector';
 import { tunnelActiveStorageLevelsFromGlobal } from './elevationLevelGeometryV2';
 import {
   maxFullModulesInBeamRun,
