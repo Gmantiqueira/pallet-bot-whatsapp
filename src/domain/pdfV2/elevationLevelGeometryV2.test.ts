@@ -11,8 +11,37 @@ import {
   TUNNEL_FIRST_BEAM_OFFSET_ABOVE_CLEARANCE_MM,
 } from './elevationLevelGeometryV2';
 
+import {
+  clampStructuralTopReserveMm,
+  RACK_TOP_CLEARANCE_MIN_MM,
+  RACK_TOP_CLEARANCE_MAX_MM,
+} from './rackUprightTopReserve';
+
+describe('clampStructuralTopReserveMm', () => {
+  it('coluna alta: alvo 300 mm dentro da banda', () => {
+    const t = clampStructuralTopReserveMm({
+      uprightHeightMm: 7200,
+      structuralBottomMm: 80,
+      minVerticalUsableMm: 1000,
+    });
+    expect(t).toBeGreaterThanOrEqual(RACK_TOP_CLEARANCE_MIN_MM);
+    expect(t).toBeLessThanOrEqual(RACK_TOP_CLEARANCE_MAX_MM);
+    expect(t).toBeCloseTo(300, 5);
+  });
+
+  it('nunca excede o teto físico nem 350 mm', () => {
+    const t = clampStructuralTopReserveMm({
+      uprightHeightMm: 2000,
+      structuralBottomMm: 80,
+      minVerticalUsableMm: 400,
+    });
+    expect(t).toBeLessThanOrEqual(RACK_TOP_CLEARANCE_MAX_MM);
+    expect(t).toBeLessThanOrEqual(2000 - 80 - 400);
+  });
+});
+
 describe('computeBeamElevations', () => {
-  it('reserva fixa 216 mm: último eixo de longarina a H − 216 mm (coluna típica)', () => {
+  it('reserva superior ~300 mm (faixa 250–350): último eixo = H − structuralTop (coluna típica)', () => {
     const H = 7200;
     const r = computeBeamElevations({
       uprightHeightMm: H,

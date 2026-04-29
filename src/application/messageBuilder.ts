@@ -372,7 +372,7 @@ const buildStateMessage = (session: Session): OutgoingMessage | null => {
         text:
           lead +
           'Agora vamos à *altura*.\n\n' +
-          'Como pretende definir a altura?\n\n• Altura do módulo — indica a altura total da estrutura (como até agora).\n• Pé-direito do galpão — indica a altura útil do edifício; calculamos a altura do módulo (múltiplos de 80 mm) e o maior número de níveis possível, sem ultrapassar o pé-direito (folga superior de 216 mm incluída no modelo).',
+          'Como pretende definir a altura?\n\n• Altura do módulo — indica a altura total da estrutura (como até agora).\n• Pé-direito do galpão — indica a altura útil do edifício; calculamos a altura do módulo (múltiplos de 80 mm) e o maior número de níveis possível, sem ultrapassar o pé-direito (folga superior ao último nível típica ~300 mm incluída no modelo).',
         buttons: [
           { id: 'HD_ALTURA_MODULO', label: 'Altura do módulo' },
           { id: 'HD_PEDIREITO', label: 'Pé-direito' },
@@ -868,7 +868,7 @@ const buildSummary = (session: Session): string => {
       );
     }
     lines.push(
-      'Altura do módulo e níveis calculados automaticamente (máx. níveis, passo 80 mm, folga superior 216 mm).'
+      'Altura do módulo e níveis calculados automaticamente (máx. níveis, passo 80 mm; folga superior ao último patamar típica ~300 mm no modelo).'
     );
   }
 

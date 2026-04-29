@@ -1,7 +1,7 @@
 /**
  * Modo pé-direito do galpão: deriva altura de módulo (passo 80 mm, ≤ pé-direito) e níveis
  * estruturais com base na geometria real de {@link computeBeamElevations}
- * (folga superior 216 mm incluída no modelo).
+ * (folga superior ~300 mm, faixa típica 250–350 mm, incluída no modelo).
  *
  * Enumera-se vários pares (altura × níveis) admissíveis; o modo pé-direito no produto
  * combina isto com {@link ../warehouseHeightLayoutPick.pickOptimalWarehouseRackWithLayout}
@@ -27,7 +27,7 @@ export const HEIGHT_DEFINITION_WAREHOUSE_CLEAR = 'warehouse_clear_height';
 
 /**
  * Modo C: `heightMode` explícito — pé-direito total do galpão (`warehouseHeightMm`);
- * altura de montante e níveis são derivados (folga superior 216 mm via geometria de elevação).
+ * altura de montante e níveis são derivados (folga superior via geometria de elevação, ~300 mm).
  */
 export const HEIGHT_MODE_WAREHOUSE_HEIGHT = 'WAREHOUSE_HEIGHT';
 
@@ -258,7 +258,7 @@ export function deriveModuleFromWarehouseClearHeight(params: {
 /**
  * Deriva altura final do montante (múltiplo de 80 mm) e níveis a partir do pé-direito do galpão.
  * Reutiliza a mesma lógica que {@link deriveModuleFromWarehouseClearHeight}: a folga superior
- * fixa de 216 mm aplica-se no modelo de eixos ({@link computeBeamElevations}), não como
+ * fixa aplicada pelo modelo de eixos ({@link computeBeamElevations}, alvo ~300 mm), não como
  * subtração explícita antes do arredondamento ao passo de coluna.
  */
 export function deriveRackFromWarehouseHeightMm(params: {
