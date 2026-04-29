@@ -2087,10 +2087,12 @@ const ELEV_SPREAD_BASE_H = 1500;
 /** Altura fixa do viewBox da prancha (escala); a largura deriva da razão com a caixa PDF. */
 const ELEV_SPREAD_H = Math.round(ELEV_SPREAD_BASE_H * ELEV_SPREAD_CANVAS_SCALE);
 /** Largura do viewBox da prancha em px (altura fixa {@link ELEV_SPREAD_H}); depende da razão W/H da caixa PDF. */
-function computeElevationSpreadWidthPx(drawingAvailHPt: number): number {
-  return Math.round(
-    ELEV_SPREAD_H * (ELEV_PDF_LS_USABLE_W_PT / drawingAvailHPt)
-  );
+function computeElevationSpreadWidthPx(
+  drawingAvailHPt: number,
+  drawingUsableWPt?: number
+): number {
+  const usableWPt = drawingUsableWPt ?? ELEV_PDF_LS_USABLE_W_PT;
+  return Math.round(ELEV_SPREAD_H * (usableWPt / drawingAvailHPt));
 }
 /** Faixa de notas compacta — menos altura em faixa = mais `innerH` para escala. */
 const ELEV_SPREAD_FOOTER_BAND_PX = 11;
@@ -2426,6 +2428,12 @@ export type SerializeElevationPagesOptions = {
    */
   drawingAvailHPtStandard?: number;
   drawingAvailHPtTunnel?: number;
+  /**
+   * Larguras úteis em pt (folha − margens) — alinha viewBox ao formato real (ex. A5 paisagem).
+   * Omitindo, usa-se {@link ELEV_PDF_LS_IMAGE_W_PT}.
+   */
+  drawingUsableWPtStandard?: number;
+  drawingUsableWPtTunnel?: number;
 };
 
 /**
@@ -2514,19 +2522,16 @@ export function serializeElevationPagesV2(
   const lsMinor = ELEV_SPREAD_LS_MINOR;
   const lsLat = ELEV_SPREAD_LS_LAT_PRIMARY;
   const lsLatMinor = ELEV_SPREAD_LS_LAT_MINOR;
-  const availStd =
-    options?.drawingAvailHPtStandard ?? ELEV_PDF_LS_AVAIL_H_PT;
-  const availTun =
-    options?.drawingAvailHPtTunnel ?? availStd;
-  const spreadWStd = computeElevationSpreadWidthPx(availStd);
+  const availStd = options?.drawingAvailHPtStandard ?? ELEV_PDF_LS_AVAIL_H_PT;
+  const availTun = options?.drawingAvailHPtTunnel ?? availStd;
+  const usableStd = options?.drawingUsableWPtStandard ?? ELEV_PDF_LS_IMAGE_W_PT;
+  const usableTun = options?.drawingUsableWPtTunnel ?? usableStd;
+  const spreadWStd = computeElevationSpreadWidthPx(availStd, usableStd);
   const L = elevationSpreadLayoutMetrics(spreadWStd);
-  const spreadWTun = computeElevationSpreadWidthPx(availTun);
+  const spreadWTun = computeElevationSpreadWidthPx(availTun, usableTun);
   const Ltun = elevationSpreadLayoutMetrics(spreadWTun);
   const { m, gap, colInnerW, innerH, panelOriginY } = L;
-  const {
-    colInnerW: colInnerWTun,
-    panelOriginY: panelOriginYTun,
-  } = Ltun;
+  const { colInnerW: colInnerWTun, panelOriginY: panelOriginYTun } = Ltun;
   const panelCap = ELEV_SPREAD_PANEL_FIT_MAX_SCALE;
   const sharedInnerH = computeOrthoSpreadSharedInnerHPx(innerH, ls);
 

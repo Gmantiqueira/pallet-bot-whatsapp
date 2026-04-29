@@ -18,6 +18,7 @@ import {
   ELEV_PDF_LS_AVAIL_H_PT,
   ELEV_PDF_LS_DRAWING_REGION_TOP_PT,
   ELEV_PDF_LS_IMAGE_BOTTOM_BLEED_PT,
+  ELEV_PDF_LS_IMAGE_W_PT,
   ELEV_SPREAD_CANVAS_SCALE,
   serializeElevationPagesV2,
   type ElevationPageSvgs,
@@ -74,7 +75,15 @@ export type ElevationLandscapeDrawingMeasure = {
   drawingRegionTopPt: number;
   availHPt: number;
   docYAfterHeader: number;
+  /** Largura útil na folha (pt), para raster/SVG — coincide com `page.width − margens`. */
+  usableWPt: number;
 };
+
+/**
+ * Formato das folhas só de elevação (paisagem). `A5` altera a proporção caixa útil vs desenho;
+ * capa/planta/3D mantêm A4.
+ */
+export const ELEVATION_LANDSCAPE_PAGE_SIZE: 'A4' | 'A5' = 'A5';
 
 /**
  * Mede com PDFKit o mesmo layout que `beginDrawingSheetHeader` em modo elevações,
@@ -84,7 +93,7 @@ export function measureElevationLandscapeDrawingMetrics(
   opts?: { title?: string; subtitle?: string }
 ): ElevationLandscapeDrawingMeasure {
   const doc = new PDFDocument({
-    size: 'A4',
+    size: ELEVATION_LANDSCAPE_PAGE_SIZE,
     layout: 'landscape',
     margins: {
       top: PAGE_MARGIN_PT,
@@ -109,6 +118,7 @@ export function measureElevationLandscapeDrawingMetrics(
     drawingRegionTopPt: yImg,
     availHPt,
     docYAfterHeader,
+    usableWPt: usableW,
   };
 }
 
@@ -168,15 +178,16 @@ function drawingRasterPixelSize(): { pxW: number; pxH: number } {
 }
 
 /** Raster elevações paisagem: Sharp preserva proporção do SVG = usableW / `availHPt`. */
-function elevationLandscapeDrawingRasterPixelSize(availHPt: number): {
+function elevationLandscapeDrawingRasterPixelSize(
+  availHPt: number,
+  usableWPt: number
+): {
   pxW: number;
   pxH: number;
 } {
-  const pageW = 841.89;
-  const usableW = pageW - 2 * PAGE_MARGIN_PT;
   const oversample = 1.08 * ELEV_SPREAD_CANVAS_SCALE;
   return {
-    pxW: Math.max(1, Math.round(ptToPx(usableW * oversample))),
+    pxW: Math.max(1, Math.round(ptToPx(usableWPt * oversample))),
     pxH: Math.max(1, Math.round(ptToPx(availHPt * oversample))),
   };
 }
@@ -400,6 +411,12 @@ export type GenerateProjectPdfV2Input = {
    */
   elevationDrawingAvailHPtStandard?: number;
   elevationDrawingAvailHPtTunnel?: number;
+  /**
+   * Larguras úteis (pt) na folha de elevações — alinhar SVG/raster à caixa real (ex. A5 paisagem).
+   * Omitindo, usa-se {@link ELEV_PDF_LS_IMAGE_W_PT} (A4 paisagem legado).
+   */
+  elevationDrawingUsableWPtStandard?: number;
+  elevationDrawingUsableWPtTunnel?: number;
 };
 
 /**
@@ -426,12 +443,16 @@ export async function renderPdfV2(
     input.elevationDrawingAvailHPtStandard ?? ELEV_PDF_LS_AVAIL_H_PT;
   const availElevTun =
     input.elevationDrawingAvailHPtTunnel ?? availElevStd;
+  const usableElevStd =
+    input.elevationDrawingUsableWPtStandard ?? ELEV_PDF_LS_IMAGE_W_PT;
+  const usableElevTun =
+    input.elevationDrawingUsableWPtTunnel ?? usableElevStd;
 
   const { pxW, pxH } = drawingRasterPixelSize();
   const { pxW: elLsWStd, pxH: elLsHStd } =
-    elevationLandscapeDrawingRasterPixelSize(availElevStd);
+    elevationLandscapeDrawingRasterPixelSize(availElevStd, usableElevStd);
   const { pxW: elLsWTun, pxH: elLsHTun } =
-    elevationLandscapeDrawingRasterPixelSize(availElevTun);
+    elevationLandscapeDrawingRasterPixelSize(availElevTun, usableElevTun);
   const { pxW: v3W, pxH: v3H } = view3dRasterPixelSize();
 
   let floorRaster: { buffer: Buffer; widthPx: number; heightPx: number };
@@ -483,7 +504,19 @@ export async function renderPdfV2(
   const left = doc.page.margins.left;
   const usableW =
     doc.page.width - doc.page.margins.left - doc.page.margins.right;
-  const pageBottom = doc.page.height - doc.page.margins.bottom;
+
+  /** Dimensões da página atual — obrigatório em folhas paisagem/A5 (não fixar à primeira página retrato). */
+  const pageLayoutNow = (): {
+    left: number;
+    usableW: number;
+    pageBottom: number;
+  } => ({
+    left: doc.page.margins.left,
+    usableW:
+      doc.page.width - doc.page.margins.left - doc.page.margins.right,
+    pageBottom: doc.page.height - doc.page.margins.bottom,
+  });
+
   /** Espaço mínimo sob o desenho até ao fim da página. */
   const imgBottomPad = 3;
 
@@ -539,19 +572,20 @@ export async function renderPdfV2(
       useFullPageHeightFromY?: boolean;
     }
   ): void => {
+    const { left: pl, usableW: uw, pageBottom: pb } = pageLayoutNow();
     const yImg = doc.y + 0.5;
     const bottomPad = opts?.bottomPadPt ?? imgBottomPad;
     const availH =
       opts?.useFullPageHeightFromY === true
         ? doc.page.height - yImg - ELEV_PDF_LS_IMAGE_BOTTOM_BLEED_PT
-        : pageBottom - yImg - bottomPad;
+        : pb - yImg - bottomPad;
     const { dw, dh } = fitRasterInBox(
       raster.widthPx,
       raster.heightPx,
-      usableW,
+      uw,
       availH
     );
-    const ix = left + (usableW - dw) / 2;
+    const ix = pl + (uw - dw) / 2;
     doc.image(raster.buffer, ix, yImg, { width: dw, height: dh });
     doc.y = yImg + dh;
   };
@@ -572,7 +606,8 @@ export async function renderPdfV2(
     }
   ): void => {
     if (options?.elevationSheet === true) {
-      applyElevationLandscapeDrawingSheetHeader(doc, left, usableW, {
+      const { left: el, usableW: uw } = pageLayoutNow();
+      applyElevationLandscapeDrawingSheetHeader(doc, el, uw, {
         title,
         subtitle: options.subtitle,
       });
@@ -770,7 +805,11 @@ export async function renderPdfV2(
   });
   embedFullWidthDrawing(floorRaster, { bottomPadPt: 2 });
 
-  doc.addPage({ size: 'A4', layout: 'landscape', margins: pageMargins });
+  doc.addPage({
+    size: ELEVATION_LANDSCAPE_PAGE_SIZE,
+    layout: 'landscape',
+    margins: pageMargins,
+  });
   beginDrawingSheetHeader(ELEV_PDF_HEADER_STANDARD_TITLE, {
     subtitle: ELEV_PDF_HEADER_STANDARD_SUBTITLE,
     compactDrawingGap: true,
@@ -781,7 +820,11 @@ export async function renderPdfV2(
   });
 
   if (hasTunnel) {
-    doc.addPage({ size: 'A4', layout: 'landscape', margins: pageMargins });
+    doc.addPage({
+      size: ELEVATION_LANDSCAPE_PAGE_SIZE,
+      layout: 'landscape',
+      margins: pageMargins,
+    });
     beginDrawingSheetHeader(ELEV_PDF_HEADER_TUNNEL_TITLE, {
       subtitle: elevLandscapeTunRaster
         ? ELEV_PDF_HEADER_TUNNEL_SUBTITLE
@@ -871,6 +914,7 @@ export async function generatePdfV2FromSession(
         docYAfterHeader: elevMeasureStd.docYAfterHeader,
         drawingRegionTopPt: elevMeasureStd.drawingRegionTopPt,
         availHPt: elevMeasureStd.availHPt,
+        usableWPt: elevMeasureStd.usableWPt,
         deltaVsAnalyticPt:
           elevMeasureStd.drawingRegionTopPt -
           ELEV_PDF_LS_DRAWING_REGION_TOP_PT,
@@ -880,6 +924,7 @@ export async function generatePdfV2FromSession(
             docYAfterHeader: elevMeasureTun.docYAfterHeader,
             drawingRegionTopPt: elevMeasureTun.drawingRegionTopPt,
             availHPt: elevMeasureTun.availHPt,
+            usableWPt: elevMeasureTun.usableWPt,
             deltaVsAnalyticPt:
               elevMeasureTun.drawingRegionTopPt -
               ELEV_PDF_LS_DRAWING_REGION_TOP_PT,
@@ -891,6 +936,8 @@ export async function generatePdfV2FromSession(
     debug: debugPdf,
     drawingAvailHPtStandard: elevMeasureStd.availHPt,
     drawingAvailHPtTunnel: elevMeasureTun?.availHPt,
+    drawingUsableWPtStandard: elevMeasureStd.usableWPt,
+    drawingUsableWPtTunnel: elevMeasureTun?.usableWPt,
   });
   const rack3d = build3DModelV2(layoutGeometry);
   validatePdfRenderCoherence(layoutGeometry, {
@@ -922,6 +969,8 @@ export async function generatePdfV2FromSession(
       view3dSvg,
       elevationDrawingAvailHPtStandard: elevMeasureStd.availHPt,
       elevationDrawingAvailHPtTunnel: elevMeasureTun?.availHPt,
+      elevationDrawingUsableWPtStandard: elevMeasureStd.usableWPt,
+      elevationDrawingUsableWPtTunnel: elevMeasureTun?.usableWPt,
     },
     options
   );
