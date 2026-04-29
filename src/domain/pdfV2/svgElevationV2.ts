@@ -2409,6 +2409,10 @@ function wrapElevationLandscapeSpread(
     }),
     `</g>`
   );
+  /** TEMP: apagar depois de confirmar que o PDF reflecte este SVG. */
+  parts.push(
+    `<text x="${width - m}" y="${m + 11}" text-anchor="end" font-size="10px" fill="#dc2626" font-family="${SVG_FONT_FAMILY}" font-weight="700">${escapeXml('MARCA TEMP · elevações OK')}</text>`
+  );
   parts.push('</svg>');
   return parts.join('');
 }
