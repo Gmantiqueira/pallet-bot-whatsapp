@@ -15,9 +15,8 @@ import { buildFloorPlanModelV2 } from '../../domain/pdfV2/floorPlanModelV2';
 import { serializeFloorPlanSvgV2 } from '../../domain/pdfV2/svgFloorPlanV2';
 import { buildElevationModelV2 } from '../../domain/pdfV2/elevationModelV2';
 import {
+  ELEV_PDF_LS_AVAIL_H_PT,
   ELEV_PDF_LS_IMAGE_BOTTOM_BLEED_PT,
-  ELEV_PDF_LS_PAGE_HEIGHT_PT,
-  ELEV_PDF_LS_YIMG_FROM_TOP_PT,
   ELEV_SPREAD_CANVAS_SCALE,
   serializeElevationPagesV2,
   type ElevationPageSvgs,
@@ -61,12 +60,7 @@ function ptToPx(pt: number): number {
 }
 
 /**
- * Orçamento vertical do cabeçalho (bloco à esquerda + traço) em pt — alinhado ao
- * cabeçalho real em {@link renderPdfV2} para a proporção do PNG ≈ caixa no PDF.
- */
-/**
- * Orçamento vertical até ao traço do cabeçalho (planta/3D). Em elevações paisagem o `yImg`
- * Elevações: ver `ELEV_PDF_LS_YIMG_FROM_TOP_PT` em `svgElevationV2.ts` (orçamento conservador).
+ * Orçamento vertical do cabeçalho (planta/retrato/3D) para proporção do raster — ver desenhos não‑elevação.
  */
 const DRAWING_SHEET_HEADER_BUDGET_PT = 38;
 const DRAWING_SHEET_BOTTOM_PAD_PT = 2;
@@ -85,16 +79,11 @@ function drawingRasterPixelSize(): { pxW: number; pxH: number } {
   };
 }
 
-/** Raster para prancha de elevações em A4 paisagem (frontal + lateral). */
+/** Raster elevações paisagem: mesma razão W/H que {@link ELEV_PDF_LS_AVAIL_H_PT} / largura útil. */
 function elevationLandscapeDrawingRasterPixelSize(): { pxW: number; pxH: number } {
   const pageW = 841.89;
   const usableW = pageW - 2 * PAGE_MARGIN_PT;
-  /** Mesmo `ELEV_PDF_LS_AVAIL_H_PT` que o viewBox em `svgElevationV2`. */
-  const imgAvailH =
-    ELEV_PDF_LS_PAGE_HEIGHT_PT -
-    ELEV_PDF_LS_YIMG_FROM_TOP_PT -
-    ELEV_PDF_LS_IMAGE_BOTTOM_BLEED_PT;
-  /** Proporção idêntica à caixa útil (Sharp `fit: inside` sem alterar razão do bitmap vs PDF). */
+  const imgAvailH = ELEV_PDF_LS_AVAIL_H_PT;
   const oversample = 1.08 * ELEV_SPREAD_CANVAS_SCALE;
   return {
     pxW: Math.max(1, Math.round(ptToPx(usableW * oversample))),

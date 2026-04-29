@@ -2029,10 +2029,13 @@ const ELEV_LATERAL_LABEL_SCALE = ELEV_PAGE_LABEL_SCALE * 0.82;
  * Margens e gap mínimos libertam largura/altura para escala do par ortográfico.
  */
 /** Moldura mínima (prancha quase full-page; traço 0,45 pt ainda dentro da área útil). */
-const ELEV_SPREAD_FRAME_INSET = 4;
+const ELEV_SPREAD_FRAME_INSET = 0;
 /** Junta frontal/lateral sem faixa — máxima largura por coluna. */
 const ELEV_SPREAD_COL_GAP_PX = 0;
-/** Respiro mínimo entre rótulos «Vista …» e painel (desenho sobe). */
+/**
+ * Folga entre a faixa de título «Vista …» e o início do painel ortográfico (px).
+ * Manter 0–2; só aumentar se cotas superiores tocarem no texto.
+ */
 const ELEV_SPREAD_CONTENT_PAD_TOP_PX = 1;
 /**
  * Ganho final do par ortográfico (~5–8%) + cotas/textos proporcionais.
@@ -2049,13 +2052,17 @@ const ELEV_SPREAD_LS_LAT_PRIMARY =
   ELEV_LATERAL_LABEL_SCALE * 1.12 * 1.12 * ELEV_SPREAD_ORTHO_REFINE;
 const ELEV_SPREAD_LS_LAT_MINOR =
   ELEV_LATERAL_LABEL_SCALE * 0.72 * 1.12 * ELEV_SPREAD_ORTHO_REFINE;
+/** Margem da página A4 paisagem (pt) — alinhada a `PAGE_MARGIN_PT` em `pdfV2Service`. */
+export const ELEV_PDF_LS_PAGE_MARGIN_PT = 24;
 /**
- * ViewBox da prancha: **mesma proporção** que a caixa útil no PDF (largura × altura em pt),
- * para o PNG encaixar sem letterbox nem zoom com clip — limites SVG = limites da folha.
- * Largura útil = 841.89 − 2×24; altura útil = `ELEV_PDF_LS_AVAIL_H_PT`.
- * `ELEV_PDF_LS_YIMG_FROM_TOP_PT` deve bater com `beginDrawingSheetHeader` (elevações compactas).
+ * Distância do **topo físico da folha** (y=0) até ao topo do bitmap no PDF (pt).
+ * Deve espelhar `beginDrawingSheetHeader` com `elevationSheet` + subtítulo + traço.
+ * Não duplicar com layout interno do SVG (o SVG só contém prancha; o PDF posiciona o raster).
  */
-export const ELEV_PDF_LS_YIMG_FROM_TOP_PT = 74;
+export const ELEV_PDF_LS_DRAWING_REGION_TOP_PT =
+  ELEV_PDF_LS_PAGE_MARGIN_PT + 2 + 12 + 1.5 + 10 + 1.5 + 2;
+/** @deprecated Preferir `ELEV_PDF_LS_DRAWING_REGION_TOP_PT`. */
+export const ELEV_PDF_LS_YIMG_FROM_TOP_PT = ELEV_PDF_LS_DRAWING_REGION_TOP_PT;
 /**
  * Folga mínima até ao fim **físico** da folha paisagem (não à margem inferior do PDFKit),
  * para a prancha usar quase toda a altura — maior `availH` em pt → bitmap maior no papel.
@@ -2065,10 +2072,13 @@ export const ELEV_PDF_LS_IMAGE_BOTTOM_BLEED_PT = 2;
 export const ELEV_PDF_LS_IMGBOTTOM_PAD_PT = ELEV_PDF_LS_IMAGE_BOTTOM_BLEED_PT;
 /** Altura da página A4 em paisagem (pt). */
 export const ELEV_PDF_LS_PAGE_HEIGHT_PT = 595.28;
-const ELEV_PDF_LS_USABLE_W_PT = 841.89 - 48;
-const ELEV_PDF_LS_AVAIL_H_PT =
+const ELEV_PDF_LS_USABLE_W_PT = 841.89 - 2 * ELEV_PDF_LS_PAGE_MARGIN_PT;
+export const ELEV_PDF_LS_IMAGE_X_PT = ELEV_PDF_LS_PAGE_MARGIN_PT;
+export const ELEV_PDF_LS_IMAGE_W_PT = ELEV_PDF_LS_USABLE_W_PT;
+/** Altura útil do bitmap no PDF: uma só vez (folha − cabeçalho estimado − bleed inferior). */
+export const ELEV_PDF_LS_AVAIL_H_PT =
   ELEV_PDF_LS_PAGE_HEIGHT_PT -
-  ELEV_PDF_LS_YIMG_FROM_TOP_PT -
+  ELEV_PDF_LS_DRAWING_REGION_TOP_PT -
   ELEV_PDF_LS_IMAGE_BOTTOM_BLEED_PT;
 /**
  * Fator do viewBox e das áreas úteis dos painéis (moldura/rodapé mantêm px fixos → desenho relativo cresce).
@@ -2082,14 +2092,14 @@ const ELEV_SPREAD_W = Math.round(
   ELEV_SPREAD_H * (ELEV_PDF_LS_USABLE_W_PT / ELEV_PDF_LS_AVAIL_H_PT)
 );
 /** Faixa de notas compacta — menos altura em faixa = mais `innerH` para escala. */
-const ELEV_SPREAD_FOOTER_BAND_PX = 36;
+const ELEV_SPREAD_FOOTER_BAND_PX = 14;
 /** Margem interna do texto de rodapé à moldura. */
 const ELEV_SPREAD_FOOTER_SIDE_PAD_PX = 10;
 /** Evita que notas de rodapé invadam o eixo da junta entre vistas. */
 const ELEV_SPREAD_FOOTER_CENTER_CLEAR_PX = 11;
 /** Folgas verticais dentro da faixa de rodapé. */
-const ELEV_SPREAD_FOOTER_TEXT_PAD_BOTTOM = 28;
-const ELEV_SPREAD_FOOTER_TEXT_PAD_TOP = 8;
+const ELEV_SPREAD_FOOTER_TEXT_PAD_BOTTOM = 3;
+const ELEV_SPREAD_FOOTER_TEXT_PAD_TOP = 2;
 /** Tipografia do rodapé: pequena e legível (independente da escala das cotas). */
 const ELEV_SPREAD_FOOTER_FS_BASE =
   Math.round(7.85 * ELEV_INTERIOR_TYPE_SCALE * ELEV_SPREAD_ORTHO_REFINE * 10) /
@@ -2101,7 +2111,7 @@ const ELEV_SPREAD_FOOTER_FS_MIN = 6.45;
  * Tecto de escala do par ortográfico (independente de `ELEV_SPREAD_ORTHO_REFINE` na tipografia,
  * para não inflacionar o bbox só por aumentar `ls`). Escala com o canvas para não ficar preso a 1.22.
  */
-const ELEV_SPREAD_PANEL_FIT_MAX_BASE = 1.22;
+const ELEV_SPREAD_PANEL_FIT_MAX_BASE = 2.6;
 const ELEV_SPREAD_PANEL_FIT_MAX_SCALE =
   ELEV_SPREAD_PANEL_FIT_MAX_BASE * ELEV_SPREAD_CANVAS_SCALE;
 
@@ -2110,16 +2120,11 @@ const ELEV_SPREAD_PANEL_FIT_MAX_SCALE =
  * interior (~88–92% da área do painel). Estrutura + anotações escalam em conjunto (bbox).
  */
 const ELEV_SPREAD_PREMIUM_ANNOTATION_INSET_PX = {
-  l: 6,
-  r: 62,
-  t: 26,
-  b: 20,
+  l: 0,
+  r: 44,
+  t: 0,
+  b: 0,
 } as const;
-
-/**
- * Multiplicador extra sobre a escala de encaixe do par ortográfico (desenho maior dentro da prancha).
- */
-const ELEV_SPREAD_BBOX_FIT_HEADROOM = 1.1;
 
 type SpreadInset = {
   l: number;
@@ -2162,9 +2167,22 @@ function computeSpreadBboxTransform(
   return { s, tx: tcx - s * cx, ty: tcy - s * cy };
 }
 
+function elevationSpreadColumnTitleMetrics(): {
+  fsCol: number;
+  titleBandPx: number;
+} {
+  const fsCol =
+    Math.round(
+      9.45 * ELEV_PAGE_LABEL_SCALE * 1.1 * 0.86 * ELEV_SPREAD_ORTHO_REFINE * 10
+    ) / 10;
+  const titleBandPx = Math.ceil(fsCol * 1.28) + 2;
+  return { fsCol, titleBandPx };
+}
+
 function elevationSpreadLayoutMetrics(): {
   m: number;
   gap: number;
+  /** Folga px entre faixa de título e início do painel (0–2). */
   padTop: number;
   footerBand: number;
   width: number;
@@ -2172,26 +2190,35 @@ function elevationSpreadLayoutMetrics(): {
   colInnerW: number;
   innerH: number;
   yFooterBandTop: number;
+  fsCol: number;
+  titleBandPx: number;
+  /** Origem Y dos painéis frontal/lateral (coordenadas absolutas SVG). */
+  panelOriginY: number;
 } {
   const m = ELEV_SPREAD_FRAME_INSET;
   const gap = ELEV_SPREAD_COL_GAP_PX;
-  const padTop = ELEV_SPREAD_CONTENT_PAD_TOP_PX;
+  const padGap = Math.min(2, Math.max(0, ELEV_SPREAD_CONTENT_PAD_TOP_PX));
   const footerBand = ELEV_SPREAD_FOOTER_BAND_PX;
   const width = ELEV_SPREAD_W;
   const height = ELEV_SPREAD_H;
+  const { fsCol, titleBandPx } = elevationSpreadColumnTitleMetrics();
   const colInnerW = (width - 2 * m - gap) / 2;
-  const innerH = height - m - footerBand - padTop;
+  const panelOriginY = m + titleBandPx + padGap;
+  const innerH = height - m - footerBand - titleBandPx - padGap;
   const yFooterBandTop = height - m - footerBand;
   return {
     m,
     gap,
-    padTop,
+    padTop: padGap,
     footerBand,
     width,
     height,
     colInnerW,
     innerH,
     yFooterBandTop,
+    fsCol,
+    titleBandPx,
+    panelOriginY,
   };
 }
 
@@ -2310,17 +2337,14 @@ function wrapElevationLandscapeSpread(
   const {
     m,
     gap,
-    padTop,
     footerBand,
     width,
     height,
     colInnerW,
     yFooterBandTop,
+    fsCol,
+    panelOriginY,
   } = L;
-  const fsCol =
-    Math.round(
-      9.45 * ELEV_PAGE_LABEL_SCALE * 1.1 * 0.86 * ELEV_SPREAD_ORTHO_REFINE * 10
-    ) / 10;
   const cxLeft = m + colInnerW / 2;
   const cxRight = m + colInnerW + gap + colInnerW / 2;
   const sepX = m + colInnerW + gap / 2;
@@ -2345,9 +2369,10 @@ function wrapElevationLandscapeSpread(
     `<rect x="${m}" y="${m}" width="${width - 2 * m}" height="${height - 2 * m}" fill="none" stroke="${COL_FRAME}" stroke-width="0.45"/>`
   );
   parts.push(
-    `<line x1="${sepX}" y1="${m + padTop + 0.5}" x2="${sepX}" y2="${yFooterBandTop}" stroke="#e2e8f0" stroke-width="0.55" opacity="0.92" pointer-events="none"/>`
+    `<line x1="${sepX}" y1="${panelOriginY - 0.5}" x2="${sepX}" y2="${yFooterBandTop}" stroke="#e2e8f0" stroke-width="0.55" opacity="0.92" pointer-events="none"/>`
   );
-  const yColTitle = m + 6;
+  /** Baseline dos títulos: suficientemente abaixo do topo para não cortar ascendentes. */
+  const yColTitle = m + fsCol * 0.9;
   parts.push(
     `<text x="${cxLeft}" y="${yColTitle}" text-anchor="middle" font-size="${fsCol}px" fill="#64748b" font-family="${SVG_FONT_FAMILY}" font-weight="600">${escapeXml('Vista frontal')}</text>`
   );
@@ -2442,7 +2467,7 @@ function finalizeOrthoSpreadPanels(
     computeSpreadBboxFitScale(left.panel, left.bbox, inset, panelCap),
     computeSpreadBboxFitScale(right.panel, right.bbox, inset, panelCap)
   );
-  const s = sRaw * ELEV_SPREAD_BBOX_FIT_HEADROOM;
+  const s = sRaw;
   let tLeft = computeSpreadBboxTransform(left.panel, left.bbox, inset, s);
   let tRight = computeSpreadBboxTransform(right.panel, right.bbox, inset, s);
   const floorL = left.guideYsLocal.floor;
@@ -2482,14 +2507,14 @@ export function serializeElevationPagesV2(
   const lsLat = ELEV_SPREAD_LS_LAT_PRIMARY;
   const lsLatMinor = ELEV_SPREAD_LS_LAT_MINOR;
   const L = elevationSpreadLayoutMetrics();
-  const { m, gap, padTop, colInnerW, innerH } = L;
+  const { m, gap, colInnerW, innerH, panelOriginY } = L;
   const panelCap = ELEV_SPREAD_PANEL_FIT_MAX_SCALE;
   const sharedInnerH = computeOrthoSpreadSharedInnerHPx(innerH, ls);
 
   const std = model.frontWithoutTunnel;
   const leftStdDef = drawFrontRack(
     m,
-    padTop,
+    panelOriginY,
     colInnerW,
     innerH,
     std,
@@ -2507,7 +2532,7 @@ export function serializeElevationPagesV2(
   );
   const rightStdDef = drawLateral(
     m + colInnerW + gap,
-    padTop,
+    panelOriginY,
     colInnerW,
     innerH,
     model.lateral,
@@ -2549,7 +2574,7 @@ export function serializeElevationPagesV2(
     const latTun = model.lateralWithTunnel;
     const leftTunDef = drawFrontRack(
       m,
-      padTop,
+      panelOriginY,
       colInnerW,
       innerH,
       tun,
@@ -2567,7 +2592,7 @@ export function serializeElevationPagesV2(
     );
     const rightTunDef = drawLateral(
       m + colInnerW + gap,
-      padTop,
+      panelOriginY,
       colInnerW,
       innerH,
       latTun,
