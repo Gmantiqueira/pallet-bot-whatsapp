@@ -514,6 +514,41 @@ describe('State Machine', () => {
       expect(r.session.answers.tunnelManualModuleIndices).toEqual([1, 2]);
     });
 
+    it('WAIT_TUNNEL_MODULE_NUMBERS: sem tunnelPreviewMaxIndex pede nova prévia (evita erro 1 a 0)', () => {
+      const session = createSession('WAIT_TUNNEL_MODULE_NUMBERS', {
+        lengthMm: 12000,
+        widthMm: 10000,
+        corridorMm: 3000,
+        moduleDimensionMode: 'MANUAL',
+        moduleDepthMm: 2700,
+        beamLengthMm: 1100,
+        hasTunnel: true,
+        tunnelConfigMode: 'MANUAL',
+        lineStrategy: 'MELHOR_LAYOUT',
+        tunnelPosition: 'MEIO',
+        tunnelAppliesTo: 'AMBOS',
+      });
+      const r = transition(session, { type: 'TEXT', value: '1' });
+      expect(r.session.state).toBe('WAIT_TUNNEL_MODULE_NUMBERS');
+      expect(r.error).toMatch(/prévia numerada/i);
+    });
+
+    it('túnel manual com menos de 2 níveis: remove também índices manuais de túnel', () => {
+      const session = createSession('CHOOSE_COLUMN_PROTECTOR', {
+        hasTunnel: true,
+        tunnelConfigMode: 'MANUAL',
+        levels: 1,
+        tunnelManualModuleIndices: [1],
+        tunnelPlacements: ['MEIO'],
+      });
+      const r = transition(session, { type: 'BUTTON', value: 'COL_NAO' });
+      expect(r.session.state).toBe('SUMMARY_CONFIRM');
+      expect(r.session.answers.hasTunnel).toBe(false);
+      expect(
+        r.session.answers.tunnelManualModuleIndices
+      ).toBeUndefined();
+    });
+
     it('com túnel: CHOOSE_COLUMN_PROTECTOR salta guardas e define AMBOS no resumo', () => {
       const session = createSession('CHOOSE_COLUMN_PROTECTOR', {
         hasTunnel: true,

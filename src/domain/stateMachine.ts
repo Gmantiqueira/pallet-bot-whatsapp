@@ -1264,7 +1264,8 @@ export const transition = (
               .tunnelPlacements;
             delete (cleared as { tunnelPosition?: unknown }).tunnelPosition;
             delete (cleared as { tunnelAppliesTo?: unknown }).tunnelAppliesTo;
-            delete (cleared as { tunnelSlotCount?: unknown }).tunnelSlotCount;
+            delete (cleared as { tunnelManualModuleIndices?: unknown })
+              .tunnelManualModuleIndices;
             newSession = {
               ...newSession,
               state: 'SUMMARY_CONFIRM',
@@ -1327,10 +1328,21 @@ export const transition = (
               'Indique os números dos módulos, por exemplo: 2, 5, 8 ou *Módulos 2 e 6*',
           };
         }
+        const maxRaw = newSession.answers.tunnelPreviewMaxIndex;
         const maxI =
-          typeof newSession.answers.tunnelPreviewMaxIndex === 'number'
-            ? newSession.answers.tunnelPreviewMaxIndex
+          typeof maxRaw === 'number' &&
+          Number.isFinite(maxRaw) &&
+          maxRaw >= 1
+            ? Math.floor(maxRaw)
             : 0;
+        if (maxI < 1) {
+          return {
+            session: newSession,
+            effects,
+            error:
+              'A prévia numerada ainda não está disponível (ou a sessão está incompleta). Regenere a prévia do túnel antes de indicar os módulos, ou use *voltar*.',
+          };
+        }
         for (const n of parsed) {
           if (n > maxI || n < 1) {
             return {
