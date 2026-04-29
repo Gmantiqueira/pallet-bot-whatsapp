@@ -16,6 +16,7 @@ import { serializeFloorPlanSvgV2 } from '../../domain/pdfV2/svgFloorPlanV2';
 import { buildElevationModelV2 } from '../../domain/pdfV2/elevationModelV2';
 import {
   ELEV_PDF_LS_AVAIL_H_PT,
+  ELEV_PDF_LS_DRAWING_REGION_TOP_PT,
   ELEV_PDF_LS_IMAGE_BOTTOM_BLEED_PT,
   ELEV_SPREAD_CANVAS_SCALE,
   serializeElevationPagesV2,
@@ -59,6 +60,93 @@ function ptToPx(pt: number): number {
   return Math.max(1, Math.round((pt * RASTER_DPI) / 72));
 }
 
+/** Cabeçalho da página “Elevações — módulo padrão” (mesmo texto que em `renderPdfV2`). */
+export const ELEV_PDF_HEADER_STANDARD_TITLE = 'Elevações — módulo padrão';
+export const ELEV_PDF_HEADER_STANDARD_SUBTITLE =
+  'Vista frontal (esquerda) e vista lateral (direita) · cotas em mm';
+/** Cabeçalho da página com túnel. */
+export const ELEV_PDF_HEADER_TUNNEL_TITLE = 'Elevações — módulo com túnel';
+export const ELEV_PDF_HEADER_TUNNEL_SUBTITLE =
+  'Vista frontal (esquerda) e vista lateral (direita) · vão de passagem inferior';
+
+export type ElevationLandscapeDrawingMeasure = {
+  /** Topo do bitmap (`doc.y + 0.5`), pt desde o topo da folha. */
+  drawingRegionTopPt: number;
+  availHPt: number;
+  docYAfterHeader: number;
+};
+
+/**
+ * Mede com PDFKit o mesmo layout que `beginDrawingSheetHeader` em modo elevações,
+ * para alinhar razão do raster/SVG à caixa real (`doc.page.height − yImg − bleed`).
+ */
+export function measureElevationLandscapeDrawingMetrics(
+  opts?: { title?: string; subtitle?: string }
+): ElevationLandscapeDrawingMeasure {
+  const doc = new PDFDocument({
+    size: 'A4',
+    layout: 'landscape',
+    margins: {
+      top: PAGE_MARGIN_PT,
+      bottom: PAGE_MARGIN_PT,
+      left: PAGE_MARGIN_PT,
+      right: PAGE_MARGIN_PT,
+    },
+  });
+  registerPdfKitFonts(doc);
+  const left = doc.page.margins.left;
+  const usableW =
+    doc.page.width - doc.page.margins.left - doc.page.margins.right;
+  applyElevationLandscapeDrawingSheetHeader(doc, left, usableW, {
+    title: opts?.title ?? ELEV_PDF_HEADER_STANDARD_TITLE,
+    subtitle: opts?.subtitle ?? ELEV_PDF_HEADER_STANDARD_SUBTITLE,
+  });
+  const docYAfterHeader = doc.y;
+  const yImg = doc.y + 0.5;
+  const availHPt =
+    doc.page.height - yImg - ELEV_PDF_LS_IMAGE_BOTTOM_BLEED_PT;
+  return {
+    drawingRegionTopPt: yImg,
+    availHPt,
+    docYAfterHeader,
+  };
+}
+
+/**
+ * Espelha `beginDrawingSheetHeader` quando `elevationSheet: true` (tipografia compacta).
+ */
+function applyElevationLandscapeDrawingSheetHeader(
+  doc: InstanceType<typeof PDFDocument>,
+  left: number,
+  usableW: number,
+  opts: { title: string; subtitle?: string }
+): void {
+  const titleT = sanitizeText(opts.title);
+  const subT =
+    opts.subtitle !== undefined ? sanitizeText(opts.subtitle) : '';
+  const tSize = 10.25;
+  const subSize = 7.85;
+  let y = doc.page.margins.top + 2;
+  doc.font(PDFKIT_FONT_BOLD).fontSize(tSize).fillColor(COL_INK);
+  const hTitle = doc.heightOfString(titleT, { width: usableW });
+  doc.text(titleT, left, y, { width: usableW, align: 'left' });
+  y += hTitle + (opts.subtitle !== undefined ? 1.5 : 2.5);
+  if (opts.subtitle !== undefined) {
+    doc.font(PDFKIT_FONT_REGULAR).fontSize(subSize).fillColor(COL_MUTED);
+    const hSub = doc.heightOfString(subT, { width: usableW });
+    doc.text(subT, left, y, { width: usableW, align: 'left' });
+    y += hSub + 1.5;
+  }
+  const ruleY = y;
+  doc
+    .strokeColor(COL_RULE)
+    .lineWidth(0.65)
+    .moveTo(left, ruleY)
+    .lineTo(left + usableW, ruleY)
+    .stroke();
+  doc.y = ruleY + 2;
+}
+
 /**
  * Orçamento vertical do cabeçalho (planta/retrato/3D) para proporção do raster — ver desenhos não‑elevação.
  */
@@ -79,15 +167,17 @@ function drawingRasterPixelSize(): { pxW: number; pxH: number } {
   };
 }
 
-/** Raster elevações paisagem: mesma razão W/H que {@link ELEV_PDF_LS_AVAIL_H_PT} / largura útil. */
-function elevationLandscapeDrawingRasterPixelSize(): { pxW: number; pxH: number } {
+/** Raster elevações paisagem: Sharp preserva proporção do SVG = usableW / `availHPt`. */
+function elevationLandscapeDrawingRasterPixelSize(availHPt: number): {
+  pxW: number;
+  pxH: number;
+} {
   const pageW = 841.89;
   const usableW = pageW - 2 * PAGE_MARGIN_PT;
-  const imgAvailH = ELEV_PDF_LS_AVAIL_H_PT;
   const oversample = 1.08 * ELEV_SPREAD_CANVAS_SCALE;
   return {
     pxW: Math.max(1, Math.round(ptToPx(usableW * oversample))),
-    pxH: Math.max(1, Math.round(ptToPx(imgAvailH * oversample))),
+    pxH: Math.max(1, Math.round(ptToPx(availHPt * oversample))),
   };
 }
 
@@ -304,6 +394,12 @@ export type GenerateProjectPdfV2Input = {
   elevationPages: ElevationPageSvgs;
   /** Vista 3D isométrica (wireframe) alinhada ao layout V2. */
   view3dSvg: string;
+  /**
+   * Alturas úteis (pt) medidas com PDFKit para cada folha de elevações — alinha raster ao embed.
+   * Se omitido, usa-se {@link ELEV_PDF_LS_AVAIL_H_PT}.
+   */
+  elevationDrawingAvailHPtStandard?: number;
+  elevationDrawingAvailHPtTunnel?: number;
 };
 
 /**
@@ -326,8 +422,16 @@ export async function renderPdfV2(
   /** Só páginas de elevação “com túnel” quando o layout tem módulo túnel real (alinhado ao resumo técnico). */
   const hasTunnel = input.layoutGeometry.metadata.hasTunnel === true;
 
+  const availElevStd =
+    input.elevationDrawingAvailHPtStandard ?? ELEV_PDF_LS_AVAIL_H_PT;
+  const availElevTun =
+    input.elevationDrawingAvailHPtTunnel ?? availElevStd;
+
   const { pxW, pxH } = drawingRasterPixelSize();
-  const { pxW: elLsW, pxH: elLsH } = elevationLandscapeDrawingRasterPixelSize();
+  const { pxW: elLsWStd, pxH: elLsHStd } =
+    elevationLandscapeDrawingRasterPixelSize(availElevStd);
+  const { pxW: elLsWTun, pxH: elLsHTun } =
+    elevationLandscapeDrawingRasterPixelSize(availElevTun);
   const { pxW: v3W, pxH: v3H } = view3dRasterPixelSize();
 
   let floorRaster: { buffer: Buffer; widthPx: number; heightPx: number };
@@ -346,9 +450,11 @@ export async function renderPdfV2(
     const tunSpreadSvg = hasTunnel ? input.elevationPages.landscapeTunnel : null;
     const rasterAll = await Promise.all([
       svgRasterToPng(input.floorPlanSvg, pxW, pxH),
-      svgRasterToPng(input.elevationPages.landscapeStandard, elLsW, elLsH),
+      svgRasterToPng(input.elevationPages.landscapeStandard, elLsWStd, elLsHStd),
       svgRasterToPng(input.view3dSvg, v3W, v3H),
-      ...(tunSpreadSvg ? [svgRasterToPng(tunSpreadSvg, elLsW, elLsH)] : []),
+      ...(tunSpreadSvg
+        ? [svgRasterToPng(tunSpreadSvg, elLsWTun, elLsHTun)]
+        : []),
     ]);
     let i = 0;
     floorRaster = rasterAll[i++]!;
@@ -465,36 +571,29 @@ export async function renderPdfV2(
       elevationSheet?: boolean;
     }
   ): void => {
-    const elev = options?.elevationSheet === true;
+    if (options?.elevationSheet === true) {
+      applyElevationLandscapeDrawingSheetHeader(doc, left, usableW, {
+        title,
+        subtitle: options.subtitle,
+      });
+      return;
+    }
     const compact = options?.compactDrawingGap === true;
     const titleT = sanitizeText(title);
     const subT =
       options?.subtitle !== undefined ? sanitizeText(options.subtitle) : '';
-    const tSize =
-      options?.titleSize ?? (elev ? 10.25 : 11.5);
-    const subSize = elev ? 7.85 : 9;
+    const tSize = options?.titleSize ?? 11.5;
+    const subSize = 9;
     let y = doc.page.margins.top + 2;
     doc.font(PDFKIT_FONT_BOLD).fontSize(tSize).fillColor(COL_INK);
     const hTitle = doc.heightOfString(titleT, { width: usableW });
     doc.text(titleT, left, y, { width: usableW, align: 'left' });
-    y +=
-      hTitle +
-      (options?.subtitle
-        ? elev
-          ? 1.5
-          : compact
-            ? 2
-            : 3
-        : elev
-          ? 2.5
-          : compact
-            ? 4
-            : 5);
+    y += hTitle + (options?.subtitle ? (compact ? 2 : 3) : compact ? 4 : 5);
     if (options?.subtitle) {
       doc.font(PDFKIT_FONT_REGULAR).fontSize(subSize).fillColor(COL_MUTED);
       const hSub = doc.heightOfString(subT, { width: usableW });
       doc.text(subT, left, y, { width: usableW, align: 'left' });
-      y += hSub + (elev ? 1.5 : compact ? 2 : 4);
+      y += hSub + (compact ? 2 : 4);
     }
     const ruleY = y;
     doc
@@ -503,7 +602,7 @@ export async function renderPdfV2(
       .moveTo(left, ruleY)
       .lineTo(left + usableW, ruleY)
       .stroke();
-    doc.y = ruleY + (elev ? 2 : compact ? 3 : 5);
+    doc.y = ruleY + (compact ? 3 : 5);
   };
 
   const labelColW = 154;
@@ -672,9 +771,8 @@ export async function renderPdfV2(
   embedFullWidthDrawing(floorRaster, { bottomPadPt: 2 });
 
   doc.addPage({ size: 'A4', layout: 'landscape', margins: pageMargins });
-  beginDrawingSheetHeader('Elevações — módulo padrão', {
-    subtitle:
-      'Vista frontal (esquerda) e vista lateral (direita) · cotas em mm',
+  beginDrawingSheetHeader(ELEV_PDF_HEADER_STANDARD_TITLE, {
+    subtitle: ELEV_PDF_HEADER_STANDARD_SUBTITLE,
     compactDrawingGap: true,
     elevationSheet: true,
   });
@@ -684,9 +782,9 @@ export async function renderPdfV2(
 
   if (hasTunnel) {
     doc.addPage({ size: 'A4', layout: 'landscape', margins: pageMargins });
-    beginDrawingSheetHeader('Elevações — módulo com túnel', {
+    beginDrawingSheetHeader(ELEV_PDF_HEADER_TUNNEL_TITLE, {
       subtitle: elevLandscapeTunRaster
-        ? 'Vista frontal (esquerda) e vista lateral (direita) · vão de passagem inferior'
+        ? ELEV_PDF_HEADER_TUNNEL_SUBTITLE
         : undefined,
       compactDrawingGap: true,
       elevationSheet: true,
@@ -754,8 +852,42 @@ export async function generatePdfV2FromSession(
   const floorModel = buildFloorPlanModelV2(layoutGeometry, answers);
   const floorPlanSvg = serializeFloorPlanSvgV2(floorModel);
   const elevationModel = buildElevationModelV2(answers, layoutGeometry);
+  const elevMeasureStd = measureElevationLandscapeDrawingMetrics();
+  const elevMeasureTun =
+    layoutGeometry.metadata.hasTunnel === true
+      ? measureElevationLandscapeDrawingMetrics({
+          title: ELEV_PDF_HEADER_TUNNEL_TITLE,
+          subtitle: ELEV_PDF_HEADER_TUNNEL_SUBTITLE,
+        })
+      : null;
+  if (process.env.PDF_ELEV_DEBUG === '1') {
+    // eslint-disable-next-line no-console
+    console.warn('[pdf-elev]', {
+      analyticDrawingTopPt: ELEV_PDF_LS_DRAWING_REGION_TOP_PT,
+      standard: {
+        docYAfterHeader: elevMeasureStd.docYAfterHeader,
+        drawingRegionTopPt: elevMeasureStd.drawingRegionTopPt,
+        availHPt: elevMeasureStd.availHPt,
+        deltaVsAnalyticPt:
+          elevMeasureStd.drawingRegionTopPt -
+          ELEV_PDF_LS_DRAWING_REGION_TOP_PT,
+      },
+      tunnel: elevMeasureTun
+        ? {
+            docYAfterHeader: elevMeasureTun.docYAfterHeader,
+            drawingRegionTopPt: elevMeasureTun.drawingRegionTopPt,
+            availHPt: elevMeasureTun.availHPt,
+            deltaVsAnalyticPt:
+              elevMeasureTun.drawingRegionTopPt -
+              ELEV_PDF_LS_DRAWING_REGION_TOP_PT,
+          }
+        : null,
+    });
+  }
   const elevationPages = serializeElevationPagesV2(elevationModel, {
     debug: debugPdf,
+    drawingAvailHPtStandard: elevMeasureStd.availHPt,
+    drawingAvailHPtTunnel: elevMeasureTun?.availHPt,
   });
   const rack3d = build3DModelV2(layoutGeometry);
   validatePdfRenderCoherence(layoutGeometry, {
@@ -785,6 +917,8 @@ export async function generatePdfV2FromSession(
       floorPlanSvg,
       elevationPages,
       view3dSvg,
+      elevationDrawingAvailHPtStandard: elevMeasureStd.availHPt,
+      elevationDrawingAvailHPtTunnel: elevMeasureTun?.availHPt,
     },
     options
   );

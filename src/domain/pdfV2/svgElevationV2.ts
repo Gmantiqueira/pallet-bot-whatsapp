@@ -2055,12 +2055,10 @@ const ELEV_SPREAD_LS_LAT_MINOR =
 /** Margem da página A4 paisagem (pt) — alinhada a `PAGE_MARGIN_PT` em `pdfV2Service`. */
 export const ELEV_PDF_LS_PAGE_MARGIN_PT = 24;
 /**
- * Distância do **topo físico da folha** (y=0) até ao topo do bitmap no PDF (pt).
- * Deve espelhar `beginDrawingSheetHeader` com `elevationSheet` + subtítulo + traço.
- * Não duplicar com layout interno do SVG (o SVG só contém prancha; o PDF posiciona o raster).
+ * Fallback quando `serializeElevationPagesV2` corre sem `drawingAvailHPt*` (ex.: testes).
+ * Valor calibrado vs {@link measureElevationLandscapeDrawingMetrics} (`PDF_ELEV_DEBUG≈52.57`).
  */
-export const ELEV_PDF_LS_DRAWING_REGION_TOP_PT =
-  ELEV_PDF_LS_PAGE_MARGIN_PT + 2 + 12 + 1.5 + 10 + 1.5 + 2;
+export const ELEV_PDF_LS_DRAWING_REGION_TOP_PT = 52.57;
 /** @deprecated Preferir `ELEV_PDF_LS_DRAWING_REGION_TOP_PT`. */
 export const ELEV_PDF_LS_YIMG_FROM_TOP_PT = ELEV_PDF_LS_DRAWING_REGION_TOP_PT;
 /**
@@ -2086,11 +2084,14 @@ export const ELEV_PDF_LS_AVAIL_H_PT =
  */
 export const ELEV_SPREAD_CANVAS_SCALE = 1.45;
 const ELEV_SPREAD_BASE_H = 1500;
-/** Largura × altura do SVG; W/H = caixa útil A4 paisagem (mesma razão que `fitRasterInBox` no PDF). */
+/** Altura fixa do viewBox da prancha (escala); a largura deriva da razão com a caixa PDF. */
 const ELEV_SPREAD_H = Math.round(ELEV_SPREAD_BASE_H * ELEV_SPREAD_CANVAS_SCALE);
-const ELEV_SPREAD_W = Math.round(
-  ELEV_SPREAD_H * (ELEV_PDF_LS_USABLE_W_PT / ELEV_PDF_LS_AVAIL_H_PT)
-);
+/** Largura do viewBox da prancha em px (altura fixa {@link ELEV_SPREAD_H}); depende da razão W/H da caixa PDF. */
+function computeElevationSpreadWidthPx(drawingAvailHPt: number): number {
+  return Math.round(
+    ELEV_SPREAD_H * (ELEV_PDF_LS_USABLE_W_PT / drawingAvailHPt)
+  );
+}
 /** Faixa de notas compacta — menos altura em faixa = mais `innerH` para escala. */
 const ELEV_SPREAD_FOOTER_BAND_PX = 14;
 /** Margem interna do texto de rodapé à moldura. */
@@ -2179,7 +2180,7 @@ function elevationSpreadColumnTitleMetrics(): {
   return { fsCol, titleBandPx };
 }
 
-function elevationSpreadLayoutMetrics(): {
+function elevationSpreadLayoutMetrics(spreadWidthPx: number): {
   m: number;
   gap: number;
   /** Folga px entre faixa de título e início do painel (0–2). */
@@ -2199,7 +2200,7 @@ function elevationSpreadLayoutMetrics(): {
   const gap = ELEV_SPREAD_COL_GAP_PX;
   const padGap = Math.min(2, Math.max(0, ELEV_SPREAD_CONTENT_PAD_TOP_PX));
   const footerBand = ELEV_SPREAD_FOOTER_BAND_PX;
-  const width = ELEV_SPREAD_W;
+  const width = spreadWidthPx;
   const height = ELEV_SPREAD_H;
   const { fsCol, titleBandPx } = elevationSpreadColumnTitleMetrics();
   const colInnerW = (width - 2 * m - gap) / 2;
@@ -2327,13 +2328,13 @@ export type ElevationPageSvgs = {
  * Folha paisagem: frontal à esquerda, lateral à direita — mesma escala gráfica que as páginas antigas.
  */
 function wrapElevationLandscapeSpread(
+  L: ReturnType<typeof elevationSpreadLayoutMetrics>,
   leftInner: string,
   rightInner: string,
   footerLeft: string,
   footerRight: string,
   guideLinesSvg?: string
 ): string {
-  const L = elevationSpreadLayoutMetrics();
   const {
     m,
     gap,
@@ -2418,6 +2419,12 @@ function wrapElevationLandscapeSpread(
  */
 export type SerializeElevationPagesOptions = {
   debug?: boolean;
+  /**
+   * Alturas úteis em pt (medidas com PDFKit no gerador) — cada folha pode ter subtítulo distinto.
+   * Omitindo, usa-se {@link ELEV_PDF_LS_AVAIL_H_PT}.
+   */
+  drawingAvailHPtStandard?: number;
+  drawingAvailHPtTunnel?: number;
 };
 
 /**
@@ -2506,8 +2513,19 @@ export function serializeElevationPagesV2(
   const lsMinor = ELEV_SPREAD_LS_MINOR;
   const lsLat = ELEV_SPREAD_LS_LAT_PRIMARY;
   const lsLatMinor = ELEV_SPREAD_LS_LAT_MINOR;
-  const L = elevationSpreadLayoutMetrics();
+  const availStd =
+    options?.drawingAvailHPtStandard ?? ELEV_PDF_LS_AVAIL_H_PT;
+  const availTun =
+    options?.drawingAvailHPtTunnel ?? availStd;
+  const spreadWStd = computeElevationSpreadWidthPx(availStd);
+  const L = elevationSpreadLayoutMetrics(spreadWStd);
+  const spreadWTun = computeElevationSpreadWidthPx(availTun);
+  const Ltun = elevationSpreadLayoutMetrics(spreadWTun);
   const { m, gap, colInnerW, innerH, panelOriginY } = L;
+  const {
+    colInnerW: colInnerWTun,
+    panelOriginY: panelOriginYTun,
+  } = Ltun;
   const panelCap = ELEV_SPREAD_PANEL_FIT_MAX_SCALE;
   const sharedInnerH = computeOrthoSpreadSharedInnerHPx(innerH, ls);
 
@@ -2561,6 +2579,7 @@ export function serializeElevationPagesV2(
     guideLinesSvg: guidesStd,
   } = finalizeOrthoSpreadPanels(leftStdDef, rightStdDef, panelCap, L);
   const landscapeStandard = wrapElevationLandscapeSpread(
+    L,
     leftStd,
     rightStd,
     'Cotas em mm · armazenagem (referência comum ao desenho com túnel, se existir).',
@@ -2574,8 +2593,8 @@ export function serializeElevationPagesV2(
     const latTun = model.lateralWithTunnel;
     const leftTunDef = drawFrontRack(
       m,
-      panelOriginY,
-      colInnerW,
+      panelOriginYTun,
+      colInnerWTun,
       innerH,
       tun,
       '',
@@ -2591,9 +2610,9 @@ export function serializeElevationPagesV2(
       }
     );
     const rightTunDef = drawLateral(
-      m + colInnerW + gap,
-      panelOriginY,
-      colInnerW,
+      m + colInnerWTun + gap,
+      panelOriginYTun,
+      colInnerWTun,
       innerH,
       latTun,
       {
@@ -2619,8 +2638,9 @@ export function serializeElevationPagesV2(
       leftSvg: leftTun,
       rightSvg: rightTun,
       guideLinesSvg: guidesTun,
-    } = finalizeOrthoSpreadPanels(leftTunDef, rightTunDef, panelCap, L);
+    } = finalizeOrthoSpreadPanels(leftTunDef, rightTunDef, panelCap, Ltun);
     landscapeTunnel = wrapElevationLandscapeSpread(
+      Ltun,
       leftTun,
       rightTun,
       'Cotas em mm · túnel: passagem entre longarinas no nível inferior.',
