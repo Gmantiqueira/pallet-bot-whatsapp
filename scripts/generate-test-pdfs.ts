@@ -2,6 +2,9 @@
  * Gera PDFs de validação visual/técnica da pipeline V2 + planilha de orçamento (.xlsx)
  * no mesmo diretório de armazenamento configurado (p.ex. `generated-pdfs/`).
  *
+ * Pipeline PDF: `PdfService.generatePdf` → `generatePdfV2FromSession` (`src/infra/pdf/pdfV2Service.ts`)
+ * → `serializeElevationPagesV2` (`src/domain/pdfV2/svgElevationV2.ts`) + raster/embed na mesma função.
+ *
  * Uso:
  *   npx tsx scripts/generate-test-pdfs.ts
  *   npm run pdf:test
