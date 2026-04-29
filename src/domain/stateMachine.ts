@@ -24,6 +24,7 @@ import {
   HEIGHT_DEFINITION_WAREHOUSE_CLEAR,
   deriveModuleFromWarehouseClearHeight,
 } from './warehouseHeightDerive';
+import { mergeAnswersForTunnelPreview } from './tunnelPreviewAnswerDefaults';
 
 export type State =
   | 'START'
@@ -222,6 +223,17 @@ function nextStateAfterLevelSpacing(answers: Record<string, unknown>): State {
   return answers.heightDefinitionMode === HEIGHT_DEFINITION_WAREHOUSE_CLEAR
     ? 'CHOOSE_COLUMN_PROTECTOR'
     : 'CHOOSE_FIRST_LEVEL_GROUND';
+}
+
+/** Túnel manual numerado na prévia só depois dos vões reais; antes disso só altura/carga placeholders no PDF da prévia. */
+function nextStateAfterModuleGeometry(answers: Record<string, unknown>): State {
+  if (
+    answers.tunnelConfigMode === 'MANUAL' &&
+    answers.hasTunnel === true
+  ) {
+    return 'GENERATING_TUNNEL_PREVIEW';
+  }
+  return 'CHOOSE_HEIGHT_DEFINITION';
 }
 
 export const transition = (
@@ -726,16 +738,18 @@ export const transition = (
             error: `Vão calculado a partir da frente do palete (${beamLengthMm} mm) fora do intervalo permitido; ajuste a frente do palete.`,
           };
         }
-        newSession = goNext(
-          newSession,
-          {
-            palletFrontMm: w,
-            moduleDepthMm,
-            beamLengthMm,
-          },
-          'CHOOSE_HEIGHT_DEFINITION'
-        );
+        const patchPd = {
+          palletFrontMm: w,
+          moduleDepthMm,
+          beamLengthMm,
+        };
+        const mergedPd = { ...newSession.answers, ...patchPd };
+        const nextPd = nextStateAfterModuleGeometry(mergedPd);
+        newSession = goNext(newSession, patchPd, nextPd);
         effects.push({ type: 'SEND' });
+        if (nextPd === 'GENERATING_TUNNEL_PREVIEW') {
+          effects.push({ type: 'GENERATE_TUNNEL_PREVIEW' });
+        }
       }
       return { session: newSession, effects, error };
 
@@ -866,12 +880,16 @@ export const transition = (
         if (ve) {
           return { session: newSession, effects, error: ve };
         }
-        newSession = goNext(
-          newSession,
-          { beamLengthMm: beam },
-          'CHOOSE_HEIGHT_DEFINITION'
-        );
+        const patchBm = {
+          beamLengthMm: beam,
+        };
+        const mergedBm = { ...newSession.answers, ...patchBm };
+        const nextBm = nextStateAfterModuleGeometry(mergedBm);
+        newSession = goNext(newSession, patchBm, nextBm);
         effects.push({ type: 'SEND' });
+        if (nextBm === 'GENERATING_TUNNEL_PREVIEW') {
+          effects.push({ type: 'GENERATE_TUNNEL_PREVIEW' });
+        }
       }
       return { session: newSession, effects, error };
 
@@ -1264,13 +1282,8 @@ export const transition = (
                 guardRailDouble: true,
                 guardRailDoublePosition: 'AMBOS',
               },
-              'GENERATING_TUNNEL_PREVIEW'
+              'SUMMARY_CONFIRM'
             );
-            effects.push(
-              { type: 'SEND' },
-              { type: 'GENERATE_TUNNEL_PREVIEW' }
-            );
-            return { session: newSession, effects };
           }
         } else if (hasTunnel) {
           newSession = goNext(
@@ -1332,11 +1345,11 @@ export const transition = (
           const { buildProjectAnswersV2 } = require('./pdfV2/answerMapping') as typeof import('./pdfV2/answerMapping');
           // eslint-disable-next-line @typescript-eslint/no-require-imports
           const { buildLayoutSolutionV2 } = require('./pdfV2/layoutSolutionV2') as typeof import('./pdfV2/layoutSolutionV2');
-          const a = {
+          const a = mergeAnswersForTunnelPreview({
             ...newSession.answers,
             tunnelManualModuleIndices: parsed,
             hasTunnel: true,
-          };
+          });
           const v2 = buildProjectAnswersV2(a);
           if (v2) {
             buildLayoutSolutionV2({ ...v2, tunnelManualModuleIndices: parsed });
@@ -1351,7 +1364,7 @@ export const transition = (
         newSession = goNext(
           newSession,
           { tunnelManualModuleIndices: parsed },
-          'SUMMARY_CONFIRM'
+          'CHOOSE_HEIGHT_DEFINITION'
         );
         effects.push({ type: 'SEND' });
       }

@@ -151,7 +151,9 @@ const buildStateMessage = (session: Session): OutgoingMessage | null => {
     case 'MENU':
       return {
         to: session.phone,
-        text: 'NOVO PROJETO\n\nComo deseja iniciar?\n\n1️⃣ Planta real\n2️⃣ Medidas digitadas',
+        text:
+          'Vamos orientar o projeto por ordem natural do espaço: medições → estrutura da sala → módulo e túnel → altura → carga → proteções → documentos.\n\n' +
+          '*NOVO PROJETO*\n\nComo deseja iniciar?\n\n1️⃣ Planta real\n2️⃣ Medidas digitadas',
         buttons: [
           { id: '1', label: 'PLANTA' },
           { id: '2', label: 'MEDIDAS' },
@@ -333,7 +335,8 @@ const buildStateMessage = (session: Session): OutgoingMessage | null => {
         to: session.phone,
         text:
           'Frente / *largura* do *palete* (mm), ao longo do eixo de circulação do empilhador (medida típica da carga vinda da frente).\n\n' +
-            'O vão por baia (entrada, para pernas da longarina) = 2 × frente + 300 mm.',
+            'Assim que enviar o valor, calculamos e mostramos logo a *profundidade de posição* e o *vão* (longarina).\n\n' +
+            'Fórmula do vão: *2 × frente + 300* mm; a profundidade de posição segue a regra do palete já indicada.',
       };
 
     case 'WAIT_MODULE_DEPTH':
@@ -352,16 +355,30 @@ const buildStateMessage = (session: Session): OutgoingMessage | null => {
             'Ex.: 1100. É o valor que o layout usa no eixo *do vão* (igual a indicar a “medida de longarina” de entrada em modo manual).',
       };
 
-    case 'CHOOSE_HEIGHT_DEFINITION':
+    case 'CHOOSE_HEIGHT_DEFINITION': {
+      const md = session.answers.moduleDepthMm;
+      const bl = session.answers.beamLengthMm;
+      const pf = session.answers.palletFrontMm;
+      let lead = '';
+      if (typeof md === 'number' && typeof bl === 'number') {
+        lead =
+          `Módulo atual: profundidade de posição *${md}* mm · vão *${bl}* mm` +
+          (typeof pf === 'number'
+            ? ` (calculado com frente do palete *${pf}* mm).\n\n`
+            : `.\n\n`);
+      }
       return {
         to: session.phone,
         text:
+          lead +
+          'Agora vamos à *altura*.\n\n' +
           'Como pretende definir a altura?\n\n• Altura do módulo — indica a altura total da estrutura (como até agora).\n• Pé-direito do galpão — indica a altura útil do edifício; calculamos a altura do módulo (múltiplos de 80 mm) e o maior número de níveis possível, sem ultrapassar o pé-direito (folga superior de 216 mm incluída no modelo).',
         buttons: [
           { id: 'HD_ALTURA_MODULO', label: 'Altura do módulo' },
           { id: 'HD_PEDIREITO', label: 'Pé-direito' },
         ],
       };
+    }
 
     case 'WAIT_WAREHOUSE_CLEAR_HEIGHT':
       return {
@@ -464,8 +481,21 @@ const buildStateMessage = (session: Session): OutgoingMessage | null => {
     case 'WAIT_HEIGHT_DIRECT':
       return {
         to: session.phone,
-        text:
-          'Altura útil do sistema em mm (múltiplos de 80 mm — valores intermédios são alinhados automaticamente).\n\nExemplo: 5040',
+        text: (() => {
+          const bits: string[] = [];
+          if (
+            session.answers.capacityInputMode === 'AUTO' &&
+            typeof session.answers.capacityKg === 'number'
+          ) {
+            bits.push(
+              `Capacidade por nível já definida: *${session.answers.capacityKg}* kg (2× peso do palete).\n`
+            );
+          }
+          bits.push(
+            'Altura útil do sistema em mm (múltiplos de 80 mm — valores intermédios são alinhados automaticamente).\n\nExemplo: 5040'
+          );
+          return bits.join('\n');
+        })(),
       };
 
     case 'CHOOSE_COLUMN_PROTECTOR': {
@@ -480,7 +510,7 @@ const buildStateMessage = (session: Session): OutgoingMessage | null => {
         : '';
       return {
         to: session.phone,
-        text: `${prefix}Protetor de coluna?`,
+        text: `${prefix}*Proteções* (coluna e guardas em sequência)\n\nProtetor de coluna?`,
         buttons: [
           { id: 'COL_SIM', label: 'Sim' },
           { id: 'COL_NAO', label: 'Não' },
@@ -589,7 +619,8 @@ const buildStateMessage = (session: Session): OutgoingMessage | null => {
             'Se *não vir o documento*, toque em *Baixar PDF* para o integrador reenviar o ficheiro.\n\n' +
             'Cada *número* na planta = *um módulo de frente* (2 baias), na mesma ordem usada no projeto final.\n\n' +
             '*Responda com os números* dos módulos onde pretende túnel. Exemplos: *2, 5, 8* ou *Módulos 2 e 6*.\n\n' +
-            'Números inválidos serão sinalizados; repetições contam uma vez.',
+            'Números inválidos serão sinalizados; repetições contam uma vez.\n\n' +
+            'A seguir: *altura*, *carga* e *proteções* — igual ao modo assistente.',
         buttons: [{ id: 'BAIXAR_PREVIA_PDF', label: 'Baixar PDF' }],
       };
 

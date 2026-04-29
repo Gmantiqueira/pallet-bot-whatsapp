@@ -34,6 +34,7 @@ import {
 import { isDebugPdf, logLayoutSolutionDebug } from '../domain/pdfV2/pdfDebugV2';
 import { validatePdfRenderCoherence } from '../domain/pdfV2/pdfRenderCoherenceV2';
 import { validatePdfV2FinalConsistency } from '../domain/pdfV2/pdfV2FinalConsistency';
+import { mergeAnswersForTunnelPreview } from '../domain/tunnelPreviewAnswerDefaults';
 import { buildFloorPlanModelV2 } from '../domain/pdfV2/floorPlanModelV2';
 import { serializeFloorPlanSvgV2 } from '../domain/pdfV2/svgFloorPlanV2';
 import { loadEnv } from '../config/env';
@@ -352,7 +353,10 @@ async function executeTunnelPreviewGeneration(
   if (!fs.existsSync(storageDir)) {
     fs.mkdirSync(storageDir, { recursive: true });
   }
-  const finalized = finalizeSummaryAnswers({ ...genSession.answers });
+  const mergedForPreview = mergeAnswersForTunnelPreview({
+    ...genSession.answers,
+  });
+  const finalized = finalizeSummaryAnswers({ ...mergedForPreview });
   const previewAns: Record<string, unknown> = {
     ...finalized,
     hasTunnel: false,
@@ -386,7 +390,7 @@ async function executeTunnelPreviewGeneration(
         state: 'WAIT_TUNNEL_MODULE_NUMBERS',
         updatedAt: Date.now(),
         answers: {
-          ...finalized,
+          ...genSession.answers,
           tunnelPreviewMaxIndex: maxIdx,
           tunnelPreviewPdfFilename: fn,
           tunnelPreviewPdfPath: pdfResult.absolutePath,
@@ -399,12 +403,12 @@ async function executeTunnelPreviewGeneration(
     return {
       updatedSession: {
         ...genSession,
-        state: 'CHOOSE_COLUMN_PROTECTOR',
+        state: 'CHOOSE_HEIGHT_DEFINITION',
         updatedAt: Date.now(),
         answers: { ...genSession.answers },
       },
       deliveryError:
-        'Não foi possível gerar a prévia. Confirme os dados e tente *Protetor de coluna* de novo, ou *voltar* para rever os níveis.',
+        'Não foi possível gerar a prévia de túnel. Confirme módulo e vão ou use *voltar* para revisar.',
     };
   }
 }

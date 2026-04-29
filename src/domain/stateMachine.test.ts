@@ -471,6 +471,46 @@ describe('State Machine', () => {
       expect(r.session.answers.hasTunnel).toBe(true);
     });
 
+    it('túnel manual: após vão (WAIT_BEAM_LENGTH) vai a GENERATING_TUNNEL_PREVIEW', () => {
+      const session = createSession('WAIT_BEAM_LENGTH', {
+        lengthMm: 12000,
+        widthMm: 10000,
+        corridorMm: 3000,
+        moduleDimensionMode: 'MANUAL',
+        moduleDepthMm: 2700,
+        hasTunnel: true,
+        tunnelConfigMode: 'MANUAL',
+        lineStrategy: 'MELHOR_LAYOUT',
+        tunnelPosition: 'MEIO',
+        tunnelAppliesTo: 'AMBOS',
+      });
+      const r = transition(session, { type: 'TEXT', value: '1100' });
+      expect(r.session.state).toBe('GENERATING_TUNNEL_PREVIEW');
+      expect(r.effects).toContainEqual({ type: 'GENERATE_TUNNEL_PREVIEW' });
+      expect(r.session.answers.beamLengthMm).toBe(1100);
+    });
+
+    it('WAIT_TUNNEL_MODULE_NUMBERS + números válidos segue para CHOOSE_HEIGHT_DEFINITION', () => {
+      const session = createSession('WAIT_TUNNEL_MODULE_NUMBERS', {
+        lengthMm: 12000,
+        widthMm: 10000,
+        corridorMm: 3000,
+        moduleDimensionMode: 'MANUAL',
+        moduleDepthMm: 2700,
+        beamLengthMm: 1100,
+        hasTunnel: true,
+        tunnelConfigMode: 'MANUAL',
+        lineStrategy: 'MELHOR_LAYOUT',
+        tunnelPosition: 'MEIO',
+        tunnelAppliesTo: 'AMBOS',
+        tunnelPreviewMaxIndex: 20,
+      });
+      const r = transition(session, { type: 'TEXT', value: '1, 2' });
+      expect(r.error).toBeUndefined();
+      expect(r.session.state).toBe('CHOOSE_HEIGHT_DEFINITION');
+      expect(r.session.answers.tunnelManualModuleIndices).toEqual([1, 2]);
+    });
+
     it('com túnel: CHOOSE_COLUMN_PROTECTOR salta guardas e define AMBOS no resumo', () => {
       const session = createSession('CHOOSE_COLUMN_PROTECTOR', {
         hasTunnel: true,
