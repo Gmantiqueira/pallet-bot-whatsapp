@@ -860,7 +860,10 @@ export async function generatePdfV2FromSession(
           subtitle: ELEV_PDF_HEADER_TUNNEL_SUBTITLE,
         })
       : null;
-  if (process.env.PDF_ELEV_DEBUG === '1') {
+  const elevLayoutDebug =
+    process.env.DEBUG_PDF === 'true' ||
+    process.env.PDF_ELEV_DEBUG === '1';
+  if (elevLayoutDebug) {
     // eslint-disable-next-line no-console
     console.warn('[pdf-elev]', {
       analyticDrawingTopPt: ELEV_PDF_LS_DRAWING_REGION_TOP_PT,

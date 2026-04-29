@@ -2056,7 +2056,7 @@ const ELEV_SPREAD_LS_LAT_MINOR =
 export const ELEV_PDF_LS_PAGE_MARGIN_PT = 24;
 /**
  * Fallback quando `serializeElevationPagesV2` corre sem `drawingAvailHPt*` (ex.: testes).
- * Valor calibrado vs {@link measureElevationLandscapeDrawingMetrics} (`PDF_ELEV_DEBUG≈52.57`).
+ * Valor calibrado vs {@link measureElevationLandscapeDrawingMetrics} (`DEBUG_PDF` / `PDF_ELEV_DEBUG`).
  */
 export const ELEV_PDF_LS_DRAWING_REGION_TOP_PT = 52.57;
 /** @deprecated Preferir `ELEV_PDF_LS_DRAWING_REGION_TOP_PT`. */
