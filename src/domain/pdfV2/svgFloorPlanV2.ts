@@ -80,7 +80,7 @@ const COL_RESIDUAL_FILL = '#f4f4f5';
 const COL_RESIDUAL_STROKE = '#a1a1aa';
 const COL_DIM = '#111827';
 /** Reserva inferior do viewBox para legenda + cotas (encaixe global do desenho). */
-const FLOOR_PLAN_LEGEND_RESERVE_PX = 536;
+const FLOOR_PLAN_LEGEND_RESERVE_PX = 568;
 /** Contorno da **faixa da linha** (unidade contínua), desenhado por cima dos módulos. */
 const COL_ROW_ENVELOPE_STROKE = '#334155';
 const ROW_ENVELOPE_SW = 2.92;
@@ -110,7 +110,7 @@ function operationDirectionIndicatorMetrics() {
     headTipInset: r(14),
     headBackInset: r(28),
     headHalfSpan: r(10),
-    fontSize: Math.round(11.5 * k * 10) / 10,
+    fontSize: Math.round(11.5 * k * 1.15 * 10) / 10,
     boxStrokeW: Math.round(0.9 * k * 100) / 100,
     shaftW: Math.round(2.6 * k * 100) / 100,
     vertBottomInset: r(10),
@@ -156,10 +156,11 @@ function corridorDisplayLabel(
       break;
   }
   const fontSize = Math.max(
-    10,
-    Math.min(compact ? 12 : 13, minSidePx * 0.088)
+    10 * 1.15,
+    Math.min((compact ? 12 : 13) * 1.15, minSidePx * 0.088 * 1.15)
   );
-  return { text, fontSize };
+  const rounded = Math.round(fontSize * 10) / 10;
+  return { text, fontSize: rounded };
 }
 
 function sortCirculation(
@@ -301,6 +302,9 @@ function fitTransformForDrawingBounds(
  * Divisão 2 baias: fio quase imperceptível + tracejado longo — sugere metades sem parecer segunda moldura.
  * Ajuda a escala mental (módulo ≈ 2× meia-baia) sem competir com o contorno nem com a faixa da linha.
  */
+/** +18% face ao índice legado — leitura em ecrã e impressão A4. */
+const PLAN_MODULE_INDEX_FONT_SCALE = 1.18;
+
 /** Tamanho/opacidade do índice do módulo: muitos módulos ou caixa pequena → mais discreto. */
 function moduleDisplayFontOpacity(
   s: FloorPlanModelV2['structureRects'][0],
@@ -318,10 +322,11 @@ function moduleDisplayFontOpacity(
             ? 19
             : 21;
   const fromBox = minSide * 0.22;
-  const fontPx = Math.max(12, Math.min(fromCount, fromBox));
+  const raw = Math.max(12, Math.min(fromCount, fromBox));
+  const fontPx = Math.round(raw * PLAN_MODULE_INDEX_FONT_SCALE * 10) / 10;
   let opacity =
     totalModules > 45 ? 0.74 : totalModules > 28 ? 0.8 : totalModules > 16 ? 0.85 : 0.9;
-  if (fontPx < 12) opacity *= 0.96;
+  if (raw < 13) opacity *= 0.96;
   const nudgeY = -Math.min(5, s.h * 0.055);
   const nudgeX = s.w >= s.h ? Math.min(4, s.w * 0.018) : 0;
   return { fontPx, opacity, nudgeX, nudgeY };
@@ -330,12 +335,18 @@ function moduleDisplayFontOpacity(
 /** Índice do módulo túnel na planta: legível dentro da pegada, coerente com o tom âmbar do túnel. */
 function tunnelModuleDisplayFontPx(
   s: FloorPlanModelV2['structureRects'][0],
-  moduleCount: number
+  _moduleCount: number
 ): number {
-  const { fontPx } = moduleDisplayFontOpacity(s, moduleCount);
+  const { fontPx } = moduleDisplayFontOpacity(s, _moduleCount);
   const minSide = Math.min(s.w, s.h);
   const fromBox = minSide * 0.2;
-  return Math.round(Math.max(15, Math.min(24, Math.max(fontPx, fromBox))));
+  const merged = Math.max(fontPx, fromBox * PLAN_MODULE_INDEX_FONT_SCALE);
+  return Math.round(
+    Math.max(
+      Math.round(15 * PLAN_MODULE_INDEX_FONT_SCALE),
+      Math.min(24 * PLAN_MODULE_INDEX_FONT_SCALE, merged)
+    )
+  );
 }
 
 function moduleBayHintLine(s: FloorPlanModelV2['structureRects'][0]): string {
@@ -394,13 +405,27 @@ function appendFloorPlanConfigurationLegend(
   model: FloorPlanModelV2,
   parts: string[]
 ): void {
-  /** ~15% maior que o bloco «SÍMBOLOS» — só a zona NOTAS DO DESENHO. */
-  const NOTES_DRAWING_FONT_SCALE = 1.15;
-  const noteTitleFs = 11.25 * NOTES_DRAWING_FONT_SCALE;
-  const noteBodyFs = 9.25 * NOTES_DRAWING_FONT_SCALE;
-  const noteAfterTitleDy = 15 * NOTES_DRAWING_FONT_SCALE;
-  const noteLineDy = 11.25 * NOTES_DRAWING_FONT_SCALE;
-  const noteBeforeSymbolsGap = 7 * NOTES_DRAWING_FONT_SCALE;
+  /** Títulos de secção +40%; texto corpo da legenda +35% — leitura móvel/impressão. */
+  const LEGEND_TITLE_VIS_SCALE = 1.4;
+  const LEGEND_BODY_VIS_SCALE = 1.35;
+  const noteTitleFs =
+    Math.round(11.25 * LEGEND_TITLE_VIS_SCALE * 10) / 10;
+  const noteBodyFs =
+    Math.round(9.25 * LEGEND_BODY_VIS_SCALE * 10) / 10;
+  const symSectionTitleFs =
+    Math.round(11.25 * LEGEND_TITLE_VIS_SCALE * 10) / 10;
+  const symSubtitleBoldFs =
+    Math.round(10.75 * LEGEND_BODY_VIS_SCALE * 10) / 10;
+  const symBodyFs =
+    Math.round(10.25 * LEGEND_BODY_VIS_SCALE * 10) / 10;
+  const symFootNoteFs =
+    Math.round(9.25 * LEGEND_BODY_VIS_SCALE * 10) / 10;
+  const noteAfterTitleDy =
+    Math.round(16 * LEGEND_TITLE_VIS_SCALE * 10) / 10;
+  const noteLineDy =
+    Math.round(12 * LEGEND_BODY_VIS_SCALE * 10) / 10;
+  const noteBeforeSymbolsGap =
+    Math.round(8 * LEGEND_BODY_VIS_SCALE * 10) / 10;
 
   const { w, h } = model.viewBox;
   const a = model.planAccessories;
@@ -419,11 +444,11 @@ function appendFloorPlanConfigurationLegend(
   }
   const notesBlockH =
     noteLines.length > 0
-      ? (22 + noteLines.length * 11.25) * NOTES_DRAWING_FONT_SCALE
+      ? 26 + noteAfterTitleDy + noteLines.length * noteLineDy
       : 0;
   /** Bloco de símbolos (mini esquemas + guardas + protetor de coluna) + rodapé. */
-  const symbolBlockH = 180;
-  const boxH = Math.min(468, 26 + notesBlockH + symbolBlockH);
+  const symbolBlockH = 202;
+  const boxH = Math.min(500, 28 + notesBlockH + symbolBlockH);
   const x0 = pad;
   const y0 = h - pad - boxH;
   parts.push(
@@ -445,9 +470,9 @@ function appendFloorPlanConfigurationLegend(
     ly += noteBeforeSymbolsGap;
   }
   parts.push(
-    `<text x="${lx}" y="${ly}" font-size="11.25px" fill="#475569" font-family="${SVG_FONT_FAMILY}" font-weight="700" letter-spacing="0.05em">SÍMBOLOS (1.º nível · guardas · protetor de coluna)</text>`
+    `<text x="${lx}" y="${ly}" font-size="${symSectionTitleFs}px" fill="#475569" font-family="${SVG_FONT_FAMILY}" font-weight="700" letter-spacing="0.05em">SÍMBOLOS (1.º nível · guardas · protetor de coluna)</text>`
   );
-  ly += 19;
+  ly += Math.round(symSectionTitleFs * 0.85) + 8;
   const onGround = a.firstLevelOnGround !== false;
   /** Mini esquema: linha do piso + 1.º feixe. */
   const miniGround = (
@@ -483,45 +508,45 @@ function appendFloorPlanConfigurationLegend(
   };
 
   parts.push(
-    `<text x="${lx}" y="${ly}" font-size="10.75px" fill="#64748b" font-family="${SVG_FONT_FAMILY}" font-weight="700">1.º eixo de feixe (destaque = opção do projeto)</text>`
+    `<text x="${lx}" y="${ly}" font-size="${symSubtitleBoldFs}px" fill="#64748b" font-family="${SVG_FONT_FAMILY}" font-weight="700">1.º eixo de feixe (destaque = opção do projeto)</text>`
   );
   ly += 5;
   parts.push(miniGround(lx, ly - 4, false, onGround));
   parts.push(
-    `<text x="${lx + 62}" y="${ly + 15}" font-size="10.25px" fill="#0f766e" font-family="${SVG_FONT_FAMILY}">Ao piso · sem vão útil inferior</text>`
+    `<text x="${lx + 62}" y="${ly + 15}" font-size="${symBodyFs}px" fill="#0f766e" font-family="${SVG_FONT_FAMILY}">Ao piso · sem vão útil inferior</text>`
   );
   parts.push(miniGround(lx + 234, ly - 4, true, !onGround));
   parts.push(
-    `<text x="${lx + 296}" y="${ly + 15}" font-size="10.25px" fill="#a16207" font-family="${SVG_FONT_FAMILY}">Elevado · folga sob o 1.º patamar</text>`
+    `<text x="${lx + 296}" y="${ly + 15}" font-size="${symBodyFs}px" fill="#a16207" font-family="${SVG_FONT_FAMILY}">Elevado · folga sob o 1.º patamar</text>`
   );
   ly += 36;
 
   const hasGuard = a.guardRailSimple || a.guardRailDouble;
   if (hasGuard) {
     parts.push(
-      `<text x="${lx}" y="${ly}" font-size="10.75px" fill="#64748b" font-family="${SVG_FONT_FAMILY}" font-weight="700">Guardas ao longo do vão (extremidades do desenho)</text>`
+      `<text x="${lx}" y="${ly}" font-size="${symSubtitleBoldFs}px" fill="#64748b" font-family="${SVG_FONT_FAMILY}" font-weight="700">Guardas ao longo do vão (extremidades do desenho)</text>`
     );
-    ly += 15;
+    ly += 15 + (symSubtitleBoldFs - 10.75) * 0.25;
     parts.push(
       `<line x1="${lx}" y1="${ly}" x2="${lx + 28}" y2="${ly}" stroke="#ca8a04" stroke-width="3.8" stroke-linecap="square"/>`,
-      `<text x="${lx + 36}" y="${ly + 4}" font-size="10.25px" fill="#713f12" font-family="${SVG_FONT_FAMILY}">Simples (1 rail)</text>`,
+      `<text x="${lx + 36}" y="${ly + 4}" font-size="${symBodyFs}px" fill="#713f12" font-family="${SVG_FONT_FAMILY}">Simples (1 rail)</text>`,
       `<line x1="${lx + 152}" y1="${ly - 3}" x2="${lx + 180}" y2="${ly - 3}" stroke="#b91c1c" stroke-width="2.4" stroke-linecap="square"/>`,
       `<line x1="${lx + 152}" y1="${ly + 3}" x2="${lx + 180}" y2="${ly + 3}" stroke="#b91c1c" stroke-width="2.4" stroke-linecap="square"/>`,
-      `<text x="${lx + 188}" y="${ly + 4}" font-size="10.25px" fill="#7f1d1d" font-family="${SVG_FONT_FAMILY}">Dupla (2 rails)</text>`
+      `<text x="${lx + 188}" y="${ly + 4}" font-size="${symBodyFs}px" fill="#7f1d1d" font-family="${SVG_FONT_FAMILY}">Dupla (2 rails)</text>`
     );
-    ly += 24;
+    ly += 24 + (symBodyFs - 10.25) * 0.35;
   }
 
   if (a.columnProtector) {
     parts.push(
       `<rect x="${lx}" y="${ly - 8}" width="23" height="9.5" rx="1.5" fill="#ea580c" stroke="#9a3412" stroke-width="0.8"/>`,
-      `<text x="${lx + 31}" y="${ly}" font-size="10.25px" fill="#431407" font-family="${SVG_FONT_FAMILY}">Protetor de coluna (base dos montantes — cantos + faixas nas pegadas)</text>`
+      `<text x="${lx + 31}" y="${ly}" font-size="${symBodyFs}px" fill="#431407" font-family="${SVG_FONT_FAMILY}">Protetor de coluna (base dos montantes — cantos + faixas nas pegadas)</text>`
     );
     ly += 19;
   }
 
   parts.push(
-    `<text x="${lx}" y="${y0 + boxH - 11}" font-size="9.25px" fill="#94a3b8" font-family="${SVG_FONT_FAMILY}">Convênio alinhado à vista frontal e ao resumo técnico.</text>`
+    `<text x="${lx}" y="${y0 + boxH - 12}" font-size="${symFootNoteFs}px" fill="#94a3b8" font-family="${SVG_FONT_FAMILY}">Convênio alinhado à vista frontal e ao resumo técnico.</text>`
   );
 }
 
@@ -598,7 +623,7 @@ function appendFloorPlanAccessoryGraphics(
         const isLeftEdge = x0 < o.x + o.w / 2;
         const tx = isLeftEdge ? x0 - 16 : x0 + 16;
         parts.push(
-          `<text x="${tx}" y="${midY + 5}" text-anchor="${isLeftEdge ? 'end' : 'start'}" font-size="12.5px" fill="${col}" stroke="#ffffff" stroke-width="0.45" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="700">${escapeXml(tag)}</text>`
+          `<text x="${tx}" y="${midY + 5}" text-anchor="${isLeftEdge ? 'end' : 'start'}" font-size="14.375px" fill="${col}" stroke="#ffffff" stroke-width="0.45" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="700">${escapeXml(tag)}</text>`
         );
       }
     } else if (kind === 'double') {
@@ -621,7 +646,7 @@ function appendFloorPlanAccessoryGraphics(
       const ty = y0 + (y0 < o.y + o.h / 2 ? -14 : 16);
       if (tag) {
         parts.push(
-          `<text x="${(x0 + x1) / 2}" y="${ty}" text-anchor="middle" font-size="12.5px" fill="${col}" stroke="#ffffff" stroke-width="0.45" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="700">${escapeXml(tag)}</text>`
+          `<text x="${(x0 + x1) / 2}" y="${ty}" text-anchor="middle" font-size="14.375px" fill="${col}" stroke="#ffffff" stroke-width="0.45" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="700">${escapeXml(tag)}</text>`
         );
       }
     } else {
@@ -642,7 +667,7 @@ function appendFloorPlanAccessoryGraphics(
       const ty = y0 + (y0 < o.y + o.h / 2 ? -14 : 16);
       if (tag) {
         parts.push(
-          `<text x="${(x0 + x1) / 2}" y="${ty}" text-anchor="middle" font-size="12.5px" fill="${col}" stroke="#ffffff" stroke-width="0.45" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="700">${escapeXml(tag)}</text>`
+          `<text x="${(x0 + x1) / 2}" y="${ty}" text-anchor="middle" font-size="14.375px" fill="${col}" stroke="#ffffff" stroke-width="0.45" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="700">${escapeXml(tag)}</text>`
         );
       }
     }
@@ -828,13 +853,14 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
     .fp-row-legend { font: 700 13px ${SVG_FONT_FAMILY_CSS}; fill: #334155; letter-spacing: 0.01em; }
     .fp-first-level { font: 400 12px ${SVG_FONT_FAMILY_CSS}; fill: #0f766e; }
     .fp-anno-heading { font: 700 11px ${SVG_FONT_FAMILY_CSS}; fill: #64748b; letter-spacing: 0.06em; text-transform: uppercase; }
-    .fp-circ-op { font: 700 14px ${SVG_FONT_FAMILY_CSS}; fill: #0f172a; }
-    .fp-circ { font: 700 14px ${SVG_FONT_FAMILY_CSS}; }
-    .fp-circ-res { font: 700 12.5px ${SVG_FONT_FAMILY_CSS}; fill: #44403c; }
-    .fp-dim { font: 700 18px ${SVG_FONT_FAMILY_CSS}; fill: ${COL_DIM}; }
-    .fp-dim-primary { font: 700 21px ${SVG_FONT_FAMILY_CSS}; fill: #0f172a; letter-spacing: 0.02em; }
-    .fp-dim-secondary { font: 700 16.5px ${SVG_FONT_FAMILY_CSS}; fill: #1e293b; }
-    .fp-dim-detail { font: 600 13.5px ${SVG_FONT_FAMILY_CSS}; fill: #475569; }
+    .fp-circ-op { font: 700 16.1px ${SVG_FONT_FAMILY_CSS}; fill: #0f172a; }
+    .fp-circ { font: 700 16.1px ${SVG_FONT_FAMILY_CSS}; }
+    .fp-circ-res { font: 700 14.375px ${SVG_FONT_FAMILY_CSS}; fill: #44403c; }
+    /** Cotas do desenho — +15% face ao passo anterior (legibilidade A4 / ecrã). */
+    .fp-dim { font: 700 20.7px ${SVG_FONT_FAMILY_CSS}; fill: ${COL_DIM}; }
+    .fp-dim-primary { font: 700 24.15px ${SVG_FONT_FAMILY_CSS}; fill: #0f172a; letter-spacing: 0.02em; }
+    .fp-dim-secondary { font: 700 18.975px ${SVG_FONT_FAMILY_CSS}; fill: #1e293b; }
+    .fp-dim-detail { font: 600 15.525px ${SVG_FONT_FAMILY_CSS}; fill: #475569; }
     .fp-implantacao-hint { font: 400 11.5px ${SVG_FONT_FAMILY_CSS}; fill: #64748b; font-style: italic; }
     .fp-strategy-hint { font: 600 11px ${SVG_FONT_FAMILY_CSS}; fill: #475569; letter-spacing: 0.01em; }
     .fp-mod-num { font-family: ${SVG_FONT_FAMILY_CSS}; font-weight: 600; fill: #1e293b; }

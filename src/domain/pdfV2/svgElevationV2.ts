@@ -29,7 +29,10 @@ import {
   ELEV_UPRIGHT_FILL as FV_UPRIGHT_FILL,
   ELEV_UPRIGHT_STROKE as FV_UPRIGHT_STROKE,
 } from './elevationVisualTokens';
-import { SVG_FONT_FAMILY, svgFontWeightForSvgAttr } from '../../config/pdfFonts';
+import {
+  SVG_FONT_FAMILY,
+  svgFontWeightForSvgAttr,
+} from '../../config/pdfFonts';
 import { sanitizeText } from '../../utils/sanitizeText';
 import { FUNDO_TRAVAMENTO_WIDTH_MM } from './fundoTravamento';
 
@@ -62,6 +65,17 @@ const COL_BRACE_STROKE = '#475569';
  */
 const ELEV_INTERIOR_TYPE_SCALE = 1.16 * 1.1;
 
+/** Refinamento leitura PDF: cotas verticais, capacidades, larguras (sem alterar geometria). */
+const ELEV_TYPO_VERTICAL_DIM_CHAIN = 1.18;
+/** Capacidade longarinas + cotas «face / largura / profundidade». */
+const ELEV_TYPO_CAP_AND_FACE_DIM = 1.18;
+/** Rótulos «Vista frontal / lateral» (prancha paisagem e cabeçalhos dos painéis). */
+const ELEV_TYPO_VISTA_HEADING = 1.2;
+/** Rodapé narrativo sob as duas colunas. */
+const ELEV_TYPO_SPREAD_FOOT_SCALE = 1.35;
+/** Cotas de largura nominal dos montantes (mm). */
+const ELEV_TYPO_DIM_UPRIGHT_MM = 1.18;
+
 /**
  * Cotas verticais à direita (frontal e lateral): colunas mais afastadas e calha larga para
  * rótulos em duas linhas (pt-BR) sem sobreposição nem truncagem no encaixe da folha.
@@ -72,12 +86,8 @@ const ELEV_VERTICAL_DIM_RIGHT_GUTTER_PX = Math.round(
   238 * ELEV_INTERIOR_TYPE_SCALE
 );
 /** Reserva horizontal antes de `rackMaxW` na frontal: toda a cadeia de cotas + rótulos à direita do vão. */
-const ELEV_FRONT_DIM_CHAIN_CAP_PX = Math.round(
-  448 * ELEV_INTERIOR_TYPE_SCALE
-);
-const ELEV_FRONT_DIM_CHAIN_BASE_PX = Math.round(
-  192 * ELEV_INTERIOR_TYPE_SCALE
-);
+const ELEV_FRONT_DIM_CHAIN_CAP_PX = Math.round(448 * ELEV_INTERIOR_TYPE_SCALE);
+const ELEV_FRONT_DIM_CHAIN_BASE_PX = Math.round(192 * ELEV_INTERIOR_TYPE_SCALE);
 const ELEV_FRONT_DIM_CHAIN_PER_SEG_LS = 15.25;
 
 function escapeXml(text: string): string {
@@ -296,7 +306,9 @@ function documentForkliftReachMm(data: ElevationPanelPayload): number {
 }
 
 /** Notas à direita da cadeia de cotas — só vista frontal. */
-function frontOperationalAnnotationLines(data: ElevationPanelPayload): string[] {
+function frontOperationalAnnotationLines(
+  data: ElevationPanelPayload
+): string[] {
   const loadH = documentLoadHeightMmForElevation(data);
   const reach = documentForkliftReachMm(data);
   return [
@@ -414,7 +426,8 @@ function textLines(
   attrs: { fontSize: number; fill: string; fontWeight?: string }
 ): string {
   const fs = attrs.fontSize;
-  const lh = fs * 1.12;
+  const lhMult = fs <= 11.5 ? 1.3 : 1.14;
+  const lh = fs * lhMult;
   const weight = svgFontWeightForSvgAttr(attrs.fontWeight);
   const inner = lines
     .map((line, i) => {
@@ -543,7 +556,7 @@ function drawVerticalDimChain(
       (yTop + yFloor) / 2 - 12.2 * ls,
       ['H total', formatMmPtBr(Math.round(uprightH))],
       {
-        fontSize: 12.45 * ls,
+        fontSize: 12.45 * ls * ELEV_TYPO_VERTICAL_DIM_CHAIN,
         fill: DIM_MAJOR,
         fontWeight: '600',
       }
@@ -554,11 +567,13 @@ function drawVerticalDimChain(
     let yN = (yTop + yFloor) / 2 + 16 * ls;
     for (const line of appendRightLines) {
       parts.push(
-        `<text x="${xTotal + 5}" y="${yN}" font-size="${8.75 * ls}px" fill="${DIM_MINOR}" font-family="${SVG_FONT_FAMILY}" font-weight="600">${escapeXml(
+        `<text x="${xTotal + 5}" y="${yN}" font-size="${
+          8.75 * ls * ELEV_TYPO_VERTICAL_DIM_CHAIN
+        }px" fill="${DIM_MINOR}" font-family="${SVG_FONT_FAMILY}" font-weight="600">${escapeXml(
           line
         )}</text>`
       );
-      yN += 10.5 * ls;
+      yN += 11.3 * ls;
     }
   }
 
@@ -568,7 +583,9 @@ function drawVerticalDimChain(
         if (idx === 0) return 'Vão túnel';
         if (idx === 1) return 'Até 1.º eixo';
         if (idx === detailCount - 1) {
-          return typeof structuralTopMm === 'number' ? 'Ao topo coluna' : 'Ao topo';
+          return typeof structuralTopMm === 'number'
+            ? 'Ao topo coluna'
+            : 'Ao topo';
         }
         return `Nív. ${idx - 1}–${idx}`;
       }
@@ -586,7 +603,9 @@ function drawVerticalDimChain(
         return hasGroundLevel ? 'Piso → 1.º eixo' : '1.º eixo';
       }
       if (idx === detailCount - 1) {
-        return typeof structuralTopMm === 'number' ? 'Ao topo coluna' : 'Ao topo';
+        return typeof structuralTopMm === 'number'
+          ? 'Ao topo coluna'
+          : 'Ao topo';
       }
       return `Nív. ${idx}–${idx + 1}`;
     }
@@ -624,7 +643,8 @@ function drawVerticalDimChain(
           ? [`${segLabel(k)} · ${formatMmPtBr(mmRounded)}`]
           : [segLabel(k), formatMmPtBr(mmRounded)],
         {
-          fontSize: (compact ? 11.45 : 11.2) * ls,
+          fontSize:
+            (compact ? 11.45 : 11.2) * ls * ELEV_TYPO_VERTICAL_DIM_CHAIN,
           fill: DIM_MINOR,
           fontWeight: '500',
         }
@@ -990,7 +1010,7 @@ function drawUprightWidthDims(
 ): string {
   const ls = labelScale;
   const parts: string[] = [];
-  const fs = 7.2 * ls;
+  const fs = 7.2 * ls * ELEV_TYPO_DIM_UPRIGHT_MM;
   for (let i = 0; i < widthsMm.length; i++) {
     const x0 = uprightXs[i]!;
     const wpx = uprightWidthsPx[i]!;
@@ -1053,15 +1073,14 @@ function buildElevationSpreadGuideLinesSvg(
   tLeft: { tx: number; ty: number; s: number },
   guideYsLocal: { top: number; floor: number; beams: number[] }
 ): string {
-  const ysLoc = [guideYsLocal.top, ...guideYsLocal.beams, guideYsLocal.floor].sort(
-    (a, b) => a - b
-  );
+  const ysLoc = [
+    guideYsLocal.top,
+    ...guideYsLocal.beams,
+    guideYsLocal.floor,
+  ].sort((a, b) => a - b);
   const uniq: number[] = [];
   for (const y of ysLoc) {
-    if (
-      uniq.length === 0 ||
-      Math.abs(y - uniq[uniq.length - 1]!) > 1.1
-    ) {
+    if (uniq.length === 0 || Math.abs(y - uniq[uniq.length - 1]!) > 1.1) {
       uniq.push(y);
     }
   }
@@ -1119,7 +1138,9 @@ function drawFrontRack(
   data: ElevationPanelPayload,
   sectionTitle: string,
   subtitle?: string,
-  options?: Omit<DrawFrontRackOptions, 'deferredWrap'> & { deferredWrap?: false }
+  options?: Omit<DrawFrontRackOptions, 'deferredWrap'> & {
+    deferredWrap?: false;
+  }
 ): string;
 function drawFrontRack(
   ox: number,
@@ -1288,7 +1309,9 @@ function drawFrontRack(
       );
       if (bw > 18 && floorTop - yPassTop > 28) {
         parts.push(
-          `<text x="${cxBay}" y="${yMid}" text-anchor="middle" dominant-baseline="middle" font-size="${7.4 * ls}px" fill="#64748b" font-family="${SVG_FONT_FAMILY}" font-weight="600">Vão túnel</text>`
+          `<text x="${cxBay}" y="${yMid}" text-anchor="middle" dominant-baseline="middle" font-size="${
+            7.4 * ls * ELEV_TYPO_VERTICAL_DIM_CHAIN
+          }px" fill="#64748b" font-family="${SVG_FONT_FAMILY}" font-weight="600">Vão túnel</text>`
         );
       }
     }
@@ -1325,7 +1348,9 @@ function drawFrontRack(
     }
     const cx = (faceSpanLeft + faceSpanRight) / 2;
     parts.push(
-      `<text x="${cx}" y="${yBeam0Elev - 5.8 * ls}" text-anchor="middle" font-size="${8.4 * ls}px" fill="#0f766e" stroke="#ffffff" stroke-width="${0.35 * ls}" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="700">1.º feixe ao piso (sem vão útil abaixo)</text>`
+      `<text x="${cx}" y="${yBeam0Elev - 5.8 * ls}" text-anchor="middle" font-size="${
+        8.4 * ls * ELEV_TYPO_CAP_AND_FACE_DIM
+      }px" fill="#0f766e" stroke="#ffffff" stroke-width="${0.35 * ls}" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="700">1.º feixe ao piso (sem vão útil abaixo)</text>`
     );
   }
 
@@ -1389,7 +1414,7 @@ function drawFrontRack(
 
   const palletKg = resolvePalletCapacityKg(data);
   const pairKg = beamPairCapacityKg(data);
-  const capFsSmall = 8.85 * lsMinor;
+  const capFsSmall = 8.85 * lsMinor * ELEV_TYPO_CAP_AND_FACE_DIM;
   const capLinePallet = `CAPACIDADE = ${formatKgCapacityPtBr(palletKg)} kg por palete`;
   parts.push(
     `<text x="${(faceSpanLeft + faceSpanRight) / 2}" y="${dimTopY - 20 * ls}" text-anchor="middle" font-size="${capFsSmall}px" fill="${DIM_MINOR}" stroke="${COL_BG}" stroke-width="${0.28 * ls}" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="600">${escapeXml(
@@ -1436,13 +1461,7 @@ function drawFrontRack(
   }
 
   parts.push(
-    drawFrontGuardRailMarkers(
-      faceSpanLeft,
-      faceSpanRight,
-      rackBottom,
-      data,
-      ls
-    )
+    drawFrontGuardRailMarkers(faceSpanLeft, faceSpanRight, rackBottom, data, ls)
   );
 
   parts.push(
@@ -1452,14 +1471,18 @@ function drawFrontRack(
     formatMmPtBr(Math.round(beamL))
   )}/baia · face de carga`;
   parts.push(
-    `<text x="${ox + pw / 2}" y="${dimTopY - 6 * ls}" text-anchor="middle" font-size="${10.5 * ls}px" fill="${DIM_MAJOR}" font-family="${SVG_FONT_FAMILY}" font-weight="700">${faceTitle}</text>`
+    `<text x="${ox + pw / 2}" y="${dimTopY - 6 * ls}" text-anchor="middle" font-size="${
+      10.5 * ls * ELEV_TYPO_CAP_AND_FACE_DIM
+    }px" fill="${DIM_MAJOR}" font-family="${SVG_FONT_FAMILY}" font-weight="700">${faceTitle}</text>`
   );
 
   parts.push(
     dimensionLineHArrows(rx, rackBottom + 26 * ls, rx + totalW, DIM_MINOR)
   );
   parts.push(
-    `<text x="${rx + totalW / 2}" y="${rackBottom + 44 * ls}" text-anchor="middle" font-size="${9 * ls}px" fill="#334155" font-family="${SVG_FONT_FAMILY}">Largura total da face: ${escapeXml(formatMmPtBr(Math.round(totalWidthMm)))}</text>`
+    `<text x="${rx + totalW / 2}" y="${rackBottom + 44 * ls}" text-anchor="middle" font-size="${
+      9 * ls * ELEV_TYPO_CAP_AND_FACE_DIM
+    }px" fill="#334155" font-family="${SVG_FONT_FAMILY}">Largura total da face: ${escapeXml(formatMmPtBr(Math.round(totalWidthMm)))}</text>`
   );
 
   if (!prem) {
@@ -1494,12 +1517,16 @@ function drawFrontRack(
 
   if (sectionTitle) {
     parts.push(
-      `<text x="${ox + pw / 2}" y="${oy + 16 * ls}" text-anchor="middle" font-size="${15 * ls}px" fill="#0f172a" font-family="${SVG_FONT_FAMILY}" font-weight="700">${escapeXml(sectionTitle)}</text>`
+      `<text x="${ox + pw / 2}" y="${oy + 16 * ls}" text-anchor="middle" font-size="${
+        15 * ls * ELEV_TYPO_VISTA_HEADING
+      }px" fill="#0f172a" font-family="${SVG_FONT_FAMILY}" font-weight="700">${escapeXml(sectionTitle)}</text>`
     );
   }
   if (subtitle) {
     parts.push(
-      `<text x="${ox + pw / 2}" y="${oy + 34 * ls}" text-anchor="middle" font-size="${9 * ls}px" fill="#64748b" font-family="${SVG_FONT_FAMILY}">${escapeXml(subtitle)}</text>`
+      `<text x="${ox + pw / 2}" y="${oy + 34 * ls}" text-anchor="middle" font-size="${
+        9 * ls * 1.11
+      }px" fill="#64748b" font-family="${SVG_FONT_FAMILY}">${escapeXml(subtitle)}</text>`
     );
   }
 
@@ -1508,16 +1535,15 @@ function drawFrontRack(
       `<g id="el-debug-front" font-family="${SVG_FONT_FAMILY}" pointer-events="none">`
     );
     parts.push(
-      `<text x="${ox + 10}" y="${oy + ph - 10}" font-size="7.5" fill="#7c3aed" font-family="${SVG_FONT_FAMILY}">DEBUG · eixos longarina (mm do piso)</text>`
+      `<text x="${ox + 10}" y="${oy + ph - 10}" font-size="10.1" fill="#7c3aed" font-family="${SVG_FONT_FAMILY}">DEBUG · eixos longarina (mm do piso)</text>`
     );
-    let ty = oy + ph - 22;
+    let ty = oy + ph - 23;
     for (let i = 0; i < data.beamElevationsMm.length; i++) {
       const mm = data.beamElevationsMm[i]!;
       const yPx = beamYsPx[i];
-      const yStr =
-        typeof yPx === 'number' ? `${yPx.toFixed(1)} px` : '—';
+      const yStr = typeof yPx === 'number' ? `${yPx.toFixed(1)} px` : '—';
       parts.push(
-        `<text x="${ox + 10}" y="${ty}" font-size="7" fill="#6b21a8" font-family="${SVG_FONT_FAMILY}">beam[${i}] z=${Math.round(mm)} mm · ${yStr}</text>`
+        `<text x="${ox + 10}" y="${ty}" font-size="9.45" fill="#6b21a8" font-family="${SVG_FONT_FAMILY}">beam[${i}] z=${Math.round(mm)} mm · ${yStr}</text>`
       );
       ty -= 10;
       if (typeof yPx === 'number') {
@@ -1528,7 +1554,9 @@ function drawFrontRack(
     }
     if (showTunnelOpening) {
       parts.push(
-        `<text x="${rx + totalW * 0.5}" y="${yPassTop - 6 * ls}" text-anchor="middle" font-size="7.5" fill="#b45309" font-family="${SVG_FONT_FAMILY}" font-weight="700">zona túnel · pé livre ${Math.round(clearanceMm)} mm</text>`
+        `<text x="${rx + totalW * 0.5}" y="${yPassTop - 6 * ls}" text-anchor="middle" font-size="${
+          7.5 * ELEV_TYPO_CAP_AND_FACE_DIM
+        }px" fill="#b45309" font-family="${SVG_FONT_FAMILY}" font-weight="700">zona túnel · pé livre ${Math.round(clearanceMm)} mm</text>`
       );
     }
     parts.push('</g>');
@@ -1699,16 +1727,7 @@ function drawLateral(
     scaleY = dh / g.uprightH;
     beamAt = (j: number) => g.beamYsPx[j]!;
   } else {
-    g = buildBeamGeometry(
-      data,
-      rackMaxW * 0.98,
-      rackMaxH,
-      ox,
-      oy,
-      pw,
-      ph,
-      1
-    );
+    g = buildBeamGeometry(data, rackMaxW * 0.98, rackMaxH, ox, oy, pw, ph, 1);
     const rackH = ph - Math.round((hideHeader ? 44 : 72) / ls);
     const sx = rackW / sliceMm;
     const sy = rackH / g.uprightH;
@@ -1740,10 +1759,14 @@ function drawLateral(
   const parts: string[] = [];
   if (!hideHeader) {
     parts.push(
-      `<text x="${ox + pw / 2}" y="${oy + 16 * ls}" text-anchor="middle" font-size="${15 * ls}px" fill="#0f172a" font-family="${SVG_FONT_FAMILY}" font-weight="700">Vista lateral</text>`
+      `<text x="${ox + pw / 2}" y="${oy + 16 * ls}" text-anchor="middle" font-size="${
+        15 * ls * ELEV_TYPO_VISTA_HEADING
+      }px" fill="#0f172a" font-family="${SVG_FONT_FAMILY}" font-weight="700">Vista lateral</text>`
     );
     parts.push(
-      `<text x="${ox + pw / 2}" y="${oy + 34 * ls}" text-anchor="middle" font-size="${9 * ls}px" fill="#64748b" font-family="${SVG_FONT_FAMILY}">${escapeXml(
+      `<text x="${ox + pw / 2}" y="${oy + 34 * ls}" text-anchor="middle" font-size="${
+        9 * ls * 1.11
+      }px" fill="#64748b" font-family="${SVG_FONT_FAMILY}">${escapeXml(
         isDouble
           ? `Perfil 1 costa ${formatMmPtBr(Math.round(sliceMm))} · dupla costas (2 filas + espinha) em planta`
           : `Prof. posição ${formatMmPtBr(Math.round(sliceMm))}`
@@ -1758,7 +1781,9 @@ function drawLateral(
     `<line x1="${x0 - 6}" y1="${floorTopLat}" x2="${x0 + dw + 6}" y2="${floorTopLat}" stroke="${COL_FLOOR}" stroke-width="2"/>`
   );
   parts.push(
-    `<text x="${x0 + dw / 2}" y="${floorTopLat + 8 * ls}" text-anchor="middle" font-size="${9 * ls}px" fill="${COL_FLOOR}" font-family="${SVG_FONT_FAMILY}" font-weight="700">PISO</text>`
+    `<text x="${x0 + dw / 2}" y="${floorTopLat + 8 * ls}" text-anchor="middle" font-size="${
+      9 * ls * ELEV_TYPO_CAP_AND_FACE_DIM
+    }px" fill="${COL_FLOOR}" font-family="${SVG_FONT_FAMILY}" font-weight="700">PISO</text>`
   );
 
   const uSide = Math.max(5.5, uprightWidthsPx[0]! * 0.42);
@@ -1811,15 +1836,13 @@ function drawLateral(
     parts.push(
       `<line x1="${bayLeft}" y1="${yPassTop}" x2="${bayRight}" y2="${yPassTop}" stroke="#94a3b8" stroke-width="0.4" opacity="0.52"/>`
     );
-    if (
-      !prem &&
-      tw > 32 &&
-      floorTopLat - yPassTop > 24
-    ) {
+    if (!prem && tw > 32 && floorTopLat - yPassTop > 24) {
       const yMid = (yPassTop + floorTopLat) / 2;
       const cxBay = (bayLeft + bayRight) / 2;
       parts.push(
-        `<text x="${cxBay}" y="${yMid}" text-anchor="middle" dominant-baseline="middle" font-size="${7 * ls}px" fill="#94a3b8" font-family="${SVG_FONT_FAMILY}" font-weight="600">Vão túnel</text>`
+        `<text x="${cxBay}" y="${yMid}" text-anchor="middle" dominant-baseline="middle" font-size="${
+          7 * ls * ELEV_TYPO_VERTICAL_DIM_CHAIN
+        }px" fill="#94a3b8" font-family="${SVG_FONT_FAMILY}" font-weight="600">Vão túnel</text>`
       );
     }
   }
@@ -1836,14 +1859,7 @@ function drawLateral(
   }
 
   parts.push(
-    drawLateralGuardRailMarkers(
-      xLeftU,
-      xRightU,
-      y0,
-      floorTopLat,
-      data,
-      ls
-    )
+    drawLateralGuardRailMarkers(xLeftU, xRightU, y0, floorTopLat, data, ls)
   );
 
   const nLatBeams = Math.max(0, nBeamAxes - 1);
@@ -1860,7 +1876,7 @@ function drawLateral(
 
   const palletKgLat = resolvePalletCapacityKg(data);
   const pairKgLat = beamPairCapacityKg(data);
-  const capLatFs = 8.75 * lsMinor;
+  const capLatFs = 8.75 * lsMinor * ELEV_TYPO_CAP_AND_FACE_DIM;
   const mxLat = (bayLeft + bayRight) / 2;
   parts.push(
     `<text x="${mxLat}" y="${y0 - 8 * ls}" text-anchor="middle" font-size="${capLatFs}px" fill="${DIM_MINOR}" stroke="${COL_BG}" stroke-width="${0.25 * ls}" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="600">${escapeXml(
@@ -1891,7 +1907,9 @@ function drawLateral(
     dimensionLineHArrows(x0, floorTopLat + 22 * ls, x0 + dw, DIM_MINOR)
   );
   parts.push(
-    `<text x="${x0 + dw / 2}" y="${floorTopLat + 38 * ls}" text-anchor="middle" font-size="${10.5 * ls}px" fill="${DIM_MINOR}" font-family="${SVG_FONT_FAMILY}" font-weight="600">${escapeXml(
+    `<text x="${x0 + dw / 2}" y="${floorTopLat + 38 * ls}" text-anchor="middle" font-size="${
+      10.5 * ls * ELEV_TYPO_CAP_AND_FACE_DIM
+    }px" fill="${DIM_MINOR}" font-family="${SVG_FONT_FAMILY}" font-weight="600">${escapeXml(
       isDouble
         ? `Profundidade da costa: ${formatMmPtBr(Math.round(sliceMm))} (dupla costas em planta)`
         : `Profundidade da costa: ${formatMmPtBr(Math.round(sliceMm))}`
@@ -1913,7 +1931,9 @@ function drawLateral(
       g.axisGapsMm,
       uprightH,
       ls,
-      clearanceLatMm > 0 ? { clearanceMm: clearanceLatMm, yPassTop } : undefined,
+      clearanceLatMm > 0
+        ? { clearanceMm: clearanceLatMm, yPassTop }
+        : undefined,
       data.hasGroundLevel === true,
       data.structuralTopMm,
       undefined,
@@ -1927,19 +1947,19 @@ function drawLateral(
     );
     let tyDbg = oy + ph - 10;
     parts.push(
-      `<text x="${ox + 8}" y="${tyDbg}" font-size="7" fill="#7c3aed" font-family="${SVG_FONT_FAMILY}">DEBUG lateral · eixos z (mm)</text>`
+      `<text x="${ox + 8}" y="${tyDbg}" font-size="9.45" fill="#7c3aed" font-family="${SVG_FONT_FAMILY}">DEBUG lateral · eixos z (mm)</text>`
     );
     tyDbg -= 10;
     for (let i = 0; i < data.beamElevationsMm.length; i++) {
       const mm = data.beamElevationsMm[i]!;
       parts.push(
-        `<text x="${ox + 8}" y="${tyDbg}" font-size="6.5" fill="#6b21a8" font-family="${SVG_FONT_FAMILY}">beam[${i}] ${Math.round(mm)} mm</text>`
+        `<text x="${ox + 8}" y="${tyDbg}" font-size="8.9" fill="#6b21a8" font-family="${SVG_FONT_FAMILY}">beam[${i}] ${Math.round(mm)} mm</text>`
       );
       tyDbg -= 9;
     }
     if (showTunnelOpening) {
       parts.push(
-        `<text x="${ox + 8}" y="${tyDbg}" font-size="6.5" fill="#b45309" font-family="${SVG_FONT_FAMILY}">restrição túnel · ${Math.round(clearanceLatMm)} mm</text>`
+        `<text x="${ox + 8}" y="${tyDbg}" font-size="8.9" fill="#b45309" font-family="${SVG_FONT_FAMILY}">restrição túnel · ${Math.round(clearanceLatMm)} mm</text>`
       );
     }
     parts.push('</g>');
@@ -2095,7 +2115,7 @@ function computeElevationSpreadWidthPx(
   return Math.round(ELEV_SPREAD_H * (usableWPt / drawingAvailHPt));
 }
 /** Faixa de notas compacta — menos altura em faixa = mais `innerH` para escala. */
-const ELEV_SPREAD_FOOTER_BAND_PX = 11;
+const ELEV_SPREAD_FOOTER_BAND_PX = 17;
 /** Margem interna do texto de rodapé à moldura. */
 const ELEV_SPREAD_FOOTER_SIDE_PAD_PX = 10;
 /** Evita que notas de rodapé invadam o eixo da junta entre vistas. */
@@ -2103,13 +2123,18 @@ const ELEV_SPREAD_FOOTER_CENTER_CLEAR_PX = 11;
 /** Folgas verticais dentro da faixa de rodapé. */
 const ELEV_SPREAD_FOOTER_TEXT_PAD_BOTTOM = 3;
 const ELEV_SPREAD_FOOTER_TEXT_PAD_TOP = 2;
-/** Tipografia do rodapé: pequena e legível (independente da escala das cotas). */
+/** Tipografia do rodapé: legível sob as duas colunas (+35%). */
 const ELEV_SPREAD_FOOTER_FS_BASE =
-  Math.round(7.85 * ELEV_INTERIOR_TYPE_SCALE * ELEV_SPREAD_ORTHO_REFINE * 10) /
-  10;
+  Math.round(
+    7.85 *
+      ELEV_INTERIOR_TYPE_SCALE *
+      ELEV_SPREAD_ORTHO_REFINE *
+      ELEV_TYPO_SPREAD_FOOT_SCALE *
+      10
+  ) / 10;
 /** Se o bloco não caber na altura útil, reduzir tipografia do rodapé. */
 const ELEV_SPREAD_FOOTER_FS_SHRINK = 0.91;
-const ELEV_SPREAD_FOOTER_FS_MIN = 6.45;
+const ELEV_SPREAD_FOOTER_FS_MIN = 9;
 /**
  * Tecto de escala do par ortográfico (independente de `ELEV_SPREAD_ORTHO_REFINE` na tipografia,
  * para não inflacionar o bbox só por aumentar `ls`). Escala com o canvas para não ficar preso a 1.22.
@@ -2177,7 +2202,13 @@ function elevationSpreadColumnTitleMetrics(): {
 } {
   const fsCol =
     Math.round(
-      9.45 * ELEV_PAGE_LABEL_SCALE * 1.1 * 0.86 * ELEV_SPREAD_ORTHO_REFINE * 10
+      9.45 *
+        ELEV_PAGE_LABEL_SCALE *
+        1.1 *
+        0.86 *
+        ELEV_SPREAD_ORTHO_REFINE *
+        ELEV_TYPO_VISTA_HEADING *
+        10
     ) / 10;
   const titleBandPx = Math.ceil(fsCol * 1.15) + 2;
   return { fsCol, titleBandPx };
@@ -2247,9 +2278,7 @@ function wrapFooterTextToLines(
     let remaining = w;
     while (remaining.length > 0) {
       const chunk =
-        remaining.length <= maxChars
-          ? remaining
-          : remaining.slice(0, maxChars);
+        remaining.length <= maxChars ? remaining : remaining.slice(0, maxChars);
       remaining = remaining.slice(chunk.length);
       if (cur.length === 0) {
         cur = chunk;
@@ -2284,23 +2313,19 @@ function elevationSpreadFooterColumnSvg(opts: {
 }): string {
   const { yBandTop, bandH, maxWidthPx, fsBase, fill, body, anchor, xEdge } =
     opts;
-  const yContentBottom =
-    yBandTop + bandH - ELEV_SPREAD_FOOTER_TEXT_PAD_BOTTOM;
+  const yContentBottom = yBandTop + bandH - ELEV_SPREAD_FOOTER_TEXT_PAD_BOTTOM;
   const yAnchorTop = yBandTop + ELEV_SPREAD_FOOTER_TEXT_PAD_TOP;
   const availableH = Math.max(24, yContentBottom - yAnchorTop);
 
   let fs = fsBase;
   let lines = wrapFooterTextToLines(body, maxWidthPx, fs);
-  let lh = fs * 1.18;
+  let lh = fs * (fs <= 10.5 ? 1.34 : 1.22);
   let blockH = (lines.length > 0 ? (lines.length - 1) * lh : 0) + fs * 0.92;
 
-  while (
-    fs > ELEV_SPREAD_FOOTER_FS_MIN &&
-    blockH > availableH - fs * 0.2
-  ) {
+  while (fs > ELEV_SPREAD_FOOTER_FS_MIN && blockH > availableH - fs * 0.2) {
     fs = Math.max(ELEV_SPREAD_FOOTER_FS_MIN, fs * ELEV_SPREAD_FOOTER_FS_SHRINK);
     lines = wrapFooterTextToLines(body, maxWidthPx, fs);
-    lh = fs * 1.18;
+    lh = fs * (fs <= 10.5 ? 1.34 : 1.22);
     blockH = (lines.length > 0 ? (lines.length - 1) * lh : 0) + fs * 0.92;
   }
 
@@ -2355,10 +2380,7 @@ function wrapElevationLandscapeSpread(
   const side = ELEV_SPREAD_FOOTER_SIDE_PAD_PX;
   const dead = ELEV_SPREAD_FOOTER_CENTER_CLEAR_PX;
   const leftColLeft = m + side;
-  const leftColMaxW = Math.max(
-    64,
-    sepX - dead - leftColLeft
-  );
+  const leftColMaxW = Math.max(64, sepX - dead - leftColLeft);
   const rightColRight = m + colInnerW + gap + colInnerW - side;
   const rightColLeft = sepX + dead;
   const rightColMaxW = Math.max(64, rightColRight - rightColLeft);
@@ -2577,7 +2599,9 @@ export function serializeElevationPagesV2(
     typeof rightStdDef !== 'object' ||
     rightStdDef.deferred !== true
   ) {
-    throw new Error('serializeElevationPagesV2: expected deferred ortho panels');
+    throw new Error(
+      'serializeElevationPagesV2: expected deferred ortho panels'
+    );
   }
   const {
     leftSvg: leftStd,
@@ -2638,7 +2662,9 @@ export function serializeElevationPagesV2(
       typeof rightTunDef !== 'object' ||
       rightTunDef.deferred !== true
     ) {
-      throw new Error('serializeElevationPagesV2: expected deferred tunnel panels');
+      throw new Error(
+        'serializeElevationPagesV2: expected deferred tunnel panels'
+      );
     }
     const {
       leftSvg: leftTun,
@@ -2728,12 +2754,12 @@ export function serializeElevationSvgV2(model: ElevationModelV2): string {
   let sy = h - 58;
   for (let i = model.summaryLines.length - 1; i >= 0; i--) {
     parts.push(
-      `<text x="${w / 2}" y="${sy}" text-anchor="middle" font-size="10.5px" fill="#1e293b" font-family="${SVG_FONT_FAMILY}">${escapeXml(model.summaryLines[i])}</text>`
+      `<text x="${w / 2}" y="${sy}" text-anchor="middle" font-size="12.4px" fill="#1e293b" font-family="${SVG_FONT_FAMILY}">${escapeXml(model.summaryLines[i])}</text>`
     );
-    sy -= 15;
+    sy -= 16;
   }
   parts.push(
-    `<text x="${w - 48}" y="${h - 38}" text-anchor="end" font-size="9px" fill="#64748b" font-family="${SVG_FONT_FAMILY}">Cotas em mm · escala automática</text>`
+    `<text x="${w - 48}" y="${h - 38}" text-anchor="end" font-size="10.6px" fill="#64748b" font-family="${SVG_FONT_FAMILY}">Cotas em mm · escala automática</text>`
   );
 
   parts.push('</svg>');

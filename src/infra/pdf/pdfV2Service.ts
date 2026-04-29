@@ -134,8 +134,8 @@ function applyElevationLandscapeDrawingSheetHeader(
   const titleT = sanitizeText(opts.title);
   const subT =
     opts.subtitle !== undefined ? sanitizeText(opts.subtitle) : '';
-  const tSize = 10.25;
-  const subSize = 7.85;
+  const tSize = 11.35;
+  const subSize = 8.65;
   let y = doc.page.margins.top + 2;
   doc.font(PDFKIT_FONT_BOLD).fontSize(tSize).fillColor(COL_INK);
   const hTitle = doc.heightOfString(titleT, { width: usableW });
@@ -324,7 +324,7 @@ function drawKeyValueRow(
   const valX = x + labelW;
   const valW = Math.max(80, usableW - labelW);
   const emphasis = opts?.emphasis === true;
-  const labelSize = emphasis ? 10 : 9.25;
+  const labelSize = emphasis ? 11 : 10.175;
   const valueSize = emphasis ? 13 : 10.75;
   const labelColor = emphasis ? COL_MUTED : '#475569';
   doc.font(PDFKIT_FONT_BOLD).fontSize(labelSize).fillColor(labelColor);
@@ -334,7 +334,7 @@ function drawKeyValueRow(
     .fontSize(valueSize)
     .fillColor(emphasis ? COL_VALUE_EMPH : COL_INK);
   const hVal = doc.heightOfString(value, { width: valW });
-  const rowH = Math.max(hLabel, hVal, emphasis ? 18 : 14);
+  const rowH = Math.max(hLabel, hVal, emphasis ? 19 : 15);
 
   doc
     .font(PDFKIT_FONT_BOLD)
@@ -342,7 +342,7 @@ function drawKeyValueRow(
     .fillColor(labelColor)
     .text(label, x, y, {
       width: labelW - 4,
-      lineGap: 1,
+      lineGap: emphasis ? 1.5 : 1.25,
     });
   doc
     .font(emphasis ? PDFKIT_FONT_BOLD : PDFKIT_FONT_REGULAR)
@@ -350,9 +350,9 @@ function drawKeyValueRow(
     .fillColor(emphasis ? COL_VALUE_EMPH : COL_INK)
     .text(value, valX, y, {
       width: valW,
-      lineGap: emphasis ? 0.5 : 1,
+      lineGap: emphasis ? 1 : 1.35,
     });
-  return y + rowH + (emphasis ? 8 : 5.5);
+  return y + rowH + (emphasis ? 8.5 : 6);
 }
 
 function measureTechnicalSummaryHeight(
@@ -361,12 +361,12 @@ function measureTechnicalSummaryHeight(
   labelColW: number,
   rows: TechnicalSummaryRow[]
 ): number {
-  doc.font(PDFKIT_FONT_BOLD).fontSize(14);
+  doc.font(PDFKIT_FONT_BOLD).fontSize(15.7);
   let h = doc.heightOfString('RESUMO TÉCNICO', { width: usableW }) + 20;
   const valW = Math.max(80, usableW - labelColW);
   for (const row of rows) {
     const emphasis = row.emphasis === true;
-    const labelSize = emphasis ? 10 : 9.25;
+    const labelSize = emphasis ? 11 : 10.175;
     const valueSize = emphasis ? 13 : 10.75;
     doc.font(PDFKIT_FONT_BOLD).fontSize(labelSize);
     const hLabel = doc.heightOfString(sanitizeText(row.label), {
@@ -376,7 +376,7 @@ function measureTechnicalSummaryHeight(
       .font(emphasis ? PDFKIT_FONT_BOLD : PDFKIT_FONT_REGULAR)
       .fontSize(valueSize);
     const hVal = doc.heightOfString(sanitizeText(row.value), { width: valW });
-    h += Math.max(hLabel, hVal, emphasis ? 18 : 14) + (emphasis ? 8 : 5.5);
+    h += Math.max(hLabel, hVal, emphasis ? 19 : 15) + (emphasis ? 8.5 : 6);
   }
   return h + 14;
 }
@@ -599,6 +599,7 @@ export async function renderPdfV2(
     options?: {
       subtitle?: string;
       titleSize?: number;
+      subtitleSize?: number;
       /** Menos folga sob o subtítulo e até ao desenho (ex.: prancha de elevações). */
       compactDrawingGap?: boolean;
       /** Cabeçalho mais baixo + tipos menores — maximiza `availH` da prancha no PDF. */
@@ -618,7 +619,7 @@ export async function renderPdfV2(
     const subT =
       options?.subtitle !== undefined ? sanitizeText(options.subtitle) : '';
     const tSize = options?.titleSize ?? 11.5;
-    const subSize = 9;
+    const subSize = options?.subtitleSize ?? 9;
     let y = doc.page.margins.top + 2;
     doc.font(PDFKIT_FONT_BOLD).fontSize(tSize).fillColor(COL_INK);
     const hTitle = doc.heightOfString(titleT, { width: usableW });
@@ -646,16 +647,16 @@ export async function renderPdfV2(
   doc.moveDown(0.28);
 
   drawCentered('PROJETO DE PORTA-PALETES', {
-    size: 23,
+    size: 25.75,
     font: PDFKIT_FONT_BOLD,
     color: COL_INK,
-    lineGap: 2,
+    lineGap: 2.5,
     moveDown: 0.22,
   });
   drawCentered('Documento técnico — layout de armazenagem em porta-paletes', {
-    size: 10,
+    size: 11.2,
     color: COL_MUTED,
-    lineGap: 1,
+    lineGap: 1.65,
     moveDown: 0.42,
   });
 
@@ -737,7 +738,7 @@ export async function renderPdfV2(
     .stroke();
 
   rowY = boxTop + boxPad;
-  doc.font(PDFKIT_FONT_BOLD).fontSize(14).fillColor(COL_INK);
+  doc.font(PDFKIT_FONT_BOLD).fontSize(15.7).fillColor(COL_INK);
   doc.text('RESUMO TÉCNICO', left, rowY, { width: usableW });
   const underY = doc.y + 3;
   doc
@@ -761,9 +762,9 @@ export async function renderPdfV2(
   }
 
   const notesTop = boxTop + boxH + 14;
-  doc.font(PDFKIT_FONT_BOLD).fontSize(10.25).fillColor(COL_INK);
+  doc.font(PDFKIT_FONT_BOLD).fontSize(11.5).fillColor(COL_INK);
   doc.text('INFORMAÇÕES TÉCNICAS', left, notesTop, { width: usableW });
-  const bodyTop = notesTop + 16;
+  const bodyTop = notesTop + 17;
   const colW = usableW * 0.62;
   const techBullets = [
     'Sistema porta-paletes seletivo.',
@@ -772,31 +773,31 @@ export async function renderPdfV2(
     'Respeitar capacidade estrutural.',
     'Projeto sujeito a validação técnica.',
   ];
-  doc.font(PDFKIT_FONT_REGULAR).fontSize(8.35).fillColor('#475569');
+  doc.font(PDFKIT_FONT_REGULAR).fontSize(9.35).fillColor('#475569');
   let yBullet = bodyTop;
   for (const line of techBullets) {
     doc.text(sanitizeText(`• ${line}`), left, yBullet, {
       width: colW,
-      lineGap: 1.25,
+      lineGap: 2,
     });
-    yBullet = doc.y + 1.5;
+    yBullet = doc.y + 2;
   }
 
   const detailW = usableW - colW - 18;
   const detailX = left + colW + 18;
-  doc.font(PDFKIT_FONT_BOLD).fontSize(8.65).fillColor(COL_ACCENT);
+  doc.font(PDFKIT_FONT_BOLD).fontSize(9.52).fillColor(COL_ACCENT);
   doc.text('DETALHE CONSTRUTIVO', detailX, bodyTop, { width: detailW });
-  doc.font(PDFKIT_FONT_REGULAR).fontSize(8.15).fillColor('#475569');
+  doc.font(PDFKIT_FONT_REGULAR).fontSize(8.97).fillColor('#475569');
   doc.text(
     sanitizeText(
       'Encaixe por garras.\nEstrutura modular para expansão.'
     ),
     detailX,
-    bodyTop + 13,
-    { width: detailW, lineGap: 2 }
+    bodyTop + 14,
+    { width: detailW, lineGap: 2.75 }
   );
 
-  doc.y = Math.max(yBullet, bodyTop + 48) + 18;
+  doc.y = Math.max(yBullet, bodyTop + 52) + 18;
 
   doc.addPage();
   beginDrawingSheetHeader('Planta de implantação — porta-paletes', {
@@ -849,6 +850,8 @@ export async function renderPdfV2(
   beginDrawingSheetHeader('Visualização 3D do layout', {
     subtitle:
       'Wireframe isométrico · montantes, longarinas e contorno do piso',
+    titleSize: 12.88,
+    subtitleSize: 10.08,
   });
   embedFullWidthDrawing(view3dRaster);
 
