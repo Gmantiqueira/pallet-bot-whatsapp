@@ -2082,7 +2082,7 @@ export const ELEV_PDF_LS_AVAIL_H_PT =
  * Fator do viewBox e das áreas úteis dos painéis (moldura/rodapé mantêm px fixos → desenho relativo cresce).
  * O raster em `pdfV2Service` deve usar o mesmo fator para manter proporção e nitidez.
  */
-export const ELEV_SPREAD_CANVAS_SCALE = 1.45;
+export const ELEV_SPREAD_CANVAS_SCALE = 1.62;
 const ELEV_SPREAD_BASE_H = 1500;
 /** Altura fixa do viewBox da prancha (escala); a largura deriva da razão com a caixa PDF. */
 const ELEV_SPREAD_H = Math.round(ELEV_SPREAD_BASE_H * ELEV_SPREAD_CANVAS_SCALE);
@@ -2093,7 +2093,7 @@ function computeElevationSpreadWidthPx(drawingAvailHPt: number): number {
   );
 }
 /** Faixa de notas compacta — menos altura em faixa = mais `innerH` para escala. */
-const ELEV_SPREAD_FOOTER_BAND_PX = 14;
+const ELEV_SPREAD_FOOTER_BAND_PX = 11;
 /** Margem interna do texto de rodapé à moldura. */
 const ELEV_SPREAD_FOOTER_SIDE_PAD_PX = 10;
 /** Evita que notas de rodapé invadam o eixo da junta entre vistas. */
@@ -2112,7 +2112,7 @@ const ELEV_SPREAD_FOOTER_FS_MIN = 6.45;
  * Tecto de escala do par ortográfico (independente de `ELEV_SPREAD_ORTHO_REFINE` na tipografia,
  * para não inflacionar o bbox só por aumentar `ls`). Escala com o canvas para não ficar preso a 1.22.
  */
-const ELEV_SPREAD_PANEL_FIT_MAX_BASE = 2.6;
+const ELEV_SPREAD_PANEL_FIT_MAX_BASE = 3;
 const ELEV_SPREAD_PANEL_FIT_MAX_SCALE =
   ELEV_SPREAD_PANEL_FIT_MAX_BASE * ELEV_SPREAD_CANVAS_SCALE;
 
@@ -2122,7 +2122,8 @@ const ELEV_SPREAD_PANEL_FIT_MAX_SCALE =
  */
 const ELEV_SPREAD_PREMIUM_ANNOTATION_INSET_PX = {
   l: 0,
-  r: 44,
+  /** Folga à direita para cadência de cotas; menor → mais largura útil para o desenho. */
+  r: 34,
   t: 0,
   b: 0,
 } as const;
@@ -2176,7 +2177,7 @@ function elevationSpreadColumnTitleMetrics(): {
     Math.round(
       9.45 * ELEV_PAGE_LABEL_SCALE * 1.1 * 0.86 * ELEV_SPREAD_ORTHO_REFINE * 10
     ) / 10;
-  const titleBandPx = Math.ceil(fsCol * 1.28) + 2;
+  const titleBandPx = Math.ceil(fsCol * 1.15) + 2;
   return { fsCol, titleBandPx };
 }
 
@@ -2408,10 +2409,6 @@ function wrapElevationLandscapeSpread(
       xEdge: rightColRight,
     }),
     `</g>`
-  );
-  /** TEMP: apagar depois de confirmar que o PDF reflecte este SVG. */
-  parts.push(
-    `<text x="${width - m}" y="${m + 11}" text-anchor="end" font-size="10px" fill="#dc2626" font-family="${SVG_FONT_FAMILY}" font-weight="700">${escapeXml('MARCA TEMP · elevações OK')}</text>`
   );
   parts.push('</svg>');
   return parts.join('');
