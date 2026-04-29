@@ -36,6 +36,10 @@ import type {
   TunnelPositionCode,
   TunnelZone,
 } from './types';
+import {
+  aggregateModuleSpanCountsFromRows,
+  equivalentAlongBeamSpan,
+} from './moduleSpanCounts';
 
 const EPS = 0.5;
 
@@ -232,9 +236,11 @@ function residualWarehouseStripAreaMm2(s: LayoutSolutionV2): number {
   return transverseResidualMm(s) * s.beamSpanMm;
 }
 
-/** Soma de módulos-equivalente por fileira (meio módulo = 0,5). */
-function rowModuleEquivSum(row: RackRowSolution): number {
-  return row.modules.reduce((acc, m) => acc + (m.type === 'half' ? 0.5 : 1), 0);
+/** Equiv. longitudinal por fileira — túnel = 1; meio = ½; inteiro normal = 1. */
+function rowAlongBeamEquiv(row: RackRowSolution): number {
+  return equivalentAlongBeamSpan(
+    aggregateModuleSpanCountsFromRows([row])
+  );
 }
 
 /**
@@ -242,7 +248,7 @@ function rowModuleEquivSum(row: RackRowSolution): number {
  */
 function rowModuleEquivVariance(s: LayoutSolutionV2): number {
   if (s.rows.length === 0) return 0;
-  const equivs = s.rows.map(rowModuleEquivSum);
+  const equivs = s.rows.map(rowAlongBeamEquiv);
   const mean = equivs.reduce((a, b) => a + b, 0) / equivs.length;
   return equivs.reduce((acc, v) => acc + (v - mean) ** 2, 0) / equivs.length;
 }
@@ -265,7 +271,7 @@ function layoutSolutionScoreTuple(
     s.totals.positions,
     -stripArea,
     -rowVar,
-    s.totals.modules,
+    s.totals.equivalentAlongBeamSpan,
     s.rows.length,
     s.orientation === 'along_length' ? 1 : 0,
   ];
@@ -1043,9 +1049,8 @@ function buildModuleSegmentsForRow(
   rowBandCount: number,
   corridorMm: number,
   globalLevels: number
-): { segments: ModuleSegment[]; moduleEquiv: number; rejectedHalf: boolean } {
+): { segments: ModuleSegment[]; rejectedHalf: boolean } {
   const segments: ModuleSegment[] = [];
-  let moduleEquiv = 0;
   let rejectedHalf = false;
 
   let idx = 0;
@@ -1066,7 +1071,6 @@ function buildModuleSegmentsForRow(
           globalLevels
         )
       );
-      moduleEquiv += 1;
       continue;
     }
 
@@ -1099,7 +1103,6 @@ function buildModuleSegmentsForRow(
         );
         cursor = b;
         runIdx += 1;
-        moduleEquiv += 1;
       }
       if (hasHalf) {
         const a = cursor;
@@ -1107,14 +1110,13 @@ function buildModuleSegmentsForRow(
         segments.push(
           rectFor(orientation, rowId, idx++, a, b, crossSeg, 'half', 'normal')
         );
-        moduleEquiv += 0.5;
       }
     };
 
     placeRects(full, half);
   }
 
-  return { segments, moduleEquiv, rejectedHalf };
+  return { segments, rejectedHalf };
 }
 
 /**
@@ -1357,7 +1359,6 @@ function buildLayoutSolutionV2Core(
     }
   }
 
-  let totalModEquiv = 0;
   let anyRejectedHalf = false;
 
   for (let rowBandIndex = 0; rowBandIndex < rowBands.length; rowBandIndex++) {
@@ -1396,7 +1397,7 @@ function buildLayoutSolutionV2Core(
         : reserveCrossPassageNoTunnel && crossPassageSpec
           ? [crossPassageSpec]
           : null;
-    const { segments, moduleEquiv, rejectedHalf } = buildModuleSegmentsForRow(
+    const { segments, rejectedHalf } = buildModuleSegmentsForRow(
       rowId,
       segsForRow,
       crossSeg,
@@ -1410,7 +1411,6 @@ function buildLayoutSolutionV2Core(
       levels
     );
     if (rejectedHalf) anyRejectedHalf = true;
-    totalModEquiv += moduleEquiv;
 
     rows.push({
       id: rowId,
@@ -1452,6 +1452,7 @@ function buildLayoutSolutionV2Core(
     hasGroundLevel
   );
   const physicalPickingModules = computePhysicalPickingModules(rows);
+  const segmentCounts = aggregateModuleSpanCountsFromRows(rows);
 
   const rackOutMode: RackDepthModeV2 =
     lineStrategy === 'PERSONALIZADO'
@@ -1476,7 +1477,8 @@ function buildLayoutSolutionV2Core(
     corridors,
     tunnels,
     totals: {
-      modules: totalModEquiv,
+      segmentCounts,
+      equivalentAlongBeamSpan: equivalentAlongBeamSpan(segmentCounts),
       physicalPickingModules,
       positions,
       levels: storageTierCount,
@@ -1668,11 +1670,14 @@ function applyManualTunnelToLayoutSolution(
     return baseSolution;
   }
   const hasGroundLevel = answers.hasGroundLevel !== false;
+  const tunnelSegCounts = aggregateModuleSpanCountsFromRows(newRows);
   const sol: LayoutSolutionV2 = {
     ...baseSolution,
     rows: newRows,
     totals: {
       ...baseSolution.totals,
+      segmentCounts: tunnelSegCounts,
+      equivalentAlongBeamSpan: equivalentAlongBeamSpan(tunnelSegCounts),
       physicalPickingModules: computePhysicalPickingModules(newRows),
       positions: computeTotalPalletPositions(
         newRows,
@@ -1680,7 +1685,6 @@ function applyManualTunnelToLayoutSolution(
         hasGroundLevel
       ),
       levels: baseSolution.totals.levels,
-      modules: baseSolution.totals.modules,
     },
     metadata: {
       ...baseSolution.metadata,

@@ -236,9 +236,9 @@ export function validatePdfRenderCoherence(
       `layoutSolution.rows (${sol.rows.length}) ≠ geometry.rows (${geometry.rows.length})`
     );
   }
-  if (Math.abs(sol.totals.modules - geometry.totals.moduleCount) > MM_EPS) {
+  if (Math.abs(sol.totals.equivalentAlongBeamSpan - geometry.totals.moduleCount) > MM_EPS) {
     errors.push(
-      `layoutSolution.totals.modules (${sol.totals.modules}) ≠ geometry.totals.moduleCount (${geometry.totals.moduleCount})`
+      `layoutSolution.totals.equivalentAlongBeamSpan (${sol.totals.equivalentAlongBeamSpan}) ≠ geometry.totals.moduleCount (${geometry.totals.moduleCount})`
     );
   }
   if (

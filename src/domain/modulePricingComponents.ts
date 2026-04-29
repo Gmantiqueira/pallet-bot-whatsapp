@@ -2,6 +2,7 @@ import type { BillOfMaterials } from './pdfV2/billOfMaterials';
 import type { LayoutSolutionV2 } from './pdfV2/types';
 import type { LayoutResult } from './layoutEngine';
 import { MODULE_PALLET_BAYS_PER_LEVEL } from './pdfV2/rackModuleSpec';
+import { equivalentAlongBeamSpan } from './pdfV2/moduleSpanCounts';
 
 /**
  * Contagens de componentes por **unidade de módulo** (face com 2 baias ao longo do vão)
@@ -96,7 +97,10 @@ export function computeModulePricingSnapshotFromBom(
   bom: BillOfMaterials,
   hasGroundLevel: boolean
 ): ModulePricingSnapshot {
-  const moduleCount = Math.max(0, sol.totals.modules);
+  const moduleCount = Math.max(
+    0,
+    equivalentAlongBeamSpan(sol.totals.segmentCounts)
+  );
   const u75 = bom.lines.find(l => l.id === 'upright75')?.quantity ?? 0;
   const u100 = bom.lines.find(l => l.id === 'upright100')?.quantity ?? 0;
   const totalCols = u75 + u100;
@@ -113,7 +117,7 @@ export function computeModulePricingSnapshotFromBom(
 
   const assumptions: string[] = [
     'Montantes e longarinas: mesmas quantidades que a lista de materiais (geometria V2).',
-    'Médias por “módulo-equiv.” ao longo do vão (`sol.totals.modules`).',
+    'Médias por equivalência ao longo do vão (`sol.totals.equivalentAlongBeamSpan`, derivada de segmentCounts).',
     'Contraventamento: travamento de fundo + travamento superior (quando aplicável), alinhado ao BOM.',
     `Paletes: total de posições do layout (${hasGroundLevel ? 'incl. patamar ao piso quando aplicável' : 'sem piso'}).`,
   ];

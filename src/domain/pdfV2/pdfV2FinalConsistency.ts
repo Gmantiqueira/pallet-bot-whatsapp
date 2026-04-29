@@ -199,9 +199,9 @@ function validateSolutionSnapshot(
       `layoutSolution.corridorMm (${sol.corridorMm}) ≠ geometry.metadata.corridorMm (${geo.metadata.corridorMm}).`
     );
   }
-  if (Math.abs(sol.totals.modules - geo.totals.moduleCount) > MM_TOL) {
+  if (Math.abs(sol.totals.equivalentAlongBeamSpan - geo.totals.moduleCount) > MM_TOL) {
     errors.push(
-      `layoutSolution.totals.modules (${sol.totals.modules}) ≠ geometry.totals.moduleCount (${geo.totals.moduleCount}).`
+      `layoutSolution.totals.equivalentAlongBeamSpan (${sol.totals.equivalentAlongBeamSpan}) ≠ geometry.totals.moduleCount (${geo.totals.moduleCount}).`
     );
   }
   if (

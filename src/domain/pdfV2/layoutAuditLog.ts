@@ -279,7 +279,7 @@ export function formatLayoutAuditReport(
   push('');
   push('— Capacidade (totals da solução) —');
   push(
-    `  modules (equiv.): ${sol.totals.modules} | positions: ${sol.totals.positions} | levels: ${sol.totals.levels}`
+    `  segmentCounts ${JSON.stringify(sol.totals.segmentCounts)} | equiv(span): ${sol.totals.equivalentAlongBeamSpan} | positions: ${sol.totals.positions} | levels: ${sol.totals.levels}`
   );
   if (sol.metadata.halfModuleRejectedReason) {
     push(`  halfModule: ${sol.metadata.halfModuleRejectedReason}`);

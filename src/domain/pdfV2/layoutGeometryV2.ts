@@ -134,7 +134,7 @@ export type TunnelInfo = {
 
 export type LayoutGeometryTotals = {
   /**
-   * Equiv. de segmentos ao longo do vão (meio = 0,5) — igual a {@link LayoutSolutionV2.totals.modules}.
+   * Equiv. longitudinal (full + ½×half + túnel) — igual a {@link LayoutSolutionV2.totals.equivalentAlongBeamSpan}.
    */
   moduleCount: number;
   /**
@@ -624,7 +624,7 @@ export function buildLayoutGeometry(
     tunnelOverlays: [...solution.tunnels],
     tunnels: tunnelInfos,
     totals: {
-      moduleCount: solution.totals.modules,
+      moduleCount: solution.totals.equivalentAlongBeamSpan,
       physicalPickingModuleCount: solution.totals.physicalPickingModules,
       positionCount: solution.totals.positions,
       levelCount: solution.totals.levels,

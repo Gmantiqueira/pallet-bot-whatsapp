@@ -2,7 +2,10 @@ import type {
   BillOfMaterials,
   BillOfMaterialsLineId,
 } from './pdfV2/billOfMaterials';
-import type { LayoutSolutionV2 } from './pdfV2/types';
+import type {
+  LayoutSolutionV2,
+  ModuleSpanCounts,
+} from './pdfV2/types';
 import type { LayoutResult } from './layoutEngine';
 import type { StructureResult, UprightType } from './structureEngine';
 
@@ -42,7 +45,7 @@ const BUDGET_ASSUMPTIONS_V2: string[] = [
   'Quantidades iguais à lista de materiais (geometria V2): montantes por prisma e vão; longarinas por segmento, baias e níveis com feixe;',
   'Túnel: pares de longarinas = (N−T)×2 baias/orçamento, T = níveis ocupados pelo vão (1 por omissão);',
   'Túnel: 1 unidade de guarda-corpo simples por módulo túnel, além do pedido de guardas do projeto.',
-  'Meio módulo: factor 0,5 no comprimento ao longo do vão;',
+  'Meio módulo: contagem explícita (halfModules) com factor ½ no vão para longarinas;',
   'Protetor de coluna (por montante); guardas por extremidade de fileira (conforme opções).',
   'Travamento superior automático entre fileiras (corredor) quando montantes &gt; 8 m — alinhado ao BOM.',
   'Travamento de fundo (costa) só com fileiras simples (sem dupla costa); 400×50%H; cadência 1/3/… módulos — alinhado ao BOM.',
@@ -51,7 +54,10 @@ const BUDGET_ASSUMPTIONS_V2: string[] = [
 export type BudgetResult = {
   items: BudgetItem[];
   totals: {
-    modules: number;
+    /** Contagens ao longo do vão — inteiros; túnel em campo próprio (nunca decimal mágico). */
+    segmentCounts: ModuleSpanCounts;
+    /** Só ordenação/coerência com BOM; não apresentar como “X,Y módulos”. */
+    equivalentAlongBeamSpan: number;
     positions: number;
   };
   meta: BudgetMeta;
@@ -60,8 +66,8 @@ export type BudgetResult = {
 export function calculateBudget(input: BudgetInput): BudgetResult {
   const { layout, structure, levels } = input;
 
-  const modules = layout.modulesTotal;
-  const positions = modules * levels;
+  const modulesInt = layout.modulesTotal;
+  const positions = modulesInt * levels;
 
   const uprightNames: Record<UprightType, string> = {
     '8T': 'Montante 8T',
@@ -70,16 +76,26 @@ export function calculateBudget(input: BudgetInput): BudgetResult {
   };
   const uprightName = uprightNames[structure.uprightType];
   const uprightQuantity = (layout.modulesPerRow + 1) * layout.rows;
-  const longarinaPairsQuantity = modules * levels;
+  const longarinaPairsQuantity = modulesInt * levels;
 
   const items: BudgetItem[] = [
     { name: uprightName, quantity: uprightQuantity },
     { name: 'Par de Longarinas', quantity: longarinaPairsQuantity },
   ];
 
+  const segmentCounts: ModuleSpanCounts = {
+    fullModules: modulesInt,
+    halfModules: 0,
+    tunnels: 0,
+  };
+
   return {
     items,
-    totals: { modules, positions },
+    totals: {
+      segmentCounts,
+      equivalentAlongBeamSpan: modulesInt,
+      positions,
+    },
     meta: {
       rulesVersion: BUDGET_RULES_VERSION_V1,
       assumptions: [...BUDGET_ASSUMPTIONS_V1],
@@ -156,7 +172,8 @@ export function budgetResultFromBillOfMaterials(
   return {
     items,
     totals: {
-      modules: sol.totals.modules,
+      segmentCounts: sol.totals.segmentCounts,
+      equivalentAlongBeamSpan: sol.totals.equivalentAlongBeamSpan,
       positions: sol.totals.positions,
     },
     meta: {

@@ -1,3 +1,4 @@
+import type { StructureResult } from '../structureEngine';
 import type {
   FloorPlanAccessoriesV2,
   LayoutOrientationV2,
@@ -25,7 +26,7 @@ import {
   minInterRowCorridorWidthMm,
   topTravamentoCorridorSpanMm,
 } from './topTravamento';
-import type { StructureResult } from '../structureEngine';
+import { equivalentAlongBeamSpan } from './moduleSpanCounts';
 
 const EPS = 0.5;
 
@@ -275,7 +276,10 @@ export function buildBillOfMaterials(
 ): BillOfMaterials {
   const { upright75, upright100 } = countUprightsByThicknessFromGeometry(geometry);
   const structuralLevels = Math.max(0, layoutSolution.metadata.structuralLevels);
-  const modulesAlong = Math.max(0, layoutSolution.totals.modules);
+  const modulesAlong = Math.max(
+    0,
+    equivalentAlongBeamSpan(layoutSolution.totals.segmentCounts)
+  );
   const travaEnabled = options?.longarinaTravaEnabled === true;
 
   const beamPairs = countBeamPairsForLayoutSolution(layoutSolution);

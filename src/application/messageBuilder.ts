@@ -7,6 +7,7 @@ import { OutgoingMessage } from '../types/messages';
 import { State } from '../domain/stateMachine';
 import type { BudgetResult } from '../domain/budgetEngine';
 import type { LayoutSolutionV2 } from '../domain/pdfV2/types';
+import { formatModuleSpanCountsCommercialPt } from '../domain/pdfV2/formatModuleCountDisplay';
 import type { StructureResult } from '../domain/structureEngine';
 
 /** Mensagem enquanto a geração do PDF está em curso (router + estado). */
@@ -891,7 +892,9 @@ const buildSummary = (session: Session): string => {
   if (budget?.totals && structure?.uprightType) {
     lines.push('');
     lines.push('— Estimativa técnica —');
-    lines.push(`Módulos: ${budget.totals.modules}`);
+    lines.push(
+      `Módulos: ${formatModuleSpanCountsCommercialPt(budget.totals.segmentCounts)}`
+    );
     lines.push(`Posições: ${budget.totals.positions}`);
     lines.push(`Coluna selecionada: ${structure.uprightType}`);
     const longarinas = budget.items.find(

@@ -324,8 +324,11 @@ describe('State Machine', () => {
       expect(result.session.answers.structure).toBeDefined();
       expect(result.session.answers.budget).toBeDefined();
       expect(
-        (result.session.answers.budget as { totals: { modules: number } })
-          .totals.modules
+        (
+          result.session.answers.budget as {
+            totals: { segmentCounts: { fullModules: number } };
+          }
+        ).totals.segmentCounts.fullModules
       ).toBe(6);
     });
 

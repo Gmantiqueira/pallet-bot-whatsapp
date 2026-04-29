@@ -50,7 +50,7 @@ describe('buildBillOfMaterials', () => {
     const h = resolveUprightHeightMmForProject(a);
     const bom = buildBillOfMaterials(sol, geo, acc, structure, h);
 
-    expect(bom.totals.modulesAlong).toBe(sol.totals.modules);
+    expect(bom.totals.modulesAlong).toBe(sol.totals.equivalentAlongBeamSpan);
     expect(bom.totals.positions).toBe(sol.totals.positions);
     for (const line of bom.lines) {
       expect(line.quantity).toBeGreaterThanOrEqual(0);
@@ -108,7 +108,12 @@ describe('buildBillOfMaterials', () => {
       corridors: [],
       tunnels: [],
       totals: {
-        modules: 1,
+        segmentCounts: {
+          fullModules: 0,
+          halfModules: 0,
+          tunnels: 1,
+        },
+        equivalentAlongBeamSpan: 1,
         physicalPickingModules: 1,
         positions: 1,
         levels: structuralLevels + 1,
@@ -165,7 +170,17 @@ describe('buildBillOfMaterials', () => {
       corridorMm: 3000,
       corridors: [],
       tunnels: [],
-      totals: { modules: 1, physicalPickingModules: 1, positions: 1, levels: N + 1 },
+      totals: {
+        segmentCounts: {
+          fullModules: 0,
+          halfModules: 0,
+          tunnels: 1,
+        },
+        equivalentAlongBeamSpan: 1,
+        physicalPickingModules: 1,
+        positions: 1,
+        levels: N + 1,
+      },
       metadata: {
         lineStrategy: 'APENAS_SIMPLES' as const,
         optimizeWithHalfModule: false,

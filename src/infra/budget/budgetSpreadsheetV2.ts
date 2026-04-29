@@ -6,6 +6,7 @@ import type {
   BillOfMaterialsLineId,
 } from '../../domain/pdfV2/billOfMaterials';
 import type { LayoutSolutionV2 } from '../../domain/pdfV2/types';
+import { formatModuleSpanCountsCommercialPt } from '../../domain/pdfV2/formatModuleCountDisplay';
 import { sanitizeText } from '../../utils/sanitizeText';
 
 const SHEET = 'PORTA PALETES';
@@ -156,7 +157,9 @@ export async function fillBudgetWorkbookFromTemplate(args: {
     formula: `(A${ROW.upright75}+A${ROW.upright100})*3`,
   };
 
-  const modulesAlong = layoutSolution.totals.modules;
+  const modulesAlong = formatModuleSpanCountsCommercialPt(
+    layoutSolution.totals.segmentCounts
+  );
   const positions = layoutSolution.totals.positions;
 
   ws.getCell('G23').value = modulesAlong;

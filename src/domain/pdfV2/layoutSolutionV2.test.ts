@@ -211,7 +211,7 @@ describe('buildLayoutSolutionV2', () => {
     const depth = s.rackDepthMode === 'double' ? 2 : 1;
     expect(s.totals.positions).toBe(
       Math.round(
-        s.totals.modules *
+        s.totals.equivalentAlongBeamSpan *
           MODULE_PALLET_BAYS_PER_LEVEL *
           depth *
           tiers

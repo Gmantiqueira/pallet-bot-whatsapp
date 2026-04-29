@@ -166,7 +166,9 @@ describe('MessageBuilder', () => {
       expect(messages[0].text).toContain('Vão por baia / entrada longarina (resultado): 1100');
       expect(messages[0].text).toContain('Níveis por módulo: 4');
       expect(messages[0].text).toContain('Ambos');
-      expect(messages[0].text).toContain('Módulos: 9');
+      expect(messages[0].text).toContain(
+        'Módulos: 8 módulos inteiros · 2 meios módulos'
+      );
       expect(messages[0].text).toContain('Posições: 72');
       expect(messages[0].text).toContain('Coluna selecionada: 8T');
       expect(messages[0].text).toContain('Pares de longarinas: 72');

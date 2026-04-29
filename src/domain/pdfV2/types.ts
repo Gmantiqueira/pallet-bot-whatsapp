@@ -31,6 +31,16 @@ export type TunnelAppliesCode =
   | 'AMBOS'
   | 'UMA';
 
+/**
+ * Contagens explícitas ao longo do eixo das longarinas (somadas todas as fileiras).
+ * Sem decimais agregados: meio-módulos em campo próprio; túnel em campo próprio.
+ */
+export type ModuleSpanCounts = {
+  fullModules: number;
+  halfModules: number;
+  tunnels: number;
+};
+
 export type ModuleSegmentType = 'full' | 'half';
 
 /** Variante de módulo: túnel = estrutura com vão livre em baixo e armazenagem acima. */
@@ -62,14 +72,14 @@ export type LayoutSolutionV2 = {
   corridors: CirculationZone[];
   tunnels: TunnelZone[];
   totals: {
+    segmentCounts: ModuleSpanCounts;
     /**
-     * Equivalente ao longo do vão por segmento de layout (1 = módulo completo ao longo da fileira,
-     * 0,5 = meio módulo) — usado no motor de pontuação e coerência com modelo 3D equiv.
+     * Igual ao antigo `totals.modules`: equiv. longitudinal (full + ½·half + túneis) — apenas coerência interna / ordenação.
      */
-    modules: number;
+    equivalentAlongBeamSpan: number;
     /**
      * Módulos de **frente** (faces de picking): em linha dupla costas, cada segmento conta ×2;
-     * túnel = 1 unidade. Alinha numeração da planta e resumo ao conceito da vista frontal (2 baias / frente).
+     * túnel = 1 unidade por face relevante — alinha numeração da planta e resumo.
      */
     physicalPickingModules: number;
     positions: number;
