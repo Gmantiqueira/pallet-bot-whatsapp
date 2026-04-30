@@ -35,6 +35,14 @@ import {
 } from '../../config/pdfFonts';
 import { sanitizeText } from '../../utils/sanitizeText';
 import { FUNDO_TRAVAMENTO_WIDTH_MM } from './fundoTravamento';
+import {
+  ISO_A4_LANDSCAPE_H_PT,
+  ISO_A4_LANDSCAPE_W_PT,
+  pdfContentMetricsPt,
+  snapSvgExtentPx,
+  svgGridMetrics,
+  uniformMarginPt,
+} from './layoutGrid';
 
 /**
  * Vista frontal na prancha: **uma** baia (2 montantes, 1 vão) para leitura mais clara.
@@ -2072,8 +2080,11 @@ const ELEV_SPREAD_LS_LAT_PRIMARY =
   ELEV_LATERAL_LABEL_SCALE * 1.12 * 1.12 * ELEV_SPREAD_ORTHO_REFINE;
 const ELEV_SPREAD_LS_LAT_MINOR =
   ELEV_LATERAL_LABEL_SCALE * 0.72 * 1.12 * ELEV_SPREAD_ORTHO_REFINE;
-/** Margem da página A4 paisagem (pt) — ≈5% da largura (igual `PAGE_MARGIN_PT` em `pdfV2Service`). */
-export const ELEV_PDF_LS_PAGE_MARGIN_PT = Math.round((595.28 * 5) / 100);
+/** Margem da página A4 paisagem (pt) — mesma regra que {@link uniformMarginPt} no PDF. */
+export const ELEV_PDF_LS_PAGE_MARGIN_PT = uniformMarginPt(
+  ISO_A4_LANDSCAPE_W_PT,
+  ISO_A4_LANDSCAPE_H_PT
+);
 /**
  * Fallback quando `serializeElevationPagesV2` corre sem `drawingAvailHPt*` (ex.: testes).
  * Valor calibrado vs {@link measureElevationLandscapeDrawingMetrics} (`DEBUG_PDF` / `PDF_ELEV_DEBUG`).
@@ -2089,9 +2100,13 @@ export const ELEV_PDF_LS_IMAGE_BOTTOM_BLEED_PT = 2;
 /** @deprecated Usar `ELEV_PDF_LS_IMAGE_BOTTOM_BLEED_PT`; mantido para raster legado. */
 export const ELEV_PDF_LS_IMGBOTTOM_PAD_PT = ELEV_PDF_LS_IMAGE_BOTTOM_BLEED_PT;
 /** Altura da página A4 em paisagem (pt). */
-export const ELEV_PDF_LS_PAGE_HEIGHT_PT = 595.28;
-const ELEV_PDF_LS_USABLE_W_PT = 841.89 - 2 * ELEV_PDF_LS_PAGE_MARGIN_PT;
-export const ELEV_PDF_LS_IMAGE_X_PT = ELEV_PDF_LS_PAGE_MARGIN_PT;
+export const ELEV_PDF_LS_PAGE_HEIGHT_PT = ISO_A4_LANDSCAPE_H_PT;
+const _elevLsPdfGrid = pdfContentMetricsPt(
+  ISO_A4_LANDSCAPE_W_PT,
+  ISO_A4_LANDSCAPE_H_PT
+);
+const ELEV_PDF_LS_USABLE_W_PT = _elevLsPdfGrid.contentW;
+export const ELEV_PDF_LS_IMAGE_X_PT = _elevLsPdfGrid.contentX;
 export const ELEV_PDF_LS_IMAGE_W_PT = ELEV_PDF_LS_USABLE_W_PT;
 /** Altura útil do bitmap no PDF: uma só vez (folha − cabeçalho estimado − bleed inferior). */
 export const ELEV_PDF_LS_AVAIL_H_PT =
@@ -2233,10 +2248,18 @@ function elevationSpreadLayoutMetrics(spreadWidthPx: number): {
   const m = ELEV_SPREAD_FRAME_INSET;
   const gap = ELEV_SPREAD_COL_GAP_PX;
   const padGap = Math.min(2, Math.max(0, ELEV_SPREAD_CONTENT_PAD_TOP_PX));
-  const footerBand = ELEV_SPREAD_FOOTER_BAND_PX;
   const width = spreadWidthPx;
   const height = ELEV_SPREAD_H;
-  const { fsCol, titleBandPx } = elevationSpreadColumnTitleMetrics();
+  const gSpread = svgGridMetrics(width, height);
+  const snapUnit = Math.min(gSpread.colW, gSpread.rowH);
+  const footerBand = snapSvgExtentPx(
+    snapUnit,
+    ELEV_SPREAD_FOOTER_BAND_PX,
+    snapUnit
+  );
+  const { fsCol, titleBandPx: titleBandRaw } =
+    elevationSpreadColumnTitleMetrics();
+  const titleBandPx = snapSvgExtentPx(snapUnit, titleBandRaw, snapUnit);
   const colInnerW = (width - 2 * m - gap) / 2;
   const panelOriginY = m + titleBandPx + padGap;
   const innerH = height - m - footerBand - titleBandPx - padGap;

@@ -12,6 +12,7 @@ import {
   SVG_FONT_FAMILY_CSS,
 } from '../../config/pdfFonts';
 import { floorPlanMinSvgFontPx } from './pdfTechnicalDrawingDefaults';
+import { floorPlanLegendReservePx, svgGridMetrics } from './layoutGrid';
 
 /** Ligação visual com a elevação (traços de baia = `ELEV_PALLET_TIER_STROKE`). */
 
@@ -82,15 +83,6 @@ const COL_RESIDUAL_STROKE = '#a1a1aa';
 const COL_DIM = '#111827';
 /** Texto sobre áreas “cheias”; WCAG ~4.5:1 vs branco não se aplica — halo + fundo garantem leitura. */
 const COL_CIRC_RES_TEXT = '#1c1917';
-/** Reserva inferior do viewBox para legenda + cotas (encaixe global do desenho). */
-/** Reserva inferior no fit da planta (~18–20% VB_H): legenda compacta + cotas. */
-const FLOOR_PLAN_LEGEND_RESERVE_PX = 400;
-
-/** Folga mínima ao viewport (px SVG); ≥4 e proporcional ao menor lado. */
-function viewportInnerPaddingPx(viewW: number, viewH: number): number {
-  return Math.max(4, Math.round(Math.min(viewW, viewH) * 0.014));
-}
-
 /** Quebra linhas longas na legenda para evitar palavras cortadas pelo clip horizontal. */
 function wrapLegendLine(line: string, maxChars: number): string[] {
   const t = line.trim();
@@ -956,7 +948,9 @@ function appendInterModuleColumnContinuity(
  */
 export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
   const { w, h } = model.viewBox;
-  const innerPad = viewportInnerPaddingPx(w, h);
+  const planGrid = svgGridMetrics(w, h);
+  const innerPad = planGrid.outerMarginPx;
+  const legendReservePx = floorPlanLegendReservePx(w, h);
   const minSvgFs = floorPlanMinSvgFontPx(h);
   const r = (n: number) => Math.round(n * 10) / 10;
   const b = minSvgFs;
@@ -1035,7 +1029,7 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
     w,
     h,
     fpPad,
-    FLOOR_PLAN_LEGEND_RESERVE_PX,
+    legendReservePx,
     innerPad
   );
   parts.push(`<g transform="${fitTf}">`);

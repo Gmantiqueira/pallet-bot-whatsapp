@@ -45,9 +45,16 @@ import {
   registerPdfKitFonts,
 } from '../../config/pdfFonts';
 import { sanitizeText } from '../../utils/sanitizeText';
+import {
+  ISO_A4_LANDSCAPE_H_PT,
+  ISO_A4_LANDSCAPE_W_PT,
+  ISO_A4_PORTRAIT_H_PT,
+  ISO_A4_PORTRAIT_W_PT,
+  pdfCenteredBlockLeftSnappedPt,
+  pdfContentMetricsPt,
+  pdfPageMarginsPt,
+} from '../../domain/pdfV2/layoutGrid';
 
-/** Margens ≈5% da largura A4 (~30 pt) — folha preenchida com área útil maximizada. */
-const PAGE_MARGIN_PT = Math.round((595.28 * 5) / 100);
 const COL_INK = '#0f172a';
 const COL_MUTED = '#64748b';
 const COL_RULE = '#cbd5e1';
@@ -80,10 +87,8 @@ export type ElevationLandscapeDrawingMeasure = {
 };
 
 /**
- * Formato das folhas só de elevação (paisagem). A4 paisagem maximiza área útil frente a A5.
- * Capa/planta/3D mantêm A4 retrato.
+ * Folhas de elevação em A4 paisagem (maior área útil que A5); capa, planta e 3D em A4 retrato.
  */
-/** A4 paisagem maximiza faixa útil das elevações (antes A5 deixava folha “vazia”). */
 export const ELEVATION_LANDSCAPE_PAGE_SIZE: 'A4' | 'A5' = 'A4';
 
 /**
@@ -96,12 +101,10 @@ export function measureElevationLandscapeDrawingMetrics(
   const doc = new PDFDocument({
     size: ELEVATION_LANDSCAPE_PAGE_SIZE,
     layout: 'landscape',
-    margins: {
-      top: PAGE_MARGIN_PT,
-      bottom: PAGE_MARGIN_PT,
-      left: PAGE_MARGIN_PT,
-      right: PAGE_MARGIN_PT,
-    },
+    margins: pdfPageMarginsPt(
+      ISO_A4_LANDSCAPE_W_PT,
+      ISO_A4_LANDSCAPE_H_PT
+    ),
   });
   registerPdfKitFonts(doc);
   const left = doc.page.margins.left;
@@ -165,11 +168,13 @@ const DRAWING_SHEET_HEADER_BUDGET_PT = 26;
 const DRAWING_SHEET_BOTTOM_PAD_PT = 2;
 
 function drawingRasterPixelSize(): { pxW: number; pxH: number } {
-  const pageW = 595.28;
-  const pageH = 841.89;
-  const usableW = pageW - 2 * PAGE_MARGIN_PT;
-  const pageBottom = pageH - PAGE_MARGIN_PT;
-  const imgTop = PAGE_MARGIN_PT + DRAWING_SHEET_HEADER_BUDGET_PT;
+  const cm = pdfContentMetricsPt(
+    ISO_A4_PORTRAIT_W_PT,
+    ISO_A4_PORTRAIT_H_PT
+  );
+  const usableW = cm.contentW;
+  const pageBottom = ISO_A4_PORTRAIT_H_PT - cm.marginPt;
+  const imgTop = cm.marginPt + DRAWING_SHEET_HEADER_BUDGET_PT;
   const imgBoxH = pageBottom - imgTop - DRAWING_SHEET_BOTTOM_PAD_PT;
   return {
     pxW: ptToPx(usableW),
@@ -488,12 +493,10 @@ export async function renderPdfV2(
     throw new Error(`Falha ao rasterizar SVG para PDF: ${msg}`);
   }
 
-  const pageMargins = {
-    top: PAGE_MARGIN_PT,
-    bottom: PAGE_MARGIN_PT,
-    left: PAGE_MARGIN_PT,
-    right: PAGE_MARGIN_PT,
-  };
+  const pageMargins = pdfPageMarginsPt(
+    ISO_A4_PORTRAIT_W_PT,
+    ISO_A4_PORTRAIT_H_PT
+  );
   const doc = new PDFDocument({
     size: 'A4',
     margins: pageMargins,
@@ -573,7 +576,7 @@ export async function renderPdfV2(
       useFullPageHeightFromY?: boolean;
     }
   ): void => {
-    const { left: pl, usableW: uw, pageBottom: pb } = pageLayoutNow();
+    const { usableW: uw, pageBottom: pb } = pageLayoutNow();
     const yImg = doc.y + 0.5;
     const bottomPad = opts?.bottomPadPt ?? imgBottomPad;
     const availH =
@@ -586,7 +589,8 @@ export async function renderPdfV2(
       uw,
       availH
     );
-    const ix = pl + (uw - dw) / 2;
+    const cm = pdfContentMetricsPt(doc.page.width, doc.page.height);
+    const ix = pdfCenteredBlockLeftSnappedPt(cm, dw);
     doc.image(raster.buffer, ix, yImg, { width: dw, height: dh });
     doc.y = yImg + dh;
   };

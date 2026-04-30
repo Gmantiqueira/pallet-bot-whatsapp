@@ -1,4 +1,5 @@
 export type * from './types';
+export * from './layoutGrid';
 export * from './answerMapping';
 export * from './layoutGeometryV2';
 export * from './layoutSolutionV2';

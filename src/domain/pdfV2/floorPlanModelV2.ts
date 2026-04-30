@@ -12,6 +12,7 @@ import { buildFloorPlanAccessories } from './visualAccessoriesV2';
 import { ELEV_BEAM_FILL } from './elevationVisualTokens';
 import { topTravamentoPlanLinesMm } from './topTravamento';
 import { resolveUprightHeightMmForProject } from '../projectEngines';
+import { snapSvgExtentPx, svgGridMetrics } from './layoutGrid';
 
 /**
  * Canvas SVG da planta.
@@ -28,14 +29,24 @@ import { resolveUprightHeightMmForProject } from '../projectEngines';
  */
 const VB_W = 1420;
 const VB_H = 1980;
-const PAD = 16;
+const _planGrid = svgGridMetrics(VB_W, VB_H);
+const PAD = snapSvgExtentPx(_planGrid.rowH, 16, _planGrid.rowH);
 /** Espaço superior sem título duplicado (o PDF traz o cabeçalho da folha). */
-const HEADER = 22;
-const DIM_OUT = 16;
+const HEADER = snapSvgExtentPx(_planGrid.rowH, 22, _planGrid.rowH);
+const DIM_OUT = snapSvgExtentPx(_planGrid.rowH, 16, _planGrid.rowH);
 /** Reserva à esquerda para cota de largura sem clip. */
-const PLAN_LEFT_DIM_MARGIN_PX = 54;
+const PLAN_LEFT_DIM_MARGIN_PX = snapSvgExtentPx(
+  _planGrid.colW,
+  54,
+  _planGrid.colW
+);
 /** Reserva inferior para cotas + legenda no modelo (coordenadas mm→SVG). */
-const PLAN_BOTTOM_STACK_RESERVE_PX = 235;
+const PLAN_BOTTOM_STACK_RESERVE_PX = snapSvgExtentPx(
+  _planGrid.rowH,
+  235,
+  _planGrid.rowH * 2
+);
+const PLAN_INNER_TOP_GAP_PX = snapSvgExtentPx(_planGrid.rowH, 18, _planGrid.rowH);
 /** Espinha entre costas (mm) — igual a layoutGeometryV2 / model3dV2.splitModuleFootprintsFor3d. */
 
 function escapeXml(text: string): string {
@@ -253,7 +264,7 @@ export function buildFloorPlanModelV2(
 ): FloorPlanModelV2 {
   const { warehouseLengthMm: L, warehouseWidthMm: W } = geometry;
   const innerW = VB_W - 2 * PAD;
-  const innerH = VB_H - PAD - HEADER - DIM_OUT - 18;
+  const innerH = VB_H - PAD - HEADER - DIM_OUT - PLAN_INNER_TOP_GAP_PX;
   const drawableW = Math.max(120, innerW - PLAN_LEFT_DIM_MARGIN_PX);
   const drawableH = Math.max(120, innerH - PLAN_BOTTOM_STACK_RESERVE_PX);
   const scale = Math.min(drawableW / L, drawableH / W);
