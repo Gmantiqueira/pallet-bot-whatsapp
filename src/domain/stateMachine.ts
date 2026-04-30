@@ -185,6 +185,32 @@ function clearCustomLineCounts(answers: Record<string, unknown>): void {
   delete answers.customLineDoubleCount;
 }
 
+/**
+ * Edição de medidas/layout/módulo altera a geometria: elimina escolhas de túnel e prévia manual
+ * para o utilizador voltar a indicar túnel (assistido ou manual com nova prévia).
+ */
+function answersAfterStructuralEditClearsTunnel(
+  answers: Record<string, unknown>
+): Record<string, unknown> {
+  const out = { ...answers };
+  delete (out as { tunnelManualModuleIndices?: unknown })
+    .tunnelManualModuleIndices;
+  delete (out as { tunnelPreviewMaxIndex?: unknown }).tunnelPreviewMaxIndex;
+  delete (out as { tunnelPreviewPdfPath?: unknown }).tunnelPreviewPdfPath;
+  delete (out as { tunnelPreviewPdfFilename?: unknown })
+    .tunnelPreviewPdfFilename;
+  delete (out as { tunnelConfigMode?: unknown }).tunnelConfigMode;
+  delete (out as { tunnelPlacements?: unknown }).tunnelPlacements;
+  delete (out as { tunnelSlotCount?: unknown }).tunnelSlotCount;
+  delete (out as { tunnelPosition?: unknown }).tunnelPosition;
+  delete (out as { tunnelAppliesTo?: unknown }).tunnelAppliesTo;
+  delete (out as { tunnelOffsetMm?: unknown }).tunnelOffsetMm;
+  out.hasTunnel = false;
+  out.tunnelInfoNote =
+    'Alterou medidas, layout ou configuração do módulo: indique outra vez se quer túnel nos passos seguintes.';
+  return out;
+}
+
 function transitionMenuChoice(session: Session, branch: '1' | '2'): Session {
   const projectType = branch === '1' ? 'PLANTA_REAL' : 'MEDIDAS_DIGITADAS';
   const nextState: State = branch === '1' ? 'WAIT_PLANT_IMAGE' : 'WAIT_LENGTH';
@@ -1536,7 +1562,7 @@ export const transition = (
 
         if (field === 'EDIT_MEDIDAS') {
           targetState = 'WAIT_LENGTH';
-          stopBefore = 'WAIT_CORRIDOR';
+          stopBefore = 'CHOOSE_MODULE_DIMENSION_MODE';
         } else if (field === 'EDIT_LAYOUT') {
           targetState = 'WAIT_CORRIDOR';
           stopBefore = 'CHOOSE_MODULE_DIMENSION_MODE';
@@ -1565,10 +1591,17 @@ export const transition = (
         }
 
         if (targetState) {
+          const patchAnswers =
+            field === 'EDIT_MEDIDAS' ||
+            field === 'EDIT_LAYOUT' ||
+            field === 'EDIT_MODULO'
+              ? answersAfterStructuralEditClearsTunnel(newSession.answers)
+              : newSession.answers;
           newSession = {
             ...newSession,
             state: targetState,
             editStopBefore: stopBefore,
+            answers: patchAnswers,
             stack: [...newSession.stack, newSession.state],
             updatedAt: Date.now(),
           };
