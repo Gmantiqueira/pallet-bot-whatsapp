@@ -14,8 +14,13 @@ import type { StructureResult } from '../domain/structureEngine';
 export const GENERATING_DOC_WAIT_TEXT =
   '⏳ A gerar o projeto (PDF e desenhos). Isto pode demorar um pouco — aguarde.';
 
+/** Enquanto a prévia PDF é gerada (pedido assíncrono com `resumePdfGeneration`). */
 export const GENERATING_TUNNEL_PREVIEW_WAIT_TEXT =
-  '⏳ A preparar a prévia do layout com módulos numerados — aguarde um momento.';
+  '⏳ Aguarde — estou a gerar a prévia do layout com módulos numerados.';
+
+/** Quando há texto/botão/imagem em fila durante a geração — mesmo pedido ou mensagens concatenadas. */
+export const GENERATING_TUNNEL_PREVIEW_WAIT_WITH_QUEUED_TEXT =
+  '⏳ Aguarde — estou a gerar a prévia do layout com módulos numerados.\n\nSe já enviou outra mensagem, será tratada automaticamente logo depois.';
 
 export interface MessageContext {
   lastError?: string;

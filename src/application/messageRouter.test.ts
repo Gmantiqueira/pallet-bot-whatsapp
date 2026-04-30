@@ -2,7 +2,11 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { PDFDocument } from 'pdf-lib';
 import { routeIncoming, IncomingPayload } from './messageRouter';
-import { GENERATING_DOC_WAIT_TEXT } from './messageBuilder';
+import {
+  GENERATING_DOC_WAIT_TEXT,
+  GENERATING_TUNNEL_PREVIEW_WAIT_WITH_QUEUED_TEXT,
+} from './messageBuilder';
+import { TUNNEL_PREVIEW_DEFERRED_INCOMING_KEY } from '../domain/tunnelPreviewAnswerDefaults';
 import { Session } from '../domain/session';
 import { SessionRepository } from '../domain/sessionRepository';
 import { finalizeSummaryAnswers } from '../domain/projectEngines';
@@ -574,6 +578,110 @@ describe('MessageRouter', () => {
           )
         ).toBe(true);
       } finally {
+        if (prev === undefined) {
+          process.env.PALLET_BOT_INLINE_PDF = '1';
+        } else {
+          process.env.PALLET_BOT_INLINE_PDF = prev;
+        }
+      }
+    });
+  });
+
+  describe('GENERATING_TUNNEL_PREVIEW async UX', () => {
+    const tunnelPreviewBaseAnswers = (): Record<string, unknown> =>
+      finalizeSummaryAnswers({
+        lengthMm: 12000,
+        widthMm: 10000,
+        corridorMm: 3000,
+        moduleDimensionMode: 'MANUAL',
+        moduleDepthMm: 2700,
+        beamLengthMm: 1100,
+        hasTunnel: true,
+        tunnelConfigMode: 'MANUAL',
+        lineStrategy: 'MELHOR_LAYOUT',
+        tunnelPosition: 'MEIO',
+        tunnelAppliesTo: 'AMBOS',
+        capacityKg: 2000,
+        heightMode: 'DIRECT',
+        heightMm: 5040,
+        levels: 4,
+        guardRailSimple: false,
+        guardRailDouble: false,
+      });
+
+    it('queues last user payload and responds with wait + deferred notice', async () => {
+      const generating = createSession(
+        'GENERATING_TUNNEL_PREVIEW',
+        tunnelPreviewBaseAnswers()
+      );
+      await repository.upsert(generating);
+
+      const r = await routeIncoming(
+        generating,
+        { from: '5511999999999', text: '1, 2' },
+        repository
+      );
+
+      expect(r.session.state).toBe('GENERATING_TUNNEL_PREVIEW');
+      expect(r.session.answers[TUNNEL_PREVIEW_DEFERRED_INCOMING_KEY]).toEqual({
+        text: '1, 2',
+      });
+      expect(r.outgoingMessages).toHaveLength(1);
+      expect(r.outgoingMessages[0].text).toBe(
+        GENERATING_TUNNEL_PREVIEW_WAIT_WITH_QUEUED_TEXT
+      );
+
+      const stored = await repository.get('5511999999999');
+      expect(stored?.answers[TUNNEL_PREVIEW_DEFERRED_INCOMING_KEY]).toEqual({
+        text: '1, 2',
+      });
+    });
+
+    it('resume applies queued module numbers after tunnel preview PDF', async () => {
+      const prev = process.env.PALLET_BOT_INLINE_PDF;
+      delete process.env.PALLET_BOT_INLINE_PDF;
+      const pdfSpy = jest
+        .spyOn(PdfService.prototype, 'generatePdf')
+        .mockImplementation(async () => {
+          const storageDir = path.join(process.cwd(), 'storage');
+          fs.mkdirSync(storageDir, { recursive: true });
+          const fakePath = path.join(
+            storageDir,
+            `tunnel-prev-${Date.now()}.pdf`
+          );
+          fs.writeFileSync(fakePath, Buffer.from('%PDF-1.4\n%%EOF'));
+          const st = fs.statSync(fakePath);
+          return {
+            filename: path.basename(fakePath),
+            absolutePath: fakePath,
+            mimeType: 'application/pdf',
+            sizeBytes: st.size,
+            storageRelativePath: path.basename(fakePath),
+          };
+        });
+
+      try {
+        const answers = {
+          ...tunnelPreviewBaseAnswers(),
+          [TUNNEL_PREVIEW_DEFERRED_INCOMING_KEY]: { text: '1' },
+        };
+        const generating = createSession('GENERATING_TUNNEL_PREVIEW', answers);
+        await repository.upsert(generating);
+
+        const r = await routeIncoming(
+          generating,
+          { from: '5511999999999', resumePdfGeneration: true },
+          repository
+        );
+
+        expect(r.session.state).toBe('CHOOSE_HEIGHT_DEFINITION');
+        expect(r.session.answers.tunnelManualModuleIndices).toEqual([1]);
+        expect(
+          r.session.answers[TUNNEL_PREVIEW_DEFERRED_INCOMING_KEY]
+        ).toBeUndefined();
+        expect(r.generatedPdf?.absolutePath).toBeTruthy();
+      } finally {
+        pdfSpy.mockRestore();
         if (prev === undefined) {
           process.env.PALLET_BOT_INLINE_PDF = '1';
         } else {

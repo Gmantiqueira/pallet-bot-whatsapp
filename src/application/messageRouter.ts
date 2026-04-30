@@ -12,6 +12,7 @@ import {
   buildMessages,
   GENERATING_DOC_WAIT_TEXT,
   GENERATING_TUNNEL_PREVIEW_WAIT_TEXT,
+  GENERATING_TUNNEL_PREVIEW_WAIT_WITH_QUEUED_TEXT,
   MessageContext,
 } from './messageBuilder';
 import { PdfService } from '../infra/pdf/pdfService';
@@ -37,6 +38,8 @@ import { validatePdfV2FinalConsistency } from '../domain/pdfV2/pdfV2FinalConsist
 import {
   mergeAnswersForTunnelPreview,
   TUNNEL_MANUAL_PREVIEW_PROVISIONAL_SPECS_KEY,
+  TUNNEL_PREVIEW_DEFERRED_INCOMING_KEY,
+  type TunnelPreviewDeferredIncoming,
 } from '../domain/tunnelPreviewAnswerDefaults';
 import { buildFloorPlanModelV2 } from '../domain/pdfV2/floorPlanModelV2';
 import { serializeFloorPlanSvgV2 } from '../domain/pdfV2/svgFloorPlanV2';
@@ -219,6 +222,127 @@ const convertToInput = (
 
   return null;
 };
+
+function finalizeAnswersPreservingTunnelPreviewDeferred(
+  answers: Record<string, unknown>
+): Record<string, unknown> {
+  const held = answers[TUNNEL_PREVIEW_DEFERRED_INCOMING_KEY];
+  const fin = finalizeSummaryAnswers({ ...answers });
+  if (held !== undefined && held !== null && typeof held === 'object') {
+    return { ...fin, [TUNNEL_PREVIEW_DEFERRED_INCOMING_KEY]: held };
+  }
+  return fin;
+}
+
+function extractTunnelPreviewQueueablePayload(
+  incoming: IncomingPayload
+): TunnelPreviewDeferredIncoming | null {
+  if (incoming.resumePdfGeneration === true) {
+    return null;
+  }
+  const trimmed = incoming.text?.trim();
+  if (trimmed) {
+    return { text: incoming.text as string };
+  }
+  const br = incoming.buttonReply?.trim();
+  if (br) {
+    return { buttonReply: incoming.buttonReply as string };
+  }
+  if (incoming.media?.type === 'image') {
+    return { media: incoming.media };
+  }
+  return null;
+}
+
+function incomingPayloadFromTunnelDeferred(
+  phone: string,
+  d: TunnelPreviewDeferredIncoming
+): IncomingPayload {
+  return {
+    from: phone,
+    ...(d.text !== undefined ? { text: d.text } : {}),
+    ...(d.buttonReply !== undefined ? { buttonReply: d.buttonReply } : {}),
+    ...(d.media !== undefined ? { media: d.media } : {}),
+  };
+}
+
+function takeTunnelPreviewDeferredFromAnswers(
+  answers: Record<string, unknown>
+): { answers: Record<string, unknown>; deferred?: TunnelPreviewDeferredIncoming } {
+  const raw = answers[TUNNEL_PREVIEW_DEFERRED_INCOMING_KEY];
+  if (!raw || typeof raw !== 'object') {
+    return { answers };
+  }
+  const next = { ...answers };
+  delete next[TUNNEL_PREVIEW_DEFERRED_INCOMING_KEY];
+  return { answers: next, deferred: raw as TunnelPreviewDeferredIncoming };
+}
+
+function applyTunnelPreviewDeferredTransition(
+  session: Session,
+  deferred: TunnelPreviewDeferredIncoming
+): {
+  session: Session;
+  deferredError?: string;
+  resentTunnelPreviewPdf?: GeneratedPdfArtifact;
+} {
+  const synthetic = incomingPayloadFromTunnelDeferred(session.phone, deferred);
+  const input = convertToInput(synthetic, session);
+  if (!input) {
+    return { session };
+  }
+  const tr = transition(session, input);
+  if (tr.error) {
+    return { session: tr.session, deferredError: tr.error };
+  }
+  let resentTunnelPreviewPdf: GeneratedPdfArtifact | undefined;
+  const wantsResend = tr.effects.some(
+    e => e.type === 'RESEND_TUNNEL_PREVIEW_PDF'
+  );
+  if (wantsResend && tr.session.state === 'WAIT_TUNNEL_MODULE_NUMBERS') {
+    resentTunnelPreviewPdf = generatedTunnelPreviewPdfFromAnswers(
+      tr.session.answers
+    );
+  }
+  return { session: tr.session, resentTunnelPreviewPdf };
+}
+
+type TunnelPreviewGenOutcome = {
+  updatedSession: Session;
+  generatedPdf?: GeneratedPdfArtifact;
+  deliveryError?: string;
+};
+
+function mergeTunnelPreviewOutcomeWithDeferred(
+  outcome: TunnelPreviewGenOutcome
+): {
+  session: Session;
+  generatedPdf?: GeneratedPdfArtifact;
+  deferredApplyError?: string;
+} {
+  let sess = outcome.updatedSession;
+  let pdf = outcome.generatedPdf;
+  if (outcome.deliveryError) {
+    return { session: sess, generatedPdf: pdf };
+  }
+  const { answers: cleaned, deferred } = takeTunnelPreviewDeferredFromAnswers(
+    sess.answers
+  );
+  if (!deferred) {
+    return { session: sess, generatedPdf: pdf };
+  }
+  sess = { ...sess, answers: cleaned };
+  const applied = applyTunnelPreviewDeferredTransition(sess, deferred);
+  sess = applied.session;
+  if (applied.resentTunnelPreviewPdf) {
+    pdf = applied.resentTunnelPreviewPdf;
+  }
+  return {
+    session: sess,
+    generatedPdf: pdf,
+    deferredApplyError: applied.deferredError,
+  };
+}
 
 interface PdfGenerationOutcome {
   updatedSession: Session;
@@ -469,20 +593,24 @@ export const routeIncoming = async (
     if (session.state === 'GENERATING_TUNNEL_PREVIEW') {
       const genSess: Session = {
         ...session,
-        answers: finalizeSummaryAnswers({ ...session.answers }),
+        answers: finalizeAnswersPreservingTunnelPreviewDeferred({
+          ...session.answers,
+        }),
       };
-      const { updatedSession, generatedPdf, deliveryError } =
-        await executeTunnelPreviewGeneration(genSess);
-      const ctx: MessageContext = { lastError: deliveryError };
-      const messages = buildMessages(updatedSession, ctx);
-      const finalSession = { ...updatedSession, updatedAt: Date.now() };
+      const outcome = await executeTunnelPreviewGeneration(genSess);
+      const merged = mergeTunnelPreviewOutcomeWithDeferred(outcome);
+      const ctx: MessageContext = {
+        lastError: outcome.deliveryError ?? merged.deferredApplyError,
+      };
+      const messages = buildMessages(merged.session, ctx);
+      const finalSession = { ...merged.session, updatedAt: Date.now() };
       if (persistSession) {
         await sessionRepository.upsert(finalSession);
       }
       return {
         session: finalSession,
         outgoingMessages: messages,
-        generatedPdf,
+        generatedPdf: merged.generatedPdf,
       };
     }
 
@@ -545,13 +673,31 @@ export const routeIncoming = async (
   }
 
   if (session.state === 'GENERATING_TUNNEL_PREVIEW') {
+    const queued = extractTunnelPreviewQueueablePayload(incoming);
+    let nextSession = session;
+    if (queued) {
+      nextSession = {
+        ...session,
+        updatedAt: Date.now(),
+        answers: {
+          ...session.answers,
+          [TUNNEL_PREVIEW_DEFERRED_INCOMING_KEY]: queued,
+        },
+      };
+    }
+    if (queued && persistSession) {
+      await sessionRepository.upsert(nextSession);
+    }
+    const waitText = queued
+      ? GENERATING_TUNNEL_PREVIEW_WAIT_WITH_QUEUED_TEXT
+      : GENERATING_TUNNEL_PREVIEW_WAIT_TEXT;
     return {
-      session,
+      session: nextSession,
       outgoingMessages: [
         {
           to: session.phone,
           type: 'text',
-          text: GENERATING_TUNNEL_PREVIEW_WAIT_TEXT,
+          text: waitText,
         },
       ],
       generatedPdf: undefined,
@@ -650,7 +796,9 @@ export const routeIncoming = async (
   ) {
     const genSession: Session = {
       ...updatedSession,
-      answers: finalizeSummaryAnswers({ ...updatedSession.answers }),
+      answers: finalizeAnswersPreservingTunnelPreviewDeferred({
+        ...updatedSession.answers,
+      }),
     };
     if (persistSession) {
       await sessionRepository.upsert({
@@ -673,9 +821,11 @@ export const routeIncoming = async (
       };
     }
     const previewOutcome = await executeTunnelPreviewGeneration(genSession);
-    deliveryError = previewOutcome.deliveryError;
-    generatedPdf = previewOutcome.generatedPdf;
-    updatedSession = previewOutcome.updatedSession;
+    const merged = mergeTunnelPreviewOutcomeWithDeferred(previewOutcome);
+    deliveryError =
+      previewOutcome.deliveryError ?? merged.deferredApplyError;
+    generatedPdf = merged.generatedPdf;
+    updatedSession = merged.session;
   }
 
   const hasResendPdfEffect = transitionResult.effects.some(

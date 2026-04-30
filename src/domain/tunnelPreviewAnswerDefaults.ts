@@ -12,6 +12,16 @@ const PREVIEW_HEIGHT_MM = 5040;
 export const TUNNEL_MANUAL_PREVIEW_PROVISIONAL_SPECS_KEY =
   'tunnelManualPreviewProvisionalSpecs' as const;
 
+/** Mensagem do utilizador recebida durante o estado `GENERATING_TUNNEL_PREVIEW`; aplicada após a prévia. */
+export const TUNNEL_PREVIEW_DEFERRED_INCOMING_KEY =
+  'tunnelPreviewDeferredIncoming' as const;
+
+export type TunnelPreviewDeferredIncoming = {
+  text?: string;
+  buttonReply?: string;
+  media?: { type: 'image'; id: string };
+};
+
 export type TunnelPreviewMergedAnswers = {
   answers: Record<string, unknown>;
   /** Verdadeiro se algum campo acima foi preenchido com valores de prévia (indicativos). */

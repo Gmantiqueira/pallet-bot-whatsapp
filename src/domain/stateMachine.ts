@@ -25,7 +25,10 @@ import {
   HEIGHT_DEFINITION_WAREHOUSE_CLEAR,
   deriveModuleFromWarehouseClearHeight,
 } from './warehouseHeightDerive';
-import { mergeAnswersForTunnelPreview } from './tunnelPreviewAnswerDefaults';
+import {
+  mergeAnswersForTunnelPreview,
+  TUNNEL_PREVIEW_DEFERRED_INCOMING_KEY,
+} from './tunnelPreviewAnswerDefaults';
 
 export type State =
   | 'START'
@@ -206,6 +209,7 @@ function answersAfterStructuralEditClearsTunnel(
   delete (out as { tunnelPosition?: unknown }).tunnelPosition;
   delete (out as { tunnelAppliesTo?: unknown }).tunnelAppliesTo;
   delete (out as { tunnelOffsetMm?: unknown }).tunnelOffsetMm;
+  delete out[TUNNEL_PREVIEW_DEFERRED_INCOMING_KEY];
   out.hasTunnel = false;
   out.tunnelInfoNote =
     'Alterou medidas, layout ou configuração do módulo: indique outra vez se quer túnel nos passos seguintes.';
@@ -227,6 +231,7 @@ function tunnelAnswersAfterManualDecline(
   delete cleared.tunnelPosition;
   delete cleared.tunnelAppliesTo;
   delete cleared.tunnelOffsetMm;
+  delete cleared[TUNNEL_PREVIEW_DEFERRED_INCOMING_KEY];
   cleared.tunnelInfoNote =
     'Túnel: não — optou por continuar sem módulos túnel após a prévia.';
   return cleared;

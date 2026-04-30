@@ -10,6 +10,7 @@ import {
   type LayoutResult,
 } from './layoutEngine';
 import { normalizeUprightHeightMmToColumnStep } from './rackColumnStep';
+import { TUNNEL_PREVIEW_DEFERRED_INCOMING_KEY } from './tunnelPreviewAnswerDefaults';
 import {
   deriveRackFromWarehouseHeightMm,
   HEIGHT_DEFINITION_MODULE_TOTAL,
@@ -237,6 +238,7 @@ export function finalizeSummaryAnswers(
   delete (stripped as { tunnelPreviewPdfPath?: unknown }).tunnelPreviewPdfPath;
   delete (stripped as { tunnelPreviewPdfFilename?: unknown })
     .tunnelPreviewPdfFilename;
+  delete stripped[TUNNEL_PREVIEW_DEFERRED_INCOMING_KEY];
   delete (stripped as { tunnelManualPreviewProvisionalSpecs?: unknown })
     .tunnelManualPreviewProvisionalSpecs;
   if (typeof stripped.heightMm === 'number') {
