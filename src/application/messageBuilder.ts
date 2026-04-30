@@ -616,11 +616,12 @@ const buildStateMessage = (session: Session): OutgoingMessage | null => {
         to: session.phone,
         text:
           '📄 *Prévia com módulos numerados*\n\n' +
-            'O PDF de pré-visualização (mesmo padrão de desenho, sem túneis) foi enviado em anexo.\n\n' +
+            'O PDF de pré-visualização (mesmo padrão de desenho, *sem túneis aplicados*) foi enviado em anexo.\n\n' +
             'Se *não vir o documento*, toque em *Baixar PDF* para o integrador reenviar o ficheiro.\n\n' +
-            'Cada *número* na planta = *um módulo de frente* (2 baias), na mesma ordem usada no projeto final.\n\n' +
-            '*Responda com os números* dos módulos onde pretende túnel. Exemplos: *2, 5, 8* ou *Módulos 2 e 6*.\n\n' +
-            'Números inválidos serão sinalizados; repetições contam uma vez.\n\n' +
+            '*Só os módulos inteiros* têm número (1, 2, 3…). *«1/2»* = meio-módulo (não pode ser túnel neste modo). *«T»* não aparece nesta prévia.\n\n' +
+            '*Responda só com os números dos inteiros* onde pretende túnel. Exemplos: *2, 5, 8* ou *Módulos 2 e 6*. Repetições contam uma vez.\n\n' +
+            'Para *nenhum* túnel: envie *cancelar* e recomece, ou use *voltar* até ao passo do túnel e escolha *Não*.\n\n' +
+            'Números inválidos serão sinalizados — pode corrigir sem reiniciar o projeto.\n\n' +
             'A seguir: *altura*, *carga* e *proteções* — igual ao modo assistente.',
         buttons: [{ id: 'BAIXAR_PREVIA_PDF', label: 'Baixar PDF' }],
       };

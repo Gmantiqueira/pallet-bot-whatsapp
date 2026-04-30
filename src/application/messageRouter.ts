@@ -400,15 +400,21 @@ async function executeTunnelPreviewGeneration(
     };
   } catch (err) {
     console.error('[diag] rt:tunnel-preview-err', err);
+    /** Voltar ao passo de geometria do módulo — evita continuar em modo manual sem índices nem prévia (layout automático de túnel). */
+    const st = genSession.stack;
+    const prev =
+      st.length > 0 ? st[st.length - 1] : ('WAIT_BEAM_LENGTH' as State);
+    const poppedStack = st.length > 0 ? st.slice(0, -1) : st;
     return {
       updatedSession: {
         ...genSession,
-        state: 'CHOOSE_HEIGHT_DEFINITION',
+        state: prev,
+        stack: poppedStack,
         updatedAt: Date.now(),
         answers: { ...genSession.answers },
       },
       deliveryError:
-        'Não foi possível gerar a prévia de túnel. Confirme módulo e vão ou use *voltar* para revisar.',
+        'Não foi possível gerar a prévia de túnel. Confirme módulo e vão e envie de novo o valor do passo anterior, ou use *voltar*.',
     };
   }
 }
