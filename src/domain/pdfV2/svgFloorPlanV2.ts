@@ -19,14 +19,21 @@ export type PlanModuleFaceLabelInput = {
   displayIndex?: number;
   segmentType?: ModuleSegmentType;
   variant?: ModuleVariantV2;
+  /** Meio-módulo: inteiro da última frente completa neste troço («N 1/2»). */
+  halfAfterFullDisplayIndex?: number;
 };
 
 /**
- * Rótulo na face na planta: só inteiros são numerados; meio-módulo «1/2»; túnel «T».
+ * Rótulo na face na planta: inteiros únicos por frente de picking; meio-módulo «N 1/2» ou «1/2»; túnel «T».
  */
 export function planModuleFaceLabel(input: PlanModuleFaceLabelInput): string {
   if (input.variant === 'tunnel') return 'T';
-  if (input.segmentType === 'half') return '1/2';
+  if (input.segmentType === 'half') {
+    if (input.halfAfterFullDisplayIndex !== undefined) {
+      return `${input.halfAfterFullDisplayIndex} 1/2`;
+    }
+    return '1/2';
+  }
   if (input.displayIndex !== undefined) return String(input.displayIndex);
   return '';
 }
@@ -1167,6 +1174,8 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
     const label = planModuleFaceLabel({
       displayIndex: s.displayIndex,
       segmentType: s.segmentType,
+      variant: s.variant,
+      halfAfterFullDisplayIndex: s.halfAfterFullDisplayIndex,
     });
     if (!label) continue;
     const { fontPx, opacity, nudgeX, nudgeY } = moduleDisplayFontOpacity(

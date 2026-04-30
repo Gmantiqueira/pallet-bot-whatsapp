@@ -386,25 +386,71 @@ export function buildFloorPlanModelV2(
   for (const row of geometry.rows) {
     const kind = rackDepthModeFromRow(row);
     const sorted = sortModulesAlongBeam(row.modules, geometry.orientation);
-    for (const m of sorted) {
-      const fps = splitModuleFootprintsFor3d(
+    const modulesWithFps = sorted.map(m => ({
+      m,
+      fps: splitModuleFootprintsFor3d(
         row,
         m,
         rackDepthMm,
         ori,
         spineMm
-      );
-      const numbered =
-        m.type !== 'tunnel' && m.segmentType !== 'half';
-      const displayIdx = numbered ? nextDisplayIdx++ : undefined;
-      let fi = 0;
-      for (const fp of fps) {
+      ),
+    }));
+    const maxFaces = Math.max(
+      1,
+      ...modulesWithFps.map(({ fps }) => fps.length)
+    );
+
+    /**
+     * Numeração por **face** ao longo do vão: primeiro toda a frente A (menor Y/X),
+     * depois toda a frente B em dupla costas — nunca repetir 1…N nas duas faces.
+     */
+    for (let faceIdx = 0; faceIdx < maxFaces; faceIdx++) {
+      let lastFullDisplayOnFace: number | undefined = undefined;
+      for (const { m, fps } of modulesWithFps) {
+        if (faceIdx >= fps.length) {
+          continue;
+        }
+        const fp = fps[faceIdx]!;
         const x0 = Math.min(fp.x0, fp.x1);
         const x1 = Math.max(fp.x0, fp.x1);
         const y0 = Math.min(fp.y0, fp.y1);
         const y1 = Math.max(fp.y0, fp.y1);
-        const id = fps.length > 1 ? `${m.id}-f${fi}` : m.id;
-        fi += 1;
+        const id = fps.length > 1 ? `${m.id}-f${faceIdx}` : m.id;
+
+        if (m.type === 'tunnel') {
+          structureRects.push({
+            id,
+            x: toX(x0),
+            y: toY(y0),
+            w: Math.max(0.5, toX(x1) - toX(x0)),
+            h: Math.max(0.5, toY(y1) - toY(y0)),
+            kind,
+            variant: 'tunnel',
+            segmentType: undefined,
+          });
+          continue;
+        }
+
+        if (m.segmentType === 'half') {
+          structureRects.push({
+            id,
+            x: toX(x0),
+            y: toY(y0),
+            w: Math.max(0.5, toX(x1) - toX(x0)),
+            h: Math.max(0.5, toY(y1) - toY(y0)),
+            kind,
+            variant: 'normal',
+            segmentType: 'half',
+            ...(lastFullDisplayOnFace !== undefined
+              ? { halfAfterFullDisplayIndex: lastFullDisplayOnFace }
+              : {}),
+          });
+          continue;
+        }
+
+        const displayIdx = nextDisplayIdx++;
+        lastFullDisplayOnFace = displayIdx;
         structureRects.push({
           id,
           x: toX(x0),
@@ -412,8 +458,8 @@ export function buildFloorPlanModelV2(
           w: Math.max(0.5, toX(x1) - toX(x0)),
           h: Math.max(0.5, toY(y1) - toY(y0)),
           kind,
-          variant: m.type === 'tunnel' ? 'tunnel' : 'normal',
-          segmentType: m.type === 'tunnel' ? undefined : m.segmentType,
+          variant: 'normal',
+          segmentType: m.segmentType,
           displayIndex: displayIdx,
         });
       }
@@ -612,7 +658,7 @@ function planModuleSingleCaption(geometry: LayoutGeometry): string {
     geometry.totals;
   const faceMods = physicalPickingModuleCount ?? moduleCount;
   const legend =
-    'Planta: só números em módulos inteiros · «1/2» = meio-módulo · «T» = túnel.';
+    'Planta: números inteiros por frente de picking (dupla costas: faces em sequência) · «N 1/2» = meio-módulo · «T» = túnel.';
   if (
     faceMods <= 0 ||
     !Number.isFinite(positionCount) ||

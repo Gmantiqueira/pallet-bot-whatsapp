@@ -140,6 +140,15 @@ describe('buildLayoutGeometry + validateLayoutGeometry', () => {
     expect(planD.structureRects.length).toBe(
       Math.round(geoD.totals.physicalPickingModuleCount)
     );
+
+    const numbered = planD.structureRects.filter(
+      r => r.variant !== 'tunnel' && r.segmentType !== 'half'
+    );
+    const idxs = numbered.map(r => r.displayIndex).filter((n): n is number => n != null);
+    expect(idxs.length).toBe(numbered.length);
+    expect(new Set(idxs).size).toBe(idxs.length);
+    expect(Math.min(...idxs)).toBe(1);
+    expect(Math.max(...idxs)).toBe(idxs.length);
   });
 
   it('validateOperationalAccess: dupla encostada à parede transversal (lado baixo) → rejeita', () => {
