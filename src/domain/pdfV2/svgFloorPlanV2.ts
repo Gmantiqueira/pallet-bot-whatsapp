@@ -83,7 +83,8 @@ const COL_DIM = '#111827';
 /** Texto sobre áreas “cheias”; WCAG ~4.5:1 vs branco não se aplica — halo + fundo garantem leitura. */
 const COL_CIRC_RES_TEXT = '#1c1917';
 /** Reserva inferior do viewBox para legenda + cotas (encaixe global do desenho). */
-const FLOOR_PLAN_LEGEND_RESERVE_PX = 568;
+/** Reserva inferior no fit da planta (~18–20% VB_H): legenda compacta + cotas. */
+const FLOOR_PLAN_LEGEND_RESERVE_PX = 400;
 
 /** Folga mínima ao viewport (px SVG); ≥4 e proporcional ao menor lado. */
 function viewportInnerPaddingPx(viewW: number, viewH: number): number {
@@ -464,9 +465,9 @@ function appendFloorPlanConfigurationLegend(
   parts: string[],
   opts: { innerPadPx: number; minSvgFs: number }
 ): void {
-  /** Títulos de secção +40%; texto corpo da legenda +35% — leitura móvel/impressão. */
-  const LEGEND_TITLE_VIS_SCALE = 1.4;
-  const LEGEND_BODY_VIS_SCALE = 1.35;
+  /** Legenda mais compacta (~12–18% da folha em VB): libertar área para implantação. */
+  const LEGEND_TITLE_VIS_SCALE = 1.28;
+  const LEGEND_BODY_VIS_SCALE = 1.22;
   const { innerPadPx, minSvgFs } = opts;
   const noteTitleFs = Math.max(
     Math.round(11.25 * LEGEND_TITLE_VIS_SCALE * 10) / 10,
@@ -525,7 +526,7 @@ function appendFloorPlanConfigurationLegend(
   }
   const notesBlockH =
     wrappedNotes.length > 0
-      ? 26 + noteAfterTitleDy + wrappedNotes.length * noteLineDy
+      ? 22 + noteAfterTitleDy + wrappedNotes.length * noteLineDy
       : 0;
   const wrappedProtNote =
     a.columnProtector
@@ -542,15 +543,15 @@ function appendFloorPlanConfigurationLegend(
       ? (wrappedProtNote.length - 1) * Math.round(symBodyFs * 1.15)
       : 0;
   /** Bloco de símbolos (mini esquemas + guardas + protetor de coluna) + rodapé. */
-  const symbolBlockH = 202 + protectorExtra;
-  const boxH = Math.min(520, 28 + notesBlockH + symbolBlockH);
+  const symbolBlockH = 158 + protectorExtra;
+  const boxH = Math.min(440, 24 + notesBlockH + symbolBlockH);
   const x0 = innerPadPx;
   const bottomReserve = Math.max(innerPadPx, 10);
   const y0 = Math.max(innerPadPx, h - bottomReserve - boxH);
   parts.push(
     `<rect x="${x0}" y="${y0}" width="${boxW}" height="${boxH}" rx="7" fill="#f8fafc" fill-opacity="0.97" stroke="#cbd5e1" stroke-width="0.95"/>`
   );
-  let ly = y0 + 17;
+  let ly = y0 + 14;
   const lx = x0 + textInset;
   if (wrappedNotes.length > 0) {
     parts.push(
@@ -568,7 +569,7 @@ function appendFloorPlanConfigurationLegend(
   parts.push(
     `<text x="${cxTitle}" y="${ly}" text-anchor="middle" font-size="${symSectionTitleFs}px" fill="#334155" font-family="${SVG_FONT_FAMILY}" font-weight="700" letter-spacing="0.05em">SÍMBOLOS (1.º nível · guardas · protetor de coluna)</text>`
   );
-  ly += Math.round(symSectionTitleFs * 0.85) + 8;
+  ly += Math.round(symSectionTitleFs * 0.78) + 5;
   const onGround = a.firstLevelOnGround !== false;
   /** Mini esquema: linha do piso + 1.º feixe. */
   const miniGround = (
@@ -606,23 +607,23 @@ function appendFloorPlanConfigurationLegend(
   parts.push(
     `<text x="${lx}" y="${ly}" font-size="${symSubtitleBoldFs}px" fill="#64748b" font-family="${SVG_FONT_FAMILY}" font-weight="700">1.º eixo de feixe (destaque = opção do projeto)</text>`
   );
-  ly += 5;
+  ly += 4;
   parts.push(miniGround(lx, ly - 4, false, onGround));
   parts.push(
-    `<text x="${lx + 62}" y="${ly + 15}" font-size="${symBodyFs}px" fill="#0f766e" font-family="${SVG_FONT_FAMILY}">Ao piso · sem vão útil inferior</text>`
+    `<text x="${lx + 62}" y="${ly + 14}" font-size="${symBodyFs}px" fill="#0f766e" font-family="${SVG_FONT_FAMILY}">Ao piso · sem vão útil inferior</text>`
   );
   parts.push(miniGround(lx + 234, ly - 4, true, !onGround));
   parts.push(
-    `<text x="${lx + 296}" y="${ly + 15}" font-size="${symBodyFs}px" fill="#a16207" font-family="${SVG_FONT_FAMILY}">Elevado · folga sob o 1.º patamar</text>`
+    `<text x="${lx + 296}" y="${ly + 14}" font-size="${symBodyFs}px" fill="#a16207" font-family="${SVG_FONT_FAMILY}">Elevado · folga sob o 1.º patamar</text>`
   );
-  ly += 36;
+  ly += 30;
 
   const hasGuard = a.guardRailSimple || a.guardRailDouble;
   if (hasGuard) {
     parts.push(
       `<text x="${lx}" y="${ly}" font-size="${symSubtitleBoldFs}px" fill="#64748b" font-family="${SVG_FONT_FAMILY}" font-weight="700">Guardas ao longo do vão (extremidades do desenho)</text>`
     );
-    ly += 15 + (symSubtitleBoldFs - 10.75) * 0.25;
+    ly += 12 + (symSubtitleBoldFs - 10.75) * 0.22;
     parts.push(
       `<line x1="${lx}" y1="${ly}" x2="${lx + 28}" y2="${ly}" stroke="#ca8a04" stroke-width="3.8" stroke-linecap="square"/>`,
       `<text x="${lx + 36}" y="${ly + 4}" font-size="${symBodyFs}px" fill="#713f12" font-family="${SVG_FONT_FAMILY}">Simples (1 rail)</text>`,
@@ -630,7 +631,7 @@ function appendFloorPlanConfigurationLegend(
       `<line x1="${lx + 152}" y1="${ly + 3}" x2="${lx + 180}" y2="${ly + 3}" stroke="#b91c1c" stroke-width="2.4" stroke-linecap="square"/>`,
       `<text x="${lx + 188}" y="${ly + 4}" font-size="${symBodyFs}px" fill="#7f1d1d" font-family="${SVG_FONT_FAMILY}">Dupla (2 rails)</text>`
     );
-    ly += 24 + (symBodyFs - 10.25) * 0.35;
+    ly += 20 + (symBodyFs - 10.25) * 0.28;
   }
 
   if (a.columnProtector) {

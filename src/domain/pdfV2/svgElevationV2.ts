@@ -2072,13 +2072,13 @@ const ELEV_SPREAD_LS_LAT_PRIMARY =
   ELEV_LATERAL_LABEL_SCALE * 1.12 * 1.12 * ELEV_SPREAD_ORTHO_REFINE;
 const ELEV_SPREAD_LS_LAT_MINOR =
   ELEV_LATERAL_LABEL_SCALE * 0.72 * 1.12 * ELEV_SPREAD_ORTHO_REFINE;
-/** Margem da página A4 paisagem (pt) — alinhada a `PAGE_MARGIN_PT` em `pdfV2Service`. */
-export const ELEV_PDF_LS_PAGE_MARGIN_PT = 24;
+/** Margem da página A4 paisagem (pt) — ≈5% da largura (igual `PAGE_MARGIN_PT` em `pdfV2Service`). */
+export const ELEV_PDF_LS_PAGE_MARGIN_PT = Math.round((595.28 * 5) / 100);
 /**
  * Fallback quando `serializeElevationPagesV2` corre sem `drawingAvailHPt*` (ex.: testes).
  * Valor calibrado vs {@link measureElevationLandscapeDrawingMetrics} (`DEBUG_PDF` / `PDF_ELEV_DEBUG`).
  */
-export const ELEV_PDF_LS_DRAWING_REGION_TOP_PT = 52.57;
+export const ELEV_PDF_LS_DRAWING_REGION_TOP_PT = 45;
 /** @deprecated Preferir `ELEV_PDF_LS_DRAWING_REGION_TOP_PT`. */
 export const ELEV_PDF_LS_YIMG_FROM_TOP_PT = ELEV_PDF_LS_DRAWING_REGION_TOP_PT;
 /**
@@ -2115,7 +2115,7 @@ function computeElevationSpreadWidthPx(
   return Math.round(ELEV_SPREAD_H * (usableWPt / drawingAvailHPt));
 }
 /** Faixa de notas compacta — menos altura em faixa = mais `innerH` para escala. */
-const ELEV_SPREAD_FOOTER_BAND_PX = 17;
+const ELEV_SPREAD_FOOTER_BAND_PX = 13;
 /** Margem interna do texto de rodapé à moldura. */
 const ELEV_SPREAD_FOOTER_SIDE_PAD_PX = 10;
 /** Evita que notas de rodapé invadam o eixo da junta entre vistas. */
@@ -2451,7 +2451,7 @@ export type SerializeElevationPagesOptions = {
   drawingAvailHPtStandard?: number;
   drawingAvailHPtTunnel?: number;
   /**
-   * Larguras úteis em pt (folha − margens) — alinha viewBox ao formato real (ex. A5 paisagem).
+   * Larguras úteis em pt (folha − margens) — alinha viewBox ao formato real (A4 paisagem).
    * Omitindo, usa-se {@link ELEV_PDF_LS_IMAGE_W_PT}.
    */
   drawingUsableWPtStandard?: number;

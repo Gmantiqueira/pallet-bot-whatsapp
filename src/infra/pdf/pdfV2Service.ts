@@ -46,8 +46,8 @@ import {
 } from '../../config/pdfFonts';
 import { sanitizeText } from '../../utils/sanitizeText';
 
-/** Margens página A4 — equilíbrio entre aparência e área útil para desenhos. */
-const PAGE_MARGIN_PT = 24;
+/** Margens ≈5% da largura A4 (~30 pt) — folha preenchida com área útil maximizada. */
+const PAGE_MARGIN_PT = Math.round((595.28 * 5) / 100);
 const COL_INK = '#0f172a';
 const COL_MUTED = '#64748b';
 const COL_RULE = '#cbd5e1';
@@ -80,10 +80,11 @@ export type ElevationLandscapeDrawingMeasure = {
 };
 
 /**
- * Formato das folhas só de elevação (paisagem). `A5` altera a proporção caixa útil vs desenho;
- * capa/planta/3D mantêm A4.
+ * Formato das folhas só de elevação (paisagem). A4 paisagem maximiza área útil frente a A5.
+ * Capa/planta/3D mantêm A4 retrato.
  */
-export const ELEVATION_LANDSCAPE_PAGE_SIZE: 'A4' | 'A5' = 'A5';
+/** A4 paisagem maximiza faixa útil das elevações (antes A5 deixava folha “vazia”). */
+export const ELEVATION_LANDSCAPE_PAGE_SIZE: 'A4' | 'A5' = 'A4';
 
 /**
  * Mede com PDFKit o mesmo layout que `beginDrawingSheetHeader` em modo elevações,
@@ -136,16 +137,16 @@ function applyElevationLandscapeDrawingSheetHeader(
     opts.subtitle !== undefined ? sanitizeText(opts.subtitle) : '';
   const tSize = 11.35;
   const subSize = 8.65;
-  let y = doc.page.margins.top + 2;
+  let y = doc.page.margins.top + 1;
   doc.font(PDFKIT_FONT_BOLD).fontSize(tSize).fillColor(COL_INK);
   const hTitle = doc.heightOfString(titleT, { width: usableW });
   doc.text(titleT, left, y, { width: usableW, align: 'left' });
-  y += hTitle + (opts.subtitle !== undefined ? 1.5 : 2.5);
+  y += hTitle + (opts.subtitle !== undefined ? 1.15 : 2);
   if (opts.subtitle !== undefined) {
     doc.font(PDFKIT_FONT_REGULAR).fontSize(subSize).fillColor(COL_MUTED);
     const hSub = doc.heightOfString(subT, { width: usableW });
     doc.text(subT, left, y, { width: usableW, align: 'left' });
-    y += hSub + 1.5;
+    y += hSub + 1.15;
   }
   const ruleY = y;
   doc
@@ -154,13 +155,13 @@ function applyElevationLandscapeDrawingSheetHeader(
     .moveTo(left, ruleY)
     .lineTo(left + usableW, ruleY)
     .stroke();
-  doc.y = ruleY + 2;
+  doc.y = ruleY + 1;
 }
 
 /**
- * Orçamento vertical do cabeçalho (planta/retrato/3D) para proporção do raster — ver desenhos não‑elevação.
+ * Orçamento vertical do cabeçalho para raster da planta/3D — alinhar com `beginDrawingSheetHeader` compacto.
  */
-const DRAWING_SHEET_HEADER_BUDGET_PT = 38;
+const DRAWING_SHEET_HEADER_BUDGET_PT = 26;
 const DRAWING_SHEET_BOTTOM_PAD_PT = 2;
 
 function drawingRasterPixelSize(): { pxW: number; pxH: number } {
@@ -172,8 +173,8 @@ function drawingRasterPixelSize(): { pxW: number; pxH: number } {
   const imgBoxH = pageBottom - imgTop - DRAWING_SHEET_BOTTOM_PAD_PT;
   return {
     pxW: ptToPx(usableW),
-    /** Oversampling para nitidez ao escalar para a caixa útil (planta + 3D). */
-    pxH: ptToPx(Math.max(120, imgBoxH * 1.22)),
+    /** Oversampling moderado — bitmap proporcional à caixa útil para encaixe “cheio”. */
+    pxH: ptToPx(Math.max(120, imgBoxH * 1.1)),
   };
 }
 
@@ -192,12 +193,12 @@ function elevationLandscapeDrawingRasterPixelSize(
   };
 }
 
-/** Vista isométrica: bitmap um pouco maior para preservar traços ao preencher a folha. */
+/** Vista isométrica: raster alinhado à caixa útil da folha (sem excesso face ao retrato A4). */
 function view3dRasterPixelSize(): { pxW: number; pxH: number } {
   const b = drawingRasterPixelSize();
   return {
-    pxW: Math.round(b.pxW * 1.08),
-    pxH: Math.round(b.pxH * 1.12),
+    pxW: Math.round(b.pxW * 1.04),
+    pxH: Math.round(b.pxH * 1.06),
   };
 }
 
@@ -412,7 +413,7 @@ export type GenerateProjectPdfV2Input = {
   elevationDrawingAvailHPtStandard?: number;
   elevationDrawingAvailHPtTunnel?: number;
   /**
-   * Larguras úteis (pt) na folha de elevações — alinhar SVG/raster à caixa real (ex. A5 paisagem).
+   * Larguras úteis (pt) na folha de elevações — alinhar SVG/raster à caixa real (A4 paisagem).
    * Omitindo, usa-se {@link ELEV_PDF_LS_IMAGE_W_PT} (A4 paisagem legado).
    */
   elevationDrawingUsableWPtStandard?: number;
@@ -505,7 +506,7 @@ export async function renderPdfV2(
   const usableW =
     doc.page.width - doc.page.margins.left - doc.page.margins.right;
 
-  /** Dimensões da página atual — obrigatório em folhas paisagem/A5 (não fixar à primeira página retrato). */
+  /** Dimensões da página atual — obrigatório em folhas paisagem (não fixar à primeira página retrato). */
   const pageLayoutNow = (): {
     left: number;
     usableW: number;
@@ -618,18 +619,18 @@ export async function renderPdfV2(
     const titleT = sanitizeText(title);
     const subT =
       options?.subtitle !== undefined ? sanitizeText(options.subtitle) : '';
-    const tSize = options?.titleSize ?? 11.5;
-    const subSize = options?.subtitleSize ?? 9;
-    let y = doc.page.margins.top + 2;
+    const tSize = options?.titleSize ?? (compact ? 11 : 11.5);
+    const subSize = options?.subtitleSize ?? (compact ? 8.35 : 9);
+    let y = doc.page.margins.top + 1;
     doc.font(PDFKIT_FONT_BOLD).fontSize(tSize).fillColor(COL_INK);
     const hTitle = doc.heightOfString(titleT, { width: usableW });
     doc.text(titleT, left, y, { width: usableW, align: 'left' });
-    y += hTitle + (options?.subtitle ? (compact ? 2 : 3) : compact ? 4 : 5);
+    y += hTitle + (options?.subtitle ? (compact ? 1.35 : 2.25) : compact ? 2.5 : 3.5);
     if (options?.subtitle) {
       doc.font(PDFKIT_FONT_REGULAR).fontSize(subSize).fillColor(COL_MUTED);
       const hSub = doc.heightOfString(subT, { width: usableW });
       doc.text(subT, left, y, { width: usableW, align: 'left' });
-      y += hSub + (compact ? 2 : 4);
+      y += hSub + (compact ? 1.35 : 2.75);
     }
     const ruleY = y;
     doc
@@ -638,7 +639,7 @@ export async function renderPdfV2(
       .moveTo(left, ruleY)
       .lineTo(left + usableW, ruleY)
       .stroke();
-    doc.y = ruleY + (compact ? 3 : 5);
+    doc.y = ruleY + (compact ? 2 : 3.5);
   };
 
   const labelColW = 154;
@@ -803,6 +804,9 @@ export async function renderPdfV2(
   beginDrawingSheetHeader('Planta de implantação — porta-paletes', {
     subtitle:
       'Desenho de conjunto · cotas em milímetros · leitura operacional e estrutural (legenda na folha)',
+    compactDrawingGap: true,
+    titleSize: 11,
+    subtitleSize: 8.35,
   });
   embedFullWidthDrawing(floorRaster, { bottomPadPt: 2 });
 
@@ -850,8 +854,9 @@ export async function renderPdfV2(
   beginDrawingSheetHeader('Visualização 3D do layout', {
     subtitle:
       'Wireframe isométrico · montantes, longarinas e contorno do piso',
-    titleSize: 12.88,
-    subtitleSize: 10.08,
+    compactDrawingGap: true,
+    titleSize: 11.35,
+    subtitleSize: 8.65,
   });
   embedFullWidthDrawing(view3dRaster);
 

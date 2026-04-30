@@ -34,8 +34,8 @@ const HEADER = 22;
 const DIM_OUT = 16;
 /** Reserva à esquerda para cota de largura sem clip. */
 const PLAN_LEFT_DIM_MARGIN_PX = 54;
-/** Reserva inferior para cotas + legenda sem sobreposição ao desenho. */
-const PLAN_BOTTOM_STACK_RESERVE_PX = 278;
+/** Reserva inferior para cotas + legenda no modelo (coordenadas mm→SVG). */
+const PLAN_BOTTOM_STACK_RESERVE_PX = 235;
 /** Espinha entre costas (mm) — igual a layoutGeometryV2 / model3dV2.splitModuleFootprintsFor3d. */
 
 function escapeXml(text: string): string {
