@@ -45,10 +45,21 @@ export const FLOOR_PLAN_CONSERVATIVE_EMBED_HEIGHT_PT = 630;
  * Tamanho mínimo de `font-size` no SVG da planta (unidades do viewBox) para que, após
  * rasterização e encaixe na caixa do PDF, o texto não fique abaixo de ~{@link PDF_MIN_BODY_TEXT_MM} mm.
  */
-export function floorPlanMinSvgFontPx(viewBoxHeightPx: number): number {
+export function floorPlanMinSvgFontPx(
+  viewBoxHeightPx: number,
+  legendReservePx?: number
+): number {
   const minPt = pdfMinBodyTextPt();
+  let denom = FLOOR_PLAN_CONSERVATIVE_EMBED_HEIGHT_PT;
+  if (legendReservePx !== undefined && legendReservePx > 0) {
+    const drawingFrac = Math.max(
+      0.5,
+      (viewBoxHeightPx - legendReservePx) / viewBoxHeightPx
+    );
+    denom = FLOOR_PLAN_CONSERVATIVE_EMBED_HEIGHT_PT * drawingFrac;
+  }
   return Math.max(
     8,
-    Math.ceil((minPt * viewBoxHeightPx) / FLOOR_PLAN_CONSERVATIVE_EMBED_HEIGHT_PT)
+    Math.ceil((minPt * viewBoxHeightPx) / denom)
   );
 }

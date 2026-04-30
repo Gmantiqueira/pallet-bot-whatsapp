@@ -19,4 +19,11 @@ describe('pdfTechnicalDrawingDefaults typography', () => {
     expect(impliedPt).toBeGreaterThanOrEqual(pdfMinBodyTextPt() - 1e-6);
     expect(minPx).toBeGreaterThanOrEqual(20);
   });
+
+  it('floorPlanMinSvgFontPx bumps base size when legend reserve shrinks drawing fraction', () => {
+    const h = 1980;
+    const withoutLegendArg = floorPlanMinSvgFontPx(h);
+    const withLegendBand = floorPlanMinSvgFontPx(h, 520);
+    expect(withLegendBand).toBeGreaterThanOrEqual(withoutLegendArg);
+  });
 });

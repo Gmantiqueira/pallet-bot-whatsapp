@@ -1066,7 +1066,7 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
   const planGrid = svgGridMetrics(w, h);
   const innerPad = planGrid.outerMarginPx;
   const legendReservePx = floorPlanLegendReservePx(w, h);
-  const minSvgFs = floorPlanMinSvgFontPx(h);
+  const minSvgFs = floorPlanMinSvgFontPx(h, legendReservePx);
   const r = (n: number) => Math.round(n * 10) / 10;
   const b = minSvgFs;
   const dimStroke = Math.max(0.48, r(b * 0.032));

@@ -145,6 +145,9 @@ export function floorPlanLegendReservePx(
   viewBoxH: number
 ): number {
   const g = svgGridMetrics(viewBoxW, viewBoxH);
-  const target = Math.min(440, viewBoxH * 0.21);
+  /** Faixa inferior fixa mínima (notas/símbolos) + fração do viewBox — evita legenda esmagada no raster A4. */
+  const pct = viewBoxH * 0.268;
+  const floorMin = 412 + viewBoxH * 0.032;
+  const target = Math.min(560, Math.max(pct, floorMin));
   return snapSvgExtentPx(g.rowH, target, g.rowH * 2);
 }
