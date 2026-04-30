@@ -2127,7 +2127,9 @@ function computeElevationSpreadWidthPx(
   drawingUsableWPt?: number
 ): number {
   const usableWPt = drawingUsableWPt ?? ELEV_PDF_LS_USABLE_W_PT;
-  return Math.round(ELEV_SPREAD_H * (usableWPt / drawingAvailHPt));
+  /** Evita divisão por zero / viewBox com largura infinita se métricas PDF falharem. */
+  const safeAvail = Math.max(12, drawingAvailHPt);
+  return Math.round(ELEV_SPREAD_H * (usableWPt / safeAvail));
 }
 /** Faixa de notas compacta — menos altura em faixa = mais `innerH` para escala. */
 const ELEV_SPREAD_FOOTER_BAND_PX = 13;
@@ -2508,9 +2510,22 @@ function orthoSpreadPairVerticalNudgePx(
   const eps = 0.75;
   const nMin = Math.max(-L.slackTop, -R.slackTop) + eps;
   const nMax = Math.min(L.slackBot, R.slackBot) - eps;
-  if (nMax < nMin) return 0;
-  /** Encostar cotas+desenho à zona inferior útil (coerente com insets de rodapé). */
-  return Math.max(nMin, Math.min(nMax, nMax - 0.25));
+  if (nMax >= nMin) {
+    /** Encostar cotas+desenho à zona inferior útil (coerente com insets de rodapé). */
+    return Math.max(nMin, Math.min(nMax, nMax - 0.25));
+  }
+  /**
+   * Sem intervalo válido (cotas muito altas vs painel): empurra o par para dentro da área útil
+   * para o raster não ficar com geometria toda fora do clip do SVG.
+   */
+  const s = tLeft.s;
+  const topL = tLeft.ty + s * left.bbox.minY;
+  const safeTL = left.panel.oy + inset.t;
+  if (topL < safeTL) return safeTL - topL + eps;
+  const botL = tLeft.ty + s * left.bbox.maxY;
+  const safeBL = left.panel.oy + left.panel.ph - inset.b;
+  if (botL > safeBL) return safeBL - botL - eps;
+  return 0;
 }
 
 function finalizeOrthoSpreadPanels(
@@ -2576,9 +2591,14 @@ export function serializeElevationPagesV2(
   const spreadWTun = computeElevationSpreadWidthPx(availTun, usableTun);
   const Ltun = elevationSpreadLayoutMetrics(spreadWTun);
   const { m, gap, colInnerW, innerH, panelOriginY } = L;
-  const { colInnerW: colInnerWTun, panelOriginY: panelOriginYTun } = Ltun;
+  const {
+    colInnerW: colInnerWTun,
+    panelOriginY: panelOriginYTun,
+    innerH: innerHTun,
+  } = Ltun;
   const panelCap = ELEV_SPREAD_PANEL_FIT_MAX_SCALE;
   const sharedInnerH = computeOrthoSpreadSharedInnerHPx(innerH, ls);
+  const sharedInnerHTun = computeOrthoSpreadSharedInnerHPx(innerHTun, ls);
 
   const std = model.frontWithoutTunnel;
   const leftStdDef = drawFrontRack(
@@ -2648,7 +2668,7 @@ export function serializeElevationPagesV2(
       m,
       panelOriginYTun,
       colInnerWTun,
-      innerH,
+      innerHTun,
       tun,
       '',
       buildElevationAccessorySubtitle(tun, true),
@@ -2658,7 +2678,7 @@ export function serializeElevationPagesV2(
         spreadPremium: true,
         debug: dbg,
         panelFitMaxScale: panelCap,
-        orthoSpread: { innerH: sharedInnerH },
+        orthoSpread: { innerH: sharedInnerHTun },
         deferredWrap: true,
       }
     );
@@ -2666,7 +2686,7 @@ export function serializeElevationPagesV2(
       m + colInnerWTun + gap,
       panelOriginYTun,
       colInnerWTun,
-      innerH,
+      innerHTun,
       latTun,
       {
         labelScale: lsLat,
@@ -2675,7 +2695,7 @@ export function serializeElevationPagesV2(
         hideHeader: true,
         debug: dbg,
         panelFitMaxScale: panelCap,
-        orthoSpread: { innerH: sharedInnerH },
+        orthoSpread: { innerH: sharedInnerHTun },
         deferredWrap: true,
       }
     );

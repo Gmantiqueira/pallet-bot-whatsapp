@@ -161,17 +161,16 @@ function applyElevationLandscapeDrawingSheetHeader(
   doc.y = ruleY + 1;
 }
 
-/**
- * Orçamento vertical do cabeçalho para raster da vista 3D — alinhar com `beginDrawingSheetHeader` compacto.
- */
-const DRAWING_SHEET_HEADER_BUDGET_PT = 26;
-const DRAWING_SHEET_BOTTOM_PAD_PT = 2;
-
 /** Título/subtítulo da folha da planta (medidos em {@link measureFloorPlanPortraitDrawingMetrics}). */
 export const FLOOR_PLAN_PDF_SHEET_TITLE =
   'Planta de implantação — porta-paletes';
 export const FLOOR_PLAN_PDF_SHEET_SUBTITLE =
   'Desenho de conjunto · cotas em milímetros · leitura operacional e estrutural (legenda na folha)';
+
+/** Folha A4 retrato da vista 3D — alinhado a `beginDrawingSheetHeader` compacto + tipos desta página. */
+export const VIEW3D_PDF_SHEET_TITLE = 'Visualização 3D do layout';
+export const VIEW3D_PDF_SHEET_SUBTITLE =
+  'Wireframe isométrico · montantes, longarinas e contorno do piso';
 
 /**
  * Cabeçalho retrato compacto só para a planta — menos folga entre subtítulo e traço,
@@ -255,6 +254,70 @@ export function measureFloorPlanPortraitDrawingMetrics(opts?: {
   return { usableWPt: usableW, availHPt };
 }
 
+/**
+ * Mede a folha da vista 3D (mesmo fluxo que {@link beginDrawingSheetHeader} compacto:
+ * título 11,35 pt, subtítulo 8,65 pt, `doc.y` após traço + 2 pt).
+ */
+export function measureView3dPortraitDrawingMetrics(): FloorPlanPortraitDrawingMeasure {
+  const pageMargins = pdfPageMarginsPt(
+    ISO_A4_PORTRAIT_W_PT,
+    ISO_A4_PORTRAIT_H_PT
+  );
+  const doc = new PDFDocument({
+    size: 'A4',
+    margins: pageMargins,
+  });
+  registerPdfKitFonts(doc);
+  const left = doc.page.margins.left;
+  const usableW =
+    doc.page.width - doc.page.margins.left - doc.page.margins.right;
+  const titleT = sanitizeText(VIEW3D_PDF_SHEET_TITLE);
+  const subT = sanitizeText(VIEW3D_PDF_SHEET_SUBTITLE);
+  const tSize = 11.35;
+  const subSize = 8.65;
+  let y = doc.page.margins.top + 1;
+  doc.font(PDFKIT_FONT_BOLD).fontSize(tSize).fillColor(COL_INK);
+  const hTitle = doc.heightOfString(titleT, { width: usableW });
+  doc.text(titleT, left, y, { width: usableW, align: 'left' });
+  y += hTitle + 1.35;
+  doc.font(PDFKIT_FONT_REGULAR).fontSize(subSize).fillColor(COL_MUTED);
+  const hSub = doc.heightOfString(subT, { width: usableW });
+  doc.text(subT, left, y, { width: usableW, align: 'left' });
+  y += hSub + 1.35;
+  const ruleY = y;
+  doc
+    .strokeColor(COL_RULE)
+    .lineWidth(0.65)
+    .moveTo(left, ruleY)
+    .lineTo(left + usableW, ruleY)
+    .stroke();
+  doc.y = ruleY + 2;
+  const yImg = doc.y + 0.5;
+  const pageBottom = doc.page.height - doc.page.margins.bottom;
+  /** Igual ao `imgBottomPad` por omissão em `embedFullWidthDrawing(view3dRaster)`. */
+  const view3dEmbedBottomPadPt = 3;
+  const availHPt = pageBottom - yImg - view3dEmbedBottomPadPt;
+  return { usableWPt: usableW, availHPt };
+}
+
+/** Oversample moderado — nitidez sem destoar da razão da caixa PDF na vista 3D. */
+const VIEW3D_RASTER_OVERSAMPLE = 1.14;
+
+/** Vista isométrica: raster com a mesma razão W/H que a caixa real na folha A4 retrato. */
+function view3dRasterPixelSize(): { pxW: number; pxH: number } {
+  const { usableWPt, availHPt } = measureView3dPortraitDrawingMetrics();
+  return {
+    pxW: Math.max(
+      1,
+      Math.round(ptToPx(usableWPt * VIEW3D_RASTER_OVERSAMPLE))
+    ),
+    pxH: Math.max(
+      1,
+      Math.round(ptToPx(availHPt * VIEW3D_RASTER_OVERSAMPLE))
+    ),
+  };
+}
+
 /** Oversample moderado: Sharp encaixa “inside”; mais px na vertical nitida faixa de cotas + legenda. */
 const FLOOR_PLAN_RASTER_OVERSAMPLE = 1.2;
 
@@ -272,22 +335,6 @@ function floorPlanRasterPixelSize(): { pxW: number; pxH: number } {
   };
 }
 
-function drawingRasterPixelSize(): { pxW: number; pxH: number } {
-  const cm = pdfContentMetricsPt(
-    ISO_A4_PORTRAIT_W_PT,
-    ISO_A4_PORTRAIT_H_PT
-  );
-  const usableW = cm.contentW;
-  const pageBottom = ISO_A4_PORTRAIT_H_PT - cm.marginPt;
-  const imgTop = cm.marginPt + DRAWING_SHEET_HEADER_BUDGET_PT;
-  const imgBoxH = pageBottom - imgTop - DRAWING_SHEET_BOTTOM_PAD_PT;
-  return {
-    pxW: ptToPx(usableW),
-    /** Oversampling moderado — bitmap proporcional à caixa útil para encaixe “cheio”. */
-    pxH: ptToPx(Math.max(120, imgBoxH * 1.1)),
-  };
-}
-
 /** Raster elevações paisagem: Sharp preserva proporção do SVG = usableW / `availHPt`. */
 function elevationLandscapeDrawingRasterPixelSize(
   availHPt: number,
@@ -297,18 +344,11 @@ function elevationLandscapeDrawingRasterPixelSize(
   pxH: number;
 } {
   const oversample = 1.08 * ELEV_SPREAD_CANVAS_SCALE;
+  const safeAvail = Math.max(8, availHPt);
+  const safeW = Math.max(8, usableWPt);
   return {
-    pxW: Math.max(1, Math.round(ptToPx(usableWPt * oversample))),
-    pxH: Math.max(1, Math.round(ptToPx(availHPt * oversample))),
-  };
-}
-
-/** Vista isométrica: raster alinhado à caixa útil da folha (sem excesso face ao retrato A4). */
-function view3dRasterPixelSize(): { pxW: number; pxH: number } {
-  const b = drawingRasterPixelSize();
-  return {
-    pxW: Math.round(b.pxW * 1.04),
-    pxH: Math.round(b.pxH * 1.06),
+    pxW: Math.max(1, Math.round(ptToPx(safeW * oversample))),
+    pxH: Math.max(1, Math.round(ptToPx(safeAvail * oversample))),
   };
 }
 
@@ -973,9 +1013,8 @@ export async function renderPdfV2(
   }
 
   doc.addPage({ size: 'A4', layout: 'portrait', margins: pageMargins });
-  beginDrawingSheetHeader('Visualização 3D do layout', {
-    subtitle:
-      'Wireframe isométrico · montantes, longarinas e contorno do piso',
+  beginDrawingSheetHeader(VIEW3D_PDF_SHEET_TITLE, {
+    subtitle: VIEW3D_PDF_SHEET_SUBTITLE,
     compactDrawingGap: true,
     titleSize: 11.35,
     subtitleSize: 8.65,
