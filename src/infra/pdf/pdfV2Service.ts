@@ -210,7 +210,7 @@ function layoutPortraitFloorPlanDrawingSheetHeader(
     .moveTo(left, ruleY)
     .lineTo(left + usableW, ruleY)
     .stroke();
-  doc.y = ruleY + 1;
+  doc.y = ruleY + 0.72;
 }
 
 export type FloorPlanPortraitDrawingMeasure = {

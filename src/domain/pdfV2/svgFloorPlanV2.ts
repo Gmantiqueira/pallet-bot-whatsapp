@@ -143,7 +143,7 @@ const COL_OP_DIRECTION_BOX_STROKE = '#94a3b8';
 const COL_OP_DIRECTION_SHAFT = '#1e293b';
 
 /** Gap mínimo (unidades SVG da planta) entre o cartão de sentido e a bbox do desenho. */
-const OPERATION_DIRECTION_LAYOUT_GAP_PX = 12;
+const OPERATION_DIRECTION_LAYOUT_GAP_PX = 22;
 
 function operationDirectionIndicatorMetrics() {
   const k = OPERATION_DIRECTION_INDICATOR_SCALE;
@@ -489,7 +489,7 @@ function fitTransformForDrawingBounds(
   legendReservePx: number,
   innerGutterPx: number
 ): string {
-  const gutter = Math.max(innerGutterPx, 18, Math.round(Math.min(viewW, viewH) * 0.02));
+  const gutter = Math.max(innerGutterPx, 14, Math.round(Math.min(viewW, viewH) * 0.017));
   const safeL = fpPad + gutter;
   const safeT = fpPad + gutter;
   const safeR = viewW - fpPad - gutter;
@@ -620,10 +620,10 @@ function appendFloorPlanConfigurationLegend(
 ): void {
   const LEGEND_TITLE_VIS_SCALE = 1.28;
   const LEGEND_BODY_VIS_SCALE = 1.22;
-  const CARD_PAD = 8;
-  const TITLE_TO_BODY_GAP = 6;
-  const SECTION_GAP = 10;
-  const FOOTER_GAP = 10;
+  const CARD_PAD = 10;
+  const TITLE_TO_BODY_GAP = 9;
+  const SECTION_GAP = 18;
+  const FOOTER_GAP = 12;
 
   const { innerPadPx, minSvgFs, legendReservePx } = opts;
   const noteTitleFs = Math.max(
@@ -651,8 +651,8 @@ function appendFloorPlanConfigurationLegend(
     Math.round(minSvgFs * 0.95 * 10) / 10
   );
 
-  const noteLineLead = noteBodyFs * 1.25;
-  const symLineLead = symBodyFs * 1.25;
+  const noteLineLead = noteBodyFs * 1.44;
+  const symLineLead = symBodyFs * 1.44;
 
   const { w, h } = model.viewBox;
   const a = model.planAccessories;
@@ -704,21 +704,19 @@ function appendFloorPlanConfigurationLegend(
       ly += 4 + 12 + protLines * symLineLead + 10;
     }
     ly += CARD_PAD;
-    return ly;
+    return ly + 12;
   };
 
   let symInnerH = measureSymbolsInnerHeight(wrappedProtNote.length);
-  const notesTailPad = noteBodyFs * 0.28 + CARD_PAD;
-  /** Altura do cartão de notas: padding + título + gap para primeira linha + linhas × entrelinha + folga inferior. */
+  const notesTailPad = noteBodyFs * 0.55 + CARD_PAD + 8;
+  /** Uma linha de título + folga até ao corpo (baseline SVG). */
+  const notesTitleBlockH =
+    noteTitleFs + Math.round(noteTitleFs * 1.08) + TITLE_TO_BODY_GAP;
+  /** Altura do cartão de notas: padding + bloco de título + linhas × entrelinha + folga inferior. */
   const notesOuter = (n: number): number =>
     n <= 0
       ? 0
-      : CARD_PAD +
-        noteTitleFs +
-        noteTitleFs +
-        TITLE_TO_BODY_GAP +
-        n * noteLineLead +
-        notesTailPad;
+      : CARD_PAD + notesTitleBlockH + n * noteLineLead + notesTailPad;
 
   const footerBlock = symFootNoteFs * 1.15 + FOOTER_GAP + innerPadPx * 0.35;
   let budgetStack = Math.min(
@@ -782,7 +780,7 @@ function appendFloorPlanConfigurationLegend(
     parts.push(
       `<text x="${cxTitle}" y="${ny}" text-anchor="middle" font-size="${noteTitleFs}px" fill="#1e293b" font-family="${SVG_FONT_FAMILY}" font-weight="700" letter-spacing="0.05em">NOTAS DO DESENHO</text>`
     );
-    ny += noteTitleFs + TITLE_TO_BODY_GAP;
+    ny += Math.round(noteTitleFs * 1.08) + TITLE_TO_BODY_GAP;
     for (const line of wrappedNotes) {
       parts.push(
         `<text x="${lx}" y="${ny}" font-size="${noteBodyFs}px" fill="#334155" font-family="${SVG_FONT_FAMILY}" dominant-baseline="alphabetic">${escapeXml(line)}</text>`
@@ -1598,8 +1596,9 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
         `<text transform="translate(${d.x1 + ox},${midY}) rotate(-90)" text-anchor="middle" class="${dCls}">${escapeXml(d.text)}</text>`
       );
     } else {
+      const lift = dimTierOf(d) === 'primary' ? 17 : 11;
       parts.push(
-        `<text x="${midX}" y="${d.y1 - 10}" text-anchor="middle" class="${dCls}">${escapeXml(d.text)}</text>`
+        `<text x="${midX}" y="${d.y1 - lift}" text-anchor="middle" class="${dCls}">${escapeXml(d.text)}</text>`
       );
     }
   }

@@ -476,7 +476,7 @@ export function buildFloorPlanModelV2(
   const DIM_TEXT_ABOVE_LINE_PX = 14;
   /** Da linha de cota secundária inferior à linha de cota principal (comprimento total). */
   const DIM_LANE_BOTTOM_MAIN_OFFSET_PX =
-    DIM_TICK_PX + DIM_HORIZONTAL_STACK_GAP_PX + DIM_TEXT_ABOVE_LINE_PX + 22;
+    DIM_TICK_PX + DIM_HORIZONTAL_STACK_GAP_PX + DIM_TEXT_ABOVE_LINE_PX + 48;
   /** Espaço horizontal entre linha de cota do corredor (vertical) e linha da largura total. */
   const DIM_LANE_LEFT_MAIN_OFFSET_PX = Math.max(
     38,
