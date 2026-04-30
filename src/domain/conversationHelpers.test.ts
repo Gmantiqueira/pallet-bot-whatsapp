@@ -1,6 +1,7 @@
 import {
   parseModuleIndexList,
   parseModuleIndexListResult,
+  matchesTunnelManualNoneReply,
 } from './conversationHelpers';
 
 describe('parseModuleIndexListResult', () => {
@@ -76,5 +77,22 @@ describe('parseModuleIndexList', () => {
 
   it('«2.5» não produz 25', () => {
     expect(parseModuleIndexList('2.5')).toEqual([2, 5]);
+  });
+});
+
+describe('matchesTunnelManualNoneReply', () => {
+  it('reconhece renúncia ao túnel manual', () => {
+    expect(matchesTunnelManualNoneReply('nenhum')).toBe(true);
+    expect(matchesTunnelManualNoneReply('  ZERO ')).toBe(true);
+    expect(matchesTunnelManualNoneReply('0')).toBe(true);
+    expect(matchesTunnelManualNoneReply('sem túnel')).toBe(true);
+    expect(matchesTunnelManualNoneReply('sem tunel')).toBe(true);
+    expect(matchesTunnelManualNoneReply('sem túneis')).toBe(true);
+    expect(matchesTunnelManualNoneReply('nenhum túnel')).toBe(true);
+  });
+
+  it('não confunde com listas de módulos', () => {
+    expect(matchesTunnelManualNoneReply('2, 5')).toBe(false);
+    expect(matchesTunnelManualNoneReply('nenhum 5')).toBe(false);
   });
 });

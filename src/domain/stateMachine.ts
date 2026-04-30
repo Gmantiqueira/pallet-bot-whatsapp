@@ -5,6 +5,7 @@ import {
   parseCommaSeparatedNumbers,
   parseNumber,
   parseModuleIndexListResult,
+  matchesTunnelManualNoneReply,
   validateCorridor,
   validateCustomLineRowCount,
   validateKg,
@@ -209,6 +210,26 @@ function answersAfterStructuralEditClearsTunnel(
   out.tunnelInfoNote =
     'Alterou medidas, layout ou configuração do módulo: indique outra vez se quer túnel nos passos seguintes.';
   return out;
+}
+
+/** Utilizador desiste do túnel no passo de números (após prévia manual): projeto segue sem túnel. */
+function tunnelAnswersAfterManualDecline(
+  answers: Record<string, unknown>
+): Record<string, unknown> {
+  const cleared: Record<string, unknown> = { ...answers, hasTunnel: false };
+  delete cleared.tunnelConfigMode;
+  delete cleared.tunnelManualModuleIndices;
+  delete cleared.tunnelPreviewMaxIndex;
+  delete cleared.tunnelPreviewPdfPath;
+  delete cleared.tunnelPreviewPdfFilename;
+  delete cleared.tunnelPlacements;
+  delete cleared.tunnelSlotCount;
+  delete cleared.tunnelPosition;
+  delete cleared.tunnelAppliesTo;
+  delete cleared.tunnelOffsetMm;
+  cleared.tunnelInfoNote =
+    'Túnel: não — optou por continuar sem módulos túnel após a prévia.';
+  return cleared;
 }
 
 function transitionMenuChoice(session: Session, branch: '1' | '2'): Session {
@@ -1342,6 +1363,15 @@ export const transition = (
         return { session: newSession, effects };
       }
       if (input.type !== 'TEXT') {
+        return { session: newSession, effects };
+      }
+      if (matchesTunnelManualNoneReply(input.value)) {
+        newSession = {
+          ...newSession,
+          answers: tunnelAnswersAfterManualDecline(newSession.answers),
+        };
+        newSession = goNext(newSession, {}, 'CHOOSE_HEIGHT_DEFINITION');
+        effects.push({ type: 'SEND' });
         return { session: newSession, effects };
       }
       {

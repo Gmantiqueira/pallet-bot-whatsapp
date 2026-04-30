@@ -620,7 +620,7 @@ const buildStateMessage = (session: Session): OutgoingMessage | null => {
             'Se *não vir o documento*, toque em *Baixar PDF* para o integrador reenviar o ficheiro.\n\n' +
             '*Só os módulos inteiros* têm número (1, 2, 3…). *«1/2»* = meio-módulo (não pode ser túnel neste modo). *«T»* não aparece nesta prévia.\n\n' +
             '*Responda só com os números dos inteiros* onde pretende túnel. Exemplos: *2, 5, 8* ou *Módulos 2 e 6*. Repetições contam uma vez.\n\n' +
-            'Para *nenhum* túnel: envie *cancelar* e recomece, ou use *voltar* até ao passo do túnel e escolha *Não*.\n\n' +
+            '*Sem nenhum túnel:* pode enviar *nenhum*, *zero*, *0* ou *sem túnel* — seguimos para altura/carga sem módulos túnel (não precisa de cancelar).\n\n' +
             'Números inválidos serão sinalizados — pode corrigir sem reiniciar o projeto.\n\n' +
             'A seguir: *altura*, *carga* e *proteções* — igual ao modo assistente.',
         buttons: [{ id: 'BAIXAR_PREVIA_PDF', label: 'Baixar PDF' }],

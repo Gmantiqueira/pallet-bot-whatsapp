@@ -125,6 +125,24 @@ export function parseModuleIndexList(text: string): number[] {
   return r.ok ? r.indices : [];
 }
 
+/**
+ * Resposta ao passo «indique os módulos com túnel»: utilizador renuncia a túneis (mantém o projeto).
+ */
+export function matchesTunnelManualNoneReply(text: string): boolean {
+  const raw = text.replace(/\u00a0/g, ' ').trim().toLowerCase();
+  if (!raw) return false;
+  const t = raw.replace(/\s+/g, ' ');
+  if (t === 'nenhum' || t === '0' || t === 'zero') return true;
+  if (/^sem\s+t[uú]nel(es)?$/u.test(t) || /^sem\s+t[uú]neis$/u.test(t))
+    return true;
+  if (
+    /^nenhum\s+t[uú]nel(es)?$/u.test(t) ||
+    /^nenhum\s+t[uú]neis$/u.test(t)
+  )
+    return true;
+  return false;
+}
+
 export const validateMm = (value: number): string | null => {
   if (value < MIN_MM || value > MAX_MM) {
     return `Valor deve estar entre ${MIN_MM} e ${MAX_MM} mm`;
