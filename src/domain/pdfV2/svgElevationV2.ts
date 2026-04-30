@@ -1605,7 +1605,15 @@ function drawFrontRack(
     ELEV_VERTICAL_DIM_RIGHT_GUTTER_PX;
   let minY = Math.min(dimTopY - 22 * ls, ry - 8, dimTopY - 20 * ls - 16);
   if (sectionTitle) minY = Math.min(minY, oy + 6);
-  if (subtitle) minY = Math.min(minY, oy + 4);
+  if (subtitle) {
+    /**
+     * Prancha premium: o subtítulo desenha-se em `oy + 34*ls`; usar `oy + 4` inflacionava o bbox
+     * com ~30px de vazio acima do texto e empurrava o centrado vertical para baixo.
+     */
+    const subFs = 9 * ls * 1.11;
+    const subtitleInkTop = oy + 34 * ls - subFs * 0.92;
+    minY = Math.min(minY, prem ? subtitleInkTop : oy + 4);
+  }
   if (showTunnelOpening) minY = Math.min(minY, yPassTop - 10);
   const maxY = Math.max(rackBottom + 76 * ls, floorTop + 16, oy + ph * 0.98);
   const minX = Math.min(
@@ -2098,10 +2106,12 @@ const ELEV_SPREAD_COL_GAP_PX = 0;
  */
 const ELEV_SPREAD_CONTENT_PAD_TOP_PX = 1;
 /**
- * Folga alvo (px SVG) entre o topo útil do painel ortográfico e o topo do bbox com cotas —
- * evita centenas de px em branco sob «Vista frontal / lateral» (calha ~16–32 px).
+ * Margem técnica mínima entre o topo útil do painel ortográfico e o topo do bbox (após encaixe).
+ * O encaixe é por ancoragem superior — não por centro vertical — para não «evaporar» espaço no topo.
  */
-const ELEV_SPREAD_TOP_SLACK_TARGET_PX = 24;
+const ELEV_SPREAD_FIT_TOP_MARGIN_PX = 18;
+/** Folga mínima até ao fundo útil do painel após escalar (px SVG). */
+const ELEV_SPREAD_FIT_BOTTOM_MARGIN_PX = 6;
 /**
  * Ganho final do par ortográfico (~5–8%) + cotas/textos proporcionais.
  * `lsPad = ls / ORTHO_REFINE` nos fitPad premium evita absorver o ganho em folga do fitBox.
@@ -2231,23 +2241,6 @@ function computeSpreadBboxFitScale(
   const rw = (safeR - safeL) / bw;
   const rh = (safeB - safeT) / bh;
   return Math.min(Math.max(0.001, maxScale), rw, rh);
-}
-
-function computeSpreadBboxTransform(
-  panel: { ox: number; oy: number; pw: number; ph: number },
-  bbox: SvgBBox,
-  inset: SpreadInset,
-  s: number
-): { s: number; tx: number; ty: number } {
-  const safeL = panel.ox + inset.l;
-  const safeR = panel.ox + panel.pw - inset.r;
-  const safeT = panel.oy + inset.t;
-  const safeB = panel.oy + panel.ph - inset.b;
-  const cx = (bbox.minX + bbox.maxX) / 2;
-  const cy = (bbox.minY + bbox.maxY) / 2;
-  const tcx = (safeL + safeR) / 2;
-  const tcy = (safeT + safeB) / 2;
-  return { s, tx: tcx - s * cx, ty: tcy - s * cy };
 }
 
 function elevationSpreadColumnTitleMetrics(): {
@@ -2521,49 +2514,76 @@ export type SerializeElevationPagesOptions = {
 };
 
 /**
- * Deslocamento Y comum para equilibrar o espaço livre acima/abaixo do bbox completo (cotas incl.),
- * sem alterar escala nem o alinhamento relativo entre as duas vistas.
+ * Translates para o par ortográfico: centragem horizontal + ancoragem superior na área útil,
+ * alinhamento de pisos entre colunas e clamp inferior — evita o vácuo causado por `ty = tcy - s*cy`.
  */
-function orthoSpreadPairVerticalNudgePx(
+function computeOrthoSpreadPanelTranslations(
   left: ElevationPanelDeferredWrap,
   right: ElevationPanelDeferredWrap,
-  tLeft: { tx: number; ty: number; s: number },
-  tRight: { tx: number; ty: number; s: number },
-  inset: SpreadInset
-): number {
-  const slack = (
-    t: { ty: number; s: number },
-    bbox: SvgBBox,
-    panel: { oy: number; ph: number }
-  ): { slackTop: number; slackBot: number } => {
+  inset: SpreadInset,
+  s: number
+): {
+  tLeft: { tx: number; ty: number; s: number };
+  tRight: { tx: number; ty: number; s: number };
+} {
+  const topM = ELEV_SPREAD_FIT_TOP_MARGIN_PX;
+  const botM = ELEV_SPREAD_FIT_BOTTOM_MARGIN_PX;
+  const eps = 0.75;
+
+  const horiz = (d: ElevationPanelDeferredWrap) => {
+    const { panel, bbox } = d;
+    const safeL = panel.ox + inset.l;
+    const safeR = panel.ox + panel.pw - inset.r;
     const safeT = panel.oy + inset.t;
     const safeB = panel.oy + panel.ph - inset.b;
-    const top = t.ty + t.s * bbox.minY;
-    const bot = t.ty + t.s * bbox.maxY;
-    return { slackTop: top - safeT, slackBot: safeB - bot };
+    const tcx = (safeL + safeR) / 2;
+    const cx = (bbox.minX + bbox.maxX) / 2;
+    const tx = tcx - s * cx;
+    return { tx, safeT, safeB };
   };
-  const L = slack(tLeft, left.bbox, left.panel);
-  const R = slack(tRight, right.bbox, right.panel);
-  const eps = 0.75;
-  const nMin = Math.max(-L.slackTop, -R.slackTop) + eps;
-  const nMax = Math.min(L.slackBot, R.slackBot) - eps;
-  if (nMax >= nMin) {
-    const slackTopRef = Math.min(L.slackTop, R.slackTop);
-    const nudgeIdeal = ELEV_SPREAD_TOP_SLACK_TARGET_PX - slackTopRef;
-    return Math.max(nMin, Math.min(nMax, nudgeIdeal));
-  }
-  /**
-   * Sem intervalo válido (cotas muito altas vs painel): empurra o par para dentro da área útil
-   * para o raster não ficar com geometria toda fora do clip do SVG.
-   */
-  const s = tLeft.s;
-  const topL = tLeft.ty + s * left.bbox.minY;
-  const safeTL = left.panel.oy + inset.t;
-  if (topL < safeTL) return safeTL - topL + eps;
-  const botL = tLeft.ty + s * left.bbox.maxY;
-  const safeBL = left.panel.oy + left.panel.ph - inset.b;
-  if (botL > safeBL) return safeBL - botL - eps;
-  return 0;
+
+  const mL = horiz(left);
+  const mR = horiz(right);
+  const floorL = left.guideYsLocal.floor;
+  const floorR = right.guideYsLocal.floor;
+
+  let tyLeft = mL.safeT + topM - s * left.bbox.minY;
+  let tyRight = tyLeft + s * (floorL - floorR);
+
+  const clampBottom = (): void => {
+    const safeBL = Math.min(mL.safeB, mR.safeB);
+    const botMax = Math.max(
+      tyLeft + s * left.bbox.maxY,
+      tyRight + s * right.bbox.maxY
+    );
+    const ov = Math.max(0, botMax - (safeBL - botM));
+    if (ov > 0) {
+      tyLeft -= ov + eps;
+      tyRight -= ov + eps;
+    }
+  };
+
+  const clampTop = (): void => {
+    const safeTL = Math.min(mL.safeT, mR.safeT);
+    const topMin = Math.min(
+      tyLeft + s * left.bbox.minY,
+      tyRight + s * right.bbox.minY
+    );
+    const deficit = safeTL + topM - topMin;
+    if (deficit > 0) {
+      tyLeft += deficit + eps;
+      tyRight += deficit + eps;
+    }
+  };
+
+  clampBottom();
+  clampTop();
+  clampBottom();
+
+  return {
+    tLeft: { tx: mL.tx, ty: tyLeft, s },
+    tRight: { tx: mR.tx, ty: tyRight, s },
+  };
 }
 
 function finalizeOrthoSpreadPanels(
@@ -2582,22 +2602,12 @@ function finalizeOrthoSpreadPanels(
     computeSpreadBboxFitScale(right.panel, right.bbox, inset, panelCap)
   );
   const s = sRaw;
-  let tLeft = computeSpreadBboxTransform(left.panel, left.bbox, inset, s);
-  let tRight = computeSpreadBboxTransform(right.panel, right.bbox, inset, s);
-  const floorL = left.guideYsLocal.floor;
-  const floorR = right.guideYsLocal.floor;
-  tRight = { ...tRight, ty: tLeft.ty + s * (floorL - floorR) };
-  const nudge = orthoSpreadPairVerticalNudgePx(
+  const { tLeft, tRight } = computeOrthoSpreadPanelTranslations(
     left,
     right,
-    tLeft,
-    tRight,
-    inset
+    inset,
+    s
   );
-  if (nudge !== 0) {
-    tLeft = { ...tLeft, ty: tLeft.ty + nudge };
-    tRight = { ...tRight, ty: tRight.ty + nudge };
-  }
   const guideLinesSvg = buildElevationSpreadGuideLinesSvg(
     layout.width,
     layout.m,
