@@ -88,20 +88,26 @@ const ROW_ENVELOPE_SW = 2.92;
 const COL_ROW_ENVELOPE_SPINE_EDGE = '#94a3b8';
 const ROW_ENVELOPE_SPINE_EDGE_SW = 1.05;
 
-function pickOperationalCorridorForOperationHint(
-  circulationDraw: CirculationRect[],
+type StructureRect = FloorPlanModelV2['structureRects'][number];
+type CirculationRect = FloorPlanModelV2['circulationRects'][number];
+
+/** Largura mínima para o texto horizontal «Sentido de operação →». */
+const OP_HINT_MIN_TEXT_WIDTH = 104;
+/** Faixa curta / longa mínima para caber o rótulo sem parecer esmagado. */
+const OP_HINT_MIN_SHORT_SIDE = 50;
+const OP_HINT_MIN_LONG_SIDE = 96;
+
+function pickBestCirculationRectForOperationHint(
+  pool: CirculationRect[],
   o: FloorPlanModelV2['warehouseOutline']
 ): CirculationRect | undefined {
-  const ops = circulationDraw.filter(
-    c => circulationSemantic(c) === 'operational'
-  );
-  if (ops.length === 0) return undefined;
+  if (pool.length === 0) return undefined;
   const midY = o.y + o.h / 2;
-  const upper = ops.filter(c => c.y + c.h / 2 <= midY + o.h * 0.06);
-  const pool = upper.length > 0 ? upper : ops;
+  const upper = pool.filter(c => c.y + c.h / 2 <= midY + o.h * 0.06);
+  const pref = upper.length > 0 ? upper : pool;
   const minSpan = 120;
-  const wideEnough = pool.filter(c => Math.max(c.w, c.h) >= minSpan);
-  const candidates = wideEnough.length > 0 ? wideEnough : pool;
+  const wideEnough = pref.filter(c => Math.max(c.w, c.h) >= minSpan);
+  const candidates = wideEnough.length > 0 ? wideEnough : pref;
   const cxo = o.x + o.w / 2;
   const scored = [...candidates].sort((a, b) => {
     const ay = a.y + a.h / 2;
@@ -114,21 +120,21 @@ function pickOperationalCorridorForOperationHint(
   return scored[0];
 }
 
-/**
- * Indicação discreta dentro do corredor operacional (sem caixa) — texto horizontal centrado,
- * afastado do rótulo «Corredor» ao centro da faixa.
- */
-function operationDirectionCorridorHintSvg(
-  circulationDraw: CirculationRect[],
-  o: FloorPlanModelV2['warehouseOutline']
-): string {
-  const c = pickOperationalCorridorForOperationHint(circulationDraw, o);
-  if (!c) return '';
+function circulationRectFitsHorizontalHint(c: CirculationRect): boolean {
+  const shortS = Math.min(c.w, c.h);
+  const longS = Math.max(c.w, c.h);
+  return (
+    shortS >= OP_HINT_MIN_SHORT_SIDE &&
+    longS >= OP_HINT_MIN_LONG_SIDE &&
+    c.w >= OP_HINT_MIN_TEXT_WIDTH
+  );
+}
+
+function renderOperationHintInRect(c: CirculationRect): string {
+  if (!circulationRectFitsHorizontalHint(c)) return '';
   const minSide = Math.min(c.w, c.h);
-  if (minSide < 72) return '';
-  const fontSize = Math.round(
-    Math.min(10.4, Math.max(8.6, minSide * 0.062)) * 10
-  ) / 10;
+  const fontSize =
+    Math.round(Math.min(10.4, Math.max(8.2, minSide * 0.062)) * 10) / 10;
   const pad = Math.max(14, minSide * 0.08);
   let ty = c.y + pad + fontSize * 0.35;
   if (c.h < 110) {
@@ -137,6 +143,46 @@ function operationDirectionCorridorHintSvg(
   const tx = c.x + c.w / 2;
   const label = 'Sentido de operação →';
   return `<text x="${tx}" y="${ty}" text-anchor="middle" dominant-baseline="middle" font-size="${fontSize}px" fill="#1e3a8a" fill-opacity="0.9" font-family="${SVG_FONT_FAMILY}" font-weight="500" letter-spacing="0.03em">${escapeXml(
+    label
+  )}</text>`;
+}
+
+/**
+ * Preferência: corredor operacional → passagem transversal → área livre → túnel.
+ * Se nenhum rectângulo tiver dimensões seguras, usa faixa superior dentro do perímetro (sítio habitualmente legível).
+ */
+function operationDirectionHintSvg(
+  circulationDraw: CirculationRect[],
+  o: FloorPlanModelV2['warehouseOutline']
+): string {
+  const tiers: FloorPlanCirculationSemantic[][] = [
+    ['operational'],
+    ['cross_passage'],
+    ['residual'],
+    ['tunnel'],
+  ];
+  for (const semantics of tiers) {
+    const pool = circulationDraw.filter(c =>
+      semantics.includes(circulationSemantic(c))
+    );
+    const picked = pickBestCirculationRectForOperationHint(pool, o);
+    if (!picked) continue;
+    const inner = renderOperationHintInRect(picked);
+    if (inner !== '') return inner;
+  }
+  return operationDirectionWarehouseBandFallbackSvg(o);
+}
+
+/** Último recurso: topo do compartimento, centrado — halo claro para ler sobre qualquer fundo. */
+function operationDirectionWarehouseBandFallbackSvg(
+  o: FloorPlanModelV2['warehouseOutline']
+): string {
+  if (o.w < OP_HINT_MIN_TEXT_WIDTH + 40 || o.h < 72) return '';
+  const fontSize = Math.round(Math.min(9.6, Math.max(8.4, o.w * 0.024)) * 10) / 10;
+  const tx = o.x + o.w / 2;
+  const ty = o.y + Math.max(20, Math.min(34, o.h * 0.065));
+  const label = 'Sentido de operação →';
+  return `<text x="${tx}" y="${ty}" text-anchor="middle" dominant-baseline="middle" font-size="${fontSize}px" fill="#1e3a8a" fill-opacity="0.94" font-family="${SVG_FONT_FAMILY}" font-weight="500" letter-spacing="0.03em" stroke="#ffffff" stroke-width="0.55" paint-order="stroke fill">${escapeXml(
     label
   )}</text>`;
 }
@@ -191,9 +237,6 @@ function sortCirculation(
       SEM_ORDER[circulationSemantic(a)] - SEM_ORDER[circulationSemantic(b)]
   );
 }
-
-type StructureRect = FloorPlanModelV2['structureRects'][number];
-type CirculationRect = FloorPlanModelV2['circulationRects'][number];
 
 /**
  * Textura + linha de fluxo muito suave em corredores alongados — reduz leitura “chapada”
@@ -1141,7 +1184,7 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
     );
   }
 
-  parts.push(operationDirectionCorridorHintSvg(circulationDraw, o));
+  parts.push(operationDirectionHintSvg(circulationDraw, o));
 
   const dimExtStroke = 0.82;
   const tick = 6.5;
