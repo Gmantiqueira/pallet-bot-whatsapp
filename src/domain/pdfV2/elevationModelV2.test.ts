@@ -39,6 +39,7 @@ describe('buildElevationModelV2 axis mapping', () => {
     const geo = buildLayoutGeometry(layout, session);
     validateLayoutGeometry(geo);
     const model = buildElevationModelV2(session, geo);
+    expect(model.frontWithoutTunnel.fundoTravamento).toBe(true);
     const rep = geo.rows[0]!.modules.find(m => m.type === 'normal')!;
 
     expect(model.frontWithoutTunnel.beamLengthMm).toBeCloseTo(
@@ -126,6 +127,35 @@ describe('buildElevationModelV2 axis mapping', () => {
 
     const model = buildElevationModelV2(session, geo);
     expect(model.frontWithTunnel).toBeUndefined();
+    validateElevationAxesAgainstGeometry(model, geo, session);
+  });
+
+  it('topTravamentoSuperior no payload quando altura > 8 m e ≥ 2 fileiras', () => {
+    const a: ProjectAnswersV2 = {
+      lengthMm: 12_000,
+      widthMm: 14_000,
+      corridorMm: 3000,
+      moduleDepthMm: 2700,
+      moduleWidthMm: 1100,
+      levels: 4,
+      capacityKg: 1200,
+      lineStrategy: 'APENAS_SIMPLES',
+      hasTunnel: false,
+      halfModuleOptimization: false,
+      firstLevelOnGround: true,
+      heightMode: 'DIRECT',
+      heightMm: 9000,
+    };
+    const layout = buildLayoutSolutionV2(a);
+    const session = answersToSession(a);
+    const geo = buildLayoutGeometry(layout, session);
+    validateLayoutGeometry(geo);
+    if (geo.rows.length < 2) {
+      return;
+    }
+    const model = buildElevationModelV2(session, geo);
+    expect(model.frontWithoutTunnel.topTravamentoSuperior).toBe(true);
+    expect(model.lateral.topTravamentoSuperior).toBe(true);
     validateElevationAxesAgainstGeometry(model, geo, session);
   });
 });

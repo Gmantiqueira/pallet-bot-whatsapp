@@ -13,7 +13,7 @@ const answersToSession = (a: ProjectAnswersV2): Record<string, unknown> => ({
 });
 
 describe('serializeElevationPagesV2', () => {
-  it('página sem túnel: piso, H total, cotas e carga (kg) por nível acima das longarinas', () => {
+  it('página sem túnel: piso, H total, cotas e carga (kg); frontal 1 baia, legenda centrada no vão', () => {
     const a: ProjectAnswersV2 = {
       lengthMm: 12_000,
       widthMm: 10_000,
@@ -34,18 +34,54 @@ describe('serializeElevationPagesV2', () => {
     const geo = buildLayoutGeometry(layout, session);
     validateLayoutGeometry(geo);
     const model = buildElevationModelV2(session, geo);
+    expect(model.frontWithoutTunnel.fundoTravamento).toBe(true);
     const pages = serializeElevationPagesV2(model);
-    const svg = pages.frontWithoutTunnel;
+    expect(pages.landscapeTunnel).toBeNull();
+    const svg = pages.landscapeStandard;
+    expect(svg).not.toMatch(/DEBUG/i);
+    expect(svg).not.toContain('el-spread-guides');
+    expect(svg).toContain('id="fundo-travamento-lateral"');
     expect(svg).toContain('PISO');
     expect(svg).toContain('H total');
-    expect(svg).toMatch(/2 baias/);
-    expect(svg).toMatch(/vão/);
-    const kgLabels = svg.match(/1200kg/g) ?? [];
-    // Uma etiqueta por baia por patamar de armazenagem (incl. piso sem longarina).
-    expect(kgLabels.length).toBe(layout.totals.levels * 2);
-    // Duas baias: uma longarina por baia e por nível estrutural (sem longarina no piso).
+    expect(svg).toMatch(/Vão [\d.]+ mm\/baia · face de carga/);
+    expect(svg).toMatch(/CAPACIDADE = 1\.200 kg por palete/);
+    const pairLabels = svg.match(/PAR DE LONGARINAS/g) ?? [];
+    const beamAxes = a.levels + 1;
+    // Prancha premium: uma legenda por par de longarinas por eixo (frontal centrada; lateral).
+    expect(pairLabels.length).toBe(beamAxes * 2);
     const orangeBeams = svg.match(/fill="#fb923c"/g) ?? [];
-    expect(orangeBeams.length).toBe(a.levels * 2);
+    // Frontal 1 baia + lateral: um feixe por eixo de longarina em cada vista (inclui último eixo ao topo).
+    expect(orangeBeams.length).toBe(beamAxes * 2);
+  });
+
+  it('travamento superior: traço discreto na frontal e na lateral quando regra BOM aplica', () => {
+    const a: ProjectAnswersV2 = {
+      lengthMm: 12_000,
+      widthMm: 14_000,
+      corridorMm: 3000,
+      moduleDepthMm: 2700,
+      moduleWidthMm: 1100,
+      levels: 4,
+      capacityKg: 1200,
+      lineStrategy: 'APENAS_SIMPLES',
+      hasTunnel: false,
+      halfModuleOptimization: false,
+      firstLevelOnGround: true,
+      heightMode: 'DIRECT',
+      heightMm: 9000,
+    };
+    const layout = buildLayoutSolutionV2(a);
+    const session = answersToSession(a);
+    const geo = buildLayoutGeometry(layout, session);
+    validateLayoutGeometry(geo);
+    if (geo.rows.length < 2) {
+      return;
+    }
+    const model = buildElevationModelV2(session, geo);
+    expect(model.frontWithoutTunnel.topTravamentoSuperior).toBe(true);
+    const pages = serializeElevationPagesV2(model);
+    expect(pages.landscapeStandard).toContain('id="top-travamento-superior-front"');
+    expect(pages.landscapeStandard).toContain('id="top-travamento-superior-lateral"');
   });
 
   it('vista lateral dupla costas: perfil estreito de uma costa (não faixa completa nem espinha)', () => {
@@ -70,10 +106,12 @@ describe('serializeElevationPagesV2', () => {
     const geo = buildLayoutGeometry(layout, session);
     validateLayoutGeometry(geo);
     const model = buildElevationModelV2(session, geo);
-    const svg = serializeElevationPagesV2(model).lateral;
+    expect(model.frontWithoutTunnel.fundoTravamento).toBe(false);
+    const svg = serializeElevationPagesV2(model).landscapeStandard;
+    expect(svg).not.toContain('id="fundo-travamento-lateral"');
     expect(svg).not.toContain('ESPINHA');
-    // Página PDF omite cabeçalho; cota horizontal = prof. uma costa (1000 mm), não faixa 2×+espinha.
-    expect(svg).toContain('Prof. posição (lateral)');
+    // Página PDF omite cabeçalho; legenda de profundidade discreta (secundária vs. frontal).
+    expect(svg).toMatch(/Profundidade da costa/);
     expect(svg).toMatch(/1\.000 mm/);
   });
 
@@ -105,14 +143,72 @@ describe('serializeElevationPagesV2', () => {
       model.frontWithTunnel!.levels
     );
     const pages = serializeElevationPagesV2(model);
-    expect(pages.frontWithTunnel).toBeDefined();
     expect(model.lateralWithTunnel).toBeDefined();
-    expect(pages.lateralWithTunnel).toBeDefined();
-    expect(pages.frontWithoutTunnel).not.toContain('TÚNEL');
-    expect(pages.frontWithTunnel!).toContain('TÚNEL');
-    expect(pages.frontWithTunnel!).toContain('Vão túnel');
-    expect(pages.lateral).not.toContain('PASSAGEM');
-    expect(pages.lateralWithTunnel!).toContain('PASSAGEM');
-    expect(pages.lateralWithTunnel!).toContain('TÚNEL');
+    expect(pages.landscapeTunnel).toBeDefined();
+    expect(pages.landscapeStandard).not.toContain('Vão túnel');
+    const tunLabels = pages.landscapeTunnel!.match(/Vão túnel/g) ?? [];
+    expect(tunLabels.length).toBeGreaterThanOrEqual(1);
+    expect(pages.landscapeTunnel!).toMatch(/Vão túnel/i);
+  });
+
+  it('prancha paisagem: mesma escala e mesmo translate Y (alinhamento ortográfico piso/topo)', () => {
+    const a: ProjectAnswersV2 = {
+      lengthMm: 12_000,
+      widthMm: 10_000,
+      corridorMm: 3000,
+      moduleDepthMm: 1000,
+      moduleWidthMm: 1100,
+      levels: 5,
+      capacityKg: 1200,
+      lineStrategy: 'APENAS_SIMPLES',
+      hasTunnel: false,
+      halfModuleOptimization: false,
+      firstLevelOnGround: true,
+      heightMode: 'DIRECT',
+      heightMm: 5040,
+    };
+    const layout = buildLayoutSolutionV2(a);
+    const session = answersToSession(a);
+    const geo = buildLayoutGeometry(layout, session);
+    validateLayoutGeometry(geo);
+    const model = buildElevationModelV2(session, geo);
+    const svg = serializeElevationPagesV2(model).landscapeStandard;
+    const transforms = [
+      ...svg.matchAll(
+        /<g transform="translate\(([^,]+),([^)]+)\) scale\(([^)]+)\)">/g
+      ),
+    ];
+    expect(transforms.length).toBe(2);
+    expect(transforms[0]![3]).toBe(transforms[1]![3]);
+    expect(transforms[0]![2]).toBe(transforms[1]![2]);
+    expect(svg).not.toContain('el-spread-guides');
+  });
+
+  it('renderOptions.debug: linhas-guia horizontais e painéis com camada el-debug', () => {
+    const a: ProjectAnswersV2 = {
+      lengthMm: 12_000,
+      widthMm: 10_000,
+      corridorMm: 3000,
+      moduleDepthMm: 1000,
+      moduleWidthMm: 1100,
+      levels: 5,
+      capacityKg: 1200,
+      lineStrategy: 'APENAS_SIMPLES',
+      hasTunnel: false,
+      halfModuleOptimization: false,
+      firstLevelOnGround: true,
+      heightMode: 'DIRECT',
+      heightMm: 5040,
+    };
+    const layout = buildLayoutSolutionV2(a);
+    const session = answersToSession(a);
+    const geo = buildLayoutGeometry(layout, session);
+    validateLayoutGeometry(geo);
+    const model = buildElevationModelV2(session, geo);
+    const svg = serializeElevationPagesV2(model, {
+      renderOptions: { debug: true },
+    }).landscapeStandard;
+    expect(svg).toContain('id="el-spread-guides"');
+    expect(svg).toContain('el-debug-front');
   });
 });

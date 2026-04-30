@@ -21,7 +21,8 @@ describe('BudgetEngine', () => {
 
     const result = calculateBudget({ layout, structure, levels: 3 });
 
-    expect(result.totals.modules).toBe(20);
+    expect(result.totals.segmentCounts.fullModules).toBe(20);
+    expect(result.totals.equivalentAlongBeamSpan).toBe(20);
     expect(result.totals.positions).toBe(60);
     expect(result.meta.rulesVersion).toBe(BUDGET_RULES_VERSION);
     expect(result.meta.assumptions).toEqual([

@@ -292,14 +292,48 @@
       messagesDiv.scrollTop = messagesDiv.scrollHeight;
     }
 
+    function addBotDocumentDownloadPlaceholder(filename) {
+      const messageDiv = document.createElement('div');
+      messageDiv.className = 'message bot message-document';
+      const link = document.createElement('a');
+      link.className = 'document-link';
+      link.href = '#';
+      link.textContent = '📄 Descarregar prévia (PDF)';
+      if (filename) {
+        link.title = filename;
+      }
+      link.onclick = function (e) {
+        e.preventDefault();
+        if (lastPdfBase64 && lastPdfFilename) {
+          downloadPdfFromBase64(lastPdfBase64, lastPdfFilename);
+          return false;
+        }
+        var fn = (filename || lastPdfFilename || '').trim();
+        if (fn) {
+          void downloadPdfViaFilesApi(fn);
+        } else {
+          addMessage(
+            '❌ PDF não disponível neste momento. Toque em *Baixar PDF*.',
+            false
+          );
+        }
+        return false;
+      };
+      messageDiv.appendChild(link);
+      messagesDiv.appendChild(messageDiv);
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+
     function renderWebhookMessages(messages) {
       if (!messages || !messages.length) return;
       messages.forEach((msg) => {
-        const isDocument =
-          msg.type === 'document' ||
-          (msg.document && msg.document.filename && msg.document.url);
-        if (isDocument && msg.document) {
-          addBotDocumentMessage(msg.document.filename, msg.document.url);
+        if (msg.type === 'document' && msg.document && msg.document.filename) {
+          const fn = msg.document.filename;
+          if (msg.document.url) {
+            addBotDocumentMessage(fn, msg.document.url);
+          } else {
+            addBotDocumentDownloadPlaceholder(fn);
+          }
           return;
         }
         if (msg.text) {
@@ -341,13 +375,16 @@
         saveClientSession(data.clientSession);
       }
       applySessionBackendHint(data);
-      renderWebhookMessages(data.messages);
+
       if (data.generatedPdf && data.generatedPdf.filename) {
         lastPdfFilename = String(data.generatedPdf.filename).trim();
       }
       if (data.pdfBase64 && typeof data.pdfBase64 === 'string') {
         lastPdfBase64 = data.pdfBase64;
       }
+
+      renderWebhookMessages(data.messages);
+
       if (data.generatedBudget && data.generatedBudget.filename) {
         lastBudgetFilename = String(data.generatedBudget.filename).trim();
       }
@@ -450,7 +487,7 @@
     }
 
     function sendButtonClick(buttonId) {
-      if (buttonId === 'BAIXAR_PDF') {
+      if (buttonId === 'BAIXAR_PDF' || buttonId === 'BAIXAR_PREVIA_PDF') {
         if (lastPdfBase64 && lastPdfFilename) {
           downloadPdfFromBase64(lastPdfBase64, lastPdfFilename);
           return;

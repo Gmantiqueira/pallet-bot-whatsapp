@@ -1,5 +1,8 @@
 import { computeBeamElevations } from './elevationLevelGeometryV2';
-import { formatModuleCountForDocumentPt } from './formatModuleCountDisplay';
+import {
+  formatModuleSpanCountsCommercialPt,
+  documentModuleSpanCountsFromTotals,
+} from './formatModuleCountDisplay';
 import type { ElevationModelV2, ElevationPanelPayload } from './types';
 import { accessoryFieldsFromAnswers } from './visualAccessoriesV2';
 import { MODULE_PALLET_BAYS_PER_LEVEL } from './rackModuleSpec';
@@ -10,9 +13,9 @@ import {
   type LayoutGeometry,
   type RackModule,
 } from './layoutGeometryV2';
-
-/** Espinha central entre costas (mm) — alinhado a layoutSolutionV2. */
-const SPINE_BACK_TO_BACK_MM = 100;
+import { appliesFundoTravamentoLayout } from './fundoTravamento';
+import { countTopTravamentoSuperiorQuantity } from './topTravamento';
+import { resolveUprightHeightMmForProject } from '../projectEngines';
 
 export class ElevationModelValidationError extends Error {
   constructor(message: string) {
@@ -24,9 +27,19 @@ export class ElevationModelValidationError extends Error {
 /** Profundidade de faixa em elevação: usa profundidade de posição semântica (moduleDepthMm), não min(width,depth). */
 function bandDepthMmFromGeometry(geometry: LayoutGeometry): number {
   const d = geometry.metadata.moduleDepthMm;
+  const sp = geometry.metadata.spineBackToBackMm;
   return geometry.metadata.rackDepthMode === 'single'
     ? d
-    : 2 * d + SPINE_BACK_TO_BACK_MM;
+    : 2 * d + sp;
+}
+
+function loadHeightMmFromAnswers(
+  answers: Record<string, unknown>
+): number | undefined {
+  if (typeof answers.loadHeightMm === 'number' && answers.loadHeightMm > 0) {
+    return answers.loadHeightMm;
+  }
+  return undefined;
 }
 
 function clearHeightFromAnswers(
@@ -83,6 +96,7 @@ function panelFromRackModule(
     rackDepthMode: geometry.metadata.rackDepthMode,
     corridorMm: geometry.metadata.corridorMm,
     capacityKgPerLevel: cap,
+    loadHeightMm: loadHeightMmFromAnswers(answers),
     tunnel: opts.tunnelVisual && isTunnel,
     uprightThicknessMm: mod.uprightThicknessMm,
     tunnelClearanceMm: isTunnel ? mod.tunnelClearanceHeightMm : undefined,
@@ -154,6 +168,7 @@ function buildFrontWithoutTunnelPayload(
     rackDepthMode: geometry.metadata.rackDepthMode,
     corridorMm: geometry.metadata.corridorMm,
     capacityKgPerLevel: cap,
+    loadHeightMm: loadHeightMmFromAnswers(answers),
     tunnel: false,
     uprightThicknessMm: UPRIGHT_THICKNESS_NORMAL_MM,
     tunnelClearanceMm: undefined,
@@ -221,7 +236,7 @@ export function validateElevationModelV2(
 
 const ELEV_AXIS_TOL_MM = 2.5;
 
-/** Garante que frontal usa o vão por baia (2 baias desenhadas na face) e profundidade = eixo transversal na planta. */
+/** Garante que o payload usa o vão por baia (coerente com o layout) e profundidade = eixo transversal na planta. */
 export function validateElevationAxesAgainstGeometry(
   model: ElevationModelV2,
   geometry: LayoutGeometry,
@@ -252,10 +267,11 @@ export function validateElevationAxesAgainstGeometry(
   }
 
   const md = geometry.metadata.moduleDepthMm;
+  const sp = geometry.metadata.spineBackToBackMm;
   const expectedBand =
     geometry.metadata.rackDepthMode === 'single'
       ? md
-      : 2 * md + SPINE_BACK_TO_BACK_MM;
+      : 2 * md + sp;
   if (Math.abs(front.bandDepthMm - expectedBand) > ELEV_AXIS_TOL_MM) {
     throw new ElevationModelValidationError(
       `Elevação: profundidade de faixa na planta (${front.bandDepthMm} mm) incoerente (esperado ~${expectedBand} mm).`
@@ -294,6 +310,26 @@ export function validateElevationAxesAgainstGeometry(
       );
     }
   }
+
+  const expFundo = appliesFundoTravamentoLayout(geometry);
+  const gotFundo = model.frontWithoutTunnel.fundoTravamento === true;
+  if (gotFundo !== expFundo) {
+    throw new ElevationModelValidationError(
+      `Indicador travamento de fundo incoerente (payload ${gotFundo}, geometria espera ${expFundo}).`
+    );
+  }
+
+  const expTopSup =
+    countTopTravamentoSuperiorQuantity(
+      geometry,
+      resolveUprightHeightMmForProject(answers)
+    ) > 0;
+  const gotTopSup = model.frontWithoutTunnel.topTravamentoSuperior === true;
+  if (gotTopSup !== expTopSup) {
+    throw new ElevationModelValidationError(
+      `Indicador travamento superior incoerente (payload ${gotTopSup}, geometria espera ${expTopSup}).`
+    );
+  }
 }
 
 /**
@@ -303,7 +339,17 @@ export function buildElevationModelV2(
   answers: Record<string, unknown>,
   geometry: LayoutGeometry
 ): ElevationModelV2 {
-  const frontWithoutTunnel = buildFrontWithoutTunnelPayload(answers, geometry);
+  const fundoTravamento = appliesFundoTravamentoLayout(geometry);
+  const topTravamentoSuperior =
+    countTopTravamentoSuperiorQuantity(
+      geometry,
+      resolveUprightHeightMmForProject(answers)
+    ) > 0;
+  const frontWithoutTunnel: ElevationPanelPayload = {
+    ...buildFrontWithoutTunnelPayload(answers, geometry),
+    fundoTravamento,
+    topTravamentoSuperior,
+  };
 
   const userWantsTunnel = answers.hasTunnel === true;
   const tunnelMod = userWantsTunnel
@@ -311,9 +357,13 @@ export function buildElevationModelV2(
     : undefined;
   const frontWithTunnel =
     userWantsTunnel && geometry.metadata.hasTunnel && tunnelMod
-      ? panelFromRackModule(answers, geometry, tunnelMod, {
-          tunnelVisual: true,
-        })
+      ? {
+          ...panelFromRackModule(answers, geometry, tunnelMod, {
+            tunnelVisual: true,
+          }),
+          fundoTravamento,
+          topTravamentoSuperior,
+        }
       : undefined;
 
   const lateral: ElevationPanelPayload = { ...frontWithoutTunnel };
@@ -322,7 +372,7 @@ export function buildElevationModelV2(
 
   const summaryLines: string[] = [
     `${geometry.totals.levelCount} níveis · ${frontWithoutTunnel.capacityKgPerLevel} kg/palete · vão/baia ${Math.round(geometry.metadata.beamAlongModuleMm)} mm · módulo ao longo da fileira ~${Math.round(geometry.metadata.moduleLengthAlongBeamMm)} mm · prof. posição ${Math.round(geometry.metadata.moduleDepthMm)} mm · faixa ${Math.round(frontWithoutTunnel.bandDepthMm)} mm`,
-    `${formatModuleCountForDocumentPt(geometry.totals.physicalPickingModuleCount ?? geometry.totals.moduleCount)} módulos de frente · posições ${geometry.totals.positionCount} · ${geometry.metadata.rackDepthMode === 'double' ? 'dupla costas' : 'simples'} · planta: 1 nº = 1 frente (2 baias)`,
+    `${formatModuleSpanCountsCommercialPt(documentModuleSpanCountsFromTotals(geometry.totals))} · posições ${geometry.totals.positionCount} · ${geometry.metadata.rackDepthMode === 'double' ? 'dupla costas' : 'simples'} · planta: inteiros nas faces completas; «1/2» meio-módulo; «T» túnel`,
   ];
   if (
     userWantsTunnel &&
@@ -331,6 +381,11 @@ export function buildElevationModelV2(
   ) {
     summaryLines.push(
       `Variante túnel no projeto: pé livre ${Math.round(tunnelMod.tunnelClearanceHeightMm)} mm — elevação ao lado: menos níveis ativos acima do vão (sem redistribuir o total para a zona superior).`
+    );
+  }
+  if (fundoTravamento) {
+    summaryLines.push(
+      'Travamento de fundo (vista lateral): referência 400 mm × 50% da altura do montante na costa; espaçamento modular 1/3/…; só com fileiras simples (sem dupla costa).'
     );
   }
 

@@ -12,6 +12,45 @@ import {
 
 const EPS = 0.5;
 
+/**
+ * Vãos de túnel ao longo do vão, um por `TunnelPositionCode`, com o mesmo
+ * ancorar operacional. Rejeita sobreposições.
+ */
+export function resolveNonOverlappingTunnelIntervalsMm(
+  beamSpan: number,
+  corridorMm: number,
+  placement: TunnelSpanPlacement,
+  positions: readonly TunnelPositionCode[]
+): { t0: number; t1: number }[] {
+  if (positions.length === 0) {
+    return [];
+  }
+  const iv: { t0: number; t1: number }[] = [];
+  for (const pos of positions) {
+    const p: TunnelSpanPlacement = {
+      ...placement,
+      tunnelPosition: pos,
+    };
+    if (positions.length > 1) {
+      delete (p as { tunnelOffsetMm?: number }).tunnelOffsetMm;
+    }
+    iv.push(resolveTunnelSpanAlongBeam(beamSpan, corridorMm, p));
+  }
+  const valid = iv.filter(i => i.t1 - i.t0 > EPS);
+  if (valid.length === 0) {
+    return [];
+  }
+  const sorted = [...valid].sort((a, b) => a.t0 - b.t0);
+  for (let i = 1; i < sorted.length; i++) {
+    if (sorted[i]!.t0 < sorted[i - 1]!.t1 - EPS) {
+      throw new Error(
+        'Túneis: vãos ao longo do eixo do vão sobrepostos; reduza a quantidade, mude a posição (ex.: início e fim) ou alargue o compartimento no sentido do vão.'
+      );
+    }
+  }
+  return sorted;
+}
+
 /** Largura da faixa de túnel (mm) — alinhada ao corredor operacional. */
 export function tunnelWidthMm(corridorMm: number): number {
   return Math.max(800, corridorMm);

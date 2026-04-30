@@ -5,8 +5,15 @@ import type {
 } from './types';
 import {
   INTER_BAY_GAP_WITHIN_MODULE_MM,
+  MODULE_PALLET_BAYS_PER_LEVEL,
   uprightWidthsMmForFrontBayCount,
 } from './rackModuleSpec';
+import { FALLBACK_EQUAL_GAP_PER_LEVEL_MM } from './elevationLevelGeometryV2';
+import {
+  DEFAULT_PALLET_CAPACITY_KG,
+  PDF_OPERATIONAL_SAFETY_CLEARANCE_MM,
+  formatKgCapacityPtBr,
+} from './pdfTechnicalDrawingDefaults';
 import {
   ELEV_BEAM_EDGE as FV_BEAM_EDGE,
   ELEV_BEAM_FILL as FV_BEAM_FILL,
@@ -22,20 +29,34 @@ import {
   ELEV_UPRIGHT_FILL as FV_UPRIGHT_FILL,
   ELEV_UPRIGHT_STROKE as FV_UPRIGHT_STROKE,
 } from './elevationVisualTokens';
-import { SVG_FONT_FAMILY, svgFontWeightForSvgAttr } from '../../config/pdfFonts';
+import {
+  SVG_FONT_FAMILY,
+  svgFontWeightForSvgAttr,
+} from '../../config/pdfFonts';
 import { sanitizeText } from '../../utils/sanitizeText';
+import { FUNDO_TRAVAMENTO_WIDTH_MM } from './fundoTravamento';
+import {
+  ISO_A4_LANDSCAPE_H_PT,
+  ISO_A4_LANDSCAPE_W_PT,
+  pdfContentMetricsPt,
+  snapSvgExtentPx,
+  svgGridMetrics,
+  uniformMarginPt,
+} from './layoutGrid';
+import type { PdfRenderOptions } from './pdfRenderOptions';
+import { pdfRenderDebugEnabled } from './pdfRenderOptions';
 
-/** Um módulo frontal = duas baias lado a lado (3 montantes), como desenho técnico tipo 2× vão. */
-const FV_FRONT_BAY_COUNT = 2;
+/**
+ * Vista frontal na prancha: **uma** baia (2 montantes, 1 vão) para leitura mais clara.
+ * O projeto continua com 2 baias por módulo (orçamento, planta, 3D); só o desenho frontal simplifica.
+ */
+const FV_FRONT_BAY_COUNT = 1;
 /**
  * Montantes exteriores: mais estreitos em px; largura ganha o vão.
  * Interiores (entre baias): fator maior para o pórtico central ler claramente no desenho.
  */
 const FV_FRONT_UPRIGHT_SLIM = 0.46;
 const FV_FRONT_CENTER_UPRIGHT_SLIM = 0.86;
-/** Marcadores discretos ao longo do vão (posições de carga na longarina). */
-const FV_ALONG_BEAM_DIVISIONS = 3;
-
 const COL_BG = '#ffffff';
 const COL_FRAME = '#d4d4d4';
 const COL_FLOOR = '#334155';
@@ -43,12 +64,58 @@ const COL_FLOOR_FILL = '#f1f5f9';
 
 /** Cotas: hierarquia — principal / secundária. */
 const DIM_MAJOR = '#0f172a';
-/** Cotas secundárias: um pouco mais escuras para leitura em impressão/PDF. */
-const DIM_MINOR = '#475569';
+/** Cotas e rótulos secundários — ligeiramente mais escuros para leitura em PDF/impressão. */
+const DIM_MINOR = '#3f4b5c';
 const COL_BRACE_STROKE = '#475569';
+
+/**
+ * Tipografia interna das pranchas de elevação (cotas, rótulos técnicos, capacidades).
+ * Hierarquia preservada: tudo escala com `ls`; lateral segue `ELEV_LATERAL_LABEL_SCALE` (= ×0,82).
+ * Inclui +10% face ao passo anterior (1,16 × 1,10).
+ */
+const ELEV_INTERIOR_TYPE_SCALE = 1.16 * 1.1;
+
+/** Refinamento leitura PDF: cotas verticais, capacidades, larguras (sem alterar geometria). */
+const ELEV_TYPO_VERTICAL_DIM_CHAIN = 1.18;
+/** Capacidade longarinas + cotas «face / largura / profundidade». */
+const ELEV_TYPO_CAP_AND_FACE_DIM = 1.18;
+/** Rótulos «Vista frontal / lateral» (prancha paisagem e cabeçalhos dos painéis). */
+const ELEV_TYPO_VISTA_HEADING = 1.2;
+/** Cotas de largura nominal dos montantes (mm). */
+const ELEV_TYPO_DIM_UPRIGHT_MM = 1.18;
+
+/**
+ * Cotas verticais à direita (frontal e lateral): colunas mais afastadas e calha larga para
+ * rótulos em duas linhas (pt-BR) sem sobreposição nem truncagem no encaixe da folha.
+ */
+const ELEV_VERTICAL_DIM_STEP_LS = 15.25;
+/**
+ * Rótulos das cotas verticais intermédias ficam à direita da cota «H total»,
+ * na calha lateral — evita sobreposição com montantes/piso quando o segmento é baixo.
+ */
+const ELEV_VERTICAL_SEG_LABEL_PAST_TOTAL_DIM_PX = 10;
+/** Gap mínimo entre o extremo direito das marcas de cota e o início do texto (px). */
+const ELEV_VERTICAL_SEG_LABEL_MIN_GAP_FROM_TICKS_PX = 8;
+/** Calha à direita da última coluna — espaço para «H total», patamares e notas sem encostar à moldura. */
+const ELEV_VERTICAL_DIM_RIGHT_GUTTER_PX = Math.round(
+  248 * ELEV_INTERIOR_TYPE_SCALE
+);
+/** Reserva horizontal antes de `rackMaxW` na frontal: toda a cadeia de cotas + rótulos à direita do vão. */
+const ELEV_FRONT_DIM_CHAIN_CAP_PX = Math.round(448 * ELEV_INTERIOR_TYPE_SCALE);
+const ELEV_FRONT_DIM_CHAIN_BASE_PX = Math.round(192 * ELEV_INTERIOR_TYPE_SCALE);
+const ELEV_FRONT_DIM_CHAIN_PER_SEG_LS = 15.25;
 
 function escapeXml(text: string): string {
   return sanitizeText(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/** Escape XML sem NFKC — preserva º em rótulos técnicos (ex.: 1º par de longarinas). */
+function escapeXmlPreserveOrdinal(text: string): string {
+  return text
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
@@ -80,6 +147,12 @@ function guardKindAtFrontEdge(
   return 'none';
 }
 
+/**
+ * Elevação: guardas mais discretas que o rack (~−20% espessura e opacidade).
+ * A planta (svgFloorPlanV2) mantém destaque inalterado.
+ */
+const ELEV_GUARD_RAIL_MARKER_VISUAL = 0.8;
+
 /** Marcadores junto à face de armazenagem (símbolo de guarda nas extremidades do vão). */
 function drawFrontGuardRailMarkers(
   faceSpanLeft: number,
@@ -94,18 +167,19 @@ function drawFrontGuardRailMarkers(
   const y1 = rackBottom - 38 * ls;
   const y2 = rackBottom + 1;
   const parts: string[] = [];
+  const gv = ELEV_GUARD_RAIL_MARKER_VISUAL;
   const post = (x: number, kind: 'simple' | 'double') => {
     const col = kind === 'double' ? '#991b1b' : '#a16207';
-    const wMain = kind === 'double' ? 3.4 : 5.4;
-    const wBack = wMain + 4.2;
+    const wMain = (kind === 'double' ? 3.4 : 5.4) * gv;
+    const wBack = wMain + 4.2 * gv;
     const xs =
       kind === 'double' ? ([x - 3.2, x + 3.2] as const) : ([x] as const);
     for (const xv of xs) {
       parts.push(
-        `<line x1="${xv}" y1="${y1}" x2="${xv}" y2="${y2}" stroke="#f8fafc" stroke-width="${wBack}" stroke-linecap="round" opacity="0.96"/>`
+        `<line x1="${xv}" y1="${y1}" x2="${xv}" y2="${y2}" stroke="#f8fafc" stroke-width="${wBack}" stroke-linecap="round" opacity="${(0.96 * gv).toFixed(3)}"/>`
       );
       parts.push(
-        `<line x1="${xv}" y1="${y1}" x2="${xv}" y2="${y2}" stroke="${col}" stroke-width="${wMain}" stroke-linecap="square" opacity="1"/>`
+        `<line x1="${xv}" y1="${y1}" x2="${xv}" y2="${y2}" stroke="${col}" stroke-width="${wMain}" stroke-linecap="square" opacity="${gv.toFixed(3)}"/>`
       );
     }
     const span = y2 - y1;
@@ -115,26 +189,12 @@ function drawFrontGuardRailMarkers(
     const half = kind === 'double' ? 11 : 9;
     for (const ry of [r1, rm, r2]) {
       parts.push(
-        `<line x1="${x - half}" y1="${ry}" x2="${x + half}" y2="${ry}" stroke="${col}" stroke-width="${2.1 * ls}" stroke-linecap="square" opacity="0.93"/>`
+        `<line x1="${x - half}" y1="${ry}" x2="${x + half}" y2="${ry}" stroke="${col}" stroke-width="${2.1 * ls * gv}" stroke-linecap="square" opacity="${(0.93 * gv).toFixed(3)}"/>`
       );
     }
   };
   if (left !== 'none') post(faceSpanLeft - 5, left);
   if (right !== 'none') post(faceSpanRight + 5, right);
-  const tag = (kind: 'simple' | 'double') =>
-    kind === 'double' ? 'Dupla' : 'Simples';
-  if (left !== 'none') {
-    const col = left === 'double' ? '#991b1b' : '#a16207';
-    parts.push(
-      `<text x="${faceSpanLeft - 24}" y="${(y1 + y2) / 2 + 3.2 * ls}" text-anchor="end" font-size="${9.2 * ls}px" fill="${col}" stroke="#ffffff" stroke-width="${0.42 * ls}" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="700">${tag(left)}</text>`
-    );
-  }
-  if (right !== 'none') {
-    const col = right === 'double' ? '#991b1b' : '#a16207';
-    parts.push(
-      `<text x="${faceSpanRight + 24}" y="${(y1 + y2) / 2 + 3.2 * ls}" text-anchor="start" font-size="${9.2 * ls}px" fill="${col}" stroke="#ffffff" stroke-width="${0.42 * ls}" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="700">${tag(right)}</text>`
-    );
-  }
   return parts.join('');
 }
 
@@ -153,18 +213,19 @@ function drawLateralGuardRailMarkers(
   const y1 = rackTop + 26 * ls;
   const y2 = rackBottom + 1;
   const parts: string[] = [];
+  const gv = ELEV_GUARD_RAIL_MARKER_VISUAL;
   const post = (x: number, kind: 'simple' | 'double') => {
     const col = kind === 'double' ? '#991b1b' : '#a16207';
-    const wMain = kind === 'double' ? 3.4 : 5.4;
-    const wBack = wMain + 4.2;
+    const wMain = (kind === 'double' ? 3.4 : 5.4) * gv;
+    const wBack = wMain + 4.2 * gv;
     const xs =
       kind === 'double' ? ([x - 3.2, x + 3.2] as const) : ([x] as const);
     for (const xv of xs) {
       parts.push(
-        `<line x1="${xv}" y1="${y1}" x2="${xv}" y2="${y2}" stroke="#f8fafc" stroke-width="${wBack}" stroke-linecap="round" opacity="0.96"/>`
+        `<line x1="${xv}" y1="${y1}" x2="${xv}" y2="${y2}" stroke="#f8fafc" stroke-width="${wBack}" stroke-linecap="round" opacity="${(0.96 * gv).toFixed(3)}"/>`
       );
       parts.push(
-        `<line x1="${xv}" y1="${y1}" x2="${xv}" y2="${y2}" stroke="${col}" stroke-width="${wMain}" stroke-linecap="square" opacity="1"/>`
+        `<line x1="${xv}" y1="${y1}" x2="${xv}" y2="${y2}" stroke="${col}" stroke-width="${wMain}" stroke-linecap="square" opacity="${gv.toFixed(3)}"/>`
       );
     }
     const span = y2 - y1;
@@ -174,63 +235,101 @@ function drawLateralGuardRailMarkers(
     const half = kind === 'double' ? 11 : 9;
     for (const ry of [r1, rm, r2]) {
       parts.push(
-        `<line x1="${x - half}" y1="${ry}" x2="${x + half}" y2="${ry}" stroke="${col}" stroke-width="${2.1 * ls}" stroke-linecap="square" opacity="0.93"/>`
+        `<line x1="${x - half}" y1="${ry}" x2="${x + half}" y2="${ry}" stroke="${col}" stroke-width="${2.1 * ls * gv}" stroke-linecap="square" opacity="${(0.93 * gv).toFixed(3)}"/>`
       );
     }
   };
   if (left !== 'none') post(xLeftOuter - 5, left);
   if (right !== 'none') post(xRightOuter + 5, right);
-  const tag = (kind: 'simple' | 'double') =>
-    kind === 'double' ? 'Dupla' : 'Simples';
-  if (left !== 'none') {
-    const col = left === 'double' ? '#991b1b' : '#a16207';
-    parts.push(
-      `<text x="${xLeftOuter - 24}" y="${(y1 + y2) / 2 + 3.2 * ls}" text-anchor="end" font-size="${9.2 * ls}px" fill="${col}" stroke="#ffffff" stroke-width="${0.42 * ls}" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="700">${tag(left)}</text>`
-    );
-  }
-  if (right !== 'none') {
-    const col = right === 'double' ? '#991b1b' : '#a16207';
-    parts.push(
-      `<text x="${xRightOuter + 24}" y="${(y1 + y2) / 2 + 3.2 * ls}" text-anchor="start" font-size="${9.2 * ls}px" fill="${col}" stroke="#ffffff" stroke-width="${0.42 * ls}" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="700">${tag(right)}</text>`
-    );
-  }
   return parts.join('');
 }
 
 /** Nota de rodapé do desenho: alinha com as opções do projeto. */
 export function buildElevationAccessorySubtitle(
-  data: ElevationPanelPayload
+  data: ElevationPanelPayload,
+  compact?: boolean
 ): string | undefined {
   const bits: string[] = [];
   if (data.columnProtector === true) {
-    bits.push('Protetores de pilar na base');
-  }
-  if (data.guardRailSimple === true && data.guardRailSimplePosition) {
-    const p = data.guardRailSimplePosition;
     bits.push(
-      p === 'AMBOS'
-        ? 'Guarda simples — ambas as extremidades'
-        : `Guarda simples — ${p === 'INICIO' ? 'início' : 'fim'} do vão`
-    );
-  }
-  if (data.guardRailDouble === true && data.guardRailDoublePosition) {
-    const p = data.guardRailDoublePosition;
-    bits.push(
-      p === 'AMBOS'
-        ? 'Guarda dupla — ambas as extremidades'
-        : `Guarda dupla — ${p === 'INICIO' ? 'início' : 'fim'} do vão`
+      compact === true ? 'Prot. de coluna' : 'Protetores de coluna na base'
     );
   }
   bits.push(
     data.firstLevelOnGround
-      ? '1.º eixo de feixe ao piso'
-      : '1.º eixo elevado (folga sob o primeiro patamar)'
+      ? compact === true
+        ? '1.º feixe ao piso'
+        : '1.º eixo de feixe ao piso'
+      : compact === true
+        ? '1.º eixo elevado'
+        : '1.º eixo elevado (folga sob o primeiro patamar)'
   );
   return bits.join(' · ');
 }
 
 function formatMmPtBr(mm: number): string {
   return `${Math.round(mm).toLocaleString('pt-BR')} mm`;
+}
+
+function resolvePalletCapacityKg(data: ElevationPanelPayload): number {
+  if (
+    typeof data.capacityKgPerLevel === 'number' &&
+    data.capacityKgPerLevel > 0
+  ) {
+    return Math.round(data.capacityKgPerLevel);
+  }
+  return DEFAULT_PALLET_CAPACITY_KG;
+}
+
+function beamPairCapacityKg(data: ElevationPanelPayload): number {
+  return resolvePalletCapacityKg(data) * MODULE_PALLET_BAYS_PER_LEVEL;
+}
+
+function documentLoadHeightMmForElevation(data: ElevationPanelPayload): number {
+  if (typeof data.loadHeightMm === 'number' && data.loadHeightMm > 0) {
+    return Math.round(data.loadHeightMm);
+  }
+  if (typeof data.meanGapMm === 'number' && data.meanGapMm > 30) {
+    return Math.round(data.meanGapMm);
+  }
+  const elev = data.beamElevationsMm;
+  if (elev.length >= 2) {
+    let m = 0;
+    for (let i = 0; i < elev.length - 1; i++) {
+      m = Math.max(m, elev[i + 1]! - elev[i]!);
+    }
+    if (m > 30) return Math.round(m);
+  }
+  return Math.round(FALLBACK_EQUAL_GAP_PER_LEVEL_MM);
+}
+
+function documentForkliftReachMm(data: ElevationPanelPayload): number {
+  const loadH = documentLoadHeightMmForElevation(data);
+  const safety = PDF_OPERATIONAL_SAFETY_CLEARANCE_MM;
+  const elev = data.beamElevationsMm;
+  const levels = Math.max(1, Math.floor(data.levels));
+  let topBeamMm = 0;
+  if (elev.length > levels) {
+    topBeamMm = elev[levels - 1] ?? 0;
+  } else if (elev.length >= 2) {
+    topBeamMm = elev[elev.length - 2] ?? 0;
+  }
+  if (topBeamMm <= 0) {
+    return Math.round(data.uprightHeightMm + safety);
+  }
+  return Math.round(topBeamMm + loadH + safety);
+}
+
+/** Notas à direita da cadeia de cotas — só vista frontal. */
+function frontOperationalAnnotationLines(
+  data: ElevationPanelPayload
+): string[] {
+  const loadH = documentLoadHeightMmForElevation(data);
+  const reach = documentForkliftReachMm(data);
+  return [
+    `ALT. MÁX. EMPILHADEIRA = ${reach.toLocaleString('pt-BR')} mm`,
+    `ALT. MÁX. CARGA = ${loadH.toLocaleString('pt-BR')} mm`,
+  ];
 }
 
 function dimensionLineHArrows(
@@ -331,7 +430,7 @@ function extensionToDim(
   y: number,
   stroke: string
 ): string {
-  return `<line x1="${xFrom}" y1="${y}" x2="${xTo}" y2="${y}" stroke="${stroke}" stroke-width="0.28" stroke-dasharray="2.5 2" opacity="0.65"/>`;
+  return `<line x1="${xFrom}" y1="${y}" x2="${xTo}" y2="${y}" stroke="${stroke}" stroke-width="0.28" opacity="0.62"/>`;
 }
 
 /** Bloco de texto multilinha (SVG). */
@@ -342,7 +441,8 @@ function textLines(
   attrs: { fontSize: number; fill: string; fontWeight?: string }
 ): string {
   const fs = attrs.fontSize;
-  const lh = fs * 1.12;
+  const lhMult = fs <= 11.5 ? 1.3 : 1.14;
+  const lh = fs * lhMult;
   const weight = svgFontWeightForSvgAttr(attrs.fontWeight);
   const inner = lines
     .map((line, i) => {
@@ -370,9 +470,12 @@ function drawVerticalDimChain(
   labelScale: number,
   tunnelDim?: { clearanceMm: number; yPassTop: number },
   hasGroundLevel?: boolean,
-  structuralTopMm?: number
+  structuralTopMm?: number,
+  appendRightLines?: string[],
+  compactSegLabels?: boolean
 ): string {
   const ls = labelScale;
+  const compact = compactSegLabels === true;
   const nB = beamYsPx.length;
   if (nB < 1 || beamH.length < 1) {
     return '';
@@ -451,12 +554,17 @@ function drawVerticalDimChain(
     return '';
   }
 
-  const step = 12.5 * ls;
+  const step = ELEV_VERTICAL_DIM_STEP_LS * ls;
   const tickL = rackRight + 2;
   const tickR = tickL + 7.5;
   const parts: string[] = [];
 
   const xTotal = rackRight + 10 + (detailCount + 1) * step;
+  /** Coluna única de rótulos à direita da linha de «H total». */
+  const xSegLabelBase = Math.max(
+    xTotal + ELEV_VERTICAL_SEG_LABEL_PAST_TOTAL_DIM_PX,
+    tickR + ELEV_VERTICAL_SEG_LABEL_MIN_GAP_FROM_TICKS_PX
+  );
   parts.push(extensionToDim(rackRight, xTotal - 2, yFloor, DIM_MAJOR));
   parts.push(extensionToDim(rackRight, xTotal - 2, yTop, DIM_MAJOR));
   parts.push(
@@ -464,19 +572,43 @@ function drawVerticalDimChain(
   );
   parts.push(
     textLines(
-      xTotal + 5,
-      (yTop + yFloor) / 2 - 10 * ls,
+      xSegLabelBase,
+      (yTop + yFloor) / 2 - 12.2 * ls,
       ['H total', formatMmPtBr(Math.round(uprightH))],
       {
-        fontSize: 10 * ls,
+        fontSize: 12.45 * ls * ELEV_TYPO_VERTICAL_DIM_CHAIN,
         fill: DIM_MAJOR,
         fontWeight: '600',
       }
     )
   );
 
+  if (appendRightLines && appendRightLines.length > 0) {
+    let yN = (yTop + yFloor) / 2 + 16 * ls;
+    for (const line of appendRightLines) {
+      parts.push(
+        `<text x="${xSegLabelBase}" y="${yN}" font-size="${
+          8.75 * ls * ELEV_TYPO_VERTICAL_DIM_CHAIN
+        }px" fill="${DIM_MINOR}" font-family="${SVG_FONT_FAMILY}" font-weight="600">${escapeXml(
+          line
+        )}</text>`
+      );
+      yN += 11.3 * ls;
+    }
+  }
+
   const segLabel = (idx: number): string => {
     if (tunnelSplit) {
+      if (compact) {
+        if (idx === 0) return 'Vão túnel';
+        if (idx === 1) return 'Até 1.º eixo';
+        if (idx === detailCount - 1) {
+          return typeof structuralTopMm === 'number'
+            ? 'Ao topo coluna'
+            : 'Ao topo';
+        }
+        return `Nív. ${idx - 1}–${idx}`;
+      }
       if (idx === 0) return 'Vão túnel';
       if (idx === 1) return 'Até 1.º eixo';
       if (idx === detailCount - 1) {
@@ -484,7 +616,18 @@ function drawVerticalDimChain(
           ? 'Últ. longarina → topo coluna'
           : 'Topo / tampo';
       }
-      return `Livre ${idx - 1}–${idx}`;
+      return `Espaço entre eixos (nív. ${idx - 1}–${idx})`;
+    }
+    if (compact) {
+      if (idx === 0) {
+        return hasGroundLevel ? 'Piso → 1.º eixo' : '1.º eixo';
+      }
+      if (idx === detailCount - 1) {
+        return typeof structuralTopMm === 'number'
+          ? 'Ao topo coluna'
+          : 'Ao topo';
+      }
+      return `Nív. ${idx}–${idx + 1}`;
     }
     if (idx === 0) {
       return hasGroundLevel ? 'Piso → 1.º eixo (sem long.)' : '1.º eixo';
@@ -494,7 +637,7 @@ function drawVerticalDimChain(
         ? 'Últ. longarina → topo coluna'
         : 'Topo / tampo';
     }
-    return `Livre ${idx}–${idx + 1}`;
+    return `Espaço entre eixos (nív. ${idx}–${idx + 1})`;
   };
 
   for (let k = 0; k < detailCount; k++) {
@@ -514,11 +657,14 @@ function drawVerticalDimChain(
     if (Math.abs(yT - yB) < 0.5) continue;
     parts.push(
       textLines(
-        xDim + 4.5,
-        midY - 8 * ls,
-        [segLabel(k), formatMmPtBr(mmRounded)],
+        xSegLabelBase,
+        midY - (compact ? 9.1 : 10.1) * ls,
+        compact
+          ? [`${segLabel(k)} · ${formatMmPtBr(mmRounded)}`]
+          : [segLabel(k), formatMmPtBr(mmRounded)],
         {
-          fontSize: 9 * ls,
+          fontSize:
+            (compact ? 11.45 : 11.2) * ls * ELEV_TYPO_VERTICAL_DIM_CHAIN,
           fill: DIM_MINOR,
           fontWeight: '500',
         }
@@ -662,6 +808,113 @@ function buildBeamGeometry(
   };
 }
 
+/**
+ * Geometria com altura útil fixa em px (escala Y comum entre vistas em prancha paisagem).
+ * Escala horizontal só encolhe vãos / montantes para caber em `rackMaxW`.
+ */
+function buildBeamGeometryFixedInnerH(
+  data: ElevationPanelPayload,
+  rackMaxW: number,
+  innerHFixed: number,
+  ox: number,
+  oy: number,
+  pw: number,
+  nMod: number = FV_FRONT_BAY_COUNT
+): BeamGeometry {
+  const levels = Math.max(1, Math.min(32, Math.floor(data.levels)));
+  const uprightH = Math.max(1, data.uprightHeightMm);
+  const beamL = Math.max(1, data.beamLengthMm);
+  const bayCount = Math.max(1, Math.min(4, Math.floor(nMod)));
+  const widthsMm = uprightWidthsMmForFrontBayCount(
+    bayCount,
+    data.tunnel === true
+  );
+  const gapTotalMm = INTER_BAY_GAP_WITHIN_MODULE_MM;
+  const sumUprightsMm = widthsMm.reduce((a, b) => a + b, 0);
+  const totalRackMm =
+    sumUprightsMm + bayCount * beamL + (bayCount - 1) * gapTotalMm;
+
+  const applyScaleX = (s: number) => ({
+    uprightWidthsPx: widthsMm.map(w => w * s),
+    beamPx: beamL * s,
+    gapPx: gapTotalMm * s,
+  });
+
+  let scale = rackMaxW / totalRackMm;
+  let { uprightWidthsPx, beamPx, gapPx } = applyScaleX(scale);
+  let totalW =
+    uprightWidthsPx.reduce((a, b) => a + b, 0) +
+    bayCount * beamPx +
+    (bayCount - 1) * gapPx;
+  if (totalW > rackMaxW) {
+    scale *= rackMaxW / totalW;
+    ({ uprightWidthsPx, beamPx, gapPx } = applyScaleX(scale));
+    totalW = rackMaxW;
+  }
+
+  const innerH = innerHFixed;
+
+  const rawBeamH = data.beamElevationsMm;
+  const rawBeamOk =
+    Array.isArray(rawBeamH) &&
+    rawBeamH.length >= 2 &&
+    rawBeamH.every(x => typeof x === 'number' && Number.isFinite(x));
+
+  const beamH =
+    rawBeamOk && rawBeamH.length >= levels + 1
+      ? rawBeamH
+      : Array.from({ length: levels + 1 }, (_, k) => (k / levels) * uprightH);
+
+  const nBeamAxes = beamH.length;
+  const maxIntervals = Math.max(0, nBeamAxes - 1);
+  const storageTiers = Math.max(1, Math.min(levels, maxIntervals));
+
+  const axisGapsMm: number[] = [];
+  for (let i = 0; i < nBeamAxes - 1; i++) {
+    axisGapsMm.push(beamH[i + 1]! - beamH[i]!);
+  }
+
+  const ry = oy + 44;
+  const rackBottom = ry + innerH;
+  const beamYsPx = beamH.map(hmm => rackBottom - (hmm / uprightH) * innerH);
+  const rx = ox + (pw - totalW) / 2;
+
+  return {
+    levels,
+    storageTiers,
+    uprightH,
+    beamH,
+    beamYsPx,
+    innerH,
+    rackBottom,
+    ry,
+    rx,
+    totalW,
+    uprightWidthsPx,
+    beamPx,
+    gapPx,
+    axisGapsMm,
+    totalWidthMm: totalRackMm,
+    uprightWidthsMm: widthsMm,
+  };
+}
+
+/** Altura útil (px) partilhada entre frontal e lateral na mesma prancha — limitada pelo orçamento vertical de ambas. */
+function computeOrthoSpreadSharedInnerHPx(ph: number, ls: number): number {
+  const frontRackMaxH = Math.max(
+    120,
+    ph - Math.round(78 / ls) - frontRackBelowFloorReservePx(ls)
+  );
+  const lateralRackMaxH = Math.max(
+    120,
+    ph -
+      Math.round(44 / ls) -
+      Math.round(10 * ls) -
+      Math.round(22 * ls + 38 * ls + 28)
+  );
+  return Math.max(80, Math.min(frontRackMaxH, lateralRackMaxH));
+}
+
 type BaySpan = { left: number; right: number };
 
 /**
@@ -694,9 +947,7 @@ function drawFrontStorageTiers(
   storageTiers: number,
   beamTh: number,
   yClipTop: number,
-  yClipBottom: number,
-  /** `true` = uma só baia com linha de separação ao centro; `false` = uma posição por baia (2 baias no módulo). */
-  splitTwoPalletPositions: boolean
+  yClipBottom: number
 ): string {
   const parts: string[] = [];
   const insetX = Math.max(2.8, (bay.right - bay.left) * 0.04);
@@ -715,25 +966,6 @@ function drawFrontStorageTiers(
     parts.push(
       `<rect x="${xl}" y="${t}" width="${xr - xl}" height="${b - t}" rx="1.2" fill="${FV_PALLET_TIER_FILL}" stroke="${FV_PALLET_TIER_STROKE}" stroke-width="0.35" opacity="${FV_PALLET_TIER_OPACITY}"/>`
     );
-    const mx = (xl + xr) / 2;
-    if (splitTwoPalletPositions) {
-      parts.push(
-        `<line x1="${mx}" y1="${t + 1.2}" x2="${mx}" y2="${b - 1.2}" stroke="#475569" stroke-width="1.15" stroke-linecap="square" opacity="0.92"/>`
-      );
-    } else {
-      parts.push(
-        `<line x1="${mx}" y1="${t + 1.5}" x2="${mx}" y2="${b - 1.5}" stroke="${FV_PALLET_TIER_STROKE}" stroke-width="0.28" opacity="0.28" stroke-dasharray="2 3"/>`
-      );
-      const bw = xr - xl;
-      if (bw > 28) {
-        for (let k = 1; k <= FV_ALONG_BEAM_DIVISIONS; k++) {
-          const xDiv = xl + (k / (FV_ALONG_BEAM_DIVISIONS + 1)) * bw;
-          parts.push(
-            `<line x1="${xDiv}" y1="${t + 2.5}" x2="${xDiv}" y2="${b - 2.5}" stroke="${FV_PALLET_TIER_STROKE}" stroke-width="0.22" opacity="0.22"/>`
-          );
-        }
-      }
-    }
   }
   return parts.join('');
 }
@@ -744,8 +976,7 @@ function drawGroundPalletBand(
   yFirstBeamPx: number,
   yFloorInnerPx: number,
   yClipTop: number,
-  yClipBottom: number,
-  splitTwoPalletPositions: boolean
+  yClipBottom: number
 ): string {
   const yTop = Math.min(yFirstBeamPx, yFloorInnerPx);
   const yBot = Math.max(yFirstBeamPx, yFloorInnerPx);
@@ -755,21 +986,12 @@ function drawGroundPalletBand(
   const insetX = Math.max(2.8, (bay.right - bay.left) * 0.04);
   const xl = bay.left + insetX;
   const xr = bay.right - insetX;
-  const parts: string[] = [
-    `<rect x="${xl}" y="${t}" width="${xr - xl}" height="${b - t}" rx="1.4" fill="${FV_GROUND_PALLET_FILL}" stroke="${FV_GROUND_PALLET_STROKE}" stroke-width="0.55" opacity="${FV_GROUND_PALLET_OPACITY}"/>`,
-  ];
-  const mx = (xl + xr) / 2;
-  if (splitTwoPalletPositions) {
-    parts.push(
-      `<line x1="${mx}" y1="${t + 1.2}" x2="${mx}" y2="${b - 1.2}" stroke="#047857" stroke-width="1.05" stroke-linecap="square" opacity="0.88"/>`
-    );
-  }
-  return parts.join('');
+  return `<rect x="${xl}" y="${t}" width="${xr - xl}" height="${b - t}" rx="1.4" fill="${FV_GROUND_PALLET_FILL}" stroke="${FV_GROUND_PALLET_STROKE}" stroke-width="0.55" opacity="${FV_GROUND_PALLET_OPACITY}"/>`;
 }
 
 /**
  * Espaço sob o piso da estrutura: cota horizontal (`rackBottom + 26·ls`) + texto «Largura total»
- * (`rackBottom + 44·ls`) deve caber em `ph` sem sobrepor a legenda da folha (`wrapElevationDrawingPage`).
+ * (`rackBottom + 44·ls`) deve caber em `ph` sem sobrepor o rodapé da prancha.
  */
 function frontRackBelowFloorReservePx(labelScale: number): number {
   const ls = labelScale;
@@ -786,7 +1008,7 @@ function drawUprightWidthDims(
 ): string {
   const ls = labelScale;
   const parts: string[] = [];
-  const fs = 7.2 * ls;
+  const fs = 7.2 * ls * ELEV_TYPO_DIM_UPRIGHT_MM;
   for (let i = 0; i < widthsMm.length; i++) {
     const x0 = uprightXs[i]!;
     const wpx = uprightWidthsPx[i]!;
@@ -801,6 +1023,110 @@ function drawUprightWidthDims(
   return parts.join('');
 }
 
+/** Encaixa o desenho no painel: bbox → escala uniforme → centragem (evita clipping). */
+function wrapSvgContentWithPanelFit(
+  inner: string,
+  panel: { ox: number; oy: number; pw: number; ph: number },
+  content: { minX: number; minY: number; maxX: number; maxY: number },
+  margin: number,
+  fitOpts?: { maxUniformScale?: number; uniformScale?: number }
+): string {
+  const { ox, oy, pw, ph } = panel;
+  const safeL = ox + margin;
+  const safeT = oy + margin;
+  const safeR = ox + pw - margin;
+  const safeB = oy + ph - margin;
+  const bw = Math.max(1, content.maxX - content.minX);
+  const bh = Math.max(1, content.maxY - content.minY);
+  const rw = (safeR - safeL) / bw;
+  const rh = (safeB - safeT) / bh;
+  const maxS =
+    fitOpts?.maxUniformScale != null && fitOpts.maxUniformScale > 0
+      ? fitOpts.maxUniformScale
+      : 1;
+  let s = Math.min(maxS, rw, rh);
+  if (typeof fitOpts?.uniformScale === 'number') {
+    s = Math.min(s, fitOpts.uniformScale);
+  }
+  const cx = (content.minX + content.maxX) / 2;
+  const cy = (content.minY + content.maxY) / 2;
+  const tcx = (safeL + safeR) / 2;
+  const tcy = (safeT + safeB) / 2;
+  const tx = tcx - s * cx;
+  const ty = tcy - s * cy;
+  return `<g transform="translate(${tx.toFixed(3)},${ty.toFixed(3)}) scale(${s.toFixed(5)})">${inner}</g>`;
+}
+
+type SvgBBox = {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+};
+
+/** Linhas-guia horizontais discretas (coordenadas da folha, após transform da vista esq.). */
+function buildElevationSpreadGuideLinesSvg(
+  width: number,
+  frameInset: number,
+  tLeft: { tx: number; ty: number; s: number },
+  guideYsLocal: { top: number; floor: number; beams: number[] }
+): string {
+  const ysLoc = [
+    guideYsLocal.top,
+    ...guideYsLocal.beams,
+    guideYsLocal.floor,
+  ].sort((a, b) => a - b);
+  const uniq: number[] = [];
+  for (const y of ysLoc) {
+    if (uniq.length === 0 || Math.abs(y - uniq[uniq.length - 1]!) > 1.1) {
+      uniq.push(y);
+    }
+  }
+  const x1 = frameInset + 3;
+  const x2 = width - frameInset - 3;
+  const parts: string[] = [
+    `<g id="el-spread-guides" pointer-events="none" opacity="1">`,
+  ];
+  for (const yLoc of uniq) {
+    const y = tLeft.ty + tLeft.s * yLoc;
+    parts.push(
+      `<line x1="${x1}" y1="${y.toFixed(3)}" x2="${x2}" y2="${y.toFixed(3)}" stroke="#cbd5e1" stroke-width="0.26" opacity="0.38"/>`
+    );
+  }
+  parts.push('</g>');
+  return parts.join('');
+}
+
+type ElevationPanelDeferredWrap = {
+  deferred: true;
+  inner: string;
+  /** Bbox completo (inclui anotações), útil para debug. */
+  bbox: SvgBBox;
+  /** Silhueta da estrutura (montantes, longarinas, piso). */
+  structuralBbox: SvgBBox;
+  /** Legado: estrutura + folga; o encaixe da prancha paisagem usa {@link bbox} + insets. */
+  fitBox: SvgBBox;
+  /** Referências Y locais (pré-transform) para linhas-guia na prancha paisagem. */
+  guideYsLocal: { top: number; floor: number; beams: number[] };
+  panel: { ox: number; oy: number; pw: number; ph: number };
+  fitOpts?: { maxUniformScale?: number };
+};
+
+type DrawFrontRackOptions = {
+  labelScale?: number;
+  /** Escala para legendas secundárias (capacidade por patamar, etc.). */
+  labelMinorScale?: number;
+  /** Prancha paisagem premium: menos repetição, cotas compactas, sem cotas de largura de montante. */
+  spreadPremium?: boolean;
+  debug?: boolean;
+  /** Prancha paisagem: até 95% da escala de encaixe para reservar folga ao rodapé. */
+  panelFitMaxScale?: number;
+  /** Altura útil fixa (px) alinhada à vista lateral na mesma prancha. */
+  orthoSpread?: { innerH: number };
+  /** Devolve conteúdo + bbox para aplicar escala uniforme partilhada com a outra coluna. */
+  deferredWrap?: boolean;
+};
+
 /** Vista frontal: estrutura, longarinas, piso, cotas e carga (kg) centrada acima de cada nível. */
 function drawFrontRack(
   ox: number,
@@ -810,21 +1136,60 @@ function drawFrontRack(
   data: ElevationPanelPayload,
   sectionTitle: string,
   subtitle?: string,
-  options?: { labelScale?: number; debug?: boolean }
-): string {
+  options?: Omit<DrawFrontRackOptions, 'deferredWrap'> & {
+    deferredWrap?: false;
+  }
+): string;
+function drawFrontRack(
+  ox: number,
+  oy: number,
+  pw: number,
+  ph: number,
+  data: ElevationPanelPayload,
+  sectionTitle: string,
+  subtitle: string | undefined,
+  options: DrawFrontRackOptions & { deferredWrap: true }
+): ElevationPanelDeferredWrap;
+function drawFrontRack(
+  ox: number,
+  oy: number,
+  pw: number,
+  ph: number,
+  data: ElevationPanelPayload,
+  sectionTitle: string,
+  subtitle?: string,
+  options?: DrawFrontRackOptions
+): string | ElevationPanelDeferredWrap {
   const ls = options?.labelScale ?? 1;
+  const lsMinor = options?.labelMinorScale ?? ls;
+  const prem = options?.spreadPremium === true;
+  const lsPad = prem ? ls / ELEV_SPREAD_ORTHO_REFINE : ls;
   const nMod = FV_FRONT_BAY_COUNT;
   const levelsEst = Math.max(1, Math.min(32, Math.floor(data.levels)));
   const tunnelExtraSeg =
     data.tunnel === true && typeof data.tunnelClearanceMm === 'number' ? 1 : 0;
   const estSegCount = levelsEst + 2 + tunnelExtraSeg;
-  const dimChainRightPx = Math.min(260, 110 + 11 * ls * (estSegCount + 1));
-  const rackMaxW = Math.max(210, pw - 20 - 40 - dimChainRightPx);
+  const dimChainRightPx = Math.min(
+    ELEV_FRONT_DIM_CHAIN_CAP_PX,
+    ELEV_FRONT_DIM_CHAIN_BASE_PX +
+      ELEV_FRONT_DIM_CHAIN_PER_SEG_LS * ls * (estSegCount + 1)
+  );
+  const rackMaxW = Math.max(210, pw - 22 - 62 - dimChainRightPx);
   const rackMaxH = Math.max(
     120,
     ph - Math.round(78 / ls) - frontRackBelowFloorReservePx(ls)
   );
-  const g = buildBeamGeometry(data, rackMaxW, rackMaxH, ox, oy, pw, ph);
+  const g = options?.orthoSpread
+    ? buildBeamGeometryFixedInnerH(
+        data,
+        rackMaxW,
+        options.orthoSpread.innerH,
+        ox,
+        oy,
+        pw,
+        nMod
+      )
+    : buildBeamGeometry(data, rackMaxW, rackMaxH, ox, oy, pw, ph);
   const slimmed = frontSlimUprightsWidenBay(g.uprightWidthsPx, g.beamPx, nMod);
   const uprightWidthsPx = slimmed.uprightWidthsPx;
   const beamWithFrontVis = slimmed.beamPx;
@@ -876,17 +1241,22 @@ function drawFrontRack(
   const dimTopY = ry - 20;
   const floorTop = rackBottom;
   const floorPad = 6;
+  /** Faces externas úteis dos montantes (inclui sangria das sapatas), para linha/piso visível em toda a largura. */
+  let floorSpanLeft = uprightXs[0]!;
+  let floorSpanRight = uprightXs[nMod]! + uprightWidthsPx[nMod]!;
+  for (let fi = 0; fi <= nMod; fi++) {
+    const ux = uprightXs[fi]!;
+    const uw = uprightWidthsPx[fi]!;
+    const prot = data.columnProtector === true;
+    const padXP = prot ? 0.95 : 0.35;
+    floorSpanLeft = Math.min(floorSpanLeft, ux - padXP);
+    floorSpanRight = Math.max(floorSpanRight, ux + uw + padXP);
+  }
 
   const parts: string[] = [];
 
   parts.push(
-    `<rect x="${rx - floorPad}" y="${floorTop}" width="${totalW + 2 * floorPad}" height="11" fill="${COL_FLOOR_FILL}" stroke="${COL_FLOOR}" stroke-width="1.35"/>`
-  );
-  parts.push(
-    `<line x1="${rx - floorPad}" y1="${floorTop}" x2="${rx + totalW + floorPad}" y2="${floorTop}" stroke="${COL_FLOOR}" stroke-width="2.2"/>`
-  );
-  parts.push(
-    `<text x="${rx + totalW / 2}" y="${floorTop + 8.5 * ls}" text-anchor="middle" font-size="${9.25 * ls}px" fill="${COL_FLOOR}" font-family="${SVG_FONT_FAMILY}" font-weight="700">PISO</text>`
+    `<rect x="${floorSpanLeft - floorPad}" y="${floorTop}" width="${floorSpanRight - floorSpanLeft + 2 * floorPad}" height="11" fill="${COL_FLOOR_FILL}" stroke="${COL_FLOOR}" stroke-width="1.35"/>`
   );
 
   const clearanceMm =
@@ -927,43 +1297,32 @@ function drawFrontRack(
     }
   }
 
+  parts.push(
+    `<line x1="${floorSpanLeft}" y1="${floorTop}" x2="${floorSpanRight}" y2="${floorTop}" stroke="${COL_FLOOR}" stroke-width="2.2"/>`
+  );
+  parts.push(
+    `<text x="${(floorSpanLeft + floorSpanRight) / 2}" y="${floorTop + 8.5 * ls}" text-anchor="middle" font-size="${9.25 * ls}px" fill="${COL_FLOOR}" font-family="${SVG_FONT_FAMILY}" font-weight="700">PISO</text>`
+  );
+
   if (showTunnelOpening && yPassTop < floorTop - 2.5) {
-    const tx0 = faceSpanLeft;
-    const tx1 = faceSpanRight;
-    const tw = Math.max(0, tx1 - tx0);
     const yMid = (yPassTop + floorTop) / 2;
-    parts.push(
-      `<rect x="${tx0}" y="${yPassTop}" width="${tw}" height="${floorTop - yPassTop}" fill="#fef3c7" fill-opacity="0.42" stroke="#b45309" stroke-width="0.55" opacity="0.95"/>`
-    );
-    parts.push(
-      `<line x1="${tx0}" y1="${yPassTop}" x2="${tx1}" y2="${yPassTop}" stroke="#b45309" stroke-width="1.05" opacity="0.9"/>`
-    );
-    parts.push(
-      textLines(tx0 + tw * 0.25, yMid - 2 * ls, ['PASSAGEM'], {
-        fontSize: 9.25 * ls,
-        fill: '#b45309',
-        fontWeight: '700',
-      })
-    );
-    parts.push(
-      textLines(tx0 + tw * 0.75, yMid - 2 * ls, ['PASSAGEM'], {
-        fontSize: 9.25 * ls,
-        fill: '#b45309',
-        fontWeight: '700',
-      })
-    );
-    parts.push(
-      textLines(
-        tx0 + tw / 2,
-        yPassTop + Math.max(10, (floorTop - yPassTop) * 0.14),
-        ['TÚNEL'],
-        {
-          fontSize: 9.5 * ls,
-          fill: '#b45309',
-          fontWeight: '700',
-        }
-      )
-    );
+    for (let bi = 0; bi < bays.length; bi++) {
+      const bay = bays[bi]!;
+      const bl = bay.left;
+      const br = bay.right;
+      const bw = br - bl;
+      const cxBay = (bl + br) / 2;
+      parts.push(
+        `<line x1="${bl}" y1="${yPassTop}" x2="${br}" y2="${yPassTop}" stroke="#94a3b8" stroke-width="0.42" opacity="0.55"/>`
+      );
+      if (bw > 18 && floorTop - yPassTop > 28) {
+        parts.push(
+          `<text x="${cxBay}" y="${yMid}" text-anchor="middle" dominant-baseline="middle" font-size="${
+            7.4 * ls * ELEV_TYPO_VERTICAL_DIM_CHAIN
+          }px" fill="#64748b" font-family="${SVG_FONT_FAMILY}" font-weight="600">Vão túnel</text>`
+        );
+      }
+    }
   }
 
   const lastUx = uprightXs[nMod]!;
@@ -972,30 +1331,6 @@ function drawFrontRack(
 
   const yBeam0Elev = beamYsPx[0];
   if (
-    data.firstLevelOnGround === false &&
-    typeof yBeam0Elev === 'number' &&
-    !showTunnelOpening &&
-    rackBottom - yBeam0Elev > 6
-  ) {
-    for (let bi = 0; bi < bays.length; bi++) {
-      const bay = bays[bi]!;
-      const yTop = Math.min(yBeam0Elev, rackBottom);
-      const yBot = Math.max(yBeam0Elev, rackBottom);
-      parts.push(
-        `<rect x="${bay.left}" y="${yTop}" width="${bay.right - bay.left}" height="${yBot - yTop}" fill="#ffedd5" fill-opacity="0.58" stroke="#ea580c" stroke-width="0.65" stroke-dasharray="7 5" opacity="0.92"/>`
-      );
-      parts.push(
-        `<line x1="${bay.left}" y1="${(yTop + yBot) / 2}" x2="${bay.right}" y2="${(yTop + yBot) / 2}" stroke="#c2410c" stroke-width="0.72" stroke-dasharray="6 5" opacity="0.92"/>`
-      );
-    }
-    const cx = (faceSpanLeft + faceSpanRight) / 2;
-    const cyMid =
-      (Math.min(yBeam0Elev, rackBottom) + Math.max(yBeam0Elev, rackBottom)) /
-      2;
-    parts.push(
-      `<text x="${cx}" y="${cyMid - 4.5 * ls}" text-anchor="middle" font-size="${8.6 * ls}px" fill="#9a3412" stroke="#ffffff" stroke-width="${0.35 * ls}" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="700">1.º eixo elevado (folga sob o patamar)</text>`
-    );
-  } else if (
     data.firstLevelOnGround === true &&
     typeof yBeam0Elev === 'number' &&
     !showTunnelOpening &&
@@ -1021,7 +1356,9 @@ function drawFrontRack(
     }
     const cx = (faceSpanLeft + faceSpanRight) / 2;
     parts.push(
-      `<text x="${cx}" y="${yBeam0Elev - 5.8 * ls}" text-anchor="middle" font-size="${8.4 * ls}px" fill="#0f766e" stroke="#ffffff" stroke-width="${0.35 * ls}" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="700">1.º feixe ao piso (sem vão útil abaixo)</text>`
+      `<text x="${cx}" y="${yBeam0Elev - 5.8 * ls}" text-anchor="middle" font-size="${
+        8.4 * ls * ELEV_TYPO_CAP_AND_FACE_DIM
+      }px" fill="#0f766e" stroke="#ffffff" stroke-width="${0.35 * ls}" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="700">1.º feixe ao piso (sem vão útil abaixo)</text>`
     );
   }
 
@@ -1038,8 +1375,7 @@ function drawFrontRack(
           yBeam0,
           rackBottom,
           ry + 1,
-          rackBottom - 1,
-          false
+          rackBottom - 1
         )
       );
     }
@@ -1053,15 +1389,14 @@ function drawFrontRack(
         storageTiers,
         beamTh,
         ry + 1,
-        rackBottom - 1,
-        false
+        rackBottom - 1
       )
     );
   }
 
   const nBeamAxes = beamH.length;
-  /** Só níveis de carga: o último eixo é limite estrutural — não desenhar longarina/capa na baia (evita “nível extra”). */
-  const nStorageBeams = Math.max(0, nBeamAxes - 1);
+  /** Um rect por eixo de longarina (inclui o último: ~300 mm ao topo do montante — alinhado à cota «Ao topo coluna»). */
+  const nStorageBeams = Math.max(0, nBeamAxes);
   for (let bi = 0; bi < bays.length; bi++) {
     const bay = bays[bi]!;
     for (let j = 0; j < nStorageBeams; j++) {
@@ -1083,41 +1418,37 @@ function drawFrontRack(
     }
   }
 
-  if (
-    typeof data.capacityKgPerLevel === 'number' &&
-    data.capacityKgPerLevel > 0
-  ) {
-    const capText = `${Math.round(data.capacityKgPerLevel)}kg`;
-    const capFs = 14.5 * ls;
-    if (
-      data.hasGroundLevel === true &&
-      !showTunnelOpening &&
-      typeof beamYsPx[0] === 'number'
-    ) {
-      const ty = (beamYsPx[0]! + rackBottom) / 2 + 3 * ls;
-      for (let bi = 0; bi < bays.length; bi++) {
-        const bay = bays[bi]!;
-        const cx = (bay.left + bay.right) / 2;
-        parts.push(
-          `<text x="${cx}" y="${ty}" text-anchor="middle" font-size="${capFs}px" fill="#047857" font-family="${SVG_FONT_FAMILY}" font-weight="700">${escapeXml(
-            capText
-          )}</text>`
-        );
-      }
+  const palletKg = resolvePalletCapacityKg(data);
+  const pairKg = beamPairCapacityKg(data);
+  const capFsSmall = 8.85 * lsMinor * ELEV_TYPO_CAP_AND_FACE_DIM;
+  const capLinePallet = `CAPACIDADE = ${formatKgCapacityPtBr(palletKg)} kg por palete`;
+  parts.push(
+    `<text x="${(faceSpanLeft + faceSpanRight) / 2}" y="${dimTopY - 20 * ls}" text-anchor="middle" font-size="${capFsSmall}px" fill="${DIM_MINOR}" stroke="${COL_BG}" stroke-width="${0.28 * ls}" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="600">${escapeXml(
+      capLinePallet
+    )}</text>`
+  );
+  const cxFace = (faceSpanLeft + faceSpanRight) / 2;
+  for (let j = 0; j < nStorageBeams; j++) {
+    const yy = beamYsPx[j]!;
+    if (showTunnelOpening && yy >= yPassTop - beamTh * 0.55) {
+      continue;
     }
-    for (let bi = 0; bi < bays.length; bi++) {
-      const bay = bays[bi]!;
-      for (let j = 0; j < nStorageBeams; j++) {
-        const yy = beamYsPx[j]!;
-        if (showTunnelOpening && yy >= yPassTop - beamTh * 0.55) {
-          continue;
-        }
-        const bh = Math.max(beamTh, 2.2);
-        const ty = yy - bh / 2 - 4.5 * ls;
+    const bh = Math.max(beamTh, 2.2);
+    const ty = yy - bh / 2 - 3.2 * lsMinor;
+    const ord = j + 1;
+    const pairLine = `${ord}\u00BA PAR DE LONGARINAS = ${formatKgCapacityPtBr(pairKg)} kg`;
+    if (prem) {
+      parts.push(
+        `<text x="${cxFace}" y="${ty}" text-anchor="middle" font-size="${capFsSmall}px" fill="${DIM_MINOR}" stroke="${COL_BG}" stroke-width="${0.25 * ls}" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="600">${escapeXmlPreserveOrdinal(
+          pairLine
+        )}</text>`
+      );
+    } else {
+      for (const bay of bays) {
         const cx = (bay.left + bay.right) / 2;
         parts.push(
-          `<text x="${cx}" y="${ty}" text-anchor="middle" font-size="${capFs}px" fill="#111827" font-family="${SVG_FONT_FAMILY}" font-weight="700">${escapeXml(
-            capText
+          `<text x="${cx}" y="${ty}" text-anchor="middle" font-size="${capFsSmall}px" fill="${DIM_MINOR}" stroke="${COL_BG}" stroke-width="${0.25 * ls}" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="600">${escapeXmlPreserveOrdinal(
+            pairLine
           )}</text>`
         );
       }
@@ -1128,42 +1459,49 @@ function drawFrontRack(
     `<line x1="${uprightXs[0]}" y1="${topY}" x2="${lastUx + lastUw}" y2="${topY}" stroke="#475569" stroke-width="1.05" stroke-linecap="square" opacity="0.75"/>`
   );
 
+  if (data.topTravamentoSuperior === true) {
+    const yTopBrace = topY - 2.85;
+    parts.push(
+      `<line id="top-travamento-superior-front" x1="${faceSpanLeft}" y1="${yTopBrace}" x2="${faceSpanRight}" y2="${yTopBrace}" stroke="#94a3b8" stroke-width="0.48" stroke-dasharray="2.5 5" opacity="0.4"/>`
+    );
+  }
+
   parts.push(
-    drawFrontGuardRailMarkers(
-      faceSpanLeft,
-      faceSpanRight,
-      rackBottom,
-      data,
-      ls
-    )
+    drawFrontGuardRailMarkers(faceSpanLeft, faceSpanRight, rackBottom, data, ls)
   );
 
   parts.push(
     dimensionLineHArrows(faceSpanLeft, dimTopY, faceSpanRight, DIM_MINOR)
   );
-  const faceTitle = `Módulo 2 baias · vão ${escapeXml(
+  const faceTitle = `Vão ${escapeXml(
     formatMmPtBr(Math.round(beamL))
-  )} mm/baia · face de armazenagem`;
+  )}/baia · face de carga`;
   parts.push(
-    `<text x="${ox + pw / 2}" y="${dimTopY - 6 * ls}" text-anchor="middle" font-size="${10.5 * ls}px" fill="${DIM_MAJOR}" font-family="${SVG_FONT_FAMILY}" font-weight="700">${faceTitle}</text>`
+    `<text x="${ox + pw / 2}" y="${dimTopY - 6 * ls}" text-anchor="middle" font-size="${
+      10.5 * ls * ELEV_TYPO_CAP_AND_FACE_DIM
+    }px" fill="${DIM_MAJOR}" font-family="${SVG_FONT_FAMILY}" font-weight="700">${faceTitle}</text>`
   );
 
   parts.push(
     dimensionLineHArrows(rx, rackBottom + 26 * ls, rx + totalW, DIM_MINOR)
   );
   parts.push(
-    `<text x="${rx + totalW / 2}" y="${rackBottom + 44 * ls}" text-anchor="middle" font-size="${9 * ls}px" fill="#334155" font-family="${SVG_FONT_FAMILY}">Largura total ${escapeXml(formatMmPtBr(Math.round(totalWidthMm)))}</text>`
+    `<text x="${rx + totalW / 2}" y="${rackBottom + 44 * ls}" text-anchor="middle" font-size="${
+      9 * ls * ELEV_TYPO_CAP_AND_FACE_DIM
+    }px" fill="#334155" font-family="${SVG_FONT_FAMILY}">Largura total da face: ${escapeXml(formatMmPtBr(Math.round(totalWidthMm)))}</text>`
   );
 
-  parts.push(
-    drawUprightWidthDims(
-      uprightXs,
-      uprightWidthsPx,
-      uprightWidthsMm,
-      rackBottom + 58 * ls,
-      ls
-    )
-  );
+  if (!prem) {
+    parts.push(
+      drawUprightWidthDims(
+        uprightXs,
+        uprightWidthsPx,
+        uprightWidthsMm,
+        rackBottom + 58 * ls,
+        ls
+      )
+    );
+  }
 
   parts.push(
     drawVerticalDimChain(
@@ -1177,18 +1515,24 @@ function drawFrontRack(
       ls,
       showTunnelOpening ? { clearanceMm: clearanceMm, yPassTop } : undefined,
       data.hasGroundLevel === true,
-      data.structuralTopMm
+      data.structuralTopMm,
+      prem ? undefined : frontOperationalAnnotationLines(data),
+      prem
     )
   );
 
   if (sectionTitle) {
     parts.push(
-      `<text x="${ox + pw / 2}" y="${oy + 16 * ls}" text-anchor="middle" font-size="${15 * ls}px" fill="#0f172a" font-family="${SVG_FONT_FAMILY}" font-weight="700">${escapeXml(sectionTitle)}</text>`
+      `<text x="${ox + pw / 2}" y="${oy + 16 * ls}" text-anchor="middle" font-size="${
+        15 * ls * ELEV_TYPO_VISTA_HEADING
+      }px" fill="#0f172a" font-family="${SVG_FONT_FAMILY}" font-weight="700">${escapeXml(sectionTitle)}</text>`
     );
   }
   if (subtitle) {
     parts.push(
-      `<text x="${ox + pw / 2}" y="${oy + 34 * ls}" text-anchor="middle" font-size="${9 * ls}px" fill="#64748b" font-family="${SVG_FONT_FAMILY}">${escapeXml(subtitle)}</text>`
+      `<text x="${ox + pw / 2}" y="${oy + 34 * ls}" text-anchor="middle" font-size="${
+        9 * ls * 1.11
+      }px" fill="#64748b" font-family="${SVG_FONT_FAMILY}">${escapeXml(subtitle)}</text>`
     );
   }
 
@@ -1197,16 +1541,15 @@ function drawFrontRack(
       `<g id="el-debug-front" font-family="${SVG_FONT_FAMILY}" pointer-events="none">`
     );
     parts.push(
-      `<text x="${ox + 10}" y="${oy + ph - 10}" font-size="7.5" fill="#7c3aed" font-family="${SVG_FONT_FAMILY}">DEBUG · eixos longarina (mm do piso)</text>`
+      `<text x="${ox + 10}" y="${oy + ph - 10}" font-size="10.1" fill="#7c3aed" font-family="${SVG_FONT_FAMILY}">DEBUG · eixos longarina (mm do piso)</text>`
     );
-    let ty = oy + ph - 22;
+    let ty = oy + ph - 23;
     for (let i = 0; i < data.beamElevationsMm.length; i++) {
       const mm = data.beamElevationsMm[i]!;
       const yPx = beamYsPx[i];
-      const yStr =
-        typeof yPx === 'number' ? `${yPx.toFixed(1)} px` : '—';
+      const yStr = typeof yPx === 'number' ? `${yPx.toFixed(1)} px` : '—';
       parts.push(
-        `<text x="${ox + 10}" y="${ty}" font-size="7" fill="#6b21a8" font-family="${SVG_FONT_FAMILY}">beam[${i}] z=${Math.round(mm)} mm · ${yStr}</text>`
+        `<text x="${ox + 10}" y="${ty}" font-size="9.45" fill="#6b21a8" font-family="${SVG_FONT_FAMILY}">beam[${i}] z=${Math.round(mm)} mm · ${yStr}</text>`
       );
       ty -= 10;
       if (typeof yPx === 'number') {
@@ -1217,13 +1560,96 @@ function drawFrontRack(
     }
     if (showTunnelOpening) {
       parts.push(
-        `<text x="${rx + totalW * 0.5}" y="${yPassTop - 6 * ls}" text-anchor="middle" font-size="7.5" fill="#b45309" font-family="${SVG_FONT_FAMILY}" font-weight="700">zona túnel · pé livre ${Math.round(clearanceMm)} mm</text>`
+        `<text x="${rx + totalW * 0.5}" y="${yPassTop - 6 * ls}" text-anchor="middle" font-size="${
+          7.5 * ELEV_TYPO_CAP_AND_FACE_DIM
+        }px" fill="#b45309" font-family="${SVG_FONT_FAMILY}" font-weight="700">zona túnel · pé livre ${Math.round(clearanceMm)} mm</text>`
       );
     }
     parts.push('</g>');
   }
 
-  return parts.join('');
+  const inner = parts.join('');
+  const rackRight = rx + totalW;
+  const step = ELEV_VERTICAL_DIM_STEP_LS * ls;
+  const detailApprox = Math.max(3, storageTiers + 2 + tunnelExtraSeg);
+  const dimRight =
+    rackRight +
+    10 +
+    (detailApprox + 2) * step +
+    ELEV_VERTICAL_DIM_RIGHT_GUTTER_PX;
+  let minY = Math.min(dimTopY - 22 * ls, ry - 8, dimTopY - 20 * ls - 16);
+  if (sectionTitle) minY = Math.min(minY, oy + 6);
+  if (subtitle) {
+    /**
+     * Prancha premium: o subtítulo desenha-se em `oy + 34*ls`; usar `oy + 4` inflacionava o bbox
+     * com ~30px de vazio acima do texto e empurrava o centrado vertical para baixo.
+     */
+    const subFs = 9 * ls * 1.11;
+    const subtitleInkTop = oy + 34 * ls - subFs * 0.92;
+    minY = Math.min(minY, prem ? subtitleInkTop : oy + 4);
+  }
+  if (showTunnelOpening) minY = Math.min(minY, yPassTop - 10);
+  const maxY = Math.max(rackBottom + 76 * ls, floorTop + 16, oy + ph * 0.98);
+  const minX = Math.min(
+    floorSpanLeft - floorPad - 4,
+    faceSpanLeft - 30,
+    ox + 4
+  );
+  const maxX = Math.max(dimRight, ox + pw - 6, rackRight + floorPad + 8);
+  const bboxBase = { minX, minY, maxX, maxY };
+  /** Folga extra ao bbox para «H total», níveis longos e cotas — encaixe usa bbox completo. */
+  const bbox = prem
+    ? {
+        minX: bboxBase.minX - 8 * ls,
+        minY: bboxBase.minY - 5 * ls,
+        maxX: bboxBase.maxX + 36 * ls,
+        maxY: bboxBase.maxY + 14 * ls,
+      }
+    : bboxBase;
+  const structuralMinY =
+    data.topTravamentoSuperior === true ? Math.min(ry, ry - 2.85) : ry;
+  const structuralBbox: SvgBBox = {
+    minX: Math.min(floorSpanLeft - floorPad, faceSpanLeft),
+    maxX: Math.max(
+      rackRight + floorPad,
+      faceSpanRight,
+      floorSpanRight + floorPad
+    ),
+    minY: structuralMinY,
+    maxY: floorTop + 11,
+  };
+  const fitPadTop = prem ? 36 * lsPad + 24 : 62 * ls + 52;
+  const fitPadBottom = prem ? 43 * lsPad + 15 : 74 * ls + 32;
+  const fitPadLeft = prem ? 10 + 6 * lsPad : 22 + 10 * ls;
+  const fitPadRight = dimRight - rackRight + (prem ? 7 : 18);
+  const fitBox: SvgBBox = {
+    minX: structuralBbox.minX - fitPadLeft,
+    minY: structuralBbox.minY - fitPadTop,
+    maxX: structuralBbox.maxX + fitPadRight,
+    maxY: structuralBbox.maxY + fitPadBottom,
+  };
+  const panel = { ox, oy, pw, ph };
+  const wrapFit =
+    options?.panelFitMaxScale != null
+      ? { maxUniformScale: options.panelFitMaxScale }
+      : undefined;
+  if (options?.deferredWrap === true) {
+    return {
+      deferred: true,
+      inner,
+      bbox,
+      structuralBbox,
+      fitBox,
+      guideYsLocal: {
+        top: ry,
+        floor: floorTop,
+        beams: beamYsPx.slice(),
+      },
+      panel,
+      fitOpts: wrapFit,
+    };
+  }
+  return wrapSvgContentWithPanelFit(inner, panel, bbox, 12, wrapFit);
 }
 
 /** Treliça diagonal entre dois níveis de vigas. */
@@ -1232,12 +1658,24 @@ function braceBetween(
   x1: number,
   yLow: number,
   yHigh: number,
-  flip: boolean
+  flip: boolean,
+  strokeOpacity = 0.9
 ): string {
   const xa = flip ? x1 : x0;
   const xb = flip ? x0 : x1;
-  return `<line x1="${xa}" y1="${yLow}" x2="${xb}" y2="${yHigh}" stroke="${COL_BRACE_STROKE}" stroke-width="1.1" opacity="0.9"/>`;
+  return `<line x1="${xa}" y1="${yLow}" x2="${xb}" y2="${yHigh}" stroke="${COL_BRACE_STROKE}" stroke-width="1.05" opacity="${strokeOpacity}"/>`;
 }
+
+type DrawLateralOptions = {
+  labelScale?: number;
+  labelMinorScale?: number;
+  spreadPremium?: boolean;
+  hideHeader?: boolean;
+  debug?: boolean;
+  panelFitMaxScale?: number;
+  orthoSpread?: { innerH: number };
+  deferredWrap?: boolean;
+};
 
 /** Vista lateral: um só perfil (faixa total), treliça única; dupla costas = espinha ao centro (sem duplicar pórticos). */
 function drawLateral(
@@ -1246,55 +1684,95 @@ function drawLateral(
   pw: number,
   ph: number,
   data: ElevationPanelPayload,
-  opts?: { labelScale?: number; hideHeader?: boolean; debug?: boolean }
-): string {
+  opts?: Omit<DrawLateralOptions, 'deferredWrap'> & { deferredWrap?: false }
+): string;
+function drawLateral(
+  ox: number,
+  oy: number,
+  pw: number,
+  ph: number,
+  data: ElevationPanelPayload,
+  opts: DrawLateralOptions & { deferredWrap: true }
+): ElevationPanelDeferredWrap;
+function drawLateral(
+  ox: number,
+  oy: number,
+  pw: number,
+  ph: number,
+  data: ElevationPanelPayload,
+  opts?: DrawLateralOptions
+): string | ElevationPanelDeferredWrap {
   const ls = opts?.labelScale ?? 1;
+  const lsMinor = opts?.labelMinorScale ?? ls;
+  const prem = opts?.spreadPremium === true;
+  const lsPad = prem ? ls / ELEV_SPREAD_ORTHO_REFINE : ls;
   const hideHeader = opts?.hideHeader === true;
   const rackMaxW = Math.min(pw - 48, Math.max(120, pw * 0.54));
   const rackMaxH = ph - Math.round(72 / ls);
-  /** Um perfil de profundidade (uma baia visível); níveis vêm do mesmo payload. */
-  const g = buildBeamGeometry(
-    data,
-    rackMaxW * 0.98,
-    rackMaxH,
-    ox,
-    oy,
-    pw,
-    ph,
-    1
-  );
-
-  const { storageTiers, uprightH, beamH, uprightWidthsPx } = g;
-  const nBeamAxes = beamH.length;
 
   /** Uma costa em profundidade — nunca a faixa dupla inteira (evita perfil largo com duas baias). */
   const sliceMm = Math.max(1, data.lateralProfileDepthMm);
   const isDouble = data.rackDepthMode === 'double';
 
-  const dimReservePx = 54;
+  /** Reserva à direita do perfil para a cadeia vertical de cotas e textos de altura. */
+  const dimReservePx = 102;
   const rackW = Math.min(
     Math.max(130, pw - 36 - dimReservePx),
     Math.max(118, pw * 0.52)
   );
-  const rackH = ph - Math.round((hideHeader ? 44 : 72) / ls);
-  const sx = rackW / sliceMm;
-  const sy = rackH / uprightH;
-  const s = Math.min(sx, sy);
-  const dw = sliceMm * s;
-  const dh = uprightH * s;
-  const x0 = ox + (pw - dw) / 2;
-  const headerPad = hideHeader ? 18 : 36;
-  const y0 = oy + headerPad + (rackH - dh) / 2;
 
-  const scaleY = dh / uprightH;
-  const beamYLocal = (j: number) => y0 + dh - (beamH[j]! / uprightH) * dh;
+  let g: BeamGeometry;
+  let x0: number;
+  let dw: number;
+  let y0: number;
+  let dh: number;
+  let floorTopLat: number;
+  let scaleY: number;
+  let beamAt: (j: number) => number;
+
+  if (opts?.orthoSpread) {
+    const innerH = opts.orthoSpread.innerH;
+    g = buildBeamGeometryFixedInnerH(
+      data,
+      rackMaxW * 0.98,
+      innerH,
+      ox,
+      oy,
+      pw,
+      1
+    );
+    dw = Math.min(rackW, rackMaxW * 0.98);
+    x0 = ox + (pw - dw) / 2;
+    y0 = g.ry;
+    dh = g.innerH;
+    floorTopLat = g.rackBottom;
+    scaleY = dh / g.uprightH;
+    beamAt = (j: number) => g.beamYsPx[j]!;
+  } else {
+    g = buildBeamGeometry(data, rackMaxW * 0.98, rackMaxH, ox, oy, pw, ph, 1);
+    const rackH = ph - Math.round((hideHeader ? 44 : 72) / ls);
+    const sx = rackW / sliceMm;
+    const sy = rackH / g.uprightH;
+    const s = Math.min(sx, sy);
+    dw = sliceMm * s;
+    dh = g.uprightH * s;
+    x0 = ox + (pw - dw) / 2;
+    const headerPad = hideHeader ? 18 : 36;
+    y0 = oy + headerPad + (rackH - dh) / 2;
+    floorTopLat = y0 + dh;
+    scaleY = dh / g.uprightH;
+    beamAt = (j: number) => y0 + dh - (g.beamH[j]! / g.uprightH) * dh;
+  }
+
+  const { storageTiers, uprightH, beamH, uprightWidthsPx } = g;
+  const nBeamAxes = beamH.length;
 
   const showTunnelOpening =
     data.tunnel === true && typeof data.tunnelClearanceMm === 'number';
   const clearanceMm = showTunnelOpening
     ? Math.max(0, data.tunnelClearanceMm!)
     : 0;
-  const floorTopLat = y0 + dh;
+  const depthScalePxPerMm = dw / sliceMm;
   const yPassTop =
     showTunnelOpening && clearanceMm > 0
       ? floorTopLat - (clearanceMm / uprightH) * dh
@@ -1303,10 +1781,14 @@ function drawLateral(
   const parts: string[] = [];
   if (!hideHeader) {
     parts.push(
-      `<text x="${ox + pw / 2}" y="${oy + 16 * ls}" text-anchor="middle" font-size="${15 * ls}px" fill="#0f172a" font-family="${SVG_FONT_FAMILY}" font-weight="700">Vista lateral</text>`
+      `<text x="${ox + pw / 2}" y="${oy + 16 * ls}" text-anchor="middle" font-size="${
+        15 * ls * ELEV_TYPO_VISTA_HEADING
+      }px" fill="#0f172a" font-family="${SVG_FONT_FAMILY}" font-weight="700">Vista lateral</text>`
     );
     parts.push(
-      `<text x="${ox + pw / 2}" y="${oy + 34 * ls}" text-anchor="middle" font-size="${9 * ls}px" fill="#64748b" font-family="${SVG_FONT_FAMILY}">${escapeXml(
+      `<text x="${ox + pw / 2}" y="${oy + 34 * ls}" text-anchor="middle" font-size="${
+        9 * ls * 1.11
+      }px" fill="#64748b" font-family="${SVG_FONT_FAMILY}">${escapeXml(
         isDouble
           ? `Perfil 1 costa ${formatMmPtBr(Math.round(sliceMm))} · dupla costas (2 filas + espinha) em planta`
           : `Prof. posição ${formatMmPtBr(Math.round(sliceMm))}`
@@ -1321,7 +1803,9 @@ function drawLateral(
     `<line x1="${x0 - 6}" y1="${floorTopLat}" x2="${x0 + dw + 6}" y2="${floorTopLat}" stroke="${COL_FLOOR}" stroke-width="2"/>`
   );
   parts.push(
-    `<text x="${x0 + dw / 2}" y="${floorTopLat + 8 * ls}" text-anchor="middle" font-size="${9 * ls}px" fill="${COL_FLOOR}" font-family="${SVG_FONT_FAMILY}" font-weight="700">PISO</text>`
+    `<text x="${x0 + dw / 2}" y="${floorTopLat + 8 * ls}" text-anchor="middle" font-size="${
+      9 * ls * ELEV_TYPO_CAP_AND_FACE_DIM
+    }px" fill="${COL_FLOOR}" font-family="${SVG_FONT_FAMILY}" font-weight="700">PISO</text>`
   );
 
   const uSide = Math.max(5.5, uprightWidthsPx[0]! * 0.42);
@@ -1336,6 +1820,22 @@ function drawLateral(
   parts.push(
     `<rect x="${xRightU}" y="${y0}" width="${uSide}" height="${dh}" fill="${FV_UPRIGHT_FILL}" stroke="${FV_UPRIGHT_STROKE}" stroke-width="1.1"/>`
   );
+
+  if (data.fundoTravamento === true && !isDouble) {
+    const wFundoPx = FUNDO_TRAVAMENTO_WIDTH_MM * depthScalePxPerMm;
+    const hFundoPx = 0.5 * dh;
+    const xFundo = x0 + dw;
+    const yFundo = floorTopLat - hFundoPx;
+    parts.push(
+      `<rect id="fundo-travamento-lateral" x="${xFundo}" y="${yFundo}" width="${wFundoPx}" height="${hFundoPx}" fill="#e2e8f0" fill-opacity="0.92" stroke="${COL_BRACE_STROKE}" stroke-width="0.95" stroke-linejoin="miter" opacity="0.94"/>`
+    );
+  }
+
+  if (data.topTravamentoSuperior === true) {
+    parts.push(
+      `<line id="top-travamento-superior-lateral" x1="${bayLeft}" y1="${y0 + 0.9}" x2="${bayRight}" y2="${y0 + 0.9}" stroke="#94a3b8" stroke-width="0.48" stroke-dasharray="2.5 5" opacity="0.4"/>`
+    );
+  }
 
   if (data.columnProtector === true) {
     const bh = 8.8;
@@ -1355,56 +1855,22 @@ function drawLateral(
 
   if (showTunnelOpening && yPassTop < floorTopLat - 2.5) {
     const tw = Math.max(0, bayRight - bayLeft);
-    const yMid = (yPassTop + floorTopLat) / 2;
     parts.push(
-      `<rect x="${bayLeft}" y="${yPassTop}" width="${tw}" height="${floorTopLat - yPassTop}" fill="#fef3c7" fill-opacity="0.42" stroke="#b45309" stroke-width="0.55" opacity="0.95"/>`
+      `<line x1="${bayLeft}" y1="${yPassTop}" x2="${bayRight}" y2="${yPassTop}" stroke="#94a3b8" stroke-width="0.4" opacity="0.52"/>`
     );
-    parts.push(
-      `<line x1="${bayLeft}" y1="${yPassTop}" x2="${bayRight}" y2="${yPassTop}" stroke="#b45309" stroke-width="1.05" opacity="0.9"/>`
-    );
-    parts.push(
-      textLines(bayLeft + tw * 0.25, yMid - 2 * ls, ['PASSAGEM'], {
-        fontSize: 9 * ls,
-        fill: '#b45309',
-        fontWeight: '700',
-      })
-    );
-    parts.push(
-      textLines(bayLeft + tw * 0.75, yMid - 2 * ls, ['PASSAGEM'], {
-        fontSize: 9 * ls,
-        fill: '#b45309',
-        fontWeight: '700',
-      })
-    );
-    parts.push(
-      textLines(
-        bayLeft + tw / 2,
-        yPassTop + Math.max(8, (floorTopLat - yPassTop) * 0.14),
-        ['TÚNEL'],
-        {
-          fontSize: 9.25 * ls,
-          fill: '#b45309',
-          fontWeight: '700',
-        }
-      )
-    );
+    if (!prem && tw > 32 && floorTopLat - yPassTop > 24) {
+      const yMid = (yPassTop + floorTopLat) / 2;
+      const cxBay = (bayLeft + bayRight) / 2;
+      parts.push(
+        `<text x="${cxBay}" y="${yMid}" text-anchor="middle" dominant-baseline="middle" font-size="${
+          7 * ls * ELEV_TYPO_VERTICAL_DIM_CHAIN
+        }px" fill="#94a3b8" font-family="${SVG_FONT_FAMILY}" font-weight="600">Vão túnel</text>`
+      );
+    }
   }
 
-  const yB0Lat = beamYLocal(0);
+  const yB0Lat = beamAt(0);
   if (
-    data.firstLevelOnGround === false &&
-    !showTunnelOpening &&
-    floorTopLat - yB0Lat > 6
-  ) {
-    const yTop = Math.min(yB0Lat, floorTopLat);
-    const yBot = Math.max(yB0Lat, floorTopLat);
-    parts.push(
-      `<rect x="${bayLeft}" y="${yTop}" width="${bayRight - bayLeft}" height="${yBot - yTop}" fill="#ffedd5" fill-opacity="0.55" stroke="#ea580c" stroke-width="0.62" stroke-dasharray="7 5" opacity="0.9"/>`
-    );
-    parts.push(
-      `<line x1="${bayLeft}" y1="${(yTop + yBot) / 2}" x2="${bayRight}" y2="${(yTop + yBot) / 2}" stroke="#c2410c" stroke-width="0.68" stroke-dasharray="6 5" opacity="0.9"/>`
-    );
-  } else if (
     data.firstLevelOnGround === true &&
     !showTunnelOpening &&
     Math.abs(yB0Lat - floorTopLat) > 5
@@ -1415,20 +1881,13 @@ function drawLateral(
   }
 
   parts.push(
-    drawLateralGuardRailMarkers(
-      xLeftU,
-      xRightU,
-      y0,
-      floorTopLat,
-      data,
-      ls
-    )
+    drawLateralGuardRailMarkers(xLeftU, xRightU, y0, floorTopLat, data, ls)
   );
 
-  const nLatBeams = Math.max(0, nBeamAxes - 1);
+  const nLatBeams = Math.max(0, nBeamAxes);
   const bhLat = Math.max(2, 2.2 * scaleY);
   for (let j = 0; j < nLatBeams; j++) {
-    const yy = beamYLocal(j);
+    const yy = beamAt(j);
     if (showTunnelOpening && yy >= yPassTop - bhLat * 0.55) {
       continue;
     }
@@ -1437,22 +1896,49 @@ function drawLateral(
     );
   }
 
+  const palletKgLat = resolvePalletCapacityKg(data);
+  const pairKgLat = beamPairCapacityKg(data);
+  const capLatFs = 8.75 * lsMinor * ELEV_TYPO_CAP_AND_FACE_DIM;
+  const mxLat = (bayLeft + bayRight) / 2;
+  parts.push(
+    `<text x="${mxLat}" y="${y0 - 8 * ls}" text-anchor="middle" font-size="${capLatFs}px" fill="${DIM_MINOR}" stroke="${COL_BG}" stroke-width="${0.25 * ls}" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="600">${escapeXml(
+      `CAPACIDADE = ${formatKgCapacityPtBr(palletKgLat)} kg por palete`
+    )}</text>`
+  );
+  for (let j = 0; j < nLatBeams; j++) {
+    const yy = beamAt(j);
+    if (showTunnelOpening && yy >= yPassTop - bhLat * 0.55) {
+      continue;
+    }
+    const ty = yy - bhLat / 2 - 2.8 * lsMinor;
+    const pairLineLat = `${j + 1}\u00BA PAR DE LONGARINAS = ${formatKgCapacityPtBr(pairKgLat)} kg`;
+    parts.push(
+      `<text x="${mxLat}" y="${ty}" text-anchor="middle" font-size="${capLatFs}px" fill="${DIM_MINOR}" stroke="${COL_BG}" stroke-width="${0.22 * ls}" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="600">${escapeXmlPreserveOrdinal(
+        pairLineLat
+      )}</text>`
+    );
+  }
+
   for (let j = 0; j < storageTiers; j++) {
-    const yLo = beamYLocal(j);
-    const yHi = beamYLocal(j + 1);
-    parts.push(braceBetween(bayLeft, bayRight, yLo, yHi, j % 2 === 0));
+    const yLo = beamAt(j);
+    const yHi = beamAt(j + 1);
+    parts.push(braceBetween(bayLeft, bayRight, yLo, yHi, j % 2 === 0, 0.62));
   }
 
   parts.push(
     dimensionLineHArrows(x0, floorTopLat + 22 * ls, x0 + dw, DIM_MINOR)
   );
   parts.push(
-    `<text x="${x0 + dw / 2}" y="${floorTopLat + 40 * ls}" text-anchor="middle" font-size="${10 * ls}px" fill="#334155" font-family="${SVG_FONT_FAMILY}">${escapeXml(
-      `Prof. posição (lateral) ${formatMmPtBr(Math.round(sliceMm))}`
+    `<text x="${x0 + dw / 2}" y="${floorTopLat + 38 * ls}" text-anchor="middle" font-size="${
+      10.5 * ls * ELEV_TYPO_CAP_AND_FACE_DIM
+    }px" fill="${DIM_MINOR}" font-family="${SVG_FONT_FAMILY}" font-weight="600">${escapeXml(
+      isDouble
+        ? `Profundidade da costa: ${formatMmPtBr(Math.round(sliceMm))} (dupla costas em planta)`
+        : `Profundidade da costa: ${formatMmPtBr(Math.round(sliceMm))}`
     )}</text>`
   );
 
-  const beamYsLat = beamH.map((_, j) => beamYLocal(j));
+  const beamYsLat = beamH.map((_, j) => beamAt(j));
   const clearanceLatMm =
     showTunnelOpening && typeof data.tunnelClearanceMm === 'number'
       ? Math.max(0, data.tunnelClearanceMm)
@@ -1467,9 +1953,13 @@ function drawLateral(
       g.axisGapsMm,
       uprightH,
       ls,
-      clearanceLatMm > 0 ? { clearanceMm: clearanceLatMm, yPassTop } : undefined,
+      clearanceLatMm > 0
+        ? { clearanceMm: clearanceLatMm, yPassTop }
+        : undefined,
       data.hasGroundLevel === true,
-      data.structuralTopMm
+      data.structuralTopMm,
+      undefined,
+      prem
     )
   );
 
@@ -1479,161 +1969,642 @@ function drawLateral(
     );
     let tyDbg = oy + ph - 10;
     parts.push(
-      `<text x="${ox + 8}" y="${tyDbg}" font-size="7" fill="#7c3aed" font-family="${SVG_FONT_FAMILY}">DEBUG lateral · eixos z (mm)</text>`
+      `<text x="${ox + 8}" y="${tyDbg}" font-size="9.45" fill="#7c3aed" font-family="${SVG_FONT_FAMILY}">DEBUG lateral · eixos z (mm)</text>`
     );
     tyDbg -= 10;
     for (let i = 0; i < data.beamElevationsMm.length; i++) {
       const mm = data.beamElevationsMm[i]!;
       parts.push(
-        `<text x="${ox + 8}" y="${tyDbg}" font-size="6.5" fill="#6b21a8" font-family="${SVG_FONT_FAMILY}">beam[${i}] ${Math.round(mm)} mm</text>`
+        `<text x="${ox + 8}" y="${tyDbg}" font-size="8.9" fill="#6b21a8" font-family="${SVG_FONT_FAMILY}">beam[${i}] ${Math.round(mm)} mm</text>`
       );
       tyDbg -= 9;
     }
     if (showTunnelOpening) {
       parts.push(
-        `<text x="${ox + 8}" y="${tyDbg}" font-size="6.5" fill="#b45309" font-family="${SVG_FONT_FAMILY}">restrição túnel · ${Math.round(clearanceLatMm)} mm</text>`
+        `<text x="${ox + 8}" y="${tyDbg}" font-size="8.9" fill="#b45309" font-family="${SVG_FONT_FAMILY}">restrição túnel · ${Math.round(clearanceLatMm)} mm</text>`
       );
     }
     parts.push('</g>');
   }
 
-  return parts.join('');
+  const innerLat = parts.join('');
+  const latStep = ELEV_VERTICAL_DIM_STEP_LS * ls;
+  const latTunnelExtra =
+    showTunnelOpening && typeof data.tunnelClearanceMm === 'number' ? 1 : 0;
+  const latDetailApprox = Math.max(3, storageTiers + 2 + latTunnelExtra);
+  const dimRightLat =
+    x0 +
+    dw +
+    10 +
+    (latDetailApprox + 2) * latStep +
+    ELEV_VERTICAL_DIM_RIGHT_GUTTER_PX;
+  const minXL = Math.min(x0 - 12, ox + 4);
+  const maxXL = Math.max(dimRightLat, ox + pw - 6);
+  const minYL = Math.min(y0 - 10 * ls, oy + (hideHeader ? 4 : 8));
+  const maxYL = Math.max(floorTopLat + 44 * ls, oy + ph * 0.97);
+  const bboxLatBase = { minX: minXL, minY: minYL, maxX: maxXL, maxY: maxYL };
+  const bboxLat =
+    prem && opts?.orthoSpread
+      ? {
+          minX: bboxLatBase.minX - 8 * ls,
+          minY: bboxLatBase.minY - 5 * ls,
+          maxX: bboxLatBase.maxX + 38 * ls,
+          maxY: bboxLatBase.maxY + 14 * ls,
+        }
+      : bboxLatBase;
+  let latStructMaxX = x0 + dw + 6;
+  if (data.fundoTravamento === true && !isDouble) {
+    latStructMaxX += FUNDO_TRAVAMENTO_WIDTH_MM * depthScalePxPerMm;
+  }
+  const structuralBboxLat: SvgBBox = {
+    minX: Math.min(x0 - 6, bayLeft),
+    maxX: latStructMaxX,
+    minY: data.topTravamentoSuperior === true ? Math.min(y0, y0 - 2.85) : y0,
+    maxY: floorTopLat + 11,
+  };
+  const fitPadTopLat = prem ? 8 * lsPad + 21 : 14 * ls + 44;
+  const fitPadBottomLat = prem ? 28 * lsPad + 12 : 48 * ls + 26;
+  const fitPadLeftLat = prem ? 10 : 20;
+  const fitPadRightLat = dimRightLat - (x0 + dw) + (prem ? 7 : 16);
+  const fitBoxLat: SvgBBox = {
+    minX: structuralBboxLat.minX - fitPadLeftLat,
+    minY: structuralBboxLat.minY - fitPadTopLat,
+    maxX: structuralBboxLat.maxX + fitPadRightLat,
+    maxY: structuralBboxLat.maxY + fitPadBottomLat,
+  };
+  const panelLat = { ox, oy, pw, ph };
+  const wrapFitLat =
+    opts?.panelFitMaxScale != null
+      ? { maxUniformScale: opts.panelFitMaxScale }
+      : undefined;
+  if (opts?.deferredWrap === true) {
+    return {
+      deferred: true,
+      inner: innerLat,
+      bbox: bboxLat,
+      structuralBbox: structuralBboxLat,
+      fitBox: fitBoxLat,
+      guideYsLocal: {
+        top: y0,
+        floor: floorTopLat,
+        beams: beamH.map((_, j) => beamAt(j)),
+      },
+      panel: panelLat,
+      fitOpts: wrapFitLat,
+    };
+  }
+  return wrapSvgContentWithPanelFit(
+    innerLat,
+    panelLat,
+    bboxLat,
+    12,
+    wrapFitLat
+  );
 }
 
-/** Escala de cotas / legendas em páginas PDF dedicadas (uma elevação por folha). */
-const ELEV_PAGE_LABEL_SCALE = 1.9;
-/** Proporção mais próxima de A4 retrato (~0,75) para o PDF encher altura sem faixas largas vazias. */
-const ELEV_PAGE_W = 1180;
-const ELEV_PAGE_H_FRONT = 1500;
-const ELEV_PAGE_H_LATERAL = 1440;
+/** Escala frontal nas páginas PDF de elevação (`1.9` histórico × fator de tipografia). */
+const ELEV_PAGE_LABEL_SCALE = 1.9 * ELEV_INTERIOR_TYPE_SCALE;
+/** Vista lateral: mais discreta que a frontal (mesma hierarquia relativa). */
+const ELEV_LATERAL_LABEL_SCALE = ELEV_PAGE_LABEL_SCALE * 0.82;
+/**
+ * Folha paisagem (~A4 landscape): duas colunas com área útil elevada.
+ * Margens e gap mínimos libertam largura/altura para escala do par ortográfico.
+ */
+/** Moldura mínima (prancha quase full-page; traço 0,45 pt ainda dentro da área útil). */
+const ELEV_SPREAD_FRAME_INSET = 0;
+/** Junta frontal/lateral sem faixa — máxima largura por coluna. */
+const ELEV_SPREAD_COL_GAP_PX = 0;
+/**
+ * Folga entre a faixa de título «Vista …» e o início do painel ortográfico (px).
+ * Manter 0–2; só aumentar se cotas superiores tocarem no texto.
+ */
+const ELEV_SPREAD_CONTENT_PAD_TOP_PX = 1;
+/**
+ * Margem técnica mínima entre o topo útil do painel ortográfico e o topo do bbox (após encaixe).
+ * O encaixe é por ancoragem superior — não por centro vertical — para não «evaporar» espaço no topo.
+ */
+const ELEV_SPREAD_FIT_TOP_MARGIN_PX = 18;
+/** Folga mínima até ao fundo útil do painel após escalar (px SVG). */
+const ELEV_SPREAD_FIT_BOTTOM_MARGIN_PX = 6;
+/**
+ * Ganho final do par ortográfico (~5–8%) + cotas/textos proporcionais.
+ * `lsPad = ls / ORTHO_REFINE` nos fitPad premium evita absorver o ganho em folga do fitBox.
+ */
+const ELEV_SPREAD_ORTHO_REFINE = 1.065;
+/** Textos técnicos principais na prancha (+12% × refinamento ortográfico). */
+const ELEV_SPREAD_LS_PRIMARY =
+  ELEV_PAGE_LABEL_SCALE * 1.12 * 1.12 * ELEV_SPREAD_ORTHO_REFINE;
+/** Capacidade / legendas auxiliares. */
+const ELEV_SPREAD_LS_MINOR =
+  ELEV_PAGE_LABEL_SCALE * 0.72 * 1.12 * ELEV_SPREAD_ORTHO_REFINE;
+const ELEV_SPREAD_LS_LAT_PRIMARY =
+  ELEV_LATERAL_LABEL_SCALE * 1.12 * 1.12 * ELEV_SPREAD_ORTHO_REFINE;
+const ELEV_SPREAD_LS_LAT_MINOR =
+  ELEV_LATERAL_LABEL_SCALE * 0.72 * 1.12 * ELEV_SPREAD_ORTHO_REFINE;
+/** Margem da página A4 paisagem (pt) — mesma regra que {@link uniformMarginPt} no PDF. */
+export const ELEV_PDF_LS_PAGE_MARGIN_PT = uniformMarginPt(
+  ISO_A4_LANDSCAPE_W_PT,
+  ISO_A4_LANDSCAPE_H_PT
+);
+/**
+ * Fallback quando `serializeElevationPagesV2` corre sem `drawingAvailHPt*` (ex.: testes).
+ * Calibre vs {@link measureElevationLandscapeDrawingMetrics}; métricas no stdout com `PDF_ELEV_DEBUG`.
+ */
+export const ELEV_PDF_LS_DRAWING_REGION_TOP_PT = 45;
+/** @deprecated Preferir `ELEV_PDF_LS_DRAWING_REGION_TOP_PT`. */
+export const ELEV_PDF_LS_YIMG_FROM_TOP_PT = ELEV_PDF_LS_DRAWING_REGION_TOP_PT;
+/**
+ * Folga mínima até ao fim **físico** da folha paisagem (não à margem inferior do PDFKit),
+ * para a prancha usar quase toda a altura — maior `availH` em pt → bitmap maior no papel.
+ */
+export const ELEV_PDF_LS_IMAGE_BOTTOM_BLEED_PT = 2;
+/** @deprecated Usar `ELEV_PDF_LS_IMAGE_BOTTOM_BLEED_PT`; mantido para raster legado. */
+export const ELEV_PDF_LS_IMGBOTTOM_PAD_PT = ELEV_PDF_LS_IMAGE_BOTTOM_BLEED_PT;
+/** Altura da página A4 em paisagem (pt). */
+export const ELEV_PDF_LS_PAGE_HEIGHT_PT = ISO_A4_LANDSCAPE_H_PT;
+const _elevLsPdfGrid = pdfContentMetricsPt(
+  ISO_A4_LANDSCAPE_W_PT,
+  ISO_A4_LANDSCAPE_H_PT
+);
+const ELEV_PDF_LS_USABLE_W_PT = _elevLsPdfGrid.contentW;
+export const ELEV_PDF_LS_IMAGE_X_PT = _elevLsPdfGrid.contentX;
+export const ELEV_PDF_LS_IMAGE_W_PT = ELEV_PDF_LS_USABLE_W_PT;
+/** Altura útil do bitmap no PDF: uma só vez (folha − cabeçalho estimado − bleed inferior). */
+export const ELEV_PDF_LS_AVAIL_H_PT =
+  ELEV_PDF_LS_PAGE_HEIGHT_PT -
+  ELEV_PDF_LS_DRAWING_REGION_TOP_PT -
+  ELEV_PDF_LS_IMAGE_BOTTOM_BLEED_PT;
+/**
+ * Fator do viewBox e das áreas úteis dos painéis (moldura/rodapé mantêm px fixos → desenho relativo cresce).
+ * O raster em `pdfV2Service` deve usar o mesmo fator para manter proporção e nitidez.
+ */
+export const ELEV_SPREAD_CANVAS_SCALE = 1.62;
+const ELEV_SPREAD_BASE_H = 1500;
+/** Altura fixa do viewBox da prancha (escala); a largura deriva da razão com a caixa PDF. */
+const ELEV_SPREAD_H = Math.round(ELEV_SPREAD_BASE_H * ELEV_SPREAD_CANVAS_SCALE);
+/** Largura do viewBox da prancha em px (altura fixa {@link ELEV_SPREAD_H}); depende da razão W/H da caixa PDF. */
+function computeElevationSpreadWidthPx(
+  drawingAvailHPt: number,
+  drawingUsableWPt?: number
+): number {
+  const usableWPt = drawingUsableWPt ?? ELEV_PDF_LS_USABLE_W_PT;
+  /** Evita divisão por zero / viewBox com largura infinita se métricas PDF falharem. */
+  const safeAvail = Math.max(12, drawingAvailHPt);
+  return Math.round(ELEV_SPREAD_H * (usableWPt / safeAvail));
+}
+/** Rodapé narrativo SVG removido — texto rasterizado ficava ilegível e repetia o cabeçalho PDF/cotas. */
+const ELEV_SPREAD_FOOTER_BAND_PX = 0;
+/**
+ * Tecto de escala do par ortográfico (independente de `ELEV_SPREAD_ORTHO_REFINE` na tipografia,
+ * para não inflacionar o bbox só por aumentar `ls`). Escala com o canvas para não ficar preso a 1.22.
+ */
+const ELEV_SPREAD_PANEL_FIT_MAX_BASE = 3;
+const ELEV_SPREAD_PANEL_FIT_MAX_SCALE =
+  ELEV_SPREAD_PANEL_FIT_MAX_BASE * ELEV_SPREAD_CANVAS_SCALE;
 
-export type ElevationPageSvgs = {
-  frontWithoutTunnel: string;
-  frontWithTunnel: string | null;
-  lateral: string;
-  lateralWithTunnel: string | null;
+/**
+ * Reserva *dentro de cada meia-coluna* para cotas e textos — o encaixe usa só o retângulo
+ * interior (~88–92% da área do painel). Estrutura + anotações escalam em conjunto (bbox).
+ */
+const ELEV_SPREAD_PREMIUM_ANNOTATION_INSET_PX = {
+  l: 0,
+  /** Folga à direita para cadência de cotas; menor → mais largura útil para o desenho. */
+  r: 34,
+  t: 0,
+  b: 0,
+} as const;
+
+type SpreadInset = {
+  l: number;
+  r: number;
+  t: number;
+  b: number;
 };
 
-function wrapElevationDrawingPage(
-  inner: string,
-  width: number,
-  height: number,
-  footerLine: string
+function computeSpreadBboxFitScale(
+  panel: { ox: number; oy: number; pw: number; ph: number },
+  bbox: SvgBBox,
+  inset: SpreadInset,
+  maxScale: number
+): number {
+  const safeL = panel.ox + inset.l;
+  const safeR = panel.ox + panel.pw - inset.r;
+  const safeT = panel.oy + inset.t;
+  const safeB = panel.oy + panel.ph - inset.b;
+  const bw = Math.max(1, bbox.maxX - bbox.minX);
+  const bh = Math.max(1, bbox.maxY - bbox.minY);
+  const rw = (safeR - safeL) / bw;
+  const rh = (safeB - safeT) / bh;
+  return Math.min(Math.max(0.001, maxScale), rw, rh);
+}
+
+function elevationSpreadColumnTitleMetrics(): {
+  fsCol: number;
+  titleBandPx: number;
+} {
+  const fsCol =
+    Math.round(
+      9.45 *
+        ELEV_PAGE_LABEL_SCALE *
+        1.1 *
+        0.86 *
+        ELEV_SPREAD_ORTHO_REFINE *
+        ELEV_TYPO_VISTA_HEADING *
+        10
+    ) / 10;
+  const titleBandPx = Math.ceil(fsCol * 1.15) + 2;
+  return { fsCol, titleBandPx };
+}
+
+function elevationSpreadLayoutMetrics(spreadWidthPx: number): {
+  m: number;
+  gap: number;
+  /** Folga px entre faixa de título e início do painel (0–2). */
+  padTop: number;
+  footerBand: number;
+  width: number;
+  height: number;
+  colInnerW: number;
+  innerH: number;
+  yFooterBandTop: number;
+  fsCol: number;
+  titleBandPx: number;
+  /** Origem Y dos painéis frontal/lateral (coordenadas absolutas SVG). */
+  panelOriginY: number;
+} {
+  const m = ELEV_SPREAD_FRAME_INSET;
+  const gap = ELEV_SPREAD_COL_GAP_PX;
+  const padGap = Math.min(2, Math.max(0, ELEV_SPREAD_CONTENT_PAD_TOP_PX));
+  const width = spreadWidthPx;
+  const height = ELEV_SPREAD_H;
+  const gSpread = svgGridMetrics(width, height);
+  const snapUnit = Math.min(gSpread.colW, gSpread.rowH);
+  const footerBand = snapSvgExtentPx(
+    snapUnit,
+    ELEV_SPREAD_FOOTER_BAND_PX,
+    snapUnit
+  );
+  const { fsCol, titleBandPx: titleBandRaw } =
+    elevationSpreadColumnTitleMetrics();
+  const titleBandPx = snapSvgExtentPx(snapUnit, titleBandRaw, snapUnit);
+  const colInnerW = (width - 2 * m - gap) / 2;
+  const panelOriginY = m + titleBandPx + padGap;
+  const innerH = height - m - footerBand - titleBandPx - padGap;
+  const yFooterBandTop = height - m - footerBand;
+  return {
+    m,
+    gap,
+    padTop: padGap,
+    footerBand,
+    width,
+    height,
+    colInnerW,
+    innerH,
+    yFooterBandTop,
+    fsCol,
+    titleBandPx,
+    panelOriginY,
+  };
+}
+
+export type ElevationPageSvgs = {
+  /** Paisagem: vista frontal (esq.) + vista lateral (dir.), módulo padrão. */
+  landscapeStandard: string;
+  /** Paisagem: frontal e lateral do módulo com túnel — null sem módulo túnel. */
+  landscapeTunnel: string | null;
+};
+
+/**
+ * Folha paisagem: frontal à esquerda, lateral à direita — mesma escala gráfica que as páginas antigas.
+ */
+function wrapElevationLandscapeSpread(
+  L: ReturnType<typeof elevationSpreadLayoutMetrics>,
+  leftInner: string,
+  rightInner: string,
+  guideLinesSvg?: string
 ): string {
-  const fsFoot = Math.round(12 * ELEV_PAGE_LABEL_SCALE * 10) / 10;
+  const {
+    m,
+    gap,
+    width,
+    height,
+    colInnerW,
+    yFooterBandTop,
+    fsCol,
+    panelOriginY,
+  } = L;
+  const cxLeft = m + colInnerW / 2;
+  const cxRight = m + colInnerW + gap + colInnerW / 2;
+  const sepX = m + colInnerW + gap / 2;
   const parts: string[] = [];
   parts.push(
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">`
   );
   parts.push(`<rect width="${width}" height="${height}" fill="${COL_BG}"/>`);
-  const m = 20;
   parts.push(
     `<rect x="${m}" y="${m}" width="${width - 2 * m}" height="${height - 2 * m}" fill="none" stroke="${COL_FRAME}" stroke-width="0.45"/>`
   );
-  parts.push(inner);
   parts.push(
-    `<text x="${width / 2}" y="${height - 14}" text-anchor="middle" font-size="${fsFoot}px" fill="#475569" font-family="${SVG_FONT_FAMILY}">${escapeXml(footerLine)}</text>`
+    `<line x1="${sepX}" y1="${panelOriginY - 0.5}" x2="${sepX}" y2="${yFooterBandTop}" stroke="#e2e8f0" stroke-width="0.55" opacity="0.92" pointer-events="none"/>`
   );
+  /** Baseline dos títulos: suficientemente abaixo do topo para não cortar ascendentes. */
+  const yColTitle = m + fsCol * 0.9;
+  parts.push(
+    `<text x="${cxLeft}" y="${yColTitle}" text-anchor="middle" font-size="${fsCol}px" fill="#64748b" font-family="${SVG_FONT_FAMILY}" font-weight="600">${escapeXml('Vista frontal')}</text>`
+  );
+  parts.push(
+    `<text x="${cxRight}" y="${yColTitle}" text-anchor="middle" font-size="${fsCol}px" fill="#64748b" font-family="${SVG_FONT_FAMILY}" font-weight="600">${escapeXml('Vista lateral')}</text>`
+  );
+  parts.push(leftInner);
+  parts.push(rightInner);
+  if (guideLinesSvg) {
+    parts.push(guideLinesSvg);
+  }
   parts.push('</svg>');
   return parts.join('');
 }
 
 /**
- * Uma folha SVG por elevação (sem túnel, com túnel se existir, lateral).
- * Títulos conceito-a-conceito ficam no PDF; aqui só desenho + nota mínima.
+ * Pranchas paisagem: frontal + lateral lado a lado (padrão; segunda prancha se houver túnel).
+ * Títulos de folha ficam no PDF; aqui só rótulos de coluna («Vista frontal / lateral»).
  */
 export type SerializeElevationPagesOptions = {
-  debug?: boolean;
+  /** Overlays e textos de diagnóstico — omitir no PDF para cliente. */
+  renderOptions?: PdfRenderOptions;
+  /**
+   * Alturas úteis em pt (medidas com PDFKit no gerador) — cada folha pode ter subtítulo distinto.
+   * Omitindo, usa-se {@link ELEV_PDF_LS_AVAIL_H_PT}.
+   */
+  drawingAvailHPtStandard?: number;
+  drawingAvailHPtTunnel?: number;
+  /**
+   * Larguras úteis em pt (folha − margens) — alinha viewBox ao formato real (A4 paisagem).
+   * Omitindo, usa-se {@link ELEV_PDF_LS_IMAGE_W_PT}.
+   */
+  drawingUsableWPtStandard?: number;
+  drawingUsableWPtTunnel?: number;
 };
+
+/**
+ * Translates para o par ortográfico: centragem horizontal + ancoragem superior na área útil,
+ * alinhamento de pisos entre colunas e clamp inferior — evita o vácuo causado por `ty = tcy - s*cy`.
+ */
+function computeOrthoSpreadPanelTranslations(
+  left: ElevationPanelDeferredWrap,
+  right: ElevationPanelDeferredWrap,
+  inset: SpreadInset,
+  s: number
+): {
+  tLeft: { tx: number; ty: number; s: number };
+  tRight: { tx: number; ty: number; s: number };
+} {
+  const topM = ELEV_SPREAD_FIT_TOP_MARGIN_PX;
+  const botM = ELEV_SPREAD_FIT_BOTTOM_MARGIN_PX;
+  const eps = 0.75;
+
+  const horiz = (d: ElevationPanelDeferredWrap) => {
+    const { panel, bbox } = d;
+    const safeL = panel.ox + inset.l;
+    const safeR = panel.ox + panel.pw - inset.r;
+    const safeT = panel.oy + inset.t;
+    const safeB = panel.oy + panel.ph - inset.b;
+    const tcx = (safeL + safeR) / 2;
+    const cx = (bbox.minX + bbox.maxX) / 2;
+    const tx = tcx - s * cx;
+    return { tx, safeT, safeB };
+  };
+
+  const mL = horiz(left);
+  const mR = horiz(right);
+  const floorL = left.guideYsLocal.floor;
+  const floorR = right.guideYsLocal.floor;
+
+  let tyLeft = mL.safeT + topM - s * left.bbox.minY;
+  let tyRight = tyLeft + s * (floorL - floorR);
+
+  const clampBottom = (): void => {
+    const safeBL = Math.min(mL.safeB, mR.safeB);
+    const botMax = Math.max(
+      tyLeft + s * left.bbox.maxY,
+      tyRight + s * right.bbox.maxY
+    );
+    const ov = Math.max(0, botMax - (safeBL - botM));
+    if (ov > 0) {
+      tyLeft -= ov + eps;
+      tyRight -= ov + eps;
+    }
+  };
+
+  const clampTop = (): void => {
+    const safeTL = Math.min(mL.safeT, mR.safeT);
+    const topMin = Math.min(
+      tyLeft + s * left.bbox.minY,
+      tyRight + s * right.bbox.minY
+    );
+    const deficit = safeTL + topM - topMin;
+    if (deficit > 0) {
+      tyLeft += deficit + eps;
+      tyRight += deficit + eps;
+    }
+  };
+
+  clampBottom();
+  clampTop();
+  clampBottom();
+
+  return {
+    tLeft: { tx: mL.tx, ty: tyLeft, s },
+    tRight: { tx: mR.tx, ty: tyRight, s },
+  };
+}
+
+function finalizeOrthoSpreadPanels(
+  left: ElevationPanelDeferredWrap,
+  right: ElevationPanelDeferredWrap,
+  panelCap: number,
+  layout: ReturnType<typeof elevationSpreadLayoutMetrics>,
+  includeGuideLines: boolean
+): {
+  leftSvg: string;
+  rightSvg: string;
+  guideLinesSvg: string;
+} {
+  const inset: SpreadInset = { ...ELEV_SPREAD_PREMIUM_ANNOTATION_INSET_PX };
+  const sRaw = Math.min(
+    computeSpreadBboxFitScale(left.panel, left.bbox, inset, panelCap),
+    computeSpreadBboxFitScale(right.panel, right.bbox, inset, panelCap)
+  );
+  const s = sRaw;
+  const { tLeft, tRight } = computeOrthoSpreadPanelTranslations(
+    left,
+    right,
+    inset,
+    s
+  );
+  const guideLinesSvg =
+    includeGuideLines === true
+      ? buildElevationSpreadGuideLinesSvg(
+          layout.width,
+          layout.m,
+          tLeft,
+          left.guideYsLocal
+        )
+      : '';
+  return {
+    leftSvg: `<g transform="translate(${tLeft.tx.toFixed(3)},${tLeft.ty.toFixed(3)}) scale(${tLeft.s.toFixed(5)})">${left.inner}</g>`,
+    rightSvg: `<g transform="translate(${tRight.tx.toFixed(3)},${tRight.ty.toFixed(3)}) scale(${tRight.s.toFixed(5)})">${right.inner}</g>`,
+    guideLinesSvg,
+  };
+}
 
 export function serializeElevationPagesV2(
   model: ElevationModelV2,
   options?: SerializeElevationPagesOptions
 ): ElevationPageSvgs {
-  const dbg = options?.debug === true;
-  const w = ELEV_PAGE_W;
-  const hF = ELEV_PAGE_H_FRONT;
-  const hL = ELEV_PAGE_H_LATERAL;
-  const ls = ELEV_PAGE_LABEL_SCALE;
-  const padX = 20;
-  const padTop = 16;
-  const innerW = w - padX * 2;
-  const innerHFront = hF - padTop - 54;
-  const innerHLat = hL - padTop - 50;
+  const dbg = pdfRenderDebugEnabled(options?.renderOptions);
+  const ls = ELEV_SPREAD_LS_PRIMARY;
+  const lsMinor = ELEV_SPREAD_LS_MINOR;
+  const lsLat = ELEV_SPREAD_LS_LAT_PRIMARY;
+  const lsLatMinor = ELEV_SPREAD_LS_LAT_MINOR;
+  const availStd = options?.drawingAvailHPtStandard ?? ELEV_PDF_LS_AVAIL_H_PT;
+  const availTun = options?.drawingAvailHPtTunnel ?? availStd;
+  const usableStd = options?.drawingUsableWPtStandard ?? ELEV_PDF_LS_IMAGE_W_PT;
+  const usableTun = options?.drawingUsableWPtTunnel ?? usableStd;
+  const spreadWStd = computeElevationSpreadWidthPx(availStd, usableStd);
+  const L = elevationSpreadLayoutMetrics(spreadWStd);
+  const spreadWTun = computeElevationSpreadWidthPx(availTun, usableTun);
+  const Ltun = elevationSpreadLayoutMetrics(spreadWTun);
+  const { m, gap, colInnerW, innerH, panelOriginY } = L;
+  const {
+    colInnerW: colInnerWTun,
+    panelOriginY: panelOriginYTun,
+    innerH: innerHTun,
+  } = Ltun;
+  const panelCap = ELEV_SPREAD_PANEL_FIT_MAX_SCALE;
+  const sharedInnerH = computeOrthoSpreadSharedInnerHPx(innerH, ls);
+  const sharedInnerHTun = computeOrthoSpreadSharedInnerHPx(innerHTun, ls);
 
   const std = model.frontWithoutTunnel;
-  const frontStdInner = drawFrontRack(
-    padX,
-    padTop,
-    innerW,
-    innerHFront,
+  const leftStdDef = drawFrontRack(
+    m,
+    panelOriginY,
+    colInnerW,
+    innerH,
     std,
     '',
-    buildElevationAccessorySubtitle(std),
+    buildElevationAccessorySubtitle(std, true),
     {
       labelScale: ls,
+      labelMinorScale: lsMinor,
+      spreadPremium: true,
       debug: dbg,
+      panelFitMaxScale: panelCap,
+      orthoSpread: { innerH: sharedInnerH },
+      deferredWrap: true,
     }
   );
-  const frontWithoutTunnel = wrapElevationDrawingPage(
-    frontStdInner,
-    w,
-    hF,
-    'Cotas em mm · mesmo modelo geométrico que o módulo com túnel (quando aplicável)'
+  const rightStdDef = drawLateral(
+    m + colInnerW + gap,
+    panelOriginY,
+    colInnerW,
+    innerH,
+    model.lateral,
+    {
+      labelScale: lsLat,
+      labelMinorScale: lsLatMinor,
+      spreadPremium: true,
+      hideHeader: true,
+      debug: dbg,
+      panelFitMaxScale: panelCap,
+      orthoSpread: { innerH: sharedInnerH },
+      deferredWrap: true,
+    }
+  );
+  if (
+    typeof leftStdDef !== 'object' ||
+    leftStdDef.deferred !== true ||
+    typeof rightStdDef !== 'object' ||
+    rightStdDef.deferred !== true
+  ) {
+    throw new Error(
+      'serializeElevationPagesV2: expected deferred ortho panels'
+    );
+  }
+  const {
+    leftSvg: leftStd,
+    rightSvg: rightStd,
+    guideLinesSvg: guidesStd,
+  } = finalizeOrthoSpreadPanels(leftStdDef, rightStdDef, panelCap, L, dbg);
+  const landscapeStandard = wrapElevationLandscapeSpread(
+    L,
+    leftStd,
+    rightStd,
+    guidesStd
   );
 
-  let frontWithTunnel: string | null = null;
-  if (model.frontWithTunnel) {
+  let landscapeTunnel: string | null = null;
+  if (model.frontWithTunnel && model.lateralWithTunnel) {
     const tun = model.frontWithTunnel;
-    const inner = drawFrontRack(
-      padX,
-      padTop,
-      innerW,
-      innerHFront,
+    const latTun = model.lateralWithTunnel;
+    const leftTunDef = drawFrontRack(
+      m,
+      panelOriginYTun,
+      colInnerWTun,
+      innerHTun,
       tun,
       '',
-      buildElevationAccessorySubtitle(tun),
-      { labelScale: ls, debug: dbg }
+      buildElevationAccessorySubtitle(tun, true),
+      {
+        labelScale: ls,
+        labelMinorScale: lsMinor,
+        spreadPremium: true,
+        debug: dbg,
+        panelFitMaxScale: panelCap,
+        orthoSpread: { innerH: sharedInnerHTun },
+        deferredWrap: true,
+      }
     );
-    frontWithTunnel = wrapElevationDrawingPage(
-      inner,
-      w,
-      hF,
-      'Cotas em mm · passagem entre longarinas da zona túnel'
+    const rightTunDef = drawLateral(
+      m + colInnerWTun + gap,
+      panelOriginYTun,
+      colInnerWTun,
+      innerHTun,
+      latTun,
+      {
+        labelScale: lsLat,
+        labelMinorScale: lsLatMinor,
+        spreadPremium: true,
+        hideHeader: true,
+        debug: dbg,
+        panelFitMaxScale: panelCap,
+        orthoSpread: { innerH: sharedInnerHTun },
+        deferredWrap: true,
+      }
+    );
+    if (
+      typeof leftTunDef !== 'object' ||
+      leftTunDef.deferred !== true ||
+      typeof rightTunDef !== 'object' ||
+      rightTunDef.deferred !== true
+    ) {
+      throw new Error(
+        'serializeElevationPagesV2: expected deferred tunnel panels'
+      );
+    }
+    const {
+      leftSvg: leftTun,
+      rightSvg: rightTun,
+      guideLinesSvg: guidesTun,
+    } = finalizeOrthoSpreadPanels(leftTunDef, rightTunDef, panelCap, Ltun, dbg);
+    landscapeTunnel = wrapElevationLandscapeSpread(
+      Ltun,
+      leftTun,
+      rightTun,
+      guidesTun
     );
   }
 
-  const latInner = drawLateral(padX, padTop, innerW, innerHLat, model.lateral, {
-    labelScale: ls,
-    hideHeader: true,
-    debug: dbg,
-  });
-  const lateral = wrapElevationDrawingPage(
-    latInner,
-    w,
-    hL,
-    'Lateral = perfil de uma costa; dupla costas completa apenas em planta'
-  );
-
-  let lateralWithTunnel: string | null = null;
-  if (model.lateralWithTunnel) {
-    const latTunInner = drawLateral(
-      padX,
-      padTop,
-      innerW,
-      innerHLat,
-      model.lateralWithTunnel,
-      { labelScale: ls, hideHeader: true, debug: dbg }
-    );
-    lateralWithTunnel = wrapElevationDrawingPage(
-      latTunInner,
-      w,
-      hL,
-      'Lateral = perfil de uma costa · túnel — abertura inferior e níveis ativos'
-    );
-  }
-
-  return { frontWithoutTunnel, frontWithTunnel, lateral, lateralWithTunnel };
+  return { landscapeStandard, landscapeTunnel };
 }
 
 /**
@@ -1706,12 +2677,12 @@ export function serializeElevationSvgV2(model: ElevationModelV2): string {
   let sy = h - 58;
   for (let i = model.summaryLines.length - 1; i >= 0; i--) {
     parts.push(
-      `<text x="${w / 2}" y="${sy}" text-anchor="middle" font-size="10.5px" fill="#1e293b" font-family="${SVG_FONT_FAMILY}">${escapeXml(model.summaryLines[i])}</text>`
+      `<text x="${w / 2}" y="${sy}" text-anchor="middle" font-size="12.4px" fill="#1e293b" font-family="${SVG_FONT_FAMILY}">${escapeXml(model.summaryLines[i])}</text>`
     );
-    sy -= 15;
+    sy -= 16;
   }
   parts.push(
-    `<text x="${w - 48}" y="${h - 38}" text-anchor="end" font-size="9px" fill="#64748b" font-family="${SVG_FONT_FAMILY}">Cotas em mm · escala automática</text>`
+    `<text x="${w - 48}" y="${h - 38}" text-anchor="end" font-size="10.6px" fill="#64748b" font-family="${SVG_FONT_FAMILY}">Cotas em mm · escala automática</text>`
   );
 
   parts.push('</svg>');

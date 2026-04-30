@@ -1,4 +1,5 @@
-import { tunnelAppliesToRow, type ProjectAnswersV2 } from './answerMapping';
+import type { ProjectAnswersV2 } from './answerMapping';
+import { tunnelAppliesToRow } from '../../core/tunnelSelector';
 import { tunnelActiveStorageLevelsFromGlobal } from './elevationLevelGeometryV2';
 import {
   maxFullModulesInBeamRun,
@@ -10,16 +11,21 @@ import {
 import {
   effectiveTunnelStartMm,
   operationalPackedExtentMm,
+  resolveNonOverlappingTunnelIntervalsMm,
   resolveTunnelSpanAlongBeam,
   shouldReserveCrossPassageForSpan,
   type TunnelSpanPlacement,
 } from './tunnelBeamSpan';
 import {
   assertLayoutSolutionDoubleRowBilateralAccess,
+  buildLayoutGeometry,
   DoubleLineAccessValidationError,
   layoutSolutionPassesOperationalAccess,
   OPERATIONAL_ACCESS_TOL_MM,
+  validateLayoutGeometry,
 } from './layoutGeometryV2';
+import { buildFloorPlanModelV2 } from './floorPlanModelV2';
+import { normalizeSpineBackToBackMm } from './spineAndDistanciador';
 import type {
   CirculationZone,
   LayoutOrientationV2,
@@ -31,8 +37,11 @@ import type {
   TunnelPositionCode,
   TunnelZone,
 } from './types';
+import {
+  aggregateModuleSpanCountsFromRows,
+  equivalentAlongBeamSpan,
+} from './moduleSpanCounts';
 
-const SPINE_BACK_TO_BACK_MM = 100;
 const EPS = 0.5;
 
 /**
@@ -63,7 +72,7 @@ function storageTiersForPositionCount(
  * Módulos de **frente** (1 frente = 2 baias, como na elevação): em dupla costas há duas frentes por
  * estação ao longo do vão; túnel conta como uma unidade.
  */
-function computePhysicalPickingModules(rows: RackRowSolution[]): number {
+export function computePhysicalPickingModules(rows: RackRowSolution[]): number {
   let sum = 0;
   for (const row of rows) {
     const ff = row.kind === 'double' ? 2 : 1;
@@ -79,7 +88,7 @@ function computePhysicalPickingModules(rows: RackRowSolution[]): number {
   return sum;
 }
 
-function computeTotalPalletPositions(
+export function computeTotalPalletPositions(
   rows: RackRowSolution[],
   structuralLevels: number,
   hasGroundLevel: boolean
@@ -155,10 +164,20 @@ function layoutSearchCandidates(
       hasTunnel: tunnelFromAnswers,
     }));
   }
+  if (strategy === 'PERSONALIZADO') {
+    return orientations.map(orientation => ({
+      orientation,
+      depthMode: 'single' as const,
+      hasTunnel: tunnelFromAnswers,
+    }));
+  }
 
   /** Com `tunnelOffsetMm` nas respostas, a posição do vão é fixa — não varia INICIO/MEIO/FIM na pesquisa. */
+  const hasExplicitTunnelPlacements =
+    Array.isArray(answers.tunnelPlacements) &&
+    answers.tunnelPlacements.length > 0;
   const tunnelPositionSlots: (TunnelPositionCode | undefined)[] =
-    typeof answers.tunnelOffsetMm === 'number'
+    typeof answers.tunnelOffsetMm === 'number' || hasExplicitTunnelPlacements
       ? [undefined]
       : ['INICIO', 'MEIO', 'FIM'];
   const structuralLevels = Math.max(1, Math.floor(answers.levels));
@@ -195,13 +214,16 @@ function transverseUsedMm(s: LayoutSolutionV2): number {
   const cor = s.corridorMm;
   const rows = s.rows;
   if (rows.length === 0) return 0;
+  const spine = s.metadata.spineBackToBackMm ?? 100;
   let bandSum = 0;
   for (const row of rows) {
-    bandSum += bandDepthForMode(row.kind, s.rackDepthMm);
+    bandSum += bandDepthForMode(row.kind, s.rackDepthMm, spine);
   }
   const between = Math.max(0, rows.length - 1) * cor;
-  /** Qualquer fileira dupla na solução implica reserva bilateral no eixo transversal (faixa interior). */
-  const perimeter = rows.some(r => r.kind === 'double') ? 2 * cor : 0;
+  const first = rows[0];
+  const last = rows[rows.length - 1];
+  const perimeter =
+    (first?.kind === 'double' ? cor : 0) + (last?.kind === 'double' ? cor : 0);
   return bandSum + between + perimeter;
 }
 
@@ -215,9 +237,11 @@ function residualWarehouseStripAreaMm2(s: LayoutSolutionV2): number {
   return transverseResidualMm(s) * s.beamSpanMm;
 }
 
-/** Soma de módulos-equivalente por fileira (meio módulo = 0,5). */
-function rowModuleEquivSum(row: RackRowSolution): number {
-  return row.modules.reduce((acc, m) => acc + (m.type === 'half' ? 0.5 : 1), 0);
+/** Equiv. longitudinal por fileira — túnel = 1; meio = ½; inteiro normal = 1. */
+function rowAlongBeamEquiv(row: RackRowSolution): number {
+  return equivalentAlongBeamSpan(
+    aggregateModuleSpanCountsFromRows([row])
+  );
 }
 
 /**
@@ -225,7 +249,7 @@ function rowModuleEquivSum(row: RackRowSolution): number {
  */
 function rowModuleEquivVariance(s: LayoutSolutionV2): number {
   if (s.rows.length === 0) return 0;
-  const equivs = s.rows.map(rowModuleEquivSum);
+  const equivs = s.rows.map(rowAlongBeamEquiv);
   const mean = equivs.reduce((a, b) => a + b, 0) / equivs.length;
   return equivs.reduce((acc, v) => acc + (v - mean) ** 2, 0) / equivs.length;
 }
@@ -248,7 +272,7 @@ function layoutSolutionScoreTuple(
     s.totals.positions,
     -stripArea,
     -rowVar,
-    s.totals.modules,
+    s.totals.equivalentAlongBeamSpan,
     s.rows.length,
     s.orientation === 'along_length' ? 1 : 0,
   ];
@@ -309,6 +333,10 @@ function mergedAnswersReplicatingSolution(
     best.metadata.tunnelPosition !== undefined
       ? { tunnelPosition: best.metadata.tunnelPosition }
       : {}),
+    ...(Array.isArray(best.metadata.tunnelPlacements) &&
+    best.metadata.tunnelPlacements.length > 0
+      ? { tunnelPlacements: [...best.metadata.tunnelPlacements] }
+      : {}),
   };
 }
 
@@ -342,6 +370,7 @@ function applyHalfModuleLowGainPolicy(
     );
   } catch (e) {
     if (e instanceof DoubleLineAccessValidationError) return best;
+    if (e instanceof Error && e.message.startsWith('Túneis:')) return best;
     throw e;
   }
   if (!layoutSolutionPassesOperationalAccess(alt)) {
@@ -393,11 +422,12 @@ export function tunnelClearanceMmFromCorridor(corridorMm: number): number {
 
 function bandDepthForMode(
   depthMode: RackDepthModeV2,
-  moduleDepthMm: number
+  moduleDepthMm: number,
+  spineBackToBackMm: number
 ): number {
   return depthMode === 'single'
     ? moduleDepthMm
-    : 2 * moduleDepthMm + SPINE_BACK_TO_BACK_MM;
+    : 2 * moduleDepthMm + spineBackToBackMm;
 }
 
 /**
@@ -676,6 +706,155 @@ function fillCrossZone(
   return { rows, corridors };
 }
 
+/**
+ * Composição explícita: N fileiras em **dupla costas** e M **simples** no eixo transversal,
+ * por esta ordem (extensão natural do preenchimento “duplas + simples” já usado no motor).
+ * Entre fileiras: corredor; primeira dupla reserva acesso a `z0` quando `corridorMm` > 0.
+ */
+function fillCrossZoneFromCustomRowMix(
+  zone: CrossZone,
+  nDouble: number,
+  nSingle: number,
+  moduleDepthMm: number,
+  corridorMm: number,
+  spineBackToBackMm: number,
+  idPrefix: string,
+  orientation: LayoutOrientationV2,
+  lengthMm: number,
+  widthMm: number
+): { rows: RowBandCross[]; corridors: CirculationZone[] } {
+  const g = Math.max(0, corridorMm);
+  const rows: RowBandCross[] = [];
+  const corridors: CirculationZone[] = [];
+  const zoneLen = zone.z1 - zone.z0;
+  const dN = Math.max(0, Math.floor(nDouble));
+  const sN = Math.max(0, Math.floor(nSingle));
+  const kinds: RackDepthModeV2[] = [
+    ...Array(dN).fill('double' as RackDepthModeV2),
+    ...Array(sN).fill('single' as RackDepthModeV2),
+  ];
+  if (kinds.length === 0) {
+    return { rows, corridors: [] };
+  }
+  let simY = zone.z0;
+  for (let i = 0; i < kinds.length; i++) {
+    const k = kinds[i]!;
+    const b = bandDepthForMode(k, moduleDepthMm, spineBackToBackMm);
+    if (i === 0) {
+      if (k === 'double') {
+        simY += g;
+      }
+    } else {
+      simY += g;
+    }
+    simY += b;
+  }
+  if (simY - zone.z1 > OPERATIONAL_ACCESS_TOL_MM) {
+    throw new Error(
+      `PERSONALIZADO: composição (duplas=${dN}, simples=${sN}) excede o espaço transversal (~${Math.round(
+        zoneLen
+      )} mm). Tente orientação alternativa, menos fileiras, ou outras medidas.`
+    );
+  }
+
+  let y = zone.z0;
+  for (let i = 0; i < kinds.length; i++) {
+    const k = kinds[i]!;
+    const b = bandDepthForMode(k, moduleDepthMm, spineBackToBackMm);
+    if (i === 0) {
+      if (k === 'double' && g > EPS) {
+        if (orientation === 'along_length') {
+          corridors.push({
+            id: `${idPrefix}-cor-leading`,
+            kind: 'corridor',
+            x0: 0,
+            x1: lengthMm,
+            y0: zone.z0,
+            y1: zone.z0 + g,
+            label: 'Corredor operacional (acesso — perímetro)',
+          });
+        } else {
+          corridors.push({
+            id: `${idPrefix}-cor-leading`,
+            kind: 'corridor',
+            x0: zone.z0,
+            x1: zone.z0 + g,
+            y0: 0,
+            y1: widthMm,
+            label: 'Corredor operacional (acesso — perímetro)',
+          });
+        }
+        y = zone.z0 + g;
+      } else if (k === 'double' && g <= EPS) {
+        y = zone.z0;
+      } else {
+        y = zone.z0;
+      }
+    } else if (g > EPS) {
+      const cor0 = y;
+      const cor1 = y + g;
+      if (orientation === 'along_length') {
+        corridors.push({
+          id: `${idPrefix}-cor-betw-${i}`,
+          kind: 'corridor',
+          x0: 0,
+          x1: lengthMm,
+          y0: cor0,
+          y1: cor1,
+          label: 'Corredor operacional',
+        });
+      } else {
+        corridors.push({
+          id: `${idPrefix}-cor-betw-${i}`,
+          kind: 'corridor',
+          x0: cor0,
+          x1: cor1,
+          y0: 0,
+          y1: widthMm,
+          label: 'Corredor operacional',
+        });
+      }
+      y = cor1;
+    }
+    const c0 = y;
+    const c1 = y + b;
+    rows.push({ id: `${idPrefix}-cust-${i}`, c0, c1, rackDepthMode: k });
+    y = c1;
+  }
+
+  const usedEnd = y;
+  const remainder = zone.z1 - usedEnd;
+  if (remainder > EPS) {
+    const label =
+      remainder + EPS >= g
+        ? 'Corredor operacional (faixa transversal)'
+        : 'Faixa transversal residual (largura inferior ao corredor declarado)';
+    if (orientation === 'along_length') {
+      corridors.push({
+        id: `${idPrefix}-cor-trailing`,
+        kind: 'corridor',
+        x0: 0,
+        x1: lengthMm,
+        y0: usedEnd,
+        y1: zone.z1,
+        label,
+      });
+    } else {
+      corridors.push({
+        id: `${idPrefix}-cor-trailing`,
+        kind: 'corridor',
+        x0: usedEnd,
+        x1: zone.z1,
+        y0: 0,
+        y1: widthMm,
+        label,
+      });
+    }
+  }
+
+  return { rows, corridors };
+}
+
 type FillContext = {
   orientation: LayoutOrientationV2;
   lengthMm: number;
@@ -731,17 +910,19 @@ export const fillWarehouseWidth = fillWarehouseCross;
 function canHaveHalfAtBeamEnd(
   endCoord: number,
   beamSpan: number,
-  beamPassage: { t0: number; t1: number } | null,
+  beamPassages: ReadonlyArray<{ t0: number; t1: number }> | null,
   rowBandCount: number
 ): boolean {
   if (rowBandCount >= 2) return true;
-  if (beamPassage) {
-    const nearPassage =
-      Math.abs(endCoord - beamPassage.t0) <= 2 ||
-      Math.abs(endCoord - beamPassage.t1) <= 2;
-    if (nearPassage) return true;
+  if (beamPassages && beamPassages.length > 0) {
+    for (const beamPassage of beamPassages) {
+      const nearPassage =
+        Math.abs(endCoord - beamPassage.t0) <= 2 ||
+        Math.abs(endCoord - beamPassage.t1) <= 2;
+      if (nearPassage) return true;
+    }
   }
-  if (!beamPassage) {
+  if (!beamPassages || beamPassages.length === 0) {
     if (endCoord <= EPS || endCoord >= beamSpan - EPS) return false;
   }
   return true;
@@ -791,25 +972,51 @@ function shouldReserveCrossPassageWithoutTunnel(
   );
 }
 
-/** Parte o vão: segmentos normais, túnel (módulo específico) ou vão transversal vazio (sem túnel). */
-function splitBeamIntoModuleSegments(
+/**
+ * Múltiplos vãos de túnel (mesmo padrão de módulo túnel em cada a intervalo [t0,t1]).
+ */
+function buildSegsFromTunnelIntervals(
   beamSpan: number,
-  hasTunnel: boolean,
+  sortedIntervals: { t0: number; t1: number }[]
+): Segment1DKind[] {
+  if (sortedIntervals.length === 0) {
+    return [{ a: 0, b: beamSpan, kind: 'normal' as const }];
+  }
+  const segs: Segment1DKind[] = [];
+  let a = 0;
+  for (const it of sortedIntervals) {
+    if (it.t0 > a + EPS) {
+      segs.push({ a, b: it.t0, kind: 'normal' });
+    }
+    if (it.t1 - it.t0 > EPS) {
+      segs.push({ a: it.t0, b: it.t1, kind: 'tunnel' });
+    }
+    a = it.t1;
+  }
+  if (beamSpan - a > EPS) {
+    segs.push({ a, b: beamSpan, kind: 'normal' });
+  }
+  if (segs.length === 0) {
+    segs.push({ a: 0, b: beamSpan, kind: 'normal' });
+  }
+  return segs;
+}
+
+/**
+ * Vão com passagem transversal (sem módulo túnel) — só quando `hasTunnel` falso
+ * (com túnel, os segmentos vêm de {@link buildSegsFromTunnelIntervals}).
+ */
+function splitBeamCrossOrFull(
+  beamSpan: number,
   corridorMm: number,
   reserveCrossPassageNoTunnel: boolean,
   placement: TunnelSpanPlacement
 ): Segment1DKind[] {
   const { t0, t1 } = resolveTunnelSpanAlongBeam(beamSpan, corridorMm, placement);
-  if (hasTunnel) {
-    if (t1 - t0 > EPS) {
-      return buildThreeBeamSegs(beamSpan, t0, t1, 'tunnel');
-    }
-    return [{ a: 0, b: beamSpan, kind: 'normal' }];
-  }
   if (reserveCrossPassageNoTunnel && t1 - t0 > EPS) {
     return buildThreeBeamSegs(beamSpan, t0, t1, 'crossGap');
   }
-  return [{ a: 0, b: beamSpan, kind: 'normal' }];
+  return [{ a: 0, b: beamSpan, kind: 'normal' as const }];
 }
 
 function fillSegmentModules(
@@ -839,16 +1046,18 @@ function buildModuleSegmentsForRow(
   bayClearSpanMm: number,
   halfOpt: boolean,
   beamSpan: number,
-  tunnel: { t0: number; t1: number } | null,
+  beamPassages: { t0: number; t1: number }[] | null,
   rowBandCount: number,
   corridorMm: number,
   globalLevels: number
-): { segments: ModuleSegment[]; moduleEquiv: number; rejectedHalf: boolean } {
+): { segments: ModuleSegment[]; rejectedHalf: boolean } {
   const segments: ModuleSegment[] = [];
-  let moduleEquiv = 0;
   let rejectedHalf = false;
 
   let idx = 0;
+  /** Troços de armazenagem separados por túnel/crossGap ou novo segmento `normal` (ver validador em layoutGeometryV2). */
+  let beamStorageStretchId = 0;
+
   for (const bs of beamSegs) {
     const len = bs.b - bs.a;
     if (len < EPS) continue;
@@ -863,21 +1072,23 @@ function buildModuleSegmentsForRow(
           bs.b,
           crossSeg,
           corridorMm,
-          globalLevels
+          globalLevels,
+          beamStorageStretchId
         )
       );
-      moduleEquiv += 1;
+      beamStorageStretchId += 1;
       continue;
     }
 
     if (bs.kind === 'crossGap') {
+      beamStorageStretchId += 1;
       continue;
     }
 
     const allowHalfEnd = canHaveHalfAtBeamEnd(
       bs.b,
       beamSpan,
-      tunnel,
+      beamPassages,
       rowBandCount
     );
     const {
@@ -887,6 +1098,9 @@ function buildModuleSegmentsForRow(
     } = fillSegmentModules(len, bayClearSpanMm, halfOpt, allowHalfEnd);
     if (rh) rejectedHalf = true;
 
+    const stretchForThisNormal = beamStorageStretchId;
+    beamStorageStretchId += 1;
+
     const placeRects = (nFull: number, hasHalf: boolean) => {
       let cursor = bs.a;
       let runIdx = 0;
@@ -894,27 +1108,45 @@ function buildModuleSegmentsForRow(
         const span = moduleFootprintAlongBeamInRunMm(runIdx, bayClearSpanMm);
         const a = cursor;
         const b = cursor + span;
-        segments.push(
-          rectFor(orientation, rowId, idx++, a, b, crossSeg, 'full', 'normal')
-        );
+        segments.push({
+          ...rectFor(
+            orientation,
+            rowId,
+            idx++,
+            a,
+            b,
+            crossSeg,
+            'full',
+            'normal'
+          ),
+          beamStorageStretchId: stretchForThisNormal,
+        });
         cursor = b;
         runIdx += 1;
-        moduleEquiv += 1;
       }
       if (hasHalf) {
         const a = cursor;
         const b = cursor + computeModuleLengthAlongBeamMm(bayClearSpanMm) / 2;
-        segments.push(
-          rectFor(orientation, rowId, idx++, a, b, crossSeg, 'half', 'normal')
-        );
-        moduleEquiv += 0.5;
+        segments.push({
+          ...rectFor(
+            orientation,
+            rowId,
+            idx++,
+            a,
+            b,
+            crossSeg,
+            'half',
+            'normal'
+          ),
+          beamStorageStretchId: stretchForThisNormal,
+        });
       }
     };
 
     placeRects(full, half);
   }
 
-  return { segments, moduleEquiv, rejectedHalf };
+  return { segments, rejectedHalf };
 }
 
 /**
@@ -948,7 +1180,8 @@ function rectForTunnelModule(
   b: number,
   crossSeg: { c0: number; c1: number },
   corridorMm: number,
-  globalLevels: number
+  globalLevels: number,
+  beamStorageStretchId?: number
 ): ModuleSegment {
   const clearance = tunnelClearanceMmFromCorridor(corridorMm);
   const activeStorageLevels = tunnelActiveStorageLevelsFromGlobal(globalLevels);
@@ -957,6 +1190,9 @@ function rectForTunnelModule(
     ...base,
     tunnelClearanceMm: clearance,
     activeStorageLevels,
+    ...(beamStorageStretchId !== undefined
+      ? { beamStorageStretchId }
+      : {}),
   };
 }
 
@@ -978,6 +1214,7 @@ function buildLayoutSolutionV2Core(
     levels,
     lineStrategy,
     hasTunnel,
+    tunnelPlacements: tunnelPlacementsAns,
     tunnelPosition,
     tunnelOffsetMm,
     tunnelAppliesTo,
@@ -1000,6 +1237,7 @@ function buildLayoutSolutionV2Core(
    */
   const bayClearSpanAlongBeamMm = Math.max(0, moduleWidthMm);
   const rackDepthMm = Math.max(0, moduleDepthMm);
+  const spineMm = normalizeSpineBackToBackMm(answers.spineBackToBackMm);
   const moduleLengthAlongBeamMm = computeModuleLengthAlongBeamMm(
     bayClearSpanAlongBeamMm
   );
@@ -1009,22 +1247,60 @@ function buildLayoutSolutionV2Core(
 
   const tunnelPos = tunnelPosition as TunnelPositionCode | undefined;
 
-  const band = bandDepthForMode(depthMode, rackDepthMm);
-
-  const ctx: FillContext = {
-    orientation,
-    lengthMm,
-    widthMm,
-    beamSpan,
-    crossSpan,
-    bandDepth: band,
-    corridorMm,
-    rackDepthMm,
-    depthMode,
-    hasTunnel,
-  };
-
-  const { rowBands, corridors: corridorsFromFill } = fillWarehouseCross(ctx);
+  let rowBands: RowBandCross[];
+  let corridorsFromFill: CirculationZone[];
+  if (lineStrategy === 'PERSONALIZADO') {
+    const nS = answers.customLineSimpleCount;
+    const nD = answers.customLineDoubleCount;
+    if (
+      typeof nS !== 'number' ||
+      typeof nD !== 'number' ||
+      !Number.isInteger(nS) ||
+      !Number.isInteger(nD) ||
+      nS < 0 ||
+      nD < 0 ||
+      nS + nD < 1
+    ) {
+      throw new Error('PERSONALIZADO: contagens de fileiras em falta ou inválidas');
+    }
+    if (nD > 0 && corridorMm <= EPS) {
+      throw new DoubleLineAccessValidationError(
+        'PERSONALIZADO: fileira dupla requer corredor > 0 mm (acesso bilateral mínimo).'
+      );
+    }
+    const z = crossZonesForTunnel(crossSpan)[0]!;
+    const mix = fillCrossZoneFromCustomRowMix(
+      z,
+      nD,
+      nS,
+      rackDepthMm,
+      corridorMm,
+      spineMm,
+      z.id,
+      orientation,
+      lengthMm,
+      widthMm
+    );
+    rowBands = mix.rows;
+    corridorsFromFill = mix.corridors;
+  } else {
+    const band = bandDepthForMode(depthMode, rackDepthMm, spineMm);
+    const ctx: FillContext = {
+      orientation,
+      lengthMm,
+      widthMm,
+      beamSpan,
+      crossSpan,
+      bandDepth: band,
+      corridorMm,
+      rackDepthMm,
+      depthMode,
+      hasTunnel,
+    };
+    const w = fillWarehouseCross(ctx);
+    rowBands = w.rowBands;
+    corridorsFromFill = w.corridors;
+  }
 
   const rowBandCount = rowBands.length;
 
@@ -1057,21 +1333,34 @@ function buildLayoutSolutionV2Core(
     ? resolveTunnelSpanAlongBeam(beamSpan, corridorMm, placement)
     : null;
 
-  const tunnelSpanResolved = hasTunnel
-    ? resolveTunnelSpanAlongBeam(beamSpan, corridorMm, placement)
-    : null;
-  const tunnelSpec =
-    tunnelSpanResolved && tunnelSpanResolved.t1 - tunnelSpanResolved.t0 > EPS
-      ? tunnelSpanResolved
-      : null;
+  const tunnelListCodes: TunnelPositionCode[] = hasTunnel
+    ? tunnelPlacementsAns && tunnelPlacementsAns.length > 0
+      ? [...tunnelPlacementsAns]
+      : [tunnelPos ?? 'MEIO']
+    : [];
 
-  const beamSegs = splitBeamIntoModuleSegments(
-    beamSpan,
-    hasTunnel,
-    corridorMm,
-    reserveCrossPassageNoTunnel,
-    placement
-  );
+  const allTunnelIntervals: { t0: number; t1: number }[] =
+    hasTunnel && tunnelListCodes.length > 0
+      ? resolveNonOverlappingTunnelIntervalsMm(
+          beamSpan,
+          corridorMm,
+          placement,
+          tunnelListCodes
+        )
+      : [];
+
+  const tunnelSpec = allTunnelIntervals[0] ?? null;
+
+  const beamSegs: Segment1DKind[] = hasTunnel
+    ? allTunnelIntervals.length > 0
+      ? buildSegsFromTunnelIntervals(beamSpan, allTunnelIntervals)
+      : [{ a: 0, b: beamSpan, kind: 'normal' as const }]
+    : splitBeamCrossOrFull(
+        beamSpan,
+        corridorMm,
+        reserveCrossPassageNoTunnel,
+        placement
+      );
 
   const corridors: CirculationZone[] = [...corridorsFromFill];
   const tunnels: TunnelZone[] = [];
@@ -1104,7 +1393,6 @@ function buildLayoutSolutionV2Core(
     }
   }
 
-  let totalModEquiv = 0;
   let anyRejectedHalf = false;
 
   for (let rowBandIndex = 0; rowBandIndex < rowBands.length; rowBandIndex++) {
@@ -1118,6 +1406,7 @@ function buildLayoutSolutionV2Core(
      * o cliente restringiu o vão a “linhas simples” no sentido de estratégia — antes só havia duplas.
      */
     const isResidualPackedSingle =
+      lineStrategy !== 'PERSONALIZADO' &&
       depthMode === 'double' &&
       rowKind === 'single' &&
       rowId.includes('-r-trail-');
@@ -1136,13 +1425,13 @@ function buildLayoutSolutionV2Core(
       : [{ a: 0, b: beamSpan, kind: 'normal' as const }];
 
     const crossSeg = { c0, c1 };
-    const tunnelForHalf =
+    const passForHalf: { t0: number; t1: number }[] | null =
       hasTunnel && appliesTunnelToThisRow
-        ? tunnelSpec
-        : reserveCrossPassageNoTunnel
-          ? crossPassageSpec
+        ? allTunnelIntervals
+        : reserveCrossPassageNoTunnel && crossPassageSpec
+          ? [crossPassageSpec]
           : null;
-    const { segments, moduleEquiv, rejectedHalf } = buildModuleSegmentsForRow(
+    const { segments, rejectedHalf } = buildModuleSegmentsForRow(
       rowId,
       segsForRow,
       crossSeg,
@@ -1150,13 +1439,12 @@ function buildLayoutSolutionV2Core(
       bayClearSpanAlongBeamMm,
       halfModuleOptimization,
       beamSpan,
-      tunnelForHalf,
+      passForHalf,
       rowBandCount,
       corridorMm,
       levels
     );
     if (rejectedHalf) anyRejectedHalf = true;
-    totalModEquiv += moduleEquiv;
 
     rows.push({
       id: rowId,
@@ -1198,11 +1486,19 @@ function buildLayoutSolutionV2Core(
     hasGroundLevel
   );
   const physicalPickingModules = computePhysicalPickingModules(rows);
+  const segmentCounts = aggregateModuleSpanCountsFromRows(rows);
+
+  const rackOutMode: RackDepthModeV2 =
+    lineStrategy === 'PERSONALIZADO'
+      ? (answers.customLineDoubleCount ?? 0) > 0
+        ? 'double'
+        : 'single'
+      : depthMode;
 
   const sol: LayoutSolutionV2 = {
     warehouse: { lengthMm, widthMm },
     orientation,
-    rackDepthMode: depthMode,
+    rackDepthMode: rackOutMode,
     beamSpanMm: beamSpan,
     crossSpanMm: crossSpan,
     moduleWidthMm,
@@ -1215,13 +1511,24 @@ function buildLayoutSolutionV2Core(
     corridors,
     tunnels,
     totals: {
-      modules: totalModEquiv,
+      segmentCounts,
+      equivalentAlongBeamSpan: equivalentAlongBeamSpan(segmentCounts),
       physicalPickingModules,
       positions,
       levels: storageTierCount,
     },
     metadata: {
       lineStrategy,
+      ...(lineStrategy === 'PERSONALIZADO' &&
+      typeof answers.customLineSimpleCount === 'number' &&
+      typeof answers.customLineDoubleCount === 'number'
+        ? {
+            customLineCounts: {
+              simple: answers.customLineSimpleCount,
+              double: answers.customLineDoubleCount,
+            },
+          }
+        : {}),
       optimizeWithHalfModule: halfModuleOptimization,
       halfModuleRejectedReason: anyRejectedHalf
         ? 'Meio módulo não aplicado: extremo sem circulação operacional adjacente (túnel/corredor entre fileiras).'
@@ -1230,6 +1537,8 @@ function buildLayoutSolutionV2Core(
       structuralLevels,
       hasGroundLevel,
       hasTunnel,
+      tunnelPlacements:
+        tunnelListCodes.length > 0 ? tunnelListCodes : undefined,
       tunnelPosition:
         typeof tunnelOffsetMm === 'number' ? undefined : tunnelPos,
       tunnelOffsetEffectiveMm: effectiveTunnelStartMm(
@@ -1238,6 +1547,7 @@ function buildLayoutSolutionV2Core(
         placement
       ),
       tunnelOperationalExtentMm: operationalExtentMm,
+      spineBackToBackMm: spineMm,
     },
   };
   assertLayoutSolutionDoubleRowBilateralAccess(sol);
@@ -1252,11 +1562,15 @@ function pickBestLayoutSolution(
   let bestScore: readonly number[] | null = null;
 
   for (const cand of candidates) {
+    const hasExplicitPlacements =
+      Array.isArray(answers.tunnelPlacements) &&
+      answers.tunnelPlacements.length > 0;
     const merged: BuildLayoutSolutionV2Input = {
       ...answers,
       hasTunnel: cand.hasTunnel,
       ...(typeof answers.tunnelOffsetMm !== 'number' &&
-      cand.tunnelPosition !== undefined
+      cand.tunnelPosition !== undefined &&
+      !hasExplicitPlacements
         ? { tunnelPosition: cand.tunnelPosition }
         : {}),
       ...(cand.halfModuleOptimization !== undefined
@@ -1268,6 +1582,7 @@ function pickBestLayoutSolution(
       sol = buildLayoutSolutionV2Core(merged, cand.orientation, cand.depthMode);
     } catch (e) {
       if (e instanceof DoubleLineAccessValidationError) continue;
+      if (e instanceof Error && e.message.startsWith('PERSONALIZADO:')) continue;
       throw e;
     }
     if (!layoutSolutionPassesOperationalAccess(sol)) continue;
@@ -1278,6 +1593,147 @@ function pickBestLayoutSolution(
     }
   }
   return best;
+}
+
+function baseModuleIdFromPlanRectId(id: string): string {
+  return id.replace(/-f\d+$/i, '');
+}
+
+/**
+ * Máximo n.º de módulo de frente na planta (1…n) — pré-visualização túnel manual.
+ */
+export function tunnelPreviewMaxDisplayIndex(
+  baseSolution: LayoutSolutionV2,
+  sessionAnswers: Record<string, unknown>
+): number {
+  const geom = buildLayoutGeometry(
+    { ...baseSolution } as LayoutSolutionV2,
+    { ...sessionAnswers, hasTunnel: false }
+  );
+  validateLayoutGeometry(geom);
+  const plan = buildFloorPlanModelV2(geom, {} as Record<string, unknown>);
+  let maxIx = 0;
+  for (const s of plan.structureRects) {
+    if (s.displayIndex != null) maxIx = Math.max(maxIx, s.displayIndex);
+  }
+  return maxIx;
+}
+
+/**
+ * Túneis manuais: aplica túneis às posições indicadas (mesma numeração que a planta).
+ */
+function applyManualTunnelToLayoutSolution(
+  baseSolution: LayoutSolutionV2,
+  displayIndices: readonly number[],
+  answers: BuildLayoutSolutionV2Input
+): LayoutSolutionV2 {
+  if (displayIndices.length === 0) {
+    return baseSolution;
+  }
+  const levels = Math.max(1, Math.floor(answers.levels));
+  if (levels < 2) {
+    throw new Error(
+      'Túnel manual: são necessários pelo menos 2 níveis estruturais com longarina.'
+    );
+  }
+  const sessionLike: Record<string, unknown> = {
+    ...(answers as unknown as Record<string, unknown>),
+    hasTunnel: false,
+  };
+  const geometryNoTun = buildLayoutGeometry(baseSolution, sessionLike);
+  validateLayoutGeometry(geometryNoTun);
+  const plan = buildFloorPlanModelV2(geometryNoTun, {});
+  const indexToBaseId = new Map<number, string>();
+  let maxIx = 0;
+  for (const s of plan.structureRects) {
+    if (s.displayIndex === undefined) continue;
+    indexToBaseId.set(s.displayIndex, baseModuleIdFromPlanRectId(s.id));
+    maxIx = Math.max(maxIx, s.displayIndex);
+  }
+  const halfBases = new Set<string>();
+  for (const row of geometryNoTun.rows) {
+    for (const m of row.modules) {
+      if (m.segmentType === 'half') {
+        halfBases.add(m.id);
+      }
+    }
+  }
+  const uniqueSorted = [...new Set(displayIndices)]
+    .filter(n => Number.isInteger(n) && n >= 1)
+    .sort((a, b) => a - b);
+  for (const i of uniqueSorted) {
+    if (i < 1 || i > maxIx) {
+      throw new Error(
+        `Túnel manual: o número ${i} não corresponde a nenhum módulo (válido: 1 a ${maxIx}).`
+      );
+    }
+  }
+  const targetBaseIds = new Set<string>();
+  for (const i of uniqueSorted) {
+    const base = indexToBaseId.get(i);
+    if (base) {
+      if (halfBases.has(base)) {
+        throw new Error(
+          `Túnel manual: o módulo n.º ${i} é meio módulo — indique outro.`
+        );
+      }
+      targetBaseIds.add(base);
+    }
+  }
+  const corridorMm = Math.max(0, answers.corridorMm);
+  const newRows: RackRowSolution[] = baseSolution.rows.map(r => ({
+    ...r,
+    modules: r.modules.map(seg => {
+      if (!targetBaseIds.has(seg.id)) {
+        return seg;
+      }
+      if (seg.type === 'half') {
+        throw new Error('Túnel manual: meio módulo não é elegível');
+      }
+      if (seg.variant === 'tunnel') {
+        return seg;
+      }
+      const clearance = tunnelClearanceMmFromCorridor(corridorMm);
+      const activeStorageLevels =
+        tunnelActiveStorageLevelsFromGlobal(levels);
+      return {
+        ...seg,
+        type: 'full' as const,
+        variant: 'tunnel' as ModuleVariantV2,
+        tunnelClearanceMm: clearance,
+        activeStorageLevels,
+      };
+    }),
+  }));
+  if (!newRows.some(r => r.modules.some(m => m.variant === 'tunnel'))) {
+    return baseSolution;
+  }
+  const hasGroundLevel = answers.hasGroundLevel !== false;
+  const tunnelSegCounts = aggregateModuleSpanCountsFromRows(newRows);
+  const sol: LayoutSolutionV2 = {
+    ...baseSolution,
+    rows: newRows,
+    totals: {
+      ...baseSolution.totals,
+      segmentCounts: tunnelSegCounts,
+      equivalentAlongBeamSpan: equivalentAlongBeamSpan(tunnelSegCounts),
+      physicalPickingModules: computePhysicalPickingModules(newRows),
+      positions: computeTotalPalletPositions(
+        newRows,
+        levels,
+        hasGroundLevel
+      ),
+      levels: baseSolution.totals.levels,
+    },
+    metadata: {
+      ...baseSolution.metadata,
+      hasTunnel: true,
+      tunnelPosition: undefined,
+      tunnelPlacements: undefined,
+    },
+  };
+  assertLayoutSolutionDoubleRowBilateralAccess(sol);
+  return sol;
 }
 
 /**
@@ -1297,6 +1753,24 @@ function pickBestLayoutSolution(
 export function buildLayoutSolutionV2(
   answers: BuildLayoutSolutionV2Input
 ): LayoutSolutionV2 {
+  const manualIdx = answers.tunnelManualModuleIndices;
+  if (
+    answers.hasTunnel &&
+    Array.isArray(manualIdx) &&
+    manualIdx.length > 0
+  ) {
+    const stripped: BuildLayoutSolutionV2Input = {
+      ...answers,
+      hasTunnel: false,
+      tunnelManualModuleIndices: undefined,
+      tunnelPlacements: undefined,
+      tunnelPosition: undefined,
+      tunnelOffsetMm: undefined,
+    };
+    const base = buildLayoutSolutionV2(stripped);
+    return applyManualTunnelToLayoutSolution(base, manualIdx, answers);
+  }
+
   const candidates = layoutSearchCandidates(answers);
   let best = pickBestLayoutSolution(answers, candidates);
 
@@ -1305,11 +1779,16 @@ export function buildLayoutSolutionV2(
       answers.lineStrategy === 'APENAS_DUPLOS'
         ? ` Estratégia APENAS_DUPLOS: não há conversão automática para linha simples — use dimensões que permitam corredor ≥ ${answers.corridorMm} mm em ambos os lados no eixo transversal, ou escolha MELHOR_LAYOUT / APENAS_SIMPLES.`
         : '';
+    const personHint =
+      answers.lineStrategy === 'PERSONALIZADO'
+        ? ' PERSONALIZADO: ajuste o nº de fileiras, corredor e profundidade (deve caber no eixo transversal).'
+        : '';
     throw new Error(
       'layoutSolutionV2: nenhum candidato com acesso operacional válido ' +
         '(fileira dupla exige corredor bilateral ≥ corredor declarado em ambos os lados no eixo transversal; ' +
         'alargue o compartimento, reduza corredor ou profundidade de posição, ou use estratégia MELHOR_LAYOUT).' +
-        dupOnly
+        dupOnly +
+        personHint
     );
   }
   return applyHalfModuleLowGainPolicy(best, answers);

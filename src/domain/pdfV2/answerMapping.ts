@@ -12,6 +12,8 @@ import {
   type HeightDefinitionMode,
 } from '../warehouseHeightDerive';
 import { maxFullModulesInBeamRun } from './rackModuleSpec';
+import { normalizeSpineBackToBackMm } from './spineAndDistanciador';
+import { isTunnelPositionCode } from '../../core/tunnelSelector';
 import type {
   LayoutOrientationV2,
   LineStrategyCode,
@@ -107,6 +109,35 @@ export function buildProjectAnswersV2(
     | TunnelAppliesCode
     | undefined;
 
+  const rawPlacements = (answers as { tunnelPlacements?: unknown }).tunnelPlacements;
+  let tunnelPlacements: TunnelPositionCode[] | undefined;
+  if (Array.isArray(rawPlacements) && rawPlacements.length > 0) {
+    const parsed: TunnelPositionCode[] = [];
+    for (const x of rawPlacements) {
+      if (typeof x === 'string' && isTunnelPositionCode(x)) {
+        parsed.push(x);
+      }
+    }
+    if (parsed.length > 0) {
+      tunnelPlacements = parsed;
+    }
+  }
+
+  const rawManual = (answers as { tunnelManualModuleIndices?: unknown })
+    .tunnelManualModuleIndices;
+  let tunnelManualModuleIndices: number[] | undefined;
+  if (Array.isArray(rawManual) && rawManual.length > 0) {
+    const m: number[] = [];
+    for (const x of rawManual) {
+      if (typeof x === 'number' && Number.isInteger(x) && x >= 1) {
+        m.push(x);
+      }
+    }
+    if (m.length > 0) {
+      tunnelManualModuleIndices = [...new Set(m)].sort((a, b) => a - b);
+    }
+  }
+
   return {
     lengthMm: answers.lengthMm,
     widthMm: answers.widthMm,
@@ -116,7 +147,19 @@ export function buildProjectAnswersV2(
     levels,
     capacityKg: answers.capacityKg,
     lineStrategy,
+    customLineSimpleCount:
+      typeof answers.customLineSimpleCount === 'number'
+        ? answers.customLineSimpleCount
+        : undefined,
+    customLineDoubleCount:
+      typeof answers.customLineDoubleCount === 'number'
+        ? answers.customLineDoubleCount
+        : undefined,
     hasTunnel: answers.hasTunnel === true,
+    ...(tunnelManualModuleIndices
+      ? { tunnelManualModuleIndices }
+      : {}),
+    tunnelPlacements,
     tunnelPosition,
     tunnelOffsetMm:
       typeof answers.tunnelOffsetMm === 'number'
@@ -171,6 +214,9 @@ export function buildProjectAnswersV2(
       typeof answers.clearHeightMm === 'number'
         ? answers.clearHeightMm
         : undefined,
+    spineBackToBackMm: normalizeSpineBackToBackMm(
+      (answers as Record<string, unknown>).spineBackToBackMm
+    ),
   };
 }
 
@@ -183,7 +229,23 @@ export type ProjectAnswersV2 = {
   levels: number;
   capacityKg: number;
   lineStrategy: LineStrategyCode;
+  /**
+   * Obrigatórios com `lineStrategy === 'PERSONALIZADO'`: contagem de fileiras
+   * (eixo transversal ao vão), implantadas **duplas → simples**.
+   */
+  customLineSimpleCount?: number;
+  customLineDoubleCount?: number;
   hasTunnel: boolean;
+  /**
+   * Túneis manuais: índices 1…n (módulo de frente na planta) a converter em módulo túnel
+   * sobre a solução sem túnel.
+   */
+  tunnelManualModuleIndices?: readonly number[];
+  /**
+   * Vários vãos de túnel ao longo do eixo do vão (cada INICIO/MEIO/FIM);
+   * se omisso, usa-se `tunnelPosition` ou MEIO.
+   */
+  tunnelPlacements?: readonly TunnelPositionCode[];
   tunnelPosition?: TunnelPositionCode;
   /**
    * Início do vão do túnel ao longo da fileira (mm), desde a origem do vão na solução.
@@ -212,6 +274,11 @@ export type ProjectAnswersV2 = {
   warehouseMinBeamGapMm?: number;
   loadHeightMm?: number;
   clearHeightMm?: number;
+  /**
+   * Largura da rua dupla: espinha entre costas (mm), alinhada ao tamanho do distanciador.
+   * Em {@link buildProjectAnswersV2} fica sempre definido (padrão 100 mm se em falta).
+   */
+  spineBackToBackMm?: number;
 };
 
 /**
@@ -283,22 +350,7 @@ function rowBandsSingleDepth(
   );
 }
 
-/**
- * Indica se **esta** faixa de fileira deve usar segmentação ao longo do vão com módulo túnel
- * (`beamSegs` com troço `tunnel`), em vez de uma única corrida normal em todo o vão.
- *
- * `UMA`: apenas `rowBandIndex === 0` (primeira fileira na ordem em que o motor as gera).
- */
-export function tunnelAppliesToRow(
-  applies: TunnelAppliesCode | undefined,
-  rowKind: 'single' | 'double',
-  rowBandIndex: number
-): boolean {
-  if (!applies) return true;
-  if (applies === 'UMA') {
-    return rowBandIndex === 0;
-  }
-  if (applies === 'AMBOS') return true;
-  if (applies === 'LINHAS_SIMPLES') return rowKind === 'single';
-  return rowKind === 'double';
-}
+export {
+  tunnelAppliesToRow,
+  isTunnelPositionCode,
+} from '../../core/tunnelSelector';

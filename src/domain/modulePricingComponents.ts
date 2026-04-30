@@ -1,5 +1,8 @@
+import type { BillOfMaterials } from './pdfV2/billOfMaterials';
+import type { LayoutSolutionV2 } from './pdfV2/types';
 import type { LayoutResult } from './layoutEngine';
 import { MODULE_PALLET_BAYS_PER_LEVEL } from './pdfV2/rackModuleSpec';
+import { equivalentAlongBeamSpan } from './pdfV2/moduleSpanCounts';
 
 /**
  * Contagens de componentes por **unidade de módulo** (face com 2 baias ao longo do vão)
@@ -79,6 +82,57 @@ export function computeModulePricingSnapshot(
       columns: totalCols,
       beams: totalBeams,
       braces: 0,
+      pallets: totalPallets,
+    },
+    moduleCount,
+    assumptions,
+  };
+}
+
+/**
+ * Componentes totais / médios alinhados ao BOM V2 (montantes reais por prisma, longarinas por túnel e meio módulo).
+ */
+export function computeModulePricingSnapshotFromBom(
+  sol: LayoutSolutionV2,
+  bom: BillOfMaterials,
+  hasGroundLevel: boolean
+): ModulePricingSnapshot {
+  const moduleCount = Math.max(
+    0,
+    equivalentAlongBeamSpan(sol.totals.segmentCounts)
+  );
+  const u75 = bom.lines.find(l => l.id === 'upright75')?.quantity ?? 0;
+  const u100 = bom.lines.find(l => l.id === 'upright100')?.quantity ?? 0;
+  const totalCols = u75 + u100;
+  const totalBeams = bom.lines.find(l => l.id === 'beamPairs')?.quantity ?? 0;
+  const totalPallets = sol.totals.positions;
+  const travFundo = bom.lines.find(l => l.id === 'travamentoFundo')?.quantity ?? 0;
+  const travSup =
+    bom.lines.find(l => l.id === 'travamentoSuperior')?.quantity ?? 0;
+  const totalBraces = travFundo + travSup;
+
+  const columnsPerModule = moduleCount > 0 ? totalCols / moduleCount : 0;
+  const beamsPerModule = moduleCount > 0 ? totalBeams / moduleCount : 0;
+  const palletsPerModule = moduleCount > 0 ? totalPallets / moduleCount : 0;
+
+  const assumptions: string[] = [
+    'Montantes e longarinas: mesmas quantidades que a lista de materiais (geometria V2).',
+    'Médias por equivalência ao longo do vão (`sol.totals.equivalentAlongBeamSpan`, derivada de segmentCounts).',
+    'Contraventamento: travamento de fundo + travamento superior (quando aplicável), alinhado ao BOM.',
+    `Paletes: total de posições do layout (${hasGroundLevel ? 'incl. patamar ao piso quando aplicável' : 'sem piso'}).`,
+  ];
+
+  return {
+    moduleComponents: {
+      columns: columnsPerModule,
+      beams: beamsPerModule,
+      braces: moduleCount > 0 ? totalBraces / moduleCount : 0,
+      pallets: palletsPerModule,
+    },
+    totalComponents: {
+      columns: totalCols,
+      beams: totalBeams,
+      braces: totalBraces,
       pallets: totalPallets,
     },
     moduleCount,

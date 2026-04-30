@@ -71,7 +71,13 @@ function expectedSpineDividerSegments(geo: LayoutGeometry): number {
   let n = 0;
   for (const row of geo.rows) {
     for (const mod of row.modules) {
-      const fps = splitModuleFootprintsFor3d(row, mod, rackDepthMm, ori);
+      const fps = splitModuleFootprintsFor3d(
+        row,
+        mod,
+        rackDepthMm,
+        ori,
+        geo.metadata.spineBackToBackMm
+      );
       if (row.rowType === 'backToBack' && fps.length === 2) n += 4;
     }
   }
@@ -87,7 +93,13 @@ function expectedTunnelOpeningFloorSegments(geo: LayoutGeometry): number {
       if (mod.type !== 'tunnel') continue;
       const clear = mod.tunnelClearanceHeightMm ?? 0;
       if (clear <= MM_EPS) continue;
-      const fps = splitModuleFootprintsFor3d(row, mod, rackDepthMm, ori);
+      const fps = splitModuleFootprintsFor3d(
+        row,
+        mod,
+        rackDepthMm,
+        ori,
+        geo.metadata.spineBackToBackMm
+      );
       segs += 4 * fps.length;
     }
   }
@@ -224,9 +236,9 @@ export function validatePdfRenderCoherence(
       `layoutSolution.rows (${sol.rows.length}) ≠ geometry.rows (${geometry.rows.length})`
     );
   }
-  if (Math.abs(sol.totals.modules - geometry.totals.moduleCount) > MM_EPS) {
+  if (Math.abs(sol.totals.equivalentAlongBeamSpan - geometry.totals.moduleCount) > MM_EPS) {
     errors.push(
-      `layoutSolution.totals.modules (${sol.totals.modules}) ≠ geometry.totals.moduleCount (${geometry.totals.moduleCount})`
+      `layoutSolution.totals.equivalentAlongBeamSpan (${sol.totals.equivalentAlongBeamSpan}) ≠ geometry.totals.moduleCount (${geometry.totals.moduleCount})`
     );
   }
   if (

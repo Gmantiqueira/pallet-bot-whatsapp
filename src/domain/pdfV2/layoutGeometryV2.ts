@@ -34,12 +34,12 @@ import type {
   LayoutSolutionV2,
   ModuleSegment,
   ModuleSegmentType,
+  ModuleSpanCounts,
   RackDepthModeV2,
   RackRowSolution,
 } from './types';
 
 const EPS = 0.5;
-const SPINE_BACK_TO_BACK_MM = 100;
 
 /** Montante padrão (mm) — módulo normal. */
 export const UPRIGHT_THICKNESS_NORMAL_MM = 75;
@@ -89,6 +89,8 @@ export type RackModule = {
   uprightThicknessMm: number;
   /** Igual a {@link footprintAlongBeamMm} (extensão ao longo das longarinas em planta). */
   beamSpanMm: number;
+  /** Ver {@link ModuleSegment.beamStorageStretchId}. */
+  beamStorageStretchId?: number;
   /** Official module: 2 pallet bays per level on the front face. */
   baysPerLevel: number;
   /** Clear span of one bay along the beam (mm) — project “vão” input. */
@@ -135,13 +137,20 @@ export type TunnelInfo = {
 
 export type LayoutGeometryTotals = {
   /**
-   * Equiv. de segmentos ao longo do vão (meio = 0,5) — igual a {@link LayoutSolutionV2.totals.modules}.
+   * Equiv. longitudinal (full + ½×half + túnel) — igual a {@link LayoutSolutionV2.totals.equivalentAlongBeamSpan}.
    */
   moduleCount: number;
   /**
    * Módulos como frentes de picking: dupla costas ⇒ 2× por segmento; túnel ⇒ 1.
    */
   physicalPickingModuleCount: number;
+  /** Contagens do solver (segmentos por fileira). Preservadas para coerência 3D / BOM. */
+  moduleSpanCounts: ModuleSpanCounts;
+  /**
+   * Contagens iguais à planta renderizada ({@link buildFloorPlanModelV2} → `structureRects`).
+   * Quando definido, resumo técnico e texto comercial devem preferir este bloco.
+   */
+  planModuleSpanCounts?: ModuleSpanCounts;
   positionCount: number;
   levelCount: number;
   tunnelCount: number;
@@ -174,6 +183,8 @@ export type LayoutGeometryMetadata = {
   crossSpanMm: number;
   /** Same as {@link LayoutSolutionV2.moduleLengthAlongBeamMm} — full module step along the row. */
   moduleLengthAlongBeamMm: number;
+  /** Espinha entre costas (mm) — rua dupla; alinhado ao distanciador no fluxo. */
+  spineBackToBackMm: number;
 };
 
 export type LayoutGeometry = {
@@ -515,6 +526,9 @@ function rackModuleFromSegment(
     rowId: row.id,
     moduleIndexInRow,
     type,
+    ...(typeof m.beamStorageStretchId === 'number'
+      ? { beamStorageStretchId: m.beamStorageStretchId }
+      : {}),
     footprint: { x0: m.x0, y0: m.y0, x1: m.x1, y1: m.y1 },
     footprintAlongBeamMm: alongBeamMm,
     footprintTransversalMm: transversalMm,
@@ -623,8 +637,9 @@ export function buildLayoutGeometry(
     tunnelOverlays: [...solution.tunnels],
     tunnels: tunnelInfos,
     totals: {
-      moduleCount: solution.totals.modules,
+      moduleCount: solution.totals.equivalentAlongBeamSpan,
       physicalPickingModuleCount: solution.totals.physicalPickingModules,
+      moduleSpanCounts: { ...solution.totals.segmentCounts },
       positionCount: solution.totals.positions,
       levelCount: solution.totals.levels,
       tunnelCount,
@@ -646,6 +661,7 @@ export function buildLayoutGeometry(
       beamSpanMm: solution.beamSpanMm,
       crossSpanMm: solution.crossSpanMm,
       moduleLengthAlongBeamMm: solution.moduleLengthAlongBeamMm,
+      spineBackToBackMm: solution.metadata.spineBackToBackMm ?? 100,
     },
   };
 }
@@ -715,23 +731,38 @@ function validateModulesSpanLengthAxis(
   ori: LayoutOrientationV2
 ): void {
   const tol = 2.5;
-  const mods = [...row.modules]
-    .filter(m => m.type !== 'tunnel')
-    .sort((a, b) => beamStartCoord(a, ori) - beamStartCoord(b, ori));
+  const mods = [...row.modules].sort(
+    (a, b) => beamStartCoord(a, ori) - beamStartCoord(b, ori)
+  );
   let runIdx = 0;
   let prevEnd: number | null = null;
+  let prevStretchId: number | null = null;
   for (const m of mods) {
+    if (m.type === 'tunnel') {
+      prevEnd = beamEndCoord(m, ori);
+      continue;
+    }
+
+    const stretchId = m.beamStorageStretchId;
+    const useStretch =
+      typeof stretchId === 'number' && Number.isFinite(stretchId);
     const start = beamStartCoord(m, ori);
-    if (
-      prevEnd != null &&
-      start - prevEnd > 1.5
-    ) {
+
+    if (!useStretch) {
+      if (prevEnd != null && start - prevEnd > 1.5) {
+        runIdx = 0;
+      }
+    } else if (prevStretchId !== null && stretchId !== prevStretchId) {
       runIdx = 0;
     }
+
     const along = m.moduleLengthAxisMm;
     if (m.segmentType === 'half') {
       const expected = nominalModuleLengthAlongBeamMm / 2;
       if (Math.abs(along - expected) <= tol) {
+        if (useStretch) {
+          prevStretchId = stretchId;
+        }
         prevEnd = beamEndCoord(m, ori);
         continue;
       }
@@ -743,6 +774,9 @@ function validateModulesSpanLengthAxis(
     const expected = moduleFootprintAlongBeamInRunMm(runIdx, beamAlongModuleMm);
     if (Math.abs(along - expected) <= tol) {
       runIdx += 1;
+      if (useStretch) {
+        prevStretchId = stretchId;
+      }
       prevEnd = beamEndCoord(m, ori);
       continue;
     }
@@ -824,8 +858,9 @@ export function validateLayoutGeometry(geo: LayoutGeometry): void {
     }
     rowIds.add(row.id);
 
+    const spine = geo.metadata.spineBackToBackMm;
     const expectedDepth =
-      row.rowType === 'backToBack' ? 2 * md + SPINE_BACK_TO_BACK_MM : md;
+      row.rowType === 'backToBack' ? 2 * md + spine : md;
     if (Math.abs(row.rowDepthMm - expectedDepth) > 2) {
       throw new LayoutGeometryValidationError(
         `Fileira ${row.id}: profundidade ${row.rowDepthMm} mm não corresponde ao modo ` +
@@ -988,7 +1023,7 @@ function doubleBandHasBilateralOperationalAccess(args: {
  * @param layout Geometria canónica da planta (mesma instância que o PDF) — {@link LayoutGeometry}.
  */
 export function validateOperationalAccess(layout: LayoutGeometry): void {
-  if (layout.metadata.rackDepthMode !== 'double') return;
+  if (!layout.rows.some(r => r.rowType === 'backToBack')) return;
 
   const wh = warehouseDoubleLineSectionFromGeometry(layout);
   for (const row of layout.rows) {
@@ -1014,7 +1049,7 @@ export function layoutSolutionPassesOperationalAccess(
 
   if (sol.rows.length === 0) return false;
 
-  if (sol.rackDepthMode !== 'double') return true;
+  if (!sol.rows.some(r => r.kind === 'double')) return true;
 
   if (cor <= EPS) return false;
 
@@ -1049,7 +1084,7 @@ export function layoutSolutionPassesOperationalAccess(
 export function assertLayoutSolutionDoubleRowBilateralAccess(
   sol: LayoutSolutionV2
 ): void {
-  if (sol.rackDepthMode !== 'double') return;
+  if (!sol.rows.some(r => r.kind === 'double')) return;
   if (sol.rows.length === 0) return;
   const wh = warehouseDoubleLineSectionFromSolution(sol);
   for (const row of sol.rows) {

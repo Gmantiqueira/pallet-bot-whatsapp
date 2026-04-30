@@ -12,7 +12,7 @@ import {
   validateOperationalAccess,
 } from './layoutGeometryV2';
 import type { ProjectAnswersV2 } from './answerMapping';
-import { buildFloorPlanModelV2 } from './floorPlanModelV2';
+import { buildFloorPlanModelV2, moduleSpanCountsFromFloorPlanStructureRects } from './floorPlanModelV2';
 
 const minimal = (): ProjectAnswersV2 => ({
   lengthMm: 12_000,
@@ -84,6 +84,24 @@ describe('buildLayoutGeometry + validateLayoutGeometry', () => {
     validateLayoutGeometry(geo);
   });
 
+  it('túnel manual (substitui um módulo): passo com montante partilhado após o túnel é válido', () => {
+    const a: ProjectAnswersV2 = {
+      ...minimal(),
+      lengthMm: 40_000,
+      halfModuleOptimization: false,
+      lineStrategy: 'APENAS_SIMPLES',
+      hasTunnel: true,
+      tunnelManualModuleIndices: [5],
+      levels: 4,
+    };
+    const sol = buildLayoutSolutionV2(a);
+    expect(sol.rows.some(r => r.modules.some(m => m.variant === 'tunnel'))).toBe(
+      true
+    );
+    const geo = buildLayoutGeometry(sol, a);
+    validateLayoutGeometry(geo);
+  });
+
   it('dupla costas: profundidade de fileira alinha com 2×módulo + espinha', () => {
     const a: ProjectAnswersV2 = {
       ...minimal(),
@@ -140,6 +158,21 @@ describe('buildLayoutGeometry + validateLayoutGeometry', () => {
     expect(planD.structureRects.length).toBe(
       Math.round(geoD.totals.physicalPickingModuleCount)
     );
+
+    const numbered = planD.structureRects.filter(
+      r => r.variant !== 'tunnel' && r.segmentType !== 'half'
+    );
+    const idxs = numbered.map(r => r.displayIndex).filter((n): n is number => n != null);
+    expect(idxs.length).toBe(numbered.length);
+    expect(new Set(idxs).size).toBe(idxs.length);
+    expect(Math.min(...idxs)).toBe(1);
+    expect(Math.max(...idxs)).toBe(idxs.length);
+    const planCounts =
+      moduleSpanCountsFromFloorPlanStructureRects(planD.structureRects);
+    expect(planCounts.fullModules).toBe(numbered.length);
+    expect(
+      planCounts.fullModules + planCounts.halfModules + planCounts.tunnels
+    ).toBe(planD.structureRects.length);
   });
 
   it('validateOperationalAccess: dupla encostada à parede transversal (lado baixo) → rejeita', () => {

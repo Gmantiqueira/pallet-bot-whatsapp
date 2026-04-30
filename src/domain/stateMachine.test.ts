@@ -1,4 +1,9 @@
-import { transition, Input, parseMenuBranch } from './stateMachine';
+import {
+  transition,
+  Input,
+  parseMenuBranch,
+  parseLineStrategyInput,
+} from './stateMachine';
 import { Session } from './session';
 import {
   DEFAULT_BEAM_LENGTH_MM,
@@ -185,6 +190,23 @@ describe('State Machine', () => {
       expect(result.effects.some(e => e.type === 'RESEND_PDF')).toBe(true);
     });
 
+    it('WAIT_TUNNEL_MODULE_NUMBERS + BAIXAR_PREVIA_PDF mantém estado e pede reenvio da prévia', () => {
+      const session = createSession('WAIT_TUNNEL_MODULE_NUMBERS', {
+        tunnelPreviewMaxIndex: 4,
+        tunnelPreviewPdfFilename: 'previa.pdf',
+        tunnelPreviewPdfPath: '/tmp/previa.pdf',
+      });
+      const result = transition(session, {
+        type: 'BUTTON',
+        value: 'BAIXAR_PREVIA_PDF',
+      });
+
+      expect(result.session.state).toBe('WAIT_TUNNEL_MODULE_NUMBERS');
+      expect(
+        result.effects.some(e => e.type === 'RESEND_TUNNEL_PREVIEW_PDF')
+      ).toBe(true);
+    });
+
     it('FINAL_CONFIRM + TEXT goes to MENU', () => {
       const session = createSession('FINAL_CONFIRM', { lengthMm: 1000 });
       const result = transition(session, { type: 'TEXT', value: 'ola' });
@@ -229,12 +251,22 @@ describe('State Machine', () => {
       session = result.session;
 
       result = transition(session, { type: 'BUTTON', value: 'TUNNEL_NAO' });
+      expect(result.session.state).toBe('CHOOSE_MODULE_DIMENSION_MODE');
+      session = result.session;
+
+      result = transition(session, { type: 'BUTTON', value: 'MDM_MANUAL' });
       expect(result.session.state).toBe('WAIT_MODULE_DEPTH');
+      expect(result.session.answers.moduleDimensionMode).toBe('MANUAL');
       session = result.session;
 
       result = transition(session, { type: 'TEXT', value: '2700' });
+      expect(result.session.state).toBe('WAIT_BEAM_LENGTH');
+      session = result.session;
+
+      result = transition(session, { type: 'TEXT', value: '1100' });
       expect(result.session.state).toBe('CHOOSE_HEIGHT_DEFINITION');
-      expect(result.session.answers.beamLengthMm).toBe(DEFAULT_BEAM_LENGTH_MM);
+      expect(result.session.answers.moduleDepthMm).toBe(2700);
+      expect(result.session.answers.beamLengthMm).toBe(1100);
       session = result.session;
 
       result = transition(session, { type: 'BUTTON', value: 'HD_ALTURA_MODULO' });
@@ -243,10 +275,27 @@ describe('State Machine', () => {
       session = result.session;
 
       result = transition(session, { type: 'TEXT', value: '4' });
+      expect(result.session.state).toBe('CHOOSE_LEVEL_SPACING_MODE');
+      session = result.session;
+
+      result = transition(session, { type: 'BUTTON', value: 'LVL_GAP_IGUAL' });
+      expect(result.session.state).toBe('WAIT_LEVEL_SPACING_UNIFORM');
+      session = result.session;
+
+      result = transition(session, { type: 'TEXT', value: '1500' });
       expect(result.session.state).toBe('CHOOSE_FIRST_LEVEL_GROUND');
+      expect(result.session.answers.equalLevelSpacing).toBe(true);
+      expect(result.session.answers.levelSpacingMm).toBe(1500);
       session = result.session;
 
       result = transition(session, { type: 'BUTTON', value: 'FLG_SIM' });
+      expect(result.session.state).toBe('CHOOSE_CAPACITY_MODE');
+      session = result.session;
+
+      result = transition(session, {
+        type: 'BUTTON',
+        value: 'CAP_MODE_DIRETO',
+      });
       expect(result.session.state).toBe('WAIT_CAPACITY');
       session = result.session;
 
@@ -275,9 +324,12 @@ describe('State Machine', () => {
       expect(result.session.answers.structure).toBeDefined();
       expect(result.session.answers.budget).toBeDefined();
       expect(
-        (result.session.answers.budget as { totals: { modules: number } })
-          .totals.modules
-      ).toBe(10);
+        (
+          result.session.answers.budget as {
+            totals: { segmentCounts: { fullModules: number } };
+          }
+        ).totals.segmentCounts.fullModules
+      ).toBe(6);
     });
 
     it('should reach WAIT_HEIGHT_DIRECT after capacity with heightMode DIRECT', () => {
@@ -293,6 +345,28 @@ describe('State Machine', () => {
       const result = transition(session, { type: 'TEXT', value: '2000' });
       expect(result.session.state).toBe('WAIT_HEIGHT_DIRECT');
       expect(result.session.answers.heightMode).toBe('DIRECT');
+    });
+
+    it('capacity automática: 2× peso do palete e capacidade preenchida', () => {
+      const session = createSession('CHOOSE_CAPACITY_MODE', {
+        lengthMm: 12000,
+        widthMm: 10000,
+        corridorMm: 3000,
+        moduleDepthMm: 2700,
+        beamLengthMm: DEFAULT_BEAM_LENGTH_MM,
+        levels: 4,
+        firstLevelOnGround: true,
+        levelSpacingMm: 1500,
+        equalLevelSpacing: true,
+        heightDefinitionMode: 'module_total',
+      });
+      let r = transition(session, { type: 'BUTTON', value: 'CAP_MODE_AUTO' });
+      expect(r.session.state).toBe('WAIT_PALLET_WEIGHT');
+      r = transition(r.session, { type: 'TEXT', value: '1000' });
+      expect(r.session.state).toBe('WAIT_HEIGHT_DIRECT');
+      expect(r.session.answers.capacityKg).toBe(2000);
+      expect(r.session.answers.palletWeightKg).toBe(1000);
+      expect(r.session.answers.capacityInputMode).toBe('AUTO');
     });
   });
 
@@ -317,17 +391,243 @@ describe('State Machine', () => {
       expect(result.session.state).toBe('WAIT_LENGTH');
     });
 
-    it('should reject corridor below minimum', () => {
+    it('should reject corridor below minimum (non-zero)', () => {
       const session = createSession('WAIT_CORRIDOR', {
         lengthMm: 12000,
         widthMm: 10000,
       });
-      const input: Input = { type: 'TEXT', value: '500' };
+      const input: Input = { type: 'TEXT', value: '400' };
 
       const result = transition(session, input);
 
-      expect(result.error).toContain('1000');
+      expect(result.error).toContain('500');
       expect(result.session.state).toBe('WAIT_CORRIDOR');
+    });
+
+    it('should accept corridor 500 mm and advance', () => {
+      const session = createSession('WAIT_CORRIDOR', {
+        lengthMm: 12000,
+        widthMm: 10000,
+      });
+      const result = transition(session, { type: 'TEXT', value: '500' });
+
+      expect(result.error).toBeUndefined();
+      expect(result.session.state).toBe('CHOOSE_LINE_STRATEGY');
+      expect(result.session.answers.corridorMm).toBe(500);
+    });
+
+    it('should treat 0 as no main corridor and skip to tunnel (single line)', () => {
+      const session = createSession('WAIT_CORRIDOR', {
+        lengthMm: 12000,
+        widthMm: 10000,
+      });
+      const result = transition(session, { type: 'TEXT', value: '0' });
+
+      expect(result.error).toBeUndefined();
+      expect(result.session.state).toBe('CHOOSE_TUNNEL');
+      expect(result.session.answers.corridorMm).toBe(0);
+      expect(result.session.answers.lineStrategy).toBe('APENAS_SIMPLES');
+    });
+
+    it('should treat Sem corredor button like 0', () => {
+      const session = createSession('WAIT_CORRIDOR', {
+        lengthMm: 12000,
+        widthMm: 10000,
+      });
+      const result = transition(session, {
+        type: 'BUTTON',
+        value: 'SEM_CORREDOR',
+      });
+
+      expect(result.session.state).toBe('CHOOSE_TUNNEL');
+      expect(result.session.answers.corridorMm).toBe(0);
+      expect(result.session.answers.lineStrategy).toBe('APENAS_SIMPLES');
+    });
+
+    it('parseLineStrategyInput: 4 = personalizado', () => {
+      expect(
+        parseLineStrategyInput({ type: 'TEXT', value: '4' })
+      ).toBe('PERSONALIZADO');
+    });
+
+    it('mais de um nível: escolhe espaçamento variável e N−1 intervalos (mm)', () => {
+      let session = createSession('CHOOSE_LEVEL_SPACING_MODE', {
+        heightDefinitionMode: 'module_total',
+        levels: 3,
+      });
+      let r = transition(session, { type: 'BUTTON', value: 'LVL_GAP_VARIAVEL' });
+      expect(r.session.state).toBe('WAIT_LEVEL_SPACINGS_LIST');
+      session = r.session;
+      r = transition(session, { type: 'TEXT', value: '1000, 1500' });
+      expect(r.session.state).toBe('CHOOSE_FIRST_LEVEL_GROUND');
+      expect(r.session.answers.equalLevelSpacing).toBe(false);
+      expect(r.session.answers.levelSpacingsMm).toEqual([1000, 1500]);
+    });
+
+    it('TUNNEL_SIM: abre passo de estratégia (assistente vs manual de módulos)', () => {
+      const session = createSession('CHOOSE_TUNNEL', { hasTunnel: false });
+      const r = transition(session, {
+        type: 'BUTTON',
+        value: 'TUNNEL_SIM',
+      });
+      expect(r.session.state).toBe('CHOOSE_TUNNEL_STRATEGY');
+      expect(r.session.answers.hasTunnel).toBe(true);
+    });
+
+    it('túnel manual: após vão (WAIT_BEAM_LENGTH) vai a GENERATING_TUNNEL_PREVIEW', () => {
+      const session = createSession('WAIT_BEAM_LENGTH', {
+        lengthMm: 12000,
+        widthMm: 10000,
+        corridorMm: 3000,
+        moduleDimensionMode: 'MANUAL',
+        moduleDepthMm: 2700,
+        hasTunnel: true,
+        tunnelConfigMode: 'MANUAL',
+        lineStrategy: 'MELHOR_LAYOUT',
+        tunnelPosition: 'MEIO',
+        tunnelAppliesTo: 'AMBOS',
+      });
+      const r = transition(session, { type: 'TEXT', value: '1100' });
+      expect(r.session.state).toBe('GENERATING_TUNNEL_PREVIEW');
+      expect(r.effects).toContainEqual({ type: 'GENERATE_TUNNEL_PREVIEW' });
+      expect(r.session.answers.beamLengthMm).toBe(1100);
+    });
+
+    it('WAIT_TUNNEL_MODULE_NUMBERS + números válidos segue para CHOOSE_HEIGHT_DEFINITION', () => {
+      const session = createSession('WAIT_TUNNEL_MODULE_NUMBERS', {
+        lengthMm: 12000,
+        widthMm: 10000,
+        corridorMm: 3000,
+        moduleDimensionMode: 'MANUAL',
+        moduleDepthMm: 2700,
+        beamLengthMm: 1100,
+        hasTunnel: true,
+        tunnelConfigMode: 'MANUAL',
+        lineStrategy: 'MELHOR_LAYOUT',
+        tunnelPosition: 'MEIO',
+        tunnelAppliesTo: 'AMBOS',
+        tunnelPreviewMaxIndex: 20,
+      });
+      const r = transition(session, { type: 'TEXT', value: '1, 2' });
+      expect(r.error).toBeUndefined();
+      expect(r.session.state).toBe('CHOOSE_HEIGHT_DEFINITION');
+      expect(r.session.answers.tunnelManualModuleIndices).toEqual([1, 2]);
+    });
+
+    it('WAIT_TUNNEL_MODULE_NUMBERS + renúncia (nenhum/zero/sem túnel) segue sem túnel para CHOOSE_HEIGHT_DEFINITION', () => {
+      const session = createSession('WAIT_TUNNEL_MODULE_NUMBERS', {
+        lengthMm: 12000,
+        widthMm: 10000,
+        corridorMm: 3000,
+        moduleDimensionMode: 'MANUAL',
+        moduleDepthMm: 2700,
+        beamLengthMm: 1100,
+        hasTunnel: true,
+        tunnelConfigMode: 'MANUAL',
+        lineStrategy: 'MELHOR_LAYOUT',
+        tunnelPosition: 'MEIO',
+        tunnelAppliesTo: 'AMBOS',
+        tunnelPreviewMaxIndex: 20,
+        tunnelManualModuleIndices: [9],
+      });
+      const r = transition(session, { type: 'TEXT', value: 'sem túnel' });
+      expect(r.error).toBeUndefined();
+      expect(r.session.state).toBe('CHOOSE_HEIGHT_DEFINITION');
+      expect(r.session.answers.hasTunnel).toBe(false);
+      expect(r.session.answers.tunnelConfigMode).toBeUndefined();
+      expect(r.session.answers.tunnelManualModuleIndices).toBeUndefined();
+      expect(r.session.answers.tunnelPreviewMaxIndex).toBeUndefined();
+    });
+
+    it('WAIT_TUNNEL_MODULE_NUMBERS: sem tunnelPreviewMaxIndex pede nova prévia (evita erro 1 a 0)', () => {
+      const session = createSession('WAIT_TUNNEL_MODULE_NUMBERS', {
+        lengthMm: 12000,
+        widthMm: 10000,
+        corridorMm: 3000,
+        moduleDimensionMode: 'MANUAL',
+        moduleDepthMm: 2700,
+        beamLengthMm: 1100,
+        hasTunnel: true,
+        tunnelConfigMode: 'MANUAL',
+        lineStrategy: 'MELHOR_LAYOUT',
+        tunnelPosition: 'MEIO',
+        tunnelAppliesTo: 'AMBOS',
+      });
+      const r = transition(session, { type: 'TEXT', value: '1' });
+      expect(r.session.state).toBe('WAIT_TUNNEL_MODULE_NUMBERS');
+      expect(r.error).toMatch(/prévia numerada/i);
+    });
+
+    it('túnel manual com menos de 2 níveis: remove também índices manuais de túnel', () => {
+      const session = createSession('CHOOSE_COLUMN_PROTECTOR', {
+        hasTunnel: true,
+        tunnelConfigMode: 'MANUAL',
+        levels: 1,
+        tunnelManualModuleIndices: [1],
+        tunnelPlacements: ['MEIO'],
+      });
+      const r = transition(session, { type: 'BUTTON', value: 'COL_NAO' });
+      expect(r.session.state).toBe('SUMMARY_CONFIRM');
+      expect(r.session.answers.hasTunnel).toBe(false);
+      expect(
+        r.session.answers.tunnelManualModuleIndices
+      ).toBeUndefined();
+    });
+
+    it('com túnel: CHOOSE_COLUMN_PROTECTOR salta guardas e define AMBOS no resumo', () => {
+      const session = createSession('CHOOSE_COLUMN_PROTECTOR', {
+        hasTunnel: true,
+      });
+      const r = transition(session, { type: 'BUTTON', value: 'COL_NAO' });
+      expect(r.session.state).toBe('SUMMARY_CONFIRM');
+      expect(r.session.answers.guardRailSimple).toBe(true);
+      expect(r.session.answers.guardRailSimplePosition).toBe('AMBOS');
+      expect(r.session.answers.guardRailDouble).toBe(true);
+      expect(r.session.answers.guardRailDoublePosition).toBe('AMBOS');
+    });
+
+    it('dois túneis: duas respostas de posição depois aplica a linhas', () => {
+      let session = createSession('CHOOSE_TUNNEL_COUNT', {
+        hasTunnel: true,
+        lengthMm: 12_000,
+      });
+      let r = transition(session, {
+        type: 'BUTTON',
+        value: 'TUNNEL_NUM_2',
+      });
+      expect(r.session.state).toBe('CHOOSE_TUNNEL_POSITION');
+      expect(r.session.answers.tunnelSlotCount).toBe(2);
+      expect(r.session.answers.tunnelPlacements).toEqual([]);
+      session = r.session;
+      r = transition(session, { type: 'BUTTON', value: 'TUNNEL_INICIO' });
+      expect(r.session.state).toBe('CHOOSE_TUNNEL_POSITION');
+      expect(r.session.answers.tunnelPlacements).toEqual(['INICIO']);
+      session = r.session;
+      r = transition(session, { type: 'BUTTON', value: 'TUNNEL_FIM' });
+      expect(r.session.state).toBe('CHOOSE_TUNNEL_APPLIES');
+      expect(r.session.answers.tunnelPlacements).toEqual(['INICIO', 'FIM']);
+      expect(r.session.answers.tunnelPosition).toBe('INICIO');
+    });
+
+    it('PERSONALIZADO: após contagens, vai a CHOOSE_TUNNEL com estratégia e campos', () => {
+      let session = createSession('CHOOSE_LINE_STRATEGY', {
+        lengthMm: 12000,
+        widthMm: 10000,
+        corridorMm: 3000,
+      });
+      let r = transition(session, { type: 'TEXT', value: '4' });
+      expect(r.session.state).toBe('WAIT_LINE_CUSTOM_SIMPLES');
+      expect(r.session.answers.lineStrategy).toBe('PERSONALIZADO');
+      session = r.session;
+      r = transition(session, { type: 'TEXT', value: '1' });
+      expect(r.session.state).toBe('WAIT_LINE_CUSTOM_DUPLOS');
+      expect(r.session.answers.customLineSimpleCount).toBe(1);
+      session = r.session;
+      r = transition(session, { type: 'TEXT', value: '1' });
+      expect(r.session.state).toBe('WAIT_SPINE_BACK_TO_BACK');
+      expect(r.session.answers.customLineDoubleCount).toBe(1);
+      r = transition(r.session, { type: 'TEXT', value: '100' });
+      expect(r.session.state).toBe('CHOOSE_TUNNEL');
     });
 
     it('should reject corridor above maximum', () => {

@@ -5,7 +5,8 @@ import type {
   BillOfMaterials,
   BillOfMaterialsLineId,
 } from '../../domain/pdfV2/billOfMaterials';
-import type { LayoutSolutionV2 } from '../../domain/pdfV2/types';
+import type { LayoutSolutionV2, ModuleSpanCounts } from '../../domain/pdfV2/types';
+import { formatModuleSpanCountsCommercialPt } from '../../domain/pdfV2/formatModuleCountDisplay';
 import { sanitizeText } from '../../utils/sanitizeText';
 
 const SHEET = 'PORTA PALETES';
@@ -23,6 +24,8 @@ const ROW = {
   travamentoFundo: 16,
   calco: 17,
 } as const;
+
+/* `travamentoSuperior` (BOM) não tem linha no modelo .xlsx — quantidade só no BOM digital / PDF. */
 
 function resolveBudgetTemplatePath(): string {
   const candidates = [
@@ -51,11 +54,32 @@ function assertNonNegativeQty(n: number, label: string): number {
 }
 
 /**
+ * ExcelJS grava `=` no XML; se a string da fórmula também começar por `=`, o Excel mostra `==` (inválido).
+ */
+function assertWorksheetFormulasExcelJsSafe(ws: ExcelJS.Worksheet): void {
+  ws.eachRow({ includeEmpty: false }, row => {
+    row.eachCell({ includeEmpty: false }, cell => {
+      const v = cell.value;
+      if (v && typeof v === 'object' && 'formula' in v) {
+        const f = (v as { formula?: string }).formula;
+        if (typeof f === 'string' && f.startsWith('=')) {
+          throw new Error(
+            `Fórmula inválida em ${cell.address}: não use "=" inicial no objeto formula do ExcelJS (evita "==" no ficheiro). Recebido: ${f.slice(0, 80)}`
+          );
+        }
+      }
+    });
+  });
+}
+
+/**
  * Preenche quantidades e descrições no modelo comercial, mantendo preços (M), pesos (U) e fórmulas (O, R, totais).
  */
 export async function fillBudgetWorkbookFromTemplate(args: {
   bom: BillOfMaterials;
   layoutSolution: LayoutSolutionV2;
+  /** Contagens da planta (G23); fallback `layoutSolution.totals.segmentCounts`. */
+  documentModuleSpanCounts?: ModuleSpanCounts;
   /** Campos opcionais de capa */
   projectLabel?: string;
   clientName?: string;
@@ -69,7 +93,10 @@ export async function fillBudgetWorkbookFromTemplate(args: {
     throw new Error(`Planilha "${SHEET}" não encontrada no modelo.`);
   }
 
-  const { bom, layoutSolution } = args;
+  const { bom, layoutSolution, documentModuleSpanCounts } = args;
+
+  const coverCounts =
+    documentModuleSpanCounts ?? layoutSolution.totals.segmentCounts;
 
   const u75 = lineById(bom, 'upright75');
   const u100 = lineById(bom, 'upright100');
@@ -105,7 +132,7 @@ export async function fillBudgetWorkbookFromTemplate(args: {
   }
 
   ws.getCell(`A${ROW.batente}`).value = {
-    formula: `=(A${ROW.upright75}+A${ROW.upright100})*2`,
+    formula: `(A${ROW.upright75}+A${ROW.upright100})*2`,
   };
 
   ws.getCell(`A${ROW.distanciador}`).value = assertNonNegativeQty(
@@ -115,7 +142,7 @@ export async function fillBudgetWorkbookFromTemplate(args: {
 
   ws.getCell(`A${ROW.columnProtector}`).value = assertNonNegativeQty(
     prot?.quantity ?? 0,
-    'protetor'
+    'protetor de coluna'
   );
 
   ws.getCell(`A${ROW.guardRailSimple}`).value = assertNonNegativeQty(
@@ -132,10 +159,10 @@ export async function fillBudgetWorkbookFromTemplate(args: {
   );
 
   ws.getCell(`A${ROW.calco}`).value = {
-    formula: `=(A${ROW.upright75}+A${ROW.upright100})*3`,
+    formula: `(A${ROW.upright75}+A${ROW.upright100})*3`,
   };
 
-  const modulesAlong = layoutSolution.totals.modules;
+  const modulesAlong = formatModuleSpanCountsCommercialPt(coverCounts);
   const positions = layoutSolution.totals.positions;
 
   ws.getCell('G23').value = modulesAlong;
@@ -159,6 +186,8 @@ export async function fillBudgetWorkbookFromTemplate(args: {
     ws.getCell('L2').value = sanitizeText(args.city.trim());
   }
 
+  assertWorksheetFormulasExcelJsSafe(ws);
+
   return workbook;
 }
 
@@ -166,6 +195,10 @@ export async function writeBudgetXlsxFile(
   workbook: ExcelJS.Workbook,
   absolutePath: string
 ): Promise<void> {
+  const ws = workbook.getWorksheet(SHEET);
+  if (ws) {
+    assertWorksheetFormulasExcelJsSafe(ws);
+  }
   await workbook.xlsx.writeFile(absolutePath);
 }
 

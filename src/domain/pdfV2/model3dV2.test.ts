@@ -101,7 +101,7 @@ describe('build3DModelV2 + projeção isométrica', () => {
     const a = { ...base(), lineStrategy: 'APENAS_SIMPLES' as const };
     const sol = buildLayoutSolutionV2(a);
     const model = build3DModelV2(geomFromAnswers(a));
-    expect(model.moduleEquivEmitted).toBeCloseTo(sol.totals.modules, 5);
+    expect(model.moduleEquivEmitted).toBeCloseTo(sol.totals.equivalentAlongBeamSpan, 5);
     expect(model.footprintPrismCount).toBeGreaterThan(0);
     expect(model.lines.length).toBeGreaterThan(10);
     const projected = projectToIsometric(model);
@@ -111,6 +111,7 @@ describe('build3DModelV2 + projeção isométrica', () => {
     expect(svg).toContain('v2-3d-wireframe');
     expect(svg).toMatch(/stroke="#c2410c"/);
     expect(svg).toMatch(/stroke="#0f172a"/);
+    expect(svg).not.toMatch(/DEBUG/i);
   });
 
   it('2: túnel — módulo túnel no layout e vão inferior no 3D', () => {
@@ -153,9 +154,9 @@ describe('build3DModelV2 + projeção isométrica', () => {
     const sol = buildLayoutSolutionV2(a);
     expect(sol.rackDepthMode).toBe('double');
     const model = build3DModelV2(geomFromAnswers(a));
-    expect(model.moduleEquivEmitted).toBeCloseTo(sol.totals.modules, 5);
+    expect(model.moduleEquivEmitted).toBeCloseTo(sol.totals.equivalentAlongBeamSpan, 5);
     expect(model.footprintPrismCount).toBeGreaterThanOrEqual(
-      Math.ceil(sol.totals.modules)
+      Math.ceil(sol.totals.equivalentAlongBeamSpan)
     );
     expect(model.lines.some(l => l.kind === 'module_outline')).toBe(true);
     expect(model.lines.some(l => l.kind === 'beam')).toBe(true);
@@ -193,7 +194,10 @@ describe('build3DModelV2 + projeção isométrica', () => {
       }
     }
     expect(mD.footprintPrismCount).toBe(expectedD);
-    expect(mS.footprintPrismCount / solS.totals.modules).toBeCloseTo(1, 5);
+    expect(mS.footprintPrismCount / solS.totals.equivalentAlongBeamSpan).toBeCloseTo(
+      1,
+      5
+    );
   });
 
   it('7: dupla costas — cada módulo normal vira 2 prismas no 3D (não um bloco único)', () => {

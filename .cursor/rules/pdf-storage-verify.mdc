@@ -1,0 +1,25 @@
+---
+description: Verificar PDFs gerados em storage ao depurar ou iterar layout PDF V2
+globs: src/domain/pdfV2/**,src/infra/pdf/**,scripts/**,storage/**
+alwaysApply: false
+---
+
+# PDFs gerados — pasta `storage`
+
+## Onde ficam
+
+- **Desenvolvimento local (predefinição):** `{workspace}/storage` (= `path.resolve(process.cwd(), 'storage')` em `src/config/storagePath.ts`).
+- **Override:** variável de ambiente `PALLET_STORAGE_PATH` (caminho absoluto resolvido).
+- **Serverless (ex.: Vercel):** típico `{tmpdir}/pallet-bot-whatsapp/storage` — não assumir `cwd/storage` em produção.
+
+## O que fazer ao trabalhar em PDF/planta/elevações
+
+1. **Depois de gerar ou quando o utilizador reportar “PDF estranho”:** listar PDFs recentes em `storage/` (ex.: `ls -lat storage/*.pdf` ou ferramenta equivalente) e identificar o ficheiro mais recente ou o nome citado (`projeto-*.pdf`).
+2. **Inspeção:** abrir esse PDF no sistema de ficheiros ou no IDE (previsualização) quando disponível; usar ferramentas CLI se existirem (`pdfinfo`, `pdftotext`) só para sanidade (páginas, não vazio), não como substituto da leitura visual.
+3. **Correções:** cruzar o que se vê no PDF com o código que gera SVG/raster (`svgFloorPlanV2`, `svgElevationV2`, `pdfV2Service`, etc.) — traços, margens, texto ilegível, rasterização.
+4. **SVG inválido:** se a geração falhar com erro de XML ao rasterizar, rever texto dentro de `<style>` ou elementos SVG — **não** usar caracteres `<` / `>` literais em comentários ou texto dentro do markup sem CDATA/escape.
+
+## O que não fazer
+
+- Não assumir que um PDF específico existe sem listar o diretório.
+- Não fazer `git add` de PDFs em `storage/` salvo pedido explícito do utilizador (geralmente são artefactos locais).

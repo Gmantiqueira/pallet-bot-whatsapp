@@ -1,15 +1,23 @@
 import type { LayoutResult } from '../../domain/layoutEngine';
 import { buildLayoutSolutionV2 } from '../../domain/pdfV2/layoutSolutionV2';
-import { buildLayoutGeometry } from '../../domain/pdfV2/layoutGeometryV2';
+import {
+  buildLayoutGeometry,
+  type LayoutGeometry,
+} from '../../domain/pdfV2/layoutGeometryV2';
 import type { ProjectAnswersV2 } from '../../domain/pdfV2/answerMapping';
+import {
+  buildFloorPlanModelV2,
+  moduleSpanCountsFromFloorPlanStructureRects,
+} from '../../domain/pdfV2/floorPlanModelV2';
 import { selectStructure } from '../../domain/structureEngine';
-import { formatModuleCountForDocumentPt } from '../../domain/pdfV2/formatModuleCountDisplay';
+import { formatModuleSpanCountsCommercialPt } from '../../domain/pdfV2/formatModuleCountDisplay';
 import { technicalSummaryRows } from './pdfService';
 import { HEIGHT_DEFINITION_WAREHOUSE_CLEAR } from '../../domain/warehouseHeightDerive';
 import {
   formatNiveisArmazenagemForDocumentPt,
   technicalSummaryRowsFromLayoutGeometry,
 } from './pdfV2TechnicalSummary';
+import { TUNNEL_MANUAL_PREVIEW_PROVISIONAL_SPECS_KEY } from '../../domain/tunnelPreviewAnswerDefaults';
 
 const minimal = (): ProjectAnswersV2 => ({
   lengthMm: 12_000,
@@ -34,7 +42,43 @@ function rowValue(
   return rows.find(r => r.label === label)?.value;
 }
 
+/** Replica o PDF: totais comerciais da planta renderizada. */
+function geometryAsPrintedPlan(
+  geo: LayoutGeometry,
+  project: Record<string, unknown>
+): LayoutGeometry {
+  const plan = buildFloorPlanModelV2(geo, project);
+  return {
+    ...geo,
+    totals: {
+      ...geo.totals,
+      planModuleSpanCounts: moduleSpanCountsFromFloorPlanStructureRects(
+        plan.structureRects
+      ),
+    },
+  };
+}
+
 describe('technicalSummaryRowsFromLayoutGeometry', () => {
+  it('prefixa aviso de pré-visualização quando tunnelManualPreviewProvisionalSpecs', () => {
+    const a = minimal();
+    const sol = buildLayoutSolutionV2(a);
+    const geo = buildLayoutGeometry(
+      sol,
+      a as unknown as Record<string, unknown>
+    );
+    const project = {
+      ...(a as unknown as Record<string, unknown>),
+      [TUNNEL_MANUAL_PREVIEW_PROVISIONAL_SPECS_KEY]: true,
+    };
+    const rows = technicalSummaryRowsFromLayoutGeometry(
+      project,
+      geometryAsPrintedPlan(geo, project)
+    );
+    expect(rows[0]?.label).toBe('Documento:');
+    expect(rows[0]?.value).toContain('Pré-visualização');
+  });
+
   it('reflete geometry.totals e dimensões do armazém (cenário com túnel)', () => {
     const a: ProjectAnswersV2 = {
       ...minimal(),
@@ -58,11 +102,12 @@ describe('technicalSummaryRowsFromLayoutGeometry', () => {
       ...(a as unknown as Record<string, unknown>),
       structure,
     };
-    const rows = technicalSummaryRowsFromLayoutGeometry(project, geo);
+    const geoDoc = geometryAsPrintedPlan(geo, project);
+    const rows = technicalSummaryRowsFromLayoutGeometry(project, geoDoc);
 
     expect(rowValue(rows, 'Coluna selecionada:')).toBe(structure.uprightType);
     expect(rowValue(rows, 'Módulos:')).toBe(
-      formatModuleCountForDocumentPt(geo.totals.physicalPickingModuleCount)
+      formatModuleSpanCountsCommercialPt(geoDoc.totals.planModuleSpanCounts!)
     );
     expect(rowValue(rows, 'Posições totais:')).toBe(
       String(geo.totals.positionCount)
@@ -71,6 +116,7 @@ describe('technicalSummaryRowsFromLayoutGeometry', () => {
       `${formatNiveisArmazenagemForDocumentPt(geo.metadata)} (${geo.totals.levelCount} patamares no total)`
     );
     expect(rowValue(rows, 'Túnel:')).toBe('Sim');
+    expect(rowValue(rows, 'Guard rail em túnel:')).toBe('Sim, obrigatório');
     expect(geo.totals.tunnelCount).toBeGreaterThan(0);
     expect(rowValue(rows, 'Comprimento:')).toContain(
       geo.warehouseLengthMm.toLocaleString('pt-BR')
@@ -114,7 +160,10 @@ describe('technicalSummaryRowsFromLayoutGeometry', () => {
         hasGroundLevel: a.hasGroundLevel !== false,
       }),
     };
-    const rows = technicalSummaryRowsFromLayoutGeometry(project, geo);
+    const rows = technicalSummaryRowsFromLayoutGeometry(
+      project,
+      geometryAsPrintedPlan(geo, project)
+    );
     expect(rowValue(rows, 'Origem do projeto:')).toBe('Medidas digitadas');
     expect(rowValue(rows, 'Definição de altura:')).toBe('Pé-direito útil do galpão');
     expect(rowValue(rows, 'Pé-direito útil informado:')).toBe('10.000 mm');
@@ -140,7 +189,11 @@ describe('technicalSummaryRowsFromLayoutGeometry', () => {
         projectType: 'PLANTA_REAL',
         structure,
       },
-      geo
+      geometryAsPrintedPlan(geo, {
+        ...(a as unknown as Record<string, unknown>),
+        projectType: 'PLANTA_REAL',
+        structure,
+      })
     );
     const rowsManual = technicalSummaryRowsFromLayoutGeometry(
       {
@@ -148,10 +201,45 @@ describe('technicalSummaryRowsFromLayoutGeometry', () => {
         projectType: 'MEDIDAS_DIGITADAS',
         structure,
       },
-      geo
+      geometryAsPrintedPlan(geo, {
+        ...(a as unknown as Record<string, unknown>),
+        projectType: 'MEDIDAS_DIGITADAS',
+        structure,
+      })
     );
     expect(rowValue(rowsPlant, 'Origem do projeto:')).toBe('Planta real');
     expect(rowValue(rowsManual, 'Origem do projeto:')).toBe('Medidas digitadas');
+  });
+
+  it('Travamento superior: Sim quando altura de montante > 8 m e há ≥ 2 fileiras (regra BOM)', () => {
+    const a: ProjectAnswersV2 = {
+      ...minimal(),
+      widthMm: 14_000,
+      moduleDepthMm: 2700,
+      heightMm: 9000,
+      lineStrategy: 'APENAS_SIMPLES',
+    };
+    const sol = buildLayoutSolutionV2(a);
+    const geo = buildLayoutGeometry(
+      sol,
+      a as unknown as Record<string, unknown>
+    );
+    if (geo.rows.length < 2) {
+      return;
+    }
+    const project = {
+      ...(a as unknown as Record<string, unknown>),
+      structure: selectStructure({
+        capacityKgPerLevel: a.capacityKg,
+        levels: a.levels,
+        hasGroundLevel: a.firstLevelOnGround !== false,
+      }),
+    };
+    const rows = technicalSummaryRowsFromLayoutGeometry(
+      project,
+      geometryAsPrintedPlan(geo, project)
+    );
+    expect(rowValue(rows, 'Travamento superior:')).toBe('Sim');
   });
 
   it('Túnel: Não no resumo quando o pedido indica túnel mas o layout não coloca módulo túnel', () => {
@@ -176,8 +264,12 @@ describe('technicalSummaryRowsFromLayoutGeometry', () => {
         hasGroundLevel: a.hasGroundLevel !== false,
       }),
     };
-    const rows = technicalSummaryRowsFromLayoutGeometry(project, geo);
+    const rows = technicalSummaryRowsFromLayoutGeometry(
+      project,
+      geometryAsPrintedPlan(geo, project)
+    );
     expect(rowValue(rows, 'Túnel:')).toBe('Não');
+    expect(rowValue(rows, 'Guard rail em túnel:')).toBeUndefined();
     expect(geo.totals.tunnelCount).toBe(0);
   });
 
@@ -208,11 +300,12 @@ describe('technicalSummaryRowsFromLayoutGeometry', () => {
         hasGroundLevel: a.hasGroundLevel !== false,
       }),
     };
-    const v2Rows = technicalSummaryRowsFromLayoutGeometry(project, geo);
+    const geoDoc = geometryAsPrintedPlan(geo, project);
+    const v2Rows = technicalSummaryRowsFromLayoutGeometry(project, geoDoc);
 
     expect(rowValue(legacyRows, 'Módulos')).toBe('999');
     expect(rowValue(v2Rows, 'Módulos:')).toBe(
-      formatModuleCountForDocumentPt(geo.totals.physicalPickingModuleCount)
+      formatModuleSpanCountsCommercialPt(geoDoc.totals.planModuleSpanCounts!)
     );
     expect(geo.totals.physicalPickingModuleCount).not.toBe(999);
 

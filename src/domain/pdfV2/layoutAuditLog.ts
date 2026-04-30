@@ -279,7 +279,7 @@ export function formatLayoutAuditReport(
   push('');
   push('— Capacidade (totals da solução) —');
   push(
-    `  modules (equiv.): ${sol.totals.modules} | positions: ${sol.totals.positions} | levels: ${sol.totals.levels}`
+    `  segmentCounts ${JSON.stringify(sol.totals.segmentCounts)} | equiv(span): ${sol.totals.equivalentAlongBeamSpan} | positions: ${sol.totals.positions} | levels: ${sol.totals.levels}`
   );
   if (sol.metadata.halfModuleRejectedReason) {
     push(`  halfModule: ${sol.metadata.halfModuleRejectedReason}`);
@@ -295,6 +295,14 @@ export function formatLayoutAuditReport(
       `  tunnelOffsetEffectiveMm: ${sol.metadata.tunnelOffsetEffectiveMm ?? '—'}`
     );
     push(`  tunnelPosition: ${answers.tunnelPosition ?? '—'}`);
+    push(
+      `  tunnelPlacements: ${
+        Array.isArray(answers.tunnelPlacements) &&
+        answers.tunnelPlacements.length > 0
+          ? answers.tunnelPlacements.join(', ')
+          : '—'
+      }`
+    );
     push(`  tunnelAppliesTo: ${answers.tunnelAppliesTo ?? '—'}`);
     for (const row of sol.rows) {
       const tunnels = row.modules.filter(m => m.variant === 'tunnel');

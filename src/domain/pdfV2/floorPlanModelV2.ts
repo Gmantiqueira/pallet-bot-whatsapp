@@ -4,12 +4,15 @@ import { splitModuleFootprintsFor3d } from './model3dV2';
 import type {
   FloorPlanCirculationSemantic,
   FloorPlanDimension,
-  FloorPlanLabel,
   FloorPlanModelV2,
+  LineStrategyCode,
+  ModuleSpanCounts,
   RackDepthModeV2,
 } from './types';
 import { buildFloorPlanAccessories } from './visualAccessoriesV2';
 import { ELEV_BEAM_FILL } from './elevationVisualTokens';
+import { topTravamentoPlanLinesMm } from './topTravamento';
+import { resolveUprightHeightMmForProject } from '../projectEngines';
 
 /**
  * Canvas SVG da planta.
@@ -23,15 +26,44 @@ import { ELEV_BEAM_FILL } from './elevationVisualTokens';
  * - Para L ≈ W, se `innerH` < `innerW`, `scale = innerH/W` fica baixo e o bitmap fica “paisagem”; no PDF
  *   o encaixe limita pela largura e sobra área em branco. Por isso `VB_H` é alto o suficiente
  *   para `innerH >= innerW` quando possível, e VB_W/VB_H ≈ 0,72 aproxima a zona útil A4 retrato.
+ *
+ * Contagens comerciais da planta: {@link moduleSpanCountsFromFloorPlanStructureRects}.
  */
+/**
+ * Contagens comerciais / resumo técnico: iguais às células desenhadas na planta
+ * (`structureRects` após faces dupla costas, meios e túneis).
+ */
+export function moduleSpanCountsFromFloorPlanStructureRects(
+  structureRects: FloorPlanModelV2['structureRects']
+): ModuleSpanCounts {
+  let fullModules = 0;
+  let halfModules = 0;
+  let tunnels = 0;
+  for (const r of structureRects) {
+    if (r.variant === 'tunnel') {
+      tunnels += 1;
+      continue;
+    }
+    if (r.segmentType === 'half') {
+      halfModules += 1;
+      continue;
+    }
+    fullModules += 1;
+  }
+  return { fullModules, halfModules, tunnels };
+}
+
 const VB_W = 1420;
 const VB_H = 1980;
 const PAD = 16;
 /** Espaço superior sem título duplicado (o PDF traz o cabeçalho da folha). */
 const HEADER = 22;
 const DIM_OUT = 16;
+/** Reserva à esquerda para cota de largura sem clip. */
+const PLAN_LEFT_DIM_MARGIN_PX = 54;
+/** Reserva inferior para cotas + legenda sem sobreposição ao desenho. */
+const PLAN_BOTTOM_STACK_RESERVE_PX = 278;
 /** Espinha entre costas (mm) — igual a layoutGeometryV2 / model3dV2.splitModuleFootprintsFor3d. */
-const SPINE_BACK_TO_BACK_MM = 100;
 
 function escapeXml(text: string): string {
   return sanitizeText(text)
@@ -45,6 +77,27 @@ function formatMm(mm: number): string {
   return `${Math.round(mm).toLocaleString('pt-BR')} mm`;
 }
 
+function layoutStrategyCaption(geometry: LayoutGeometry): string {
+  const ls = geometry.metadata.lineStrategy;
+  const depth =
+    ls === 'PERSONALIZADO'
+      ? 'composição personalizada (simples e/ou duplas)'
+      : geometry.metadata.rackDepthMode === 'double'
+        ? 'fileiras em dupla costas'
+        : 'fileiras simples';
+  const ori =
+    geometry.orientation === 'along_length'
+      ? 'vão das longarinas ∥ comprimento do compartimento'
+      : 'vão das longarinas ∥ largura do compartimento';
+  const strat: Record<LineStrategyCode, string> = {
+    APENAS_SIMPLES: 'Estratégia: só linhas simples',
+    APENAS_DUPLOS: 'Estratégia: só linhas duplas',
+    MELHOR_LAYOUT: 'Estratégia: melhor layout (otimizado)',
+    PERSONALIZADO: 'Estratégia: personalizada (N simples, M duplas)',
+  };
+  return `${strat[ls] ?? 'Estratégia de linhas'} · ${depth} · ${ori}`;
+}
+
 /**
  * Tint subtil alinhado aos níveis: mesma cor das longarinas na elevação ({@link ELEV_BEAM_FILL}).
  * Opacidade 5–10% conforme o número de níveis estruturais.
@@ -53,7 +106,7 @@ function moduleLevelTintFromMetadata(
   metadata: LayoutGeometry['metadata']
 ): FloorPlanModelV2['moduleLevelTint'] {
   const n = Math.max(1, metadata.structuralLevels);
-  const opacity = Math.min(0.1, 0.05 + (n - 1) * 0.008);
+  const opacity = Math.min(0.032, 0.016 + (n - 1) * 0.0025);
   return {
     fill: ELEV_BEAM_FILL,
     opacity,
@@ -128,15 +181,15 @@ function corridorPlanDimensionLabel(
   const fmt = formatMm(spanMm);
   const t = zone.label ?? '';
   if (t.includes('residual')) {
-    return `Faixa transversal (residual): ${fmt}`;
+    return `Largura — faixa transversal (residual): ${fmt}`;
   }
   if (t.includes('Passagem transversal')) {
-    return `Passagem transversal: ${fmt}`;
+    return `Largura — passagem transversal: ${fmt}`;
   }
   if (t.includes('faixa transversal') && t.includes('Corredor')) {
-    return `Corredor (faixa transversal): ${fmt}`;
+    return `Largura do corredor (faixa transversal): ${fmt}`;
   }
-  return `Corredor operacional: ${fmt}`;
+  return `Largura do corredor operacional: ${fmt}`;
 }
 
 function circulationSemanticFromZone(
@@ -187,7 +240,8 @@ function rowBandFootprintMm(row: RackRow): {
  */
 function doubleRowFaceBandsMm(
   row: RackRow,
-  rackDepthMm: number
+  rackDepthMm: number,
+  spineBackToBackMm: number
 ): {
   faceAMm: { x0: number; y0: number; x1: number; y1: number };
   faceBMm: { x0: number; y0: number; x1: number; y1: number };
@@ -196,7 +250,7 @@ function doubleRowFaceBandsMm(
   if (row.rowType !== 'backToBack') return null;
   const r = rowBandFootprintMm(row);
   const md = rackDepthMm;
-  const sp = SPINE_BACK_TO_BACK_MM;
+  const sp = spineBackToBackMm;
   if (row.layoutOrientation === 'along_length') {
     const ySplitFront = r.y0 + md;
     const ySplitBack = ySplitFront + sp;
@@ -227,17 +281,21 @@ export function buildFloorPlanModelV2(
   const { warehouseLengthMm: L, warehouseWidthMm: W } = geometry;
   const innerW = VB_W - 2 * PAD;
   const innerH = VB_H - PAD - HEADER - DIM_OUT - 18;
-  const scale = Math.min(innerW / L, innerH / W);
+  const drawableW = Math.max(120, innerW - PLAN_LEFT_DIM_MARGIN_PX);
+  const drawableH = Math.max(120, innerH - PLAN_BOTTOM_STACK_RESERVE_PX);
+  const scale = Math.min(drawableW / L, drawableH / W);
   const boxW = L * scale;
   const boxH = W * scale;
-  const bx = PAD + (innerW - boxW) / 2;
-  const by = HEADER + (innerH - boxH) / 2;
+  const bx = PAD + PLAN_LEFT_DIM_MARGIN_PX + (drawableW - boxW) / 2;
+  const by = HEADER + (drawableH - boxH) / 2;
 
   const toX = (xmm: number) => bx + xmm * scale;
   const toY = (ymm: number) => by + ymm * scale;
 
   const rackDepthMm = geometry.metadata.rackDepthMm;
+  const spineMm = geometry.metadata.spineBackToBackMm;
   const rowBandRects: FloorPlanModelV2['rowBandRects'] = [];
+  const rowSpineGapRects: FloorPlanModelV2['rowSpineGapRects'] = [];
   const rowSpineLines: FloorPlanModelV2['rowSpineLines'] = [];
 
   function mmRectToBand(
@@ -248,6 +306,7 @@ export function buildFloorPlanModelV2(
     opts: {
       showInRowLegend?: boolean;
       pickingFace?: 'A' | 'B';
+      spineFacingEdge?: FloorPlanModelV2['rowBandRects'][0]['spineFacingEdge'];
     }
   ): void {
     const x0 = Math.min(mm.x0, mm.x1);
@@ -264,6 +323,24 @@ export function buildFloorPlanModelV2(
       rowCaption: caption,
       showInRowLegend: opts.showInRowLegend,
       pickingFace: opts.pickingFace,
+      spineFacingEdge: opts.spineFacingEdge,
+    });
+  }
+
+  function mmSpineGapToRect(
+    id: string,
+    mm: { x0: number; y0: number; x1: number; y1: number }
+  ): void {
+    const x0 = Math.min(mm.x0, mm.x1);
+    const x1 = Math.max(mm.x0, mm.x1);
+    const y0 = Math.min(mm.y0, mm.y1);
+    const y1 = Math.max(mm.y0, mm.y1);
+    rowSpineGapRects.push({
+      id,
+      x: toX(x0),
+      y: toY(y0),
+      w: Math.max(0.5, toX(x1) - toX(x0)),
+      h: Math.max(0.5, toY(y1) - toY(y0)),
     });
   }
 
@@ -273,17 +350,48 @@ export function buildFloorPlanModelV2(
     const caption = `Linha ${rowIndex + 1} — ${nMod} ${nMod === 1 ? 'módulo' : 'módulos'}`;
 
     if (kind === 'double') {
-      const split = doubleRowFaceBandsMm(row, rackDepthMm);
+      const split = doubleRowFaceBandsMm(row, rackDepthMm, spineMm);
       if (split) {
         const { faceAMm, faceBMm, spineMidlineMm } = split;
+        const lo = row.layoutOrientation;
+        /** Aresta da faixa voltada para o canal da espinha (referencial SVG do retângulo). */
+        const spineEdgeA =
+          lo === 'along_length' ? ('max_y' as const) : ('max_x' as const);
+        const spineEdgeB =
+          lo === 'along_length' ? ('min_y' as const) : ('min_x' as const);
         mmRectToBand(`${row.id}-band-a`, faceAMm, kind, caption, {
           showInRowLegend: true,
           pickingFace: 'A',
+          spineFacingEdge: spineEdgeA,
         });
         mmRectToBand(`${row.id}-band-b`, faceBMm, kind, caption, {
           showInRowLegend: false,
           pickingFace: 'B',
+          spineFacingEdge: spineEdgeB,
         });
+        const gx0 = Math.min(faceAMm.x0, faceAMm.x1, faceBMm.x0, faceBMm.x1);
+        const gx1 = Math.max(faceAMm.x0, faceAMm.x1, faceBMm.x0, faceBMm.x1);
+        const gy0 = Math.min(faceAMm.y0, faceAMm.y1, faceBMm.y0, faceBMm.y1);
+        const gy1 = Math.max(faceAMm.y0, faceAMm.y1, faceBMm.y0, faceBMm.y1);
+        if (lo === 'along_length') {
+          const ySplitFront = Math.min(faceAMm.y0, faceAMm.y1) + rackDepthMm;
+          const ySplitBack = ySplitFront + spineMm;
+          mmSpineGapToRect(`${row.id}-spine-gap`, {
+            x0: gx0,
+            y0: ySplitFront,
+            x1: gx1,
+            y1: ySplitBack,
+          });
+        } else {
+          const xSplitFront = Math.min(faceAMm.x0, faceAMm.x1) + rackDepthMm;
+          const xSplitBack = xSplitFront + spineMm;
+          mmSpineGapToRect(`${row.id}-spine-gap`, {
+            x0: xSplitFront,
+            y0: gy0,
+            x1: xSplitBack,
+            y1: gy1,
+          });
+        }
         rowSpineLines.push({
           id: `${row.id}-spine`,
           x1: toX(spineMidlineMm.x1),
@@ -305,16 +413,66 @@ export function buildFloorPlanModelV2(
   for (const row of geometry.rows) {
     const kind = rackDepthModeFromRow(row);
     const sorted = sortModulesAlongBeam(row.modules, geometry.orientation);
-    for (const m of sorted) {
-      const fps = splitModuleFootprintsFor3d(row, m, rackDepthMm, ori);
-      let fi = 0;
-      for (const fp of fps) {
+    const modulesWithFps = sorted.map(m => ({
+      m,
+      fps: splitModuleFootprintsFor3d(
+        row,
+        m,
+        rackDepthMm,
+        ori,
+        spineMm
+      ),
+    }));
+    const maxFaces = Math.max(
+      1,
+      ...modulesWithFps.map(({ fps }) => fps.length)
+    );
+
+    /**
+     * Numeração por **face** ao longo do vão: primeiro toda a frente A (menor Y/X),
+     * depois toda a frente B em dupla costas — nunca repetir 1…N nas duas faces.
+     */
+    for (let faceIdx = 0; faceIdx < maxFaces; faceIdx++) {
+      for (const { m, fps } of modulesWithFps) {
+        if (faceIdx >= fps.length) {
+          continue;
+        }
+        const fp = fps[faceIdx]!;
         const x0 = Math.min(fp.x0, fp.x1);
         const x1 = Math.max(fp.x0, fp.x1);
         const y0 = Math.min(fp.y0, fp.y1);
         const y1 = Math.max(fp.y0, fp.y1);
-        const id = fps.length > 1 ? `${m.id}-f${fi}` : m.id;
-        fi += 1;
+        const id = fps.length > 1 ? `${m.id}-f${faceIdx}` : m.id;
+
+        if (m.type === 'tunnel') {
+          structureRects.push({
+            id,
+            x: toX(x0),
+            y: toY(y0),
+            w: Math.max(0.5, toX(x1) - toX(x0)),
+            h: Math.max(0.5, toY(y1) - toY(y0)),
+            kind,
+            variant: 'tunnel',
+            segmentType: undefined,
+          });
+          continue;
+        }
+
+        if (m.segmentType === 'half') {
+          structureRects.push({
+            id,
+            x: toX(x0),
+            y: toY(y0),
+            w: Math.max(0.5, toX(x1) - toX(x0)),
+            h: Math.max(0.5, toY(y1) - toY(y0)),
+            kind,
+            variant: 'normal',
+            segmentType: 'half',
+          });
+          continue;
+        }
+
+        const displayIdx = nextDisplayIdx++;
         structureRects.push({
           id,
           x: toX(x0),
@@ -322,9 +480,9 @@ export function buildFloorPlanModelV2(
           w: Math.max(0.5, toX(x1) - toX(x0)),
           h: Math.max(0.5, toY(y1) - toY(y0)),
           kind,
-          variant: m.type === 'tunnel' ? 'tunnel' : 'normal',
-          segmentType: m.type === 'tunnel' ? undefined : m.segmentType,
-          displayIndex: nextDisplayIdx++,
+          variant: 'normal',
+          segmentType: m.segmentType,
+          displayIndex: displayIdx,
         });
       }
     }
@@ -358,14 +516,16 @@ export function buildFloorPlanModelV2(
   }
 
   const dimensionLines: FloorPlanDimension[] = [];
-  const dimY = by + boxH + 22;
+  /** Folga explícita abaixo do perímetro tracejado antes da cota horizontal (evita leitura colada ao limite). */
+  const dimY = by + boxH + 34;
   dimensionLines.push({
     id: 'dim-length',
     x1: bx,
     y1: dimY,
     x2: bx + boxW,
     y2: dimY,
-    text: `Comprimento do galpão: ${formatMm(L)}`,
+    text: `Comprimento total: ${formatMm(L)}`,
+    dimTier: 'primary',
   });
   const dimX = bx - 44;
   dimensionLines.push({
@@ -374,8 +534,9 @@ export function buildFloorPlanModelV2(
     y1: by,
     x2: dimX,
     y2: by + boxH,
-    text: `Largura do galpão: ${formatMm(W)}`,
+    text: `Largura total: ${formatMm(W)}`,
     offset: -28,
+    dimTier: 'primary',
   });
 
   const corridorZone = pickCorridorZoneForPlanDimension(geometry.circulationZones);
@@ -420,6 +581,7 @@ export function buildFloorPlanModelV2(
         ],
         textAnchor: { x: (cLeft + cRight) / 2, y: textY },
         textRotateDeg: 0,
+        dimTier: 'secondary',
       });
     } else {
       const canPlaceLeft = cLeft > margin + 24;
@@ -440,49 +602,59 @@ export function buildFloorPlanModelV2(
         ],
         textAnchor: { x: textX, y: (cTop + cBot) / 2 },
         textRotateDeg: -90,
+        dimTier: 'secondary',
       });
     }
   }
 
+  const meta = geometry.metadata;
+  const bayClearSpanNote =
+    meta.beamAlongModuleMm > 0
+      ? `Vão por baia (referência): ${formatMm(meta.beamAlongModuleMm)}`
+      : undefined;
+
   const moduleLevelTint = moduleLevelTintFromMetadata(geometry.metadata);
 
-  const rowLegendBaseY = by + boxH + 56;
   const rowBandsForLegend = rowBandRects.filter(
     r => r.showInRowLegend !== false
   );
-  const rowLegendBlock: FloorPlanLabel[] =
-    rowBandsForLegend.length === 0
-      ? []
-      : [
-          {
-            id: 'row-leg-heading',
-            x: VB_W / 2,
-            y: rowLegendBaseY,
-            text: 'Fileiras (referência)',
-            className: 'fp-anno-heading',
-          },
-          ...rowBandsForLegend.map((r, i) => ({
-            id: `row-leg-${r.id}`,
-            x: VB_W / 2,
-            y: rowLegendBaseY + 22 + i * 19,
-            text: r.rowCaption,
-            className: 'fp-row-legend',
-          })),
-        ];
 
   const planAccessories = buildFloorPlanAccessories(answers, geometry);
 
-  const labels: FloorPlanLabel[] = [
-    {
-      id: 'sub-dims',
-      x: VB_W / 2,
-      y: PAD + 16,
-      text: `Dimensões do compartimento: ${formatMm(L)} × ${formatMm(W)}`,
-      className: 'fp-drawing-meta',
-    },
-    ...planCaptionLabels(geometry, planAccessories),
-    ...rowLegendBlock,
-  ];
+  const uprightH = resolveUprightHeightMmForProject(answers ?? {});
+  const topTravamentoLines: FloorPlanModelV2['topTravamentoLines'] =
+    topTravamentoPlanLinesMm(geometry, uprightH).map(ln => ({
+      id: ln.id,
+      x1: toX(ln.x0),
+      y1: toY(ln.y0),
+      x2: toX(ln.x1),
+      y2: toY(ln.y1),
+    }));
+
+  const hasTunnelOverlayZones = geometry.tunnelOverlays.length > 0;
+  const hasCrossPassageZone = geometry.circulationZones.some(z =>
+    (z.label ?? '').includes('Passagem transversal')
+  );
+  const tunnelOperationHint = geometry.metadata.hasTunnel
+    ? geometry.rows.length > 1
+      ? 'Ligação entre fileiras · trânsito ao piso com picking nos níveis superiores'
+      : 'Passagem ao piso · picking nos patamares acima do vão'
+    : hasCrossPassageZone || hasTunnelOverlayZones
+      ? 'Faixas de passagem ao piso no desenho: circulação; picking nos níveis superiores (quando aplicável).'
+      : undefined;
+
+  const planLegendNotes = {
+    moduleIndexHint: planModuleSingleCaption(geometry),
+    firstLevelHint: planAccessories.firstLevelOnGround
+      ? '1.º eixo de feixe: ao piso (referência).'
+      : '1.º eixo de feixe: elevado — folga sob o 1.º patamar (referência).',
+    implantHint:
+      'Módulos = picking · corredores = circulação do empilhador · tracejado exterior = limite do compartimento.',
+    strategyHint: layoutStrategyCaption(geometry),
+    rowLines: rowBandsForLegend.map(r => r.rowCaption),
+    tunnelNote: tunnelOperationHint,
+    bayClearSpanNote,
+  };
 
   return {
     viewBox: { w: VB_W, h: VB_H },
@@ -490,52 +662,34 @@ export function buildFloorPlanModelV2(
     beamSpanAlong: geometry.beamSpanDirection,
     planAccessories,
     rowBandRects,
+    rowSpineGapRects,
     rowSpineLines,
+    topTravamentoLines,
     structureRects,
     circulationRects,
     dimensionLines,
-    labels,
+    labels: [],
     moduleLevelTint,
+    tunnelOperationHint,
+    planLegendNotes,
   };
-}
-
-/** Legenda única dos números dos módulos (≈ posições por módulo) + leitura do 1.º nível. */
-function planCaptionLabels(
-  geometry: LayoutGeometry,
-  planAccessories: FloorPlanModelV2['planAccessories']
-): FloorPlanLabel[] {
-  const line: FloorPlanLabel = {
-    id: 'cap-module-line',
-    x: VB_W / 2,
-    y: PAD + 34,
-    text: planModuleSingleCaption(geometry),
-    className: 'fp-plan-hint',
-  };
-  const firstLevel: FloorPlanLabel = {
-    id: 'cap-first-level',
-    x: VB_W / 2,
-    y: PAD + 50,
-    text: planAccessories.firstLevelOnGround
-      ? '1.º eixo de feixe: ao piso (referência)'
-      : '1.º eixo de feixe: elevado — folga sob o primeiro patamar (referência)',
-    className: 'fp-first-level',
-  };
-  return [line, firstLevel];
 }
 
 function planModuleSingleCaption(geometry: LayoutGeometry): string {
   const { positionCount, physicalPickingModuleCount, moduleCount } =
     geometry.totals;
   const faceMods = physicalPickingModuleCount ?? moduleCount;
+  const legend =
+    'Planta: números inteiros nas faces completas (dupla costas: faces em sequência) · «1/2» = meio-módulo · «T» = túnel.';
   if (
     faceMods <= 0 ||
     !Number.isFinite(positionCount) ||
     !Number.isFinite(faceMods)
   ) {
-    return 'Cada número representa um módulo de frente (2 baias), ver resumo técnico';
+    return `${legend} Ver resumo técnico para contagens.`;
   }
   const approx = Math.round(positionCount / faceMods);
-  return `Cada número = 1 módulo de frente (2 baias) (≈${approx} posições por módulo)`;
+  return `${legend} Cada n.º inteiro ≈ 1 frente de picking (2 baias) (~${approx} posições por frente).`;
 }
 
 export { escapeXml };

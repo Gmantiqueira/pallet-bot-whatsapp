@@ -54,7 +54,7 @@ describe('PdfService', () => {
     expect(result.mimeType).toBe('application/pdf');
 
     const pdfDoc = await PDFDocument.load(fs.readFileSync(result.absolutePath));
-    expect(pdfDoc.getPageCount()).toBeGreaterThanOrEqual(5);
+    expect(pdfDoc.getPageCount()).toBeGreaterThanOrEqual(4);
   });
 
   it('generatePdf deve aceitar fluxo CALC', async () => {

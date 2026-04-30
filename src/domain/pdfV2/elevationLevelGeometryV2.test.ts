@@ -11,8 +11,37 @@ import {
   TUNNEL_FIRST_BEAM_OFFSET_ABOVE_CLEARANCE_MM,
 } from './elevationLevelGeometryV2';
 
+import {
+  clampStructuralTopReserveMm,
+  RACK_TOP_CLEARANCE_MIN_MM,
+  RACK_TOP_CLEARANCE_MAX_MM,
+} from './rackUprightTopReserve';
+
+describe('clampStructuralTopReserveMm', () => {
+  it('coluna alta: alvo 300 mm dentro da banda', () => {
+    const t = clampStructuralTopReserveMm({
+      uprightHeightMm: 7200,
+      structuralBottomMm: 80,
+      minVerticalUsableMm: 1000,
+    });
+    expect(t).toBeGreaterThanOrEqual(RACK_TOP_CLEARANCE_MIN_MM);
+    expect(t).toBeLessThanOrEqual(RACK_TOP_CLEARANCE_MAX_MM);
+    expect(t).toBeCloseTo(300, 5);
+  });
+
+  it('nunca excede o teto físico nem 350 mm', () => {
+    const t = clampStructuralTopReserveMm({
+      uprightHeightMm: 2000,
+      structuralBottomMm: 80,
+      minVerticalUsableMm: 400,
+    });
+    expect(t).toBeLessThanOrEqual(RACK_TOP_CLEARANCE_MAX_MM);
+    expect(t).toBeLessThanOrEqual(2000 - 80 - 400);
+  });
+});
+
 describe('computeBeamElevations', () => {
-  it('reserva fixa 216 mm: último eixo de longarina a H − 216 mm (coluna típica)', () => {
+  it('reserva superior ~300 mm (faixa 250–350): último eixo = H − structuralTop (coluna típica)', () => {
     const H = 7200;
     const r = computeBeamElevations({
       uprightHeightMm: H,
@@ -50,6 +79,26 @@ describe('computeBeamElevations', () => {
     for (let i = 0; i < 5; i++) {
       const step = r.beamElevationsMm[i + 1]! - r.beamElevationsMm[i]!;
       expect(step).toBeCloseTo(hWork / 5, 3);
+    }
+  });
+
+  it('equalLevelSpacing com pitch menor que o vão: âncora no topo e vãos iguais entre eixos', () => {
+    const H = 5000;
+    const levels = 5;
+    const r = computeBeamElevations({
+      uprightHeightMm: H,
+      levels,
+      hasGroundLevel: false,
+      firstLevelOnGround: true,
+      equalLevelSpacing: true,
+      levelSpacingMm: 800,
+    });
+    const top = H - DEFAULT_STRUCTURAL_TOP_MM;
+    expect(r.beamElevationsMm[levels]).toBeCloseTo(top, 2);
+    for (let i = 0; i < levels; i++) {
+      const step =
+        r.beamElevationsMm[i + 1]! - r.beamElevationsMm[i]!;
+      expect(step).toBeCloseTo(800, 2);
     }
   });
 

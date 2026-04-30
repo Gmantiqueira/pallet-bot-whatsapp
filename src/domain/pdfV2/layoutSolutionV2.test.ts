@@ -41,6 +41,19 @@ describe('buildLayoutSolutionV2', () => {
     expect(s.rows[0].kind).toBe('double');
   });
 
+  it('PERSONALIZADO: 1 dupla + 1 simples (eixo transversal: duplas primeiro, depois simples)', () => {
+    const a: ProjectAnswersV2 = {
+      ...base(),
+      lineStrategy: 'PERSONALIZADO',
+      customLineSimpleCount: 1,
+      customLineDoubleCount: 1,
+    };
+    const s = buildLayoutSolutionV2(a);
+    expect(s.metadata.lineStrategy).toBe('PERSONALIZADO');
+    expect(s.metadata.customLineCounts).toEqual({ simple: 1, double: 1 });
+    expect(s.rows.map(r => r.kind)).toEqual(['double', 'single']);
+  });
+
   it('APENAS_DUPLOS: sem fallback silencioso — rejeita se não couber dupla com corredor bilateral', () => {
     const a: ProjectAnswersV2 = {
       ...base(),
@@ -198,7 +211,7 @@ describe('buildLayoutSolutionV2', () => {
     const depth = s.rackDepthMode === 'double' ? 2 : 1;
     expect(s.totals.positions).toBe(
       Math.round(
-        s.totals.modules *
+        s.totals.equivalentAlongBeamSpan *
           MODULE_PALLET_BAYS_PER_LEVEL *
           depth *
           tiers
@@ -486,6 +499,35 @@ describe('buildLayoutSolutionV2', () => {
     expect(tunnelCount(sAmbos)).toBe(sAmbos.rows.length);
   });
 
+  it('15b: vários túneis (tunnelPlacements) — troços distintos ao longo do vão', () => {
+    const common = {
+      ...base(),
+      lengthMm: 50_000,
+      widthMm: 16_000,
+      hasTunnel: true,
+      tunnelPlacements: ['INICIO', 'FIM'] as const,
+      tunnelAppliesTo: 'AMBOS' as const,
+      lineStrategy: 'APENAS_SIMPLES' as const,
+    };
+    const s = buildLayoutSolutionV2(common);
+    const tun0 = s.rows[0]!.modules.filter(m => m.variant === 'tunnel');
+    expect(tun0.length).toBe(2);
+    expect(s.metadata.tunnelPlacements).toEqual(['INICIO', 'FIM']);
+  });
+
+  it('15c: tunnelPlacements sobrepostos falha com mensagem clara', () => {
+    expect(() =>
+      buildLayoutSolutionV2({
+        ...base(),
+        lengthMm: 40_000,
+        widthMm: 16_000,
+        hasTunnel: true,
+        tunnelPlacements: ['MEIO', 'MEIO'],
+        lineStrategy: 'APENAS_SIMPLES' as const,
+      })
+    ).toThrow(/Túneis:/);
+  });
+
   it('15: posição do túnel (INICIO/MEIO/FIM) só recorta ao longo do vão — mesma quantidade de fileiras', () => {
     const common = {
       ...base(),
@@ -531,10 +573,17 @@ describe('buildLayoutSolutionV2', () => {
     });
     const tunMid = mid.rows[0]!.modules.find(m => m.variant === 'tunnel')!;
     const tunOff = off.rows[0]!.modules.find(m => m.variant === 'tunnel')!;
-    const x0m = Math.min(tunMid.x0, tunMid.x1);
-    const x0o = Math.min(tunOff.x0, tunOff.x1);
-    expect(Math.abs(x0o - 500)).toBeLessThan(2);
-    expect(Math.abs(x0m - x0o)).toBeGreaterThan(10);
+    const startAlong = (
+      sol: { orientation: string },
+      t: { x0: number; x1: number; y0: number; y1: number }
+    ) =>
+      sol.orientation === 'along_length'
+        ? Math.min(t.x0, t.x1)
+        : Math.min(t.y0, t.y1);
+    const a0m = startAlong(mid, tunMid);
+    const a0o = startAlong(off, tunOff);
+    expect(Math.abs(a0o - 500)).toBeLessThan(2);
+    expect(Math.abs(a0m - a0o)).toBeGreaterThan(10);
     expect(off.metadata.tunnelOffsetEffectiveMm).toBeCloseTo(500, 3);
   });
 });

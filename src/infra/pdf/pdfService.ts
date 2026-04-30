@@ -150,8 +150,8 @@ export class PdfService {
    * Gera o PDF técnico (planta, elevações, vista 3D) a partir da sessão.
    */
   async generatePdf(session: Session): Promise<GenerateProjectPdfResult> {
-    const { generatePdfV2FromSession } = await import('./pdfV2Service');
-    return generatePdfV2FromSession(session, {
+    const { renderProjectPdfFromSession } = await import('../../render/pdfRenderer');
+    return renderProjectPdfFromSession(session, {
       storagePath: this.storagePath,
     });
   }

@@ -97,6 +97,12 @@ function projectAnswersForWarehouseCandidate(
   const lineStrategy =
     (answers.lineStrategy as LineStrategyCode | undefined) ?? 'MELHOR_LAYOUT';
   const tunnelPosition = answers.tunnelPosition as TunnelPositionCode | undefined;
+  const rawTunnelPl = (answers as { tunnelPlacements?: unknown })
+    .tunnelPlacements;
+  const tunnelPlacements =
+    Array.isArray(rawTunnelPl) && rawTunnelPl.length > 0
+      ? (rawTunnelPl as readonly TunnelPositionCode[])
+      : undefined;
   const tunnelAppliesTo = answers.tunnelAppliesTo as TunnelAppliesCode | undefined;
 
   const totalLevels =
@@ -111,7 +117,16 @@ function projectAnswersForWarehouseCandidate(
     levels: rack.levels,
     capacityKg: answers.capacityKg,
     lineStrategy,
+    customLineSimpleCount:
+      typeof answers.customLineSimpleCount === 'number'
+        ? answers.customLineSimpleCount
+        : undefined,
+    customLineDoubleCount:
+      typeof answers.customLineDoubleCount === 'number'
+        ? answers.customLineDoubleCount
+        : undefined,
     hasTunnel: answers.hasTunnel === true,
+    tunnelPlacements,
     tunnelPosition,
     tunnelOffsetMm:
       typeof answers.tunnelOffsetMm === 'number'

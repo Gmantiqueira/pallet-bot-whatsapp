@@ -104,13 +104,15 @@ describe('MessageBuilder', () => {
       expect(messages[0].text).toContain('12000');
     });
 
-    it('should build WAIT_CORRIDOR message with examples', () => {
+    it('should build WAIT_CORRIDOR message with examples and Sem corredor', () => {
       const session = createSession('WAIT_CORRIDOR');
       const messages = buildMessages(session);
 
-      expect(messages[0].text).toContain('corredor');
+      expect(messages[0].text).toContain('corredor principal');
       expect(messages[0].text).toContain('2800');
       expect(messages[0].text).toContain('3000');
+      expect(messages[0].text).toContain('500');
+      expect(messages[0].buttons?.map(b => b.id)).toEqual(['SEM_CORREDOR']);
     });
 
     it('should build WAIT_HEIGHT_DIRECT message', () => {
@@ -160,15 +162,67 @@ describe('MessageBuilder', () => {
       expect(messages[0].text).toContain('800');
       expect(messages[0].text).toContain('5040');
       expect(messages[0].text).toContain('Altura útil do sistema');
-      expect(messages[0].text).toContain('Profundidade da posição');
+      expect(messages[0].text).toContain('Profundidade de posição (resultado, montante)');
+      expect(messages[0].text).toContain('Vão por baia / entrada longarina (resultado): 1100');
       expect(messages[0].text).toContain('Níveis por módulo: 4');
       expect(messages[0].text).toContain('Ambos');
-      expect(messages[0].text).toContain('Módulos: 10');
-      expect(messages[0].text).toContain('Posições: 40');
+      expect(messages[0].text).toContain(
+        'Módulos: 8 módulos inteiros · 2 meios módulos'
+      );
+      expect(messages[0].text).toContain('Posições: 72');
       expect(messages[0].text).toContain('Coluna selecionada: 8T');
-      expect(messages[0].text).toContain('Pares de longarinas: 40');
+      expect(messages[0].text).toContain('Pares de longarinas: 72');
       expect(messages[0].buttons).toHaveLength(1);
       expect(messages[0].buttons?.[0].id).toBe('CONTINUAR');
+    });
+
+    it('should build WAIT_TUNNEL_MODULE_NUMBERS with Baixar PDF button', () => {
+      const session = createSession('WAIT_TUNNEL_MODULE_NUMBERS', {
+        tunnelPreviewMaxIndex: 3,
+      });
+      const messages = buildMessages(session, {});
+
+      expect(messages).toHaveLength(2);
+      const withBtn = messages.find(m =>
+        m.buttons?.some(b => b.id === 'BAIXAR_PREVIA_PDF')
+      );
+      expect(withBtn?.text).toMatch(/Baixar PDF/i);
+      expect(messages[messages.length - 1].text).toMatch(
+        /Indique em que módulos/i
+      );
+      expect(messages.some(m => m.type === 'document')).toBe(false);
+    });
+
+    it('WAIT_TUNNEL: primeira mensagem document quando tunnelPreviewAttachPdf', () => {
+      const session = createSession('WAIT_TUNNEL_MODULE_NUMBERS', {
+        tunnelPreviewMaxIndex: 3,
+        tunnelPreviewPdfFilename: 'previa-layout.pdf',
+      });
+      const messages = buildMessages(session, {
+        tunnelPreviewAttachPdf: true,
+      });
+
+      expect(messages).toHaveLength(3);
+      expect(messages[0].type).toBe('document');
+      expect(messages[0].document?.filename).toBe('previa-layout.pdf');
+      expect(
+        messages[1].buttons?.some(b => b.id === 'BAIXAR_PREVIA_PDF')
+      ).toBe(true);
+      expect(messages[2].text).toMatch(/túnel/i);
+    });
+
+    it('should show document first when tunnelPreviewResendPdf with filename', () => {
+      const session = createSession('WAIT_TUNNEL_MODULE_NUMBERS', {
+        tunnelPreviewMaxIndex: 3,
+        tunnelPreviewPdfFilename: 'previa.pdf',
+      });
+      const messages = buildMessages(session, { tunnelPreviewResendPdf: true });
+
+      expect(messages[0].type).toBe('document');
+      expect(messages[1].text).toMatch(/reenvio da prévia|Baixar PDF/i);
+      expect(
+        messages[1].buttons?.some(b => b.id === 'BAIXAR_PREVIA_PDF')
+      ).toBe(true);
     });
 
     it('should build DONE com botão Baixar PDF (integrador envia PDF)', () => {

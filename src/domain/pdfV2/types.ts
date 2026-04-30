@@ -14,7 +14,8 @@ export type RackDepthModeV2 = 'single' | 'double';
 export type LineStrategyCode =
   | 'APENAS_SIMPLES'
   | 'APENAS_DUPLOS'
-  | 'MELHOR_LAYOUT';
+  | 'MELHOR_LAYOUT'
+  | 'PERSONALIZADO';
 
 /** Compatível com START / MIDDLE / END (API em inglês). */
 export type TunnelPositionCode = 'INICIO' | 'MEIO' | 'FIM';
@@ -29,6 +30,16 @@ export type TunnelAppliesCode =
   | 'LINHAS_DUPLOS'
   | 'AMBOS'
   | 'UMA';
+
+/**
+ * Contagens explícitas ao longo do eixo das longarinas (somadas todas as fileiras).
+ * Sem decimais agregados: meio-módulos em campo próprio; túnel em campo próprio.
+ */
+export type ModuleSpanCounts = {
+  fullModules: number;
+  halfModules: number;
+  tunnels: number;
+};
 
 export type ModuleSegmentType = 'full' | 'half';
 
@@ -61,14 +72,14 @@ export type LayoutSolutionV2 = {
   corridors: CirculationZone[];
   tunnels: TunnelZone[];
   totals: {
+    segmentCounts: ModuleSpanCounts;
     /**
-     * Equivalente ao longo do vão por segmento de layout (1 = módulo completo ao longo da fileira,
-     * 0,5 = meio módulo) — usado no motor de pontuação e coerência com modelo 3D equiv.
+     * Igual ao antigo `totals.modules`: equiv. longitudinal (full + ½·half + túneis) — apenas coerência interna / ordenação.
      */
-    modules: number;
+    equivalentAlongBeamSpan: number;
     /**
      * Módulos de **frente** (faces de picking): em linha dupla costas, cada segmento conta ×2;
-     * túnel = 1 unidade. Alinha numeração da planta e resumo ao conceito da vista frontal (2 baias / frente).
+     * túnel = 1 unidade por face relevante — alinha numeração da planta e resumo.
      */
     physicalPickingModules: number;
     positions: number;
@@ -80,6 +91,11 @@ export type LayoutSolutionV2 = {
   };
   metadata: {
     lineStrategy: LineStrategyCode;
+    /**
+     * Estratégia PERSONALIZADO: nº de fileiras simples e duplas pedidas; implantação transversal
+     * na ordem **duplas → simples** (igual extensão natural do motor em dupla + simples remanescente).
+     */
+    customLineCounts?: { simple: number; double: number };
     optimizeWithHalfModule: boolean;
     halfModuleRejectedReason?: string;
     firstLevelOnGround: boolean;
@@ -88,6 +104,11 @@ export type LayoutSolutionV2 = {
     /** Patamar de palete no piso sem longarina. */
     hasGroundLevel: boolean;
     hasTunnel: boolean;
+    /**
+     * Vãos de túnel (INICIO/MEIO/FIM cada), quando a configuração usa vários túneis;
+     * omisso: usar só `tunnelPosition` ou o equivalente.
+     */
+    tunnelPlacements?: readonly TunnelPositionCode[];
     /** Onde aplicável: posição do vão (túnel / passagem) usada nesta solução. */
     tunnelPosition?: TunnelPositionCode;
     /** Início efetivo do vão ao longo do `beamSpanMm` (mm), após limites geométricos. */
@@ -97,6 +118,12 @@ export type LayoutSolutionV2 = {
      * no fim do compartimento — usada para INICIO/MEIO/FIM relativos à fileira operacional.
      */
     tunnelOperationalExtentMm?: number;
+    /**
+     * Largura da espinha / “rua” entre as duas costas numa fileira dupla (mm). Igual à entrada
+     * do distanciador no fluxo; o motor de layout usa o mesmo valor na banda `2×prof + espinha`.
+     * Omisso em testes: tratar como 100 mm.
+     */
+    spineBackToBackMm?: number;
   };
 };
 
@@ -114,6 +141,12 @@ export type RackRowSolution = {
 export type ModuleSegment = {
   id: string;
   type: ModuleSegmentType;
+  /**
+   * Troço contínuo de armazenagem ao longo do vão (`placeRects` por segmento `normal`).
+   * Avança após cada `tunnel`, `crossGap` ou novo troço `normal` — alinha o validador com o motor:
+   * túnel manual inline mantém o mesmo id que os vizinhos; vão de corredor entre troços não.
+   */
+  beamStorageStretchId?: number;
   /** Por omissão trata-se como módulo normal. */
   variant?: ModuleVariantV2;
   /** Pé livre de passagem (mm) até ao 1.º eixo de longarina — só módulo túnel. */
@@ -164,7 +197,7 @@ export type FloorPlanModelV2 = {
   warehouseOutline: { x: number; y: number; w: number; h: number };
   /** Direção do vão das longarinas no plano (eixo das linhas de armazenagem). */
   beamSpanAlong: 'x' | 'y';
-  /** Protetores, guardas e leitura do 1.º nível — mesmo critério do resumo técnico. */
+  /** Protetores de coluna, guardas e leitura do 1.º nível — mesmo critério do resumo técnico. */
   planAccessories: FloorPlanAccessoriesV2;
   /** Faixa da fileira (estrutura) por baixo dos módulos. */
   rowBandRects: {
@@ -180,9 +213,20 @@ export type FloorPlanModelV2 = {
     showInRowLegend?: boolean;
     /** Dupla costas: frente de picking (alinhado ao 1.º / 2.º split da pegada). */
     pickingFace?: 'A' | 'B';
+    /**
+     * Dupla costas: aresta da faixa voltada para a espinha (canal entre costas).
+     * Usado na planta para não desenhar contorno forte nessa aresta — duas estruturas independentes.
+     */
+    spineFacingEdge?: 'min_x' | 'max_x' | 'min_y' | 'max_y';
   }[];
+  /** Dupla costas: faixa do canal entre as duas frentes (espinha), em px — preenchimento / divisores. */
+  rowSpineGapRects: { id: string; x: number; y: number; w: number; h: number }[];
   /** Dupla costas: eixo ao longo da espinha (costas) entre as duas frentes — tracejado na planta. */
   rowSpineLines: { id: string; x1: number; y1: number; x2: number; y2: number }[];
+  /**
+   * Travamento superior (montantes &gt; 8 m): traços no corredor entre fileiras — viewBox, px.
+   */
+  topTravamentoLines: { id: string; x1: number; y1: number; x2: number; y2: number }[];
   structureRects: {
     id: string;
     x: number;
@@ -193,7 +237,7 @@ export type FloorPlanModelV2 = {
     variant?: ModuleVariantV2;
     /** Meio-módulo (1 baia ao longo do vão) — desenho e legenda distintos na planta. */
     segmentType?: ModuleSegmentType;
-    /** Numeração global na planta (1…n), linha a linha, ao longo do vão. */
+    /** Só módulos inteiros normais: sequência 1…n por frente de picking; meios e túneis sem número. */
     displayIndex?: number;
   }[];
   /**
@@ -214,6 +258,32 @@ export type FloorPlanModelV2 = {
   }[];
   dimensionLines: FloorPlanDimension[];
   labels: FloorPlanLabel[];
+  /**
+   * Identificação de cada fileira no próprio desenho (ex.: «Linha 1» no início da faixa ao longo do vão).
+   */
+  rowLineMarkers?: {
+    id: string;
+    text: string;
+    x: number;
+    y: number;
+    fontSize: number;
+  }[];
+  /**
+   * Texto extra no módulo túnel quando aplicável (continuidade entre fileiras / uso operacional).
+   */
+  tunnelOperationHint?: string;
+  /**
+   * Explicações retiradas do desenho — apenas legenda compacta inferior.
+   */
+  planLegendNotes?: {
+    moduleIndexHint: string;
+    firstLevelHint: string;
+    implantHint: string;
+    strategyHint: string;
+    rowLines: string[];
+    tunnelNote?: string;
+    bayClearSpanNote?: string;
+  };
 };
 
 export type FloorPlanDimension = {
@@ -236,6 +306,10 @@ export type FloorPlanDimension = {
   textAnchor?: { x: number; y: number };
   /** Rotação do texto em graus (ex.: -90 para cota vertical). */
   textRotateDeg?: number;
+  /**
+   * Hierarquia visual entre cotas (menos competição): envelope do compartimento → corredor → vão de baia.
+   */
+  dimTier?: 'primary' | 'secondary' | 'detail';
 };
 
 export type FloorPlanLabel = {
@@ -269,6 +343,11 @@ export type ElevationPanelPayload = {
   /** Corredor principal (mm) — contexto operacional no PDF. */
   corridorMm: number;
   capacityKgPerLevel: number;
+  /**
+   * Altura útil de carga por nível (mm), quando conhecida — documentação ALT. MÁX. CARGA.
+   * Ausente: deriva-se de `meanGapMm` / geometria de eixos.
+   */
+  loadHeightMm?: number;
   tunnel: boolean;
   /** Espessura representativa dos montantes (mm) — alinhada ao módulo de referência. */
   uprightThicknessMm?: number;
@@ -289,12 +368,22 @@ export type ElevationPanelPayload = {
   structuralTopMm: number;
   usableHeightMm: number;
   meanGapMm: number;
-  /** Protetor de cantoneira na base dos montantes (face frontal). */
+  /** Protetor de coluna na base dos montantes (face frontal). */
   columnProtector?: boolean;
   guardRailSimple?: boolean;
   guardRailSimplePosition?: GuardRailPositionCode;
   guardRailDouble?: boolean;
   guardRailDoublePosition?: GuardRailPositionCode;
+  /**
+   * Travamento de fundo na costa (só quando o layout é só fileiras simples):
+   * indicador para a vista lateral — peça 400×50%H atrás do módulo.
+   */
+  fundoTravamento?: boolean;
+  /**
+   * Travamento superior estrutural (regra BOM: montante acima de 8 m e ≥ 2 fileiras).
+   * Vista frontal/lateral: traço discreto junto ao topo.
+   */
+  topTravamentoSuperior?: boolean;
 };
 
 export type ElevationModelV2 = {

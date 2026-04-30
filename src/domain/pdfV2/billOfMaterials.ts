@@ -1,3 +1,4 @@
+import type { StructureResult } from '../structureEngine';
 import type {
   FloorPlanAccessoriesV2,
   LayoutOrientationV2,
@@ -8,14 +9,26 @@ import {
   MODULE_PALLET_BAYS_PER_LEVEL,
   uprightWidthsMmForFrontBayCount,
 } from './rackModuleSpec';
+import {
+  buildBudgetModuleQuantityRows,
+  countBeamPairsForLayoutSolution,
+  countTunnelModuleSegments,
+} from './budgetQuantificationV2';
 import { splitModuleFootprintsFor3d } from './model3dV2';
-import type { StructureResult } from '../structureEngine';
+import { totalDistanciadorCountForDoubleRows } from './spineAndDistanciador';
+import {
+  countFundoTravamentoQuantity,
+  FUNDO_TRAVAMENTO_WIDTH_MM,
+  fundoTravamentoHeightMm,
+} from './fundoTravamento';
+import {
+  countTopTravamentoSuperiorQuantity,
+  minInterRowCorridorWidthMm,
+  topTravamentoCorridorSpanMm,
+} from './topTravamento';
+import { equivalentAlongBeamSpan } from './moduleSpanCounts';
 
 const EPS = 0.5;
-
-/** Referência da planilha modelo ORÇAMENTO-BRAUNA-505-A (escala linear de acessórios). */
-const REF_MO_TOTAL = 84;
-const REF_DISTANCIADOR = 136;
 
 export type BillOfMaterialsLineId =
   | 'upright75'
@@ -27,7 +40,9 @@ export type BillOfMaterialsLineId =
   | 'guardRailSimple'
   | 'guardRailDouble'
   | 'travamentoFundo'
-  | 'calco';
+  | 'travamentoSuperior'
+  | 'calco'
+  | 'longarinaTrava';
 
 export type BillOfMaterialsLine = {
   id: BillOfMaterialsLineId;
@@ -46,11 +61,38 @@ export type BillOfMaterials = {
   /** Metadados para descrições dinâmicas. */
   meta: {
     structuralLevels: number;
+    /** Extensão do compartimento ao longo do eixo das longarinas (não usar como vão de peça). */
     beamSpanMm: number;
+    /** Profundidade estrutural (eixo transversal ao vão) — base da descrição de montante. */
+    rackDepthMm: number;
+    /** Vão livre de uma baia ao longo das longarinas — base da descrição de longarina. */
+    beamBaySpanMm: number;
     uprightHeightMm: number;
     uprightType: StructureResult['uprightType'];
     loadTonPerModule: number;
+    /**
+     * Itens lógicos (quadro, base, trava, …) para orçamento; independente do PDF.
+     */
+    budgetModuleRows?: import('./budgetQuantificationV2').BudgetModuleQuantityRow[];
   };
+};
+
+export type { BudgetModuleQuantityRow } from './budgetQuantificationV2';
+
+export {
+  buildBudgetModuleQuantityRows,
+  countBeamPairsForLayoutSolution,
+  countTunnelModuleSegments,
+  storageLevelsWithBeamsForBudget,
+  TUNNEL_BUDGET_OCCUPIED_STORAGE_LEVELS,
+} from './budgetQuantificationV2';
+
+export type BuildBillOfMaterialsOptions = {
+  /**
+   * Quando as regras comerciais incluem trava em cada par de longarinas contado,
+   * a quantidade = pares de longarinas (orçamento).
+   */
+  longarinaTravaEnabled?: boolean;
 };
 
 function bayCountForModule(mod: RackModule): number {
@@ -79,10 +121,17 @@ function spineGapUprightCount(
   row: RackRow,
   mod: RackModule,
   rackDepthMm: number,
-  orientation: LayoutOrientationV2
+  orientation: LayoutOrientationV2,
+  spineBackToBackMm: number
 ): number {
   if (row.rowType !== 'backToBack' || mod.type === 'tunnel') return 0;
-  const fps = splitModuleFootprintsFor3d(row, mod, rackDepthMm, orientation);
+  const fps = splitModuleFootprintsFor3d(
+    row,
+    mod,
+    rackDepthMm,
+    orientation,
+    spineBackToBackMm
+  );
   if (fps.length < 2 || !fps[0] || !fps[1]) return 0;
   const fpA = fps[0];
   const fpB = fps[1];
@@ -111,13 +160,25 @@ export function countUprightsByThicknessFromGeometry(
 
   for (const row of geometry.rows) {
     for (const mod of row.modules) {
-      const fps = splitModuleFootprintsFor3d(row, mod, rackDepthMm, ori);
+      const fps = splitModuleFootprintsFor3d(
+        row,
+        mod,
+        rackDepthMm,
+        ori,
+        geometry.metadata.spineBackToBackMm
+      );
       const perFace = countUprightThicknessAlongFace(mod);
       const perModuleUpright75 = perFace.n75 * fps.length;
       const perModuleUpright100 = perFace.n100 * fps.length;
       upright75 += perModuleUpright75;
       upright100 += perModuleUpright100;
-      upright75 += spineGapUprightCount(row, mod, rackDepthMm, ori);
+      upright75 += spineGapUprightCount(
+        row,
+        mod,
+        rackDepthMm,
+        ori,
+        geometry.metadata.spineBackToBackMm
+      );
     }
   }
 
@@ -136,12 +197,65 @@ function guardRailUnitCount(
   return rowCount * ends;
 }
 
-function formatMm3d(mm: number): string {
+export function formatMm3d(mm: number): string {
   const m = mm / 1000;
   return m.toLocaleString('pt-BR', {
     minimumFractionDigits: 3,
     maximumFractionDigits: 3,
   });
+}
+
+const DESC_EPS_MM = 0.5;
+
+/**
+ * Garante descrições comerciais alinhadas à referência Brauna (profundidade×altura em montantes; vão de baia em longarinas).
+ * Não altera quantidades.
+ */
+export function validateBillOfMaterialsCommercialDescriptions(
+  bom: BillOfMaterials,
+  layoutSolution: LayoutSolutionV2,
+  uprightHeightMm: number
+): void {
+  const depthMm = layoutSolution.rackDepthMm;
+  const bayMm = layoutSolution.beamAlongModuleMm;
+  const spanMm = layoutSolution.beamSpanMm;
+
+  const depthFmt = formatMm3d(depthMm);
+  const bayFmt = formatMm3d(bayMm);
+  const spanFmt = formatMm3d(spanMm);
+
+  const montantePair = `${depthFmt}x${formatMm3d(uprightHeightMm)}`;
+
+  for (const id of ['upright75', 'upright100'] as const) {
+    const line = bom.lines.find(l => l.id === id);
+    const desc = line?.description?.trim();
+    if (!desc) continue;
+    if (!desc.includes(montantePair)) {
+      throw new Error(
+        `Descrição de MONTANTE (${id}) deve usar profundidade×altura (${montantePair} m); texto: ${desc}`
+      );
+    }
+    if (Math.abs(spanMm - depthMm) > DESC_EPS_MM && desc.includes(spanFmt)) {
+      throw new Error(
+        `Descrição de MONTANTE (${id}) não deve usar o comprimento total do galpão (${spanFmt} m); texto: ${desc}`
+      );
+    }
+  }
+
+  const beamLine = bom.lines.find(l => l.id === 'beamPairs');
+  const beamDesc = beamLine?.description?.trim();
+  if (beamDesc) {
+    if (!beamDesc.includes(bayFmt)) {
+      throw new Error(
+        `Descrição de longarina deve usar o vão da baia (${bayFmt} m); texto: ${beamDesc}`
+      );
+    }
+    if (Math.abs(spanMm - bayMm) > DESC_EPS_MM && beamDesc.includes(spanFmt)) {
+      throw new Error(
+        `Descrição de longarina não deve usar o comprimento total do galpão (${spanFmt} m); usar vão da baia (${bayFmt} m). Texto: ${beamDesc}`
+      );
+    }
+  }
 }
 
 function tonLabel(t: StructureResult['uprightType']): string {
@@ -150,27 +264,35 @@ function tonLabel(t: StructureResult['uprightType']): string {
 
 /**
  * Lista de materiais para a planilha comercial, alinhada ao `layoutSolution` e à geometria PDF.
+ * Opções: travas de longarina (uma por par contado) quando a regra comercial estiver ativa.
  */
 export function buildBillOfMaterials(
   layoutSolution: LayoutSolutionV2,
   geometry: LayoutGeometry,
   accessories: FloorPlanAccessoriesV2,
   structure: StructureResult,
-  uprightHeightMm: number
+  uprightHeightMm: number,
+  options?: BuildBillOfMaterialsOptions
 ): BillOfMaterials {
   const { upright75, upright100 } = countUprightsByThicknessFromGeometry(geometry);
   const structuralLevels = Math.max(0, layoutSolution.metadata.structuralLevels);
-  const modulesAlong = Math.max(0, layoutSolution.totals.modules);
+  const modulesAlong = Math.max(
+    0,
+    equivalentAlongBeamSpan(layoutSolution.totals.segmentCounts)
+  );
+  const travaEnabled = options?.longarinaTravaEnabled === true;
 
-  /** Pares de longarinas: módulos (equiv. ao longo do vão) × níveis com feixe × 2 faces ao longo do vão. */
-  const beamPairs = Math.round(modulesAlong * structuralLevels * 2);
+  const beamPairs = countBeamPairsForLayoutSolution(layoutSolution);
+  const longarinaTravaQty = travaEnabled ? beamPairs : 0;
 
   const rowCount = geometry.rows.length;
-  const grSimple = guardRailUnitCount(
+  const grSimpleUser = guardRailUnitCount(
     rowCount,
     accessories.guardRailSimple,
     accessories.guardRailSimplePosition
   );
+  const grSimpleFromTunnel = countTunnelModuleSegments(layoutSolution);
+  const grSimple = grSimpleUser + grSimpleFromTunnel;
   const grDouble = guardRailUnitCount(
     rowCount,
     accessories.guardRailDouble,
@@ -178,23 +300,37 @@ export function buildBillOfMaterials(
   );
 
   const montTotal = Math.max(0, upright75 + upright100);
-  const distanciador = Math.max(
-    0,
-    Math.round((REF_DISTANCIADOR * montTotal) / Math.max(1, REF_MO_TOTAL))
-  );
+  const distanciador = totalDistanciadorCountForDoubleRows(geometry);
+  const hMm = uprightHeightMm;
 
-  const travamento = Math.max(0, rowCount);
+  const travamentoFundoQty = countFundoTravamentoQuantity(geometry);
+  const descTravFundo =
+    travamentoFundoQty > 0
+      ? `TRAVAMENTO DE FUNDO (costa, atrás do módulo) — ${formatMm3d(FUNDO_TRAVAMENTO_WIDTH_MM)}×${formatMm3d(fundoTravamentoHeightMm(hMm))} m (L×A); espaçamento alinhado ao módulo (1/3/…); só fileiras simples.`
+      : undefined;
+
+  const travamentoSuperior = countTopTravamentoSuperiorQuantity(
+    geometry,
+    uprightHeightMm
+  );
+  const minCor = minInterRowCorridorWidthMm(geometry);
+  const descTravSup =
+    travamentoSuperior > 0 && minCor !== null
+      ? `TRAVAMENTO SUPERIOR (entre fileiras) — vão: larg. corredor + ${formatMm3d(2000)} m (mín. ref. corredor ${formatMm3d(minCor)} m → vão de peça ${formatMm3d(topTravamentoCorridorSpanMm(minCor))} m).`
+      : undefined;
 
   const protectors = accessories.columnProtector
     ? Math.max(0, montTotal)
     : 0;
 
-  const beamMm = layoutSolution.beamSpanMm;
-  const hMm = uprightHeightMm;
+  /** Profundidade estrutural (transversal ao vão); montante = profundidade × altura (padrão Brauna). */
+  const depthMm = layoutSolution.rackDepthMm;
+  /** Vão livre de uma baia — longarina, não o comprimento total do galpão. */
+  const baySpanMm = layoutSolution.beamAlongModuleMm;
 
-  const desc75 = `MONTANTE #14 F75 - ${formatMm3d(beamMm)}x${formatMm3d(hMm)} - ${tonLabel(structure.uprightType)}`;
-  const desc100 = `MONTANTE #14 F100 - ${formatMm3d(beamMm)}x${formatMm3d(hMm)} - 15T`;
-  const descBeams = `PAR DE LONGARINAS #14 - Z95x${formatMm3d(beamMm)} - 1T`;
+  const desc75 = `MONTANTE #14 F75 - ${formatMm3d(depthMm)}x${formatMm3d(hMm)} - ${tonLabel(structure.uprightType)}`;
+  const desc100 = `MONTANTE #14 F100 - ${formatMm3d(depthMm)}x${formatMm3d(hMm)} - 15T`;
+  const descBeams = `PAR DE LONGARINAS #14 - Z95x${formatMm3d(baySpanMm)} - 1T`;
 
   const lines: BillOfMaterialsLine[] = [
     { id: 'upright75', quantity: upright75, description: desc75 },
@@ -208,11 +344,34 @@ export function buildBillOfMaterials(
     { id: 'columnProtector', quantity: protectors },
     { id: 'guardRailSimple', quantity: grSimple },
     { id: 'guardRailDouble', quantity: grDouble },
-    { id: 'travamentoFundo', quantity: travamento },
+    {
+      id: 'travamentoFundo',
+      quantity: travamentoFundoQty,
+      description: descTravFundo,
+    },
+    {
+      id: 'travamentoSuperior',
+      quantity: travamentoSuperior,
+      description: descTravSup,
+    },
     { id: 'calco', quantity: 0 },
+    {
+      id: 'longarinaTrava',
+      quantity: longarinaTravaQty,
+      description:
+        longarinaTravaQty > 0
+          ? 'Trava de longarina (1 unidade por par de longarinas contado no orçamento).'
+          : undefined,
+    },
   ];
 
-  return {
+  const budgetModuleRows = buildBudgetModuleQuantityRows(
+    layoutSolution,
+    lines,
+    { longarinaTravaEnabled: travaEnabled }
+  );
+
+  const bom: BillOfMaterials = {
     lines,
     totals: {
       modulesAlong,
@@ -221,9 +380,16 @@ export function buildBillOfMaterials(
     meta: {
       structuralLevels,
       beamSpanMm: layoutSolution.beamSpanMm,
+      rackDepthMm: layoutSolution.rackDepthMm,
+      beamBaySpanMm: layoutSolution.beamAlongModuleMm,
       uprightHeightMm,
       uprightType: structure.uprightType,
       loadTonPerModule: structure.loadTonPerModule,
+      budgetModuleRows,
     },
   };
+
+  validateBillOfMaterialsCommercialDescriptions(bom, layoutSolution, uprightHeightMm);
+
+  return bom;
 }
