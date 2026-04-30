@@ -4,7 +4,7 @@ import {
   MIN_MM,
   parseCommaSeparatedNumbers,
   parseNumber,
-  parseModuleIndexList,
+  parseModuleIndexListResult,
   validateCorridor,
   validateCustomLineRowCount,
   validateKg,
@@ -1345,15 +1345,15 @@ export const transition = (
         return { session: newSession, effects };
       }
       {
-        const parsed = parseModuleIndexList(input.value);
-        if (parsed.length === 0) {
+        const parsedRes = parseModuleIndexListResult(input.value);
+        if (!parsedRes.ok) {
           return {
             session: newSession,
             effects,
-            error:
-              'Indique os números dos módulos, por exemplo: 2, 5, 8 ou *Módulos 2 e 6*',
+            error: parsedRes.error,
           };
         }
+        const parsed = parsedRes.indices;
         const maxRaw = newSession.answers.tunnelPreviewMaxIndex;
         const maxI =
           typeof maxRaw === 'number' &&
