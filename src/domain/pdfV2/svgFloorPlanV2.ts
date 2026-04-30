@@ -80,7 +80,7 @@ const COL_RESIDUAL_FILL = '#f4f4f5';
 const COL_RESIDUAL_STROKE = '#a1a1aa';
 const COL_DIM = '#111827';
 /** Reserva inferior do viewBox para legenda + cotas (encaixe global do desenho). */
-const FLOOR_PLAN_LEGEND_RESERVE_PX = 568;
+const FLOOR_PLAN_LEGEND_RESERVE_PX = 628;
 /** Contorno da **faixa da linha** (unidade contínua), desenhado por cima dos módulos. */
 const COL_ROW_ENVELOPE_STROKE = '#334155';
 const ROW_ENVELOPE_SW = 2.92;
@@ -88,37 +88,57 @@ const ROW_ENVELOPE_SW = 2.92;
 const COL_ROW_ENVELOPE_SPINE_EDGE = '#94a3b8';
 const ROW_ENVELOPE_SPINE_EDGE_SW = 1.05;
 
-/** ~+12,5% face ao bloco base 228×58 (faixa pedida 10–15%). */
-const OPERATION_DIRECTION_INDICATOR_SCALE = 1.125;
-const COL_OP_DIRECTION_LABEL = '#0f172a';
-const COL_OP_DIRECTION_BOX_STROKE = '#64748b';
-const COL_OP_DIRECTION_SHAFT = '#0f172a';
+function pickOperationalCorridorForOperationHint(
+  circulationDraw: CirculationRect[],
+  o: FloorPlanModelV2['warehouseOutline']
+): CirculationRect | undefined {
+  const ops = circulationDraw.filter(
+    c => circulationSemantic(c) === 'operational'
+  );
+  if (ops.length === 0) return undefined;
+  const midY = o.y + o.h / 2;
+  const upper = ops.filter(c => c.y + c.h / 2 <= midY + o.h * 0.06);
+  const pool = upper.length > 0 ? upper : ops;
+  const minSpan = 120;
+  const wideEnough = pool.filter(c => Math.max(c.w, c.h) >= minSpan);
+  const candidates = wideEnough.length > 0 ? wideEnough : pool;
+  const cxo = o.x + o.w / 2;
+  const scored = [...candidates].sort((a, b) => {
+    const ay = a.y + a.h / 2;
+    const by = b.y + b.h / 2;
+    if (Math.abs(ay - by) > o.h * 0.04) return ay - by;
+    const da = Math.abs(a.x + a.w / 2 - cxo);
+    const db = Math.abs(b.x + b.w / 2 - cxo);
+    return da - db;
+  });
+  return scored[0];
+}
 
-function operationDirectionIndicatorMetrics() {
-  const k = OPERATION_DIRECTION_INDICATOR_SCALE;
-  const r = (n: number) => Math.round(n * k);
-  return {
-    gw: r(228),
-    gh: r(58),
-    pad: r(12),
-    rx: Math.max(4, r(5)),
-    textInset: r(10),
-    textY: r(22),
-    arrowRowY: r(38),
-    shaftStartInset: r(8),
-    shaftEndInset: r(22),
-    headTipInset: r(14),
-    headBackInset: r(28),
-    headHalfSpan: r(10),
-    fontSize: Math.round(11.5 * k * 1.15 * 10) / 10,
-    boxStrokeW: Math.round(0.9 * k * 100) / 100,
-    shaftW: Math.round(2.6 * k * 100) / 100,
-    vertBottomInset: r(10),
-    vertTopInset: r(14),
-    vertTipY: r(6),
-    vertBaseY: r(18),
-    vertHalfW: r(8),
-  } as const;
+/**
+ * Indicação discreta dentro do corredor operacional (sem caixa) — texto horizontal centrado,
+ * afastado do rótulo «Corredor» ao centro da faixa.
+ */
+function operationDirectionCorridorHintSvg(
+  circulationDraw: CirculationRect[],
+  o: FloorPlanModelV2['warehouseOutline']
+): string {
+  const c = pickOperationalCorridorForOperationHint(circulationDraw, o);
+  if (!c) return '';
+  const minSide = Math.min(c.w, c.h);
+  if (minSide < 72) return '';
+  const fontSize = Math.round(
+    Math.min(10.4, Math.max(8.6, minSide * 0.062)) * 10
+  ) / 10;
+  const pad = Math.max(14, minSide * 0.08);
+  let ty = c.y + pad + fontSize * 0.35;
+  if (c.h < 110) {
+    ty = c.y + c.h - pad;
+  }
+  const tx = c.x + c.w / 2;
+  const label = 'Sentido de operação →';
+  return `<text x="${tx}" y="${ty}" text-anchor="middle" dominant-baseline="middle" font-size="${fontSize}px" fill="#1e3a8a" fill-opacity="0.9" font-family="${SVG_FONT_FAMILY}" font-weight="500" letter-spacing="0.03em">${escapeXml(
+    label
+  )}</text>`;
 }
 
 const SEM_ORDER: Record<FloorPlanCirculationSemantic, number> = {
@@ -211,16 +231,6 @@ function appendOperationalCorridorVisualExtras(
   }
 }
 
-function orientationArrowBounds(
-  o: FloorPlanModelV2['warehouseOutline'],
-  _beamAlong: 'x' | 'y'
-): { minX: number; minY: number; maxX: number; maxY: number } {
-  const { gw, gh, pad } = operationDirectionIndicatorMetrics();
-  const gx = o.x + o.w - gw - pad;
-  const gy = o.y + o.h - gh - pad;
-  return { minX: gx, minY: gy, maxX: gx + gw, maxY: gy + gh };
-}
-
 function computeFloorPlanDrawingBounds(
   model: FloorPlanModelV2,
   structureDraw: StructureRect[],
@@ -266,8 +276,6 @@ function computeFloorPlanDrawingBounds(
       }
     }
   }
-  const ab = orientationArrowBounds(o, model.beamSpanAlong);
-  bump(ab.minX, ab.minY, ab.maxX, ab.maxY);
   bump(o.x - 16, o.y - 16, o.x + o.w + 16, o.y + o.h + 16);
   return { minX, minY, maxX, maxY };
 }
@@ -399,82 +407,105 @@ function appendColumnProtectorAlongModules(
 }
 
 /**
- * Legenda compacta: 1.º nível, guardas (simples/dupla), protetor de coluna — mesma semântica do resumo técnico.
+ * Legenda inferior: notas, símbolos e rodapé com espaçamento fixo (line-height ≥ 1.35),
+ * sem sobreposição — aparência de prancha técnica.
  */
 function appendFloorPlanConfigurationLegend(
   model: FloorPlanModelV2,
   parts: string[]
 ): void {
-  /** Títulos de secção +40%; texto corpo da legenda +35% — leitura móvel/impressão. */
-  const LEGEND_TITLE_VIS_SCALE = 1.4;
-  const LEGEND_BODY_VIS_SCALE = 1.35;
-  const noteTitleFs =
-    Math.round(11.25 * LEGEND_TITLE_VIS_SCALE * 10) / 10;
-  const noteBodyFs =
-    Math.round(9.25 * LEGEND_BODY_VIS_SCALE * 10) / 10;
-  const symSectionTitleFs =
-    Math.round(11.25 * LEGEND_TITLE_VIS_SCALE * 10) / 10;
-  const symSubtitleBoldFs =
-    Math.round(10.75 * LEGEND_BODY_VIS_SCALE * 10) / 10;
-  const symBodyFs =
-    Math.round(10.25 * LEGEND_BODY_VIS_SCALE * 10) / 10;
-  const symFootNoteFs =
-    Math.round(9.25 * LEGEND_BODY_VIS_SCALE * 10) / 10;
-  const noteAfterTitleDy =
-    Math.round(16 * LEGEND_TITLE_VIS_SCALE * 10) / 10;
-  const noteLineDy =
-    Math.round(12 * LEGEND_BODY_VIS_SCALE * 10) / 10;
-  const noteBeforeSymbolsGap =
-    Math.round(8 * LEGEND_BODY_VIS_SCALE * 10) / 10;
+  const INNER_PAD = 10;
+  const SECTION_GAP = 12;
+  const FOOTER_GAP = 14;
+  const LH = 1.35;
+
+  const noteTitleFs = 11.5;
+  const noteBodyFs = 9;
+  const symTitleFs = 10.75;
+  const symSubtitleFs = 9;
+  const symBodyFs = 8.75;
+  const symFootNoteFs = 8.25;
+
+  const noteLineDy = noteBodyFs * LH;
+  const symLineDy = symBodyFs * LH;
 
   const { w, h } = model.viewBox;
   const a = model.planAccessories;
   const notes = model.planLegendNotes;
-  const pad = 14;
-  const boxW = Math.min(520, w - 2 * pad - 8);
-  const noteLines: string[] = [];
+  const outerPad = 14;
+  const boxW = Math.max(280, w - 2 * outerPad);
+  const lxContent = outerPad + INNER_PAD;
+
+  const noteLinesRaw: string[] = [];
   if (notes) {
-    noteLines.push(notes.moduleIndexHint, notes.firstLevelHint, notes.implantHint);
-    noteLines.push(notes.strategyHint);
+    noteLinesRaw.push(
+      notes.moduleIndexHint,
+      notes.firstLevelHint,
+      notes.implantHint,
+      notes.strategyHint
+    );
     for (const r of notes.rowLines) {
-      noteLines.push(r);
+      noteLinesRaw.push(r);
     }
-    if (notes.bayClearSpanNote) noteLines.push(notes.bayClearSpanNote);
-    if (notes.tunnelNote) noteLines.push(notes.tunnelNote);
+    if (notes.bayClearSpanNote) noteLinesRaw.push(notes.bayClearSpanNote);
+    if (notes.tunnelNote) noteLinesRaw.push(notes.tunnelNote);
   }
-  const notesBlockH =
-    noteLines.length > 0
-      ? 26 + noteAfterTitleDy + noteLines.length * noteLineDy
-      : 0;
-  /** Bloco de símbolos (mini esquemas + guardas + protetor de coluna) + rodapé. */
-  const symbolBlockH = 202;
-  const boxH = Math.min(500, 28 + notesBlockH + symbolBlockH);
-  const x0 = pad;
-  const y0 = h - pad - boxH;
+  const noteLines = noteLinesRaw.filter(s => typeof s === 'string' && s.trim().length > 0);
+
+  const ICON_W = 56;
+  const ROW_ICON_H = 36;
+  const hasGuard = a.guardRailSimple || a.guardRailDouble;
+
+  let estH = INNER_PAD;
+  if (noteLines.length > 0) {
+    estH += noteTitleFs * LH + noteLines.length * noteLineDy + SECTION_GAP;
+  }
+  estH += symTitleFs * LH + symSubtitleFs * LH + 10;
+  estH += ROW_ICON_H * 2 + 10;
+  if (hasGuard) {
+    estH += symSubtitleFs * LH + symLineDy * 2 + 10;
+  }
+  if (a.columnProtector) {
+    estH += symLineDy + 10;
+  }
+  estH += FOOTER_GAP + symFootNoteFs * LH + INNER_PAD;
+
+  const boxH = Math.min(Math.floor(h * 0.44), Math.max(308, Math.ceil(estH + 20)));
+  const x0 = outerPad;
+  const y0 = h - outerPad - boxH;
+
   parts.push(
-    `<rect x="${x0}" y="${y0}" width="${boxW}" height="${boxH}" rx="7" fill="#f8fafc" fill-opacity="0.97" stroke="#cbd5e1" stroke-width="0.95"/>`
+    `<rect x="${x0}" y="${y0}" width="${boxW}" height="${boxH}" rx="6" fill="#fafafa" fill-opacity="0.99" stroke="#e2e8f0" stroke-width="0.65"/>`
   );
-  let ly = y0 + 17;
-  const lx = x0 + 12;
+
+  let ly = y0 + INNER_PAD + noteTitleFs;
   if (noteLines.length > 0) {
     parts.push(
-      `<text x="${lx}" y="${ly}" font-size="${noteTitleFs}px" fill="#334155" font-family="${SVG_FONT_FAMILY}" font-weight="700" letter-spacing="0.05em">NOTAS DO DESENHO</text>`
+      `<text x="${lxContent}" y="${ly}" font-size="${noteTitleFs}px" fill="#334155" font-family="${SVG_FONT_FAMILY}" font-weight="600" letter-spacing="0.04em">NOTAS DO DESENHO</text>`
     );
-    ly += noteAfterTitleDy;
+    ly += noteTitleFs * LH * 0.35 + noteLineDy * 0.65;
     for (const line of noteLines) {
       parts.push(
-        `<text x="${lx}" y="${ly}" font-size="${noteBodyFs}px" fill="#475569" font-family="${SVG_FONT_FAMILY}">${escapeXml(line)}</text>`
+        `<text x="${lxContent}" y="${ly}" font-size="${noteBodyFs}px" fill="#64748b" font-family="${SVG_FONT_FAMILY}" font-weight="400">${escapeXml(line)}</text>`
       );
       ly += noteLineDy;
     }
-    ly += noteBeforeSymbolsGap;
+    ly += SECTION_GAP;
+  } else {
+    ly = y0 + INNER_PAD + symTitleFs;
   }
+
   parts.push(
-    `<text x="${lx}" y="${ly}" font-size="${symSectionTitleFs}px" fill="#475569" font-family="${SVG_FONT_FAMILY}" font-weight="700" letter-spacing="0.05em">SÍMBOLOS (1.º nível · guardas · protetor de coluna)</text>`
+    `<text x="${lxContent}" y="${ly}" font-size="${symTitleFs}px" fill="#334155" font-family="${SVG_FONT_FAMILY}" font-weight="600" letter-spacing="0.04em">SÍMBOLOS</text>`
   );
-  ly += Math.round(symSectionTitleFs * 0.85) + 8;
+  ly += symTitleFs * LH * 0.45 + symSubtitleFs * LH * 0.55;
+  parts.push(
+    `<text x="${lxContent}" y="${ly}" font-size="${symSubtitleFs}px" fill="#64748b" font-family="${SVG_FONT_FAMILY}" font-weight="500">1.º nível · guardas · protetor de coluna</text>`
+  );
+  ly += symSubtitleFs * LH + 10;
+
   const onGround = a.firstLevelOnGround !== false;
-  /** Mini esquema: linha do piso + 1.º feixe. */
+
   const miniGround = (
     gx: number,
     gy: number,
@@ -486,67 +517,73 @@ function appendFloorPlanConfigurationLegend(
     const bits: string[] = [];
     if (highlight) {
       bits.push(
-        `<rect x="${gx - 3}" y="${gy - 2}" width="60" height="31" rx="5" fill="none" stroke="${
+        `<rect x="${gx - 2}" y="${gy - 1}" width="58" height="30" rx="4" fill="none" stroke="${
           elevated ? '#ca8a04' : '#0d9488'
-        }" stroke-width="1.65" opacity="0.95"/>`
+        }" stroke-width="1.05" opacity="0.72"/>`
       );
     }
     bits.push(
-      `<line x1="${gx}" y1="${floorY}" x2="${gx + 54}" y2="${floorY}" stroke="#334155" stroke-width="1.6" stroke-linecap="square"/>`
+      `<line x1="${gx}" y1="${floorY}" x2="${gx + 54}" y2="${floorY}" stroke="#334155" stroke-width="1.45" stroke-linecap="square"/>`
     );
     if (elevated) {
       bits.push(
-        `<rect x="${gx + 2}" y="${beamY}" width="50" height="${floorY - beamY}" fill="#fef9c3" fill-opacity="0.55" stroke="none"/>`,
-        `<line x1="${gx}" y1="${beamY}" x2="${gx + 54}" y2="${beamY}" stroke="#ca8a04" stroke-width="1.35" stroke-dasharray="4 3" opacity="0.9"/>`
+        `<rect x="${gx + 2}" y="${beamY}" width="50" height="${floorY - beamY}" fill="#fef9c3" fill-opacity="0.45" stroke="none"/>`,
+        `<line x1="${gx}" y1="${beamY}" x2="${gx + 54}" y2="${beamY}" stroke="#ca8a04" stroke-width="1.2" stroke-dasharray="4 3" opacity="0.85"/>`
       );
     } else {
       bits.push(
-        `<line x1="${gx}" y1="${beamY}" x2="${gx + 54}" y2="${beamY}" stroke="#0d9488" stroke-width="2.1" stroke-linecap="square" opacity="0.88"/>`
+        `<line x1="${gx}" y1="${beamY}" x2="${gx + 54}" y2="${beamY}" stroke="#0d9488" stroke-width="1.85" stroke-linecap="square" opacity="0.88"/>`
       );
     }
     return bits.join('');
   };
 
+  const rowCenterY = ly + ROW_ICON_H / 2 + 6;
+  parts.push(miniGround(lxContent, rowCenterY - 18, false, onGround));
   parts.push(
-    `<text x="${lx}" y="${ly}" font-size="${symSubtitleBoldFs}px" fill="#64748b" font-family="${SVG_FONT_FAMILY}" font-weight="700">1.º eixo de feixe (destaque = opção do projeto)</text>`
+    `<text x="${lxContent + ICON_W}" y="${rowCenterY}" dominant-baseline="middle" font-size="${symBodyFs}px" fill="#0f766e" font-family="${SVG_FONT_FAMILY}" font-weight="400">Ao piso · sem vão útil abaixo</text>`
   );
-  ly += 5;
-  parts.push(miniGround(lx, ly - 4, false, onGround));
-  parts.push(
-    `<text x="${lx + 62}" y="${ly + 15}" font-size="${symBodyFs}px" fill="#0f766e" font-family="${SVG_FONT_FAMILY}">Ao piso · sem vão útil inferior</text>`
-  );
-  parts.push(miniGround(lx + 234, ly - 4, true, !onGround));
-  parts.push(
-    `<text x="${lx + 296}" y="${ly + 15}" font-size="${symBodyFs}px" fill="#a16207" font-family="${SVG_FONT_FAMILY}">Elevado · folga sob o 1.º patamar</text>`
-  );
-  ly += 36;
+  ly += ROW_ICON_H + 8;
 
-  const hasGuard = a.guardRailSimple || a.guardRailDouble;
+  const row2Y = ly + ROW_ICON_H / 2 + 6;
+  parts.push(miniGround(lxContent, row2Y - 18, true, !onGround));
+  parts.push(
+    `<text x="${lxContent + ICON_W}" y="${row2Y}" dominant-baseline="middle" font-size="${symBodyFs}px" fill="#a16207" font-family="${SVG_FONT_FAMILY}" font-weight="400">1.º eixo elevado · folga sob o patamar</text>`
+  );
+  ly += ROW_ICON_H + 10;
+
   if (hasGuard) {
     parts.push(
-      `<text x="${lx}" y="${ly}" font-size="${symSubtitleBoldFs}px" fill="#64748b" font-family="${SVG_FONT_FAMILY}" font-weight="700">Guardas ao longo do vão (extremidades do desenho)</text>`
+      `<text x="${lxContent}" y="${ly}" font-size="${symSubtitleFs}px" fill="#475569" font-family="${SVG_FONT_FAMILY}" font-weight="500">Guardas nas extremidades do vão</text>`
     );
-    ly += 15 + (symSubtitleBoldFs - 10.75) * 0.25;
+    ly += symSubtitleFs * LH + 6;
+    const gMid = ly + symLineDy / 2;
     parts.push(
-      `<line x1="${lx}" y1="${ly}" x2="${lx + 28}" y2="${ly}" stroke="#ca8a04" stroke-width="3.8" stroke-linecap="square"/>`,
-      `<text x="${lx + 36}" y="${ly + 4}" font-size="${symBodyFs}px" fill="#713f12" font-family="${SVG_FONT_FAMILY}">Simples (1 rail)</text>`,
-      `<line x1="${lx + 152}" y1="${ly - 3}" x2="${lx + 180}" y2="${ly - 3}" stroke="#b91c1c" stroke-width="2.4" stroke-linecap="square"/>`,
-      `<line x1="${lx + 152}" y1="${ly + 3}" x2="${lx + 180}" y2="${ly + 3}" stroke="#b91c1c" stroke-width="2.4" stroke-linecap="square"/>`,
-      `<text x="${lx + 188}" y="${ly + 4}" font-size="${symBodyFs}px" fill="#7f1d1d" font-family="${SVG_FONT_FAMILY}">Dupla (2 rails)</text>`
+      `<line x1="${lxContent}" y1="${gMid}" x2="${lxContent + 26}" y2="${gMid}" stroke="#ca8a04" stroke-width="3.2" stroke-linecap="square"/>`,
+      `<text x="${lxContent + ICON_W}" y="${gMid}" dominant-baseline="middle" font-size="${symBodyFs}px" fill="#713f12" font-family="${SVG_FONT_FAMILY}" font-weight="400">Simples (1 rail)</text>`
     );
-    ly += 24 + (symBodyFs - 10.25) * 0.35;
+    ly += symLineDy + 6;
+    const gMid2 = ly + symLineDy / 2;
+    parts.push(
+      `<line x1="${lxContent}" y1="${gMid2 - 3}" x2="${lxContent + 26}" y2="${gMid2 - 3}" stroke="#b91c1c" stroke-width="2.2" stroke-linecap="square"/>`,
+      `<line x1="${lxContent}" y1="${gMid2 + 3}" x2="${lxContent + 26}" y2="${gMid2 + 3}" stroke="#b91c1c" stroke-width="2.2" stroke-linecap="square"/>`,
+      `<text x="${lxContent + ICON_W}" y="${gMid2}" dominant-baseline="middle" font-size="${symBodyFs}px" fill="#7f1d1d" font-family="${SVG_FONT_FAMILY}" font-weight="400">Dupla (2 rails)</text>`
+    );
+    ly += symLineDy + 8;
   }
 
   if (a.columnProtector) {
+    const pMid = ly + symLineDy / 2;
     parts.push(
-      `<rect x="${lx}" y="${ly - 8}" width="23" height="9.5" rx="1.5" fill="#ea580c" stroke="#9a3412" stroke-width="0.8"/>`,
-      `<text x="${lx + 31}" y="${ly}" font-size="${symBodyFs}px" fill="#431407" font-family="${SVG_FONT_FAMILY}">Protetor de coluna (base dos montantes — cantos + faixas nas pegadas)</text>`
+      `<rect x="${lxContent}" y="${pMid - 5}" width="22" height="9" rx="1.4" fill="#ea580c" stroke="#9a3412" stroke-width="0.65"/>`,
+      `<text x="${lxContent + ICON_W}" y="${pMid}" dominant-baseline="middle" font-size="${symBodyFs}px" fill="#431407" font-family="${SVG_FONT_FAMILY}" font-weight="400">Protetor de coluna na base dos montantes</text>`
     );
-    ly += 19;
+    ly += symLineDy + 6;
   }
 
+  const footerY = y0 + boxH - INNER_PAD;
   parts.push(
-    `<text x="${lx}" y="${y0 + boxH - 12}" font-size="${symFootNoteFs}px" fill="#94a3b8" font-family="${SVG_FONT_FAMILY}">Convênio alinhado à vista frontal e ao resumo técnico.</text>`
+    `<text x="${lxContent}" y="${footerY}" font-size="${symFootNoteFs}px" fill="#94a3b8" font-family="${SVG_FONT_FAMILY}" font-weight="400">Convênio com vista frontal e resumo técnico.</text>`
   );
 }
 
@@ -728,27 +765,6 @@ function appendRowBandEnvelope(
   line(x, y + h, x + w, y + h, 'max_y');
   line(x, y, x, y + h, 'min_x');
   line(x + w, y, x + w, y + h, 'max_x');
-}
-
-function orientationArrowSvg(
-  o: FloorPlanModelV2['warehouseOutline'],
-  beamAlong: 'x' | 'y'
-): string {
-  const m = operationDirectionIndicatorMetrics();
-  const { gw, gh, pad } = m;
-  const gx = o.x + o.w - gw - pad;
-  const gy = o.y + o.h - gh - pad;
-  const ax = gx + gw / 2;
-  const yArr = gy + m.arrowRowY;
-  const shaft =
-    beamAlong === 'x'
-      ? `<line x1="${gx + m.shaftStartInset}" y1="${yArr}" x2="${gx + gw - m.shaftEndInset}" y2="${yArr}" stroke="${COL_OP_DIRECTION_SHAFT}" stroke-width="${m.shaftW}"/><polygon points="${gx + gw - m.headTipInset},${yArr} ${gx + gw - m.headBackInset},${yArr - m.headHalfSpan} ${gx + gw - m.headBackInset},${yArr + m.headHalfSpan}" fill="${COL_OP_DIRECTION_SHAFT}"/>`
-      : `<line x1="${ax}" y1="${gy + gh - m.vertBottomInset}" x2="${ax}" y2="${gy + m.vertTopInset}" stroke="${COL_OP_DIRECTION_SHAFT}" stroke-width="${m.shaftW}"/><polygon points="${ax},${gy + m.vertTipY} ${ax - m.vertHalfW},${gy + m.vertBaseY} ${ax + m.vertHalfW},${gy + m.vertBaseY}" fill="${COL_OP_DIRECTION_SHAFT}"/>`;
-  return `<g>
-    <rect x="${gx}" y="${gy}" width="${gw}" height="${gh}" rx="${m.rx}" fill="#f8fafc" fill-opacity="0.98" stroke="${COL_OP_DIRECTION_BOX_STROKE}" stroke-width="${m.boxStrokeW}"/>
-    <text x="${gx + m.textInset}" y="${gy + m.textY}" font-size="${m.fontSize}px" fill="${COL_OP_DIRECTION_LABEL}" font-family="${SVG_FONT_FAMILY}" font-weight="700">Sentido de operação (empilhadeira)</text>
-    ${shaft}
-  </g>`;
 }
 
 function dimTierOf(d: FloorPlanDimension): 'primary' | 'secondary' | 'detail' {
@@ -1125,7 +1141,7 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
     );
   }
 
-  parts.push(orientationArrowSvg(o, model.beamSpanAlong));
+  parts.push(operationDirectionCorridorHintSvg(circulationDraw, o));
 
   const dimExtStroke = 0.82;
   const tick = 6.5;
