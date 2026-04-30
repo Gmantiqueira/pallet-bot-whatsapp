@@ -1578,8 +1578,12 @@ export function tunnelPreviewMaxDisplayIndex(
     { ...sessionAnswers, hasTunnel: false }
   );
   validateLayoutGeometry(geom);
-  return buildFloorPlanModelV2(geom, {} as Record<string, unknown>)
-    .structureRects.length;
+  const plan = buildFloorPlanModelV2(geom, {} as Record<string, unknown>);
+  let maxIx = 0;
+  for (const s of plan.structureRects) {
+    if (s.displayIndex != null) maxIx = Math.max(maxIx, s.displayIndex);
+  }
+  return maxIx;
 }
 
 /**
@@ -1607,11 +1611,12 @@ function applyManualTunnelToLayoutSolution(
   validateLayoutGeometry(geometryNoTun);
   const plan = buildFloorPlanModelV2(geometryNoTun, {});
   const indexToBaseId = new Map<number, string>();
+  let maxIx = 0;
   for (const s of plan.structureRects) {
     if (s.displayIndex === undefined) continue;
     indexToBaseId.set(s.displayIndex, baseModuleIdFromPlanRectId(s.id));
+    maxIx = Math.max(maxIx, s.displayIndex);
   }
-  const maxIx = indexToBaseId.size;
   const halfBases = new Set<string>();
   for (const row of geometryNoTun.rows) {
     for (const m of row.modules) {

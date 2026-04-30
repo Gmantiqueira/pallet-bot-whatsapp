@@ -4,6 +4,7 @@ import type {
   FloorPlanModelV2,
   GuardRailPositionCode,
   ModuleSegmentType,
+  ModuleVariantV2,
 } from './types';
 import { escapeXml } from './floorPlanModelV2';
 import { ELEV_PALLET_TIER_STROKE } from './elevationVisualTokens';
@@ -14,19 +15,20 @@ import {
 
 /** Ligação visual com a elevação (traços de baia = `ELEV_PALLET_TIER_STROKE`). */
 
+export type PlanModuleFaceLabelInput = {
+  displayIndex?: number;
+  segmentType?: ModuleSegmentType;
+  variant?: ModuleVariantV2;
+};
+
 /**
- * Rótulo do número na face do módulo na planta. Meio-módulo: uma linha (n−1)½ ou «Meio módulo»,
- * em vez de inteiro + «1/2» desalinhados.
+ * Rótulo na face na planta: só inteiros são numerados; meio-módulo «1/2»; túnel «T».
  */
-export function planModuleFaceLabel(
-  displayIndex: number,
-  segmentType: ModuleSegmentType | undefined
-): string {
-  if (segmentType === 'half') {
-    if (displayIndex <= 1) return 'Meio módulo';
-    return `${displayIndex - 1}\u00BD`;
-  }
-  return String(displayIndex);
+export function planModuleFaceLabel(input: PlanModuleFaceLabelInput): string {
+  if (input.variant === 'tunnel') return 'T';
+  if (input.segmentType === 'half') return '1/2';
+  if (input.displayIndex !== undefined) return String(input.displayIndex);
+  return '';
 }
 
 const COL_BG = '#ffffff';
@@ -383,7 +385,7 @@ function moduleDisplayFontOpacity(
   return { fontPx, opacity, nudgeX, nudgeY };
 }
 
-/** Índice do módulo túnel na planta: legível dentro da pegada, coerente com o tom âmbar do túnel. */
+/** Letra «T» do módulo túnel na planta — legível dentro da pegada. */
 function tunnelModuleDisplayFontPx(
   s: FloorPlanModelV2['structureRects'][0],
   _moduleCount: number
@@ -1119,14 +1121,14 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
       parts.push(
         `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="${fillMod}" stroke="${strokeMod}" stroke-width="${sw}"/>`
       );
-      if (s.displayIndex !== undefined) {
-        const cx = s.x + s.w / 2;
-        const cy = s.y + s.h / 2;
-        const fsTunnel = tunnelModuleDisplayFontPx(s, moduleCount);
-        parts.push(
-          `<text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="middle" font-size="${fsTunnel}px" fill="#78350f" font-family="${SVG_FONT_FAMILY}" font-weight="600" opacity="0.9">${s.displayIndex}</text>`
-        );
-      }
+      const cx = s.x + s.w / 2;
+      const cy = s.y + s.h / 2;
+      const fsTunnel = tunnelModuleDisplayFontPx(s, moduleCount);
+      parts.push(
+        `<text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="middle" font-size="${fsTunnel}px" fill="#78350f" font-family="${SVG_FONT_FAMILY}" font-weight="600" opacity="0.9">${escapeXml(
+          planModuleFaceLabel({ variant: 'tunnel' })
+        )}</text>`
+      );
     } else {
       parts.push(
         `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="${fillMod}" stroke="none"/>`
@@ -1161,23 +1163,22 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
   }
 
   for (const s of structureDraw) {
-    if (s.displayIndex === undefined) continue;
     if (s.variant === 'tunnel') continue;
+    const label = planModuleFaceLabel({
+      displayIndex: s.displayIndex,
+      segmentType: s.segmentType,
+    });
+    if (!label) continue;
     const { fontPx, opacity, nudgeX, nudgeY } = moduleDisplayFontOpacity(
       s,
       moduleCount
     );
     const tcx = s.x + s.w / 2 + nudgeX;
     const tcy = s.y + s.h / 2 + nudgeY;
-    const label = planModuleFaceLabel(s.displayIndex, s.segmentType);
     const cls = s.segmentType === 'half' ? 'fp-mod-half' : 'fp-mod-num';
     let fs = fontPx;
     if (s.segmentType === 'half') {
-      if (label.length > 10) {
-        fs = Math.max(10, fontPx * 0.66);
-      } else {
-        fs = Math.max(11, fontPx * 0.9);
-      }
+      fs = Math.max(11, fontPx * 0.92);
     }
     parts.push(
       `<text x="${tcx}" y="${tcy}" text-anchor="middle" dominant-baseline="middle" class="${cls}" font-size="${fs}px" opacity="${opacity}">${escapeXml(label)}</text>`

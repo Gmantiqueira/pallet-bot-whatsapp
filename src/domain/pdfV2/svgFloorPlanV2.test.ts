@@ -2,16 +2,20 @@ import { planModuleFaceLabel } from './svgFloorPlanV2';
 
 describe('planModuleFaceLabel', () => {
   it('full module: decimal string', () => {
-    expect(planModuleFaceLabel(9, 'full')).toBe('9');
-    expect(planModuleFaceLabel(10, undefined)).toBe('10');
+    expect(planModuleFaceLabel({ displayIndex: 9, segmentType: 'full' })).toBe(
+      '9'
+    );
+    expect(planModuleFaceLabel({ displayIndex: 10 })).toBe('10');
   });
 
-  it('half module: vulgar fraction after previous index', () => {
-    expect(planModuleFaceLabel(10, 'half')).toBe('9½');
-    expect(planModuleFaceLabel(2, 'half')).toBe('1½');
+  it('half module: apenas fração, sem numeração', () => {
+    expect(planModuleFaceLabel({ segmentType: 'half' })).toBe('1/2');
+    expect(planModuleFaceLabel({ displayIndex: 99, segmentType: 'half' })).toBe(
+      '1/2'
+    );
   });
 
-  it('half module at first slot: texto fixo', () => {
-    expect(planModuleFaceLabel(1, 'half')).toBe('Meio módulo');
+  it('tunnel: T', () => {
+    expect(planModuleFaceLabel({ variant: 'tunnel' })).toBe('T');
   });
 });

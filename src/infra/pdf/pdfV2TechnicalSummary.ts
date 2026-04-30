@@ -5,7 +5,7 @@ import {
   HEIGHT_MODE_WAREHOUSE_HEIGHT,
 } from '../../domain/warehouseHeightDerive';
 import { MIN_LEVEL_GAP_MM } from '../../domain/conversationHelpers';
-import { formatModuleCountForDocumentPt } from '../../domain/pdfV2/formatModuleCountDisplay';
+import { formatModuleSpanCountsCommercialPt } from '../../domain/pdfV2/formatModuleCountDisplay';
 import { sanitizeText } from '../../utils/sanitizeText';
 import { formatMm, formatPeDireitoAltura } from './pdfService';
 import { countTopTravamentoSuperiorQuantity } from '../../domain/pdfV2/topTravamento';
@@ -172,9 +172,7 @@ export function technicalSummaryRowsFromLayoutGeometry(
 ): TechnicalSummaryRow[] {
   const { totals, metadata, warehouseLengthMm, warehouseWidthMm } = geometry;
 
-  const modulos = formatModuleCountForDocumentPt(
-    totals.physicalPickingModuleCount ?? totals.moduleCount
-  );
+  const modulos = formatModuleSpanCountsCommercialPt(totals.moduleSpanCounts);
   const niveisText = formatNiveisArmazenagemForDocumentPt(metadata);
   const niveisDetail =
     totals.levelCount !== metadata.structuralLevels

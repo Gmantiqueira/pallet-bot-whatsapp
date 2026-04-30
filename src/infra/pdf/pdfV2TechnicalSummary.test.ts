@@ -3,7 +3,7 @@ import { buildLayoutSolutionV2 } from '../../domain/pdfV2/layoutSolutionV2';
 import { buildLayoutGeometry } from '../../domain/pdfV2/layoutGeometryV2';
 import type { ProjectAnswersV2 } from '../../domain/pdfV2/answerMapping';
 import { selectStructure } from '../../domain/structureEngine';
-import { formatModuleCountForDocumentPt } from '../../domain/pdfV2/formatModuleCountDisplay';
+import { formatModuleSpanCountsCommercialPt } from '../../domain/pdfV2/formatModuleCountDisplay';
 import { technicalSummaryRows } from './pdfService';
 import { HEIGHT_DEFINITION_WAREHOUSE_CLEAR } from '../../domain/warehouseHeightDerive';
 import {
@@ -62,7 +62,7 @@ describe('technicalSummaryRowsFromLayoutGeometry', () => {
 
     expect(rowValue(rows, 'Coluna selecionada:')).toBe(structure.uprightType);
     expect(rowValue(rows, 'Módulos:')).toBe(
-      formatModuleCountForDocumentPt(geo.totals.physicalPickingModuleCount)
+      formatModuleSpanCountsCommercialPt(geo.totals.moduleSpanCounts)
     );
     expect(rowValue(rows, 'Posições totais:')).toBe(
       String(geo.totals.positionCount)
@@ -242,7 +242,7 @@ describe('technicalSummaryRowsFromLayoutGeometry', () => {
 
     expect(rowValue(legacyRows, 'Módulos')).toBe('999');
     expect(rowValue(v2Rows, 'Módulos:')).toBe(
-      formatModuleCountForDocumentPt(geo.totals.physicalPickingModuleCount)
+      formatModuleSpanCountsCommercialPt(geo.totals.moduleSpanCounts)
     );
     expect(geo.totals.physicalPickingModuleCount).not.toBe(999);
 

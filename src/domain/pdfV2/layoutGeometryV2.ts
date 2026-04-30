@@ -34,6 +34,7 @@ import type {
   LayoutSolutionV2,
   ModuleSegment,
   ModuleSegmentType,
+  ModuleSpanCounts,
   RackDepthModeV2,
   RackRowSolution,
 } from './types';
@@ -141,6 +142,8 @@ export type LayoutGeometryTotals = {
    * Módulos como frentes de picking: dupla costas ⇒ 2× por segmento; túnel ⇒ 1.
    */
   physicalPickingModuleCount: number;
+  /** Ao longo do vão: inteiros, meio-módulos e túneis em campos separados (texto comercial / planta). */
+  moduleSpanCounts: ModuleSpanCounts;
   positionCount: number;
   levelCount: number;
   tunnelCount: number;
@@ -626,6 +629,7 @@ export function buildLayoutGeometry(
     totals: {
       moduleCount: solution.totals.equivalentAlongBeamSpan,
       physicalPickingModuleCount: solution.totals.physicalPickingModules,
+      moduleSpanCounts: { ...solution.totals.segmentCounts },
       positionCount: solution.totals.positions,
       levelCount: solution.totals.levels,
       tunnelCount,

@@ -394,6 +394,9 @@ export function buildFloorPlanModelV2(
         ori,
         spineMm
       );
+      const numbered =
+        m.type !== 'tunnel' && m.segmentType !== 'half';
+      const displayIdx = numbered ? nextDisplayIdx++ : undefined;
       let fi = 0;
       for (const fp of fps) {
         const x0 = Math.min(fp.x0, fp.x1);
@@ -411,7 +414,7 @@ export function buildFloorPlanModelV2(
           kind,
           variant: m.type === 'tunnel' ? 'tunnel' : 'normal',
           segmentType: m.type === 'tunnel' ? undefined : m.segmentType,
-          displayIndex: nextDisplayIdx++,
+          displayIndex: displayIdx,
         });
       }
     }
@@ -608,15 +611,17 @@ function planModuleSingleCaption(geometry: LayoutGeometry): string {
   const { positionCount, physicalPickingModuleCount, moduleCount } =
     geometry.totals;
   const faceMods = physicalPickingModuleCount ?? moduleCount;
+  const legend =
+    'Planta: só números em módulos inteiros · «1/2» = meio-módulo · «T» = túnel.';
   if (
     faceMods <= 0 ||
     !Number.isFinite(positionCount) ||
     !Number.isFinite(faceMods)
   ) {
-    return 'Cada número representa um módulo de frente (2 baias), ver resumo técnico';
+    return `${legend} Ver resumo técnico para contagens.`;
   }
   const approx = Math.round(positionCount / faceMods);
-  return `Cada número = 1 módulo de frente (2 baias) (≈${approx} posições por módulo)`;
+  return `${legend} Cada n.º inteiro ≈ 1 frente de picking (2 baias) (~${approx} posições por frente).`;
 }
 
 export { escapeXml };
