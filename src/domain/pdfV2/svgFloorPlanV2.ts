@@ -270,8 +270,9 @@ function orientationArrowBounds(
   _beamAlong: 'x' | 'y'
 ): { minX: number; minY: number; maxX: number; maxY: number } {
   const { gw, gh, pad } = operationDirectionIndicatorMetrics();
-  const gx = o.x + o.w - gw - pad;
-  const gy = o.y + o.h - gh - pad;
+  /** Acima do envelope — não sobrepõe módulos nem cruza cotas inferiores (faixa paralela). */
+  const gx = o.x + (o.w - gw) / 2;
+  const gy = o.y - gh - pad - 8;
   return { minX: gx, minY: gy, maxX: gx + gw, maxY: gy + gh };
 }
 
@@ -843,8 +844,8 @@ function orientationArrowSvg(
 ): string {
   const m = operationDirectionIndicatorMetrics(minLabelPx * 0.96);
   const { gw, gh, pad } = m;
-  const gx = o.x + o.w - gw - pad;
-  const gy = o.y + o.h - gh - pad;
+  const gx = o.x + (o.w - gw) / 2;
+  const gy = o.y - gh - pad - 8;
   const ax = gx + gw / 2;
   const yArr = gy + m.arrowRowY;
   const fs = m.fontSize;
@@ -1257,7 +1258,13 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
   const dimExtStroke = 0.82;
   const tick = 6.5;
 
-  for (const d of model.dimensionLines) {
+  const dimRank = (d: FloorPlanDimension): number =>
+    dimTierOf(d) === 'primary' ? 2 : dimTierOf(d) === 'secondary' ? 1 : 0;
+  const dimensionsSorted = [...model.dimensionLines].sort(
+    (a, b) => dimRank(a) - dimRank(b)
+  );
+
+  for (const d of dimensionsSorted) {
     const mainW = dimStrokeMain(d);
     const colDim = dimStrokeColor(d);
     const extOp =
