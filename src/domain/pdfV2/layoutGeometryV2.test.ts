@@ -84,6 +84,24 @@ describe('buildLayoutGeometry + validateLayoutGeometry', () => {
     validateLayoutGeometry(geo);
   });
 
+  it('túnel manual (substitui um módulo): passo com montante partilhado após o túnel é válido', () => {
+    const a: ProjectAnswersV2 = {
+      ...minimal(),
+      lengthMm: 40_000,
+      halfModuleOptimization: false,
+      lineStrategy: 'APENAS_SIMPLES',
+      hasTunnel: true,
+      tunnelManualModuleIndices: [5],
+      levels: 4,
+    };
+    const sol = buildLayoutSolutionV2(a);
+    expect(sol.rows.some(r => r.modules.some(m => m.variant === 'tunnel'))).toBe(
+      true
+    );
+    const geo = buildLayoutGeometry(sol, a);
+    validateLayoutGeometry(geo);
+  });
+
   it('dupla costas: profundidade de fileira alinha com 2×módulo + espinha', () => {
     const a: ProjectAnswersV2 = {
       ...minimal(),

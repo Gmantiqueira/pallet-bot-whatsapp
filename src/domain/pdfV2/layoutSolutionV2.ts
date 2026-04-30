@@ -1055,6 +1055,9 @@ function buildModuleSegmentsForRow(
   let rejectedHalf = false;
 
   let idx = 0;
+  /** Troços de armazenagem separados por túnel/crossGap ou novo segmento `normal` (ver validador em layoutGeometryV2). */
+  let beamStorageStretchId = 0;
+
   for (const bs of beamSegs) {
     const len = bs.b - bs.a;
     if (len < EPS) continue;
@@ -1069,13 +1072,16 @@ function buildModuleSegmentsForRow(
           bs.b,
           crossSeg,
           corridorMm,
-          globalLevels
+          globalLevels,
+          beamStorageStretchId
         )
       );
+      beamStorageStretchId += 1;
       continue;
     }
 
     if (bs.kind === 'crossGap') {
+      beamStorageStretchId += 1;
       continue;
     }
 
@@ -1092,6 +1098,9 @@ function buildModuleSegmentsForRow(
     } = fillSegmentModules(len, bayClearSpanMm, halfOpt, allowHalfEnd);
     if (rh) rejectedHalf = true;
 
+    const stretchForThisNormal = beamStorageStretchId;
+    beamStorageStretchId += 1;
+
     const placeRects = (nFull: number, hasHalf: boolean) => {
       let cursor = bs.a;
       let runIdx = 0;
@@ -1099,18 +1108,38 @@ function buildModuleSegmentsForRow(
         const span = moduleFootprintAlongBeamInRunMm(runIdx, bayClearSpanMm);
         const a = cursor;
         const b = cursor + span;
-        segments.push(
-          rectFor(orientation, rowId, idx++, a, b, crossSeg, 'full', 'normal')
-        );
+        segments.push({
+          ...rectFor(
+            orientation,
+            rowId,
+            idx++,
+            a,
+            b,
+            crossSeg,
+            'full',
+            'normal'
+          ),
+          beamStorageStretchId: stretchForThisNormal,
+        });
         cursor = b;
         runIdx += 1;
       }
       if (hasHalf) {
         const a = cursor;
         const b = cursor + computeModuleLengthAlongBeamMm(bayClearSpanMm) / 2;
-        segments.push(
-          rectFor(orientation, rowId, idx++, a, b, crossSeg, 'half', 'normal')
-        );
+        segments.push({
+          ...rectFor(
+            orientation,
+            rowId,
+            idx++,
+            a,
+            b,
+            crossSeg,
+            'half',
+            'normal'
+          ),
+          beamStorageStretchId: stretchForThisNormal,
+        });
       }
     };
 
@@ -1151,7 +1180,8 @@ function rectForTunnelModule(
   b: number,
   crossSeg: { c0: number; c1: number },
   corridorMm: number,
-  globalLevels: number
+  globalLevels: number,
+  beamStorageStretchId?: number
 ): ModuleSegment {
   const clearance = tunnelClearanceMmFromCorridor(corridorMm);
   const activeStorageLevels = tunnelActiveStorageLevelsFromGlobal(globalLevels);
@@ -1160,6 +1190,9 @@ function rectForTunnelModule(
     ...base,
     tunnelClearanceMm: clearance,
     activeStorageLevels,
+    ...(beamStorageStretchId !== undefined
+      ? { beamStorageStretchId }
+      : {}),
   };
 }
 

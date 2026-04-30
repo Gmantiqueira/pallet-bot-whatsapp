@@ -141,6 +141,12 @@ export type RackRowSolution = {
 export type ModuleSegment = {
   id: string;
   type: ModuleSegmentType;
+  /**
+   * Troço contínuo de armazenagem ao longo do vão (`placeRects` por segmento `normal`).
+   * Avança após cada `tunnel`, `crossGap` ou novo troço `normal` — alinha o validador com o motor:
+   * túnel manual inline mantém o mesmo id que os vizinhos; vão de corredor entre troços não.
+   */
+  beamStorageStretchId?: number;
   /** Por omissão trata-se como módulo normal. */
   variant?: ModuleVariantV2;
   /** Pé livre de passagem (mm) até ao 1.º eixo de longarina — só módulo túnel. */

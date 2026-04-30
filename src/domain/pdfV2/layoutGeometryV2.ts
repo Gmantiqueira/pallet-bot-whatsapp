@@ -89,6 +89,8 @@ export type RackModule = {
   uprightThicknessMm: number;
   /** Igual a {@link footprintAlongBeamMm} (extensão ao longo das longarinas em planta). */
   beamSpanMm: number;
+  /** Ver {@link ModuleSegment.beamStorageStretchId}. */
+  beamStorageStretchId?: number;
   /** Official module: 2 pallet bays per level on the front face. */
   baysPerLevel: number;
   /** Clear span of one bay along the beam (mm) — project “vão” input. */
@@ -519,6 +521,9 @@ function rackModuleFromSegment(
     rowId: row.id,
     moduleIndexInRow,
     type,
+    ...(typeof m.beamStorageStretchId === 'number'
+      ? { beamStorageStretchId: m.beamStorageStretchId }
+      : {}),
     footprint: { x0: m.x0, y0: m.y0, x1: m.x1, y1: m.y1 },
     footprintAlongBeamMm: alongBeamMm,
     footprintTransversalMm: transversalMm,
@@ -721,23 +726,38 @@ function validateModulesSpanLengthAxis(
   ori: LayoutOrientationV2
 ): void {
   const tol = 2.5;
-  const mods = [...row.modules]
-    .filter(m => m.type !== 'tunnel')
-    .sort((a, b) => beamStartCoord(a, ori) - beamStartCoord(b, ori));
+  const mods = [...row.modules].sort(
+    (a, b) => beamStartCoord(a, ori) - beamStartCoord(b, ori)
+  );
   let runIdx = 0;
   let prevEnd: number | null = null;
+  let prevStretchId: number | null = null;
   for (const m of mods) {
+    if (m.type === 'tunnel') {
+      prevEnd = beamEndCoord(m, ori);
+      continue;
+    }
+
+    const stretchId = m.beamStorageStretchId;
+    const useStretch =
+      typeof stretchId === 'number' && Number.isFinite(stretchId);
     const start = beamStartCoord(m, ori);
-    if (
-      prevEnd != null &&
-      start - prevEnd > 1.5
-    ) {
+
+    if (!useStretch) {
+      if (prevEnd != null && start - prevEnd > 1.5) {
+        runIdx = 0;
+      }
+    } else if (prevStretchId !== null && stretchId !== prevStretchId) {
       runIdx = 0;
     }
+
     const along = m.moduleLengthAxisMm;
     if (m.segmentType === 'half') {
       const expected = nominalModuleLengthAlongBeamMm / 2;
       if (Math.abs(along - expected) <= tol) {
+        if (useStretch) {
+          prevStretchId = stretchId;
+        }
         prevEnd = beamEndCoord(m, ori);
         continue;
       }
@@ -749,6 +769,9 @@ function validateModulesSpanLengthAxis(
     const expected = moduleFootprintAlongBeamInRunMm(runIdx, beamAlongModuleMm);
     if (Math.abs(along - expected) <= tol) {
       runIdx += 1;
+      if (useStretch) {
+        prevStretchId = stretchId;
+      }
       prevEnd = beamEndCoord(m, ori);
       continue;
     }
