@@ -514,6 +514,31 @@ describe('State Machine', () => {
       expect(r.session.answers.tunnelManualModuleIndices).toEqual([1, 2]);
     });
 
+    it('WAIT_TUNNEL_MODULE_NUMBERS + renúncia (nenhum/zero/sem túnel) segue sem túnel para CHOOSE_HEIGHT_DEFINITION', () => {
+      const session = createSession('WAIT_TUNNEL_MODULE_NUMBERS', {
+        lengthMm: 12000,
+        widthMm: 10000,
+        corridorMm: 3000,
+        moduleDimensionMode: 'MANUAL',
+        moduleDepthMm: 2700,
+        beamLengthMm: 1100,
+        hasTunnel: true,
+        tunnelConfigMode: 'MANUAL',
+        lineStrategy: 'MELHOR_LAYOUT',
+        tunnelPosition: 'MEIO',
+        tunnelAppliesTo: 'AMBOS',
+        tunnelPreviewMaxIndex: 20,
+        tunnelManualModuleIndices: [9],
+      });
+      const r = transition(session, { type: 'TEXT', value: 'sem túnel' });
+      expect(r.error).toBeUndefined();
+      expect(r.session.state).toBe('CHOOSE_HEIGHT_DEFINITION');
+      expect(r.session.answers.hasTunnel).toBe(false);
+      expect(r.session.answers.tunnelConfigMode).toBeUndefined();
+      expect(r.session.answers.tunnelManualModuleIndices).toBeUndefined();
+      expect(r.session.answers.tunnelPreviewMaxIndex).toBeUndefined();
+    });
+
     it('WAIT_TUNNEL_MODULE_NUMBERS: sem tunnelPreviewMaxIndex pede nova prévia (evita erro 1 a 0)', () => {
       const session = createSession('WAIT_TUNNEL_MODULE_NUMBERS', {
         lengthMm: 12000,
