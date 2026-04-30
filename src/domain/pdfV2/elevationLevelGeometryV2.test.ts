@@ -82,6 +82,26 @@ describe('computeBeamElevations', () => {
     }
   });
 
+  it('equalLevelSpacing com pitch menor que o vão: âncora no topo e vãos iguais entre eixos', () => {
+    const H = 5000;
+    const levels = 5;
+    const r = computeBeamElevations({
+      uprightHeightMm: H,
+      levels,
+      hasGroundLevel: false,
+      firstLevelOnGround: true,
+      equalLevelSpacing: true,
+      levelSpacingMm: 800,
+    });
+    const top = H - DEFAULT_STRUCTURAL_TOP_MM;
+    expect(r.beamElevationsMm[levels]).toBeCloseTo(top, 2);
+    for (let i = 0; i < levels; i++) {
+      const step =
+        r.beamElevationsMm[i + 1]! - r.beamElevationsMm[i]!;
+      expect(step).toBeCloseTo(800, 2);
+    }
+  });
+
   it('5 níveis, 5000 mm, primeiro elevado: primeiro eixo mais alto; vãos iguais no restante', () => {
     const r = computeBeamElevations({
       uprightHeightMm: 5000,

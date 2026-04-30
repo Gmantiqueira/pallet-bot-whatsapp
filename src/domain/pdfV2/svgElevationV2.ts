@@ -1397,8 +1397,8 @@ function drawFrontRack(
   }
 
   const nBeamAxes = beamH.length;
-  /** Só níveis de carga: o último eixo é limite estrutural — não desenhar longarina/capa na baia (evita “nível extra”). */
-  const nStorageBeams = Math.max(0, nBeamAxes - 1);
+  /** Um rect por eixo de longarina (inclui o último: ~300 mm ao topo do montante — alinhado à cota «Ao topo coluna»). */
+  const nStorageBeams = Math.max(0, nBeamAxes);
   for (let bi = 0; bi < bays.length; bi++) {
     const bay = bays[bi]!;
     for (let j = 0; j < nStorageBeams; j++) {
@@ -1870,7 +1870,7 @@ function drawLateral(
     drawLateralGuardRailMarkers(xLeftU, xRightU, y0, floorTopLat, data, ls)
   );
 
-  const nLatBeams = Math.max(0, nBeamAxes - 1);
+  const nLatBeams = Math.max(0, nBeamAxes);
   const bhLat = Math.max(2, 2.2 * scaleY);
   for (let j = 0; j < nLatBeams; j++) {
     const yy = beamAt(j);

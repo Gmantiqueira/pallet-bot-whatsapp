@@ -263,16 +263,26 @@ export function computeBeamElevations(
     Number.isFinite(input.levelSpacingMm) &&
     input.levelSpacingMm > EPS
   ) {
-    let gap = input.levelSpacingMm;
-    if (levels * gap > span + EPS) {
-      gap = span / levels;
+    /** Âncora no topo: último eixo fixo em topBeam; pitch uniforme nos `levels` degraus até ao 1.º eixo. */
+    let gap = Math.max(EPS, input.levelSpacingMm);
+    let beam0Eq = beam0;
+    const spanTop = topBeam - beam0Eq;
+    if (levels * gap > spanTop + EPS) {
+      gap = spanTop / levels;
       gapsScaledToFit = true;
+    } else {
+      const beam0Anchored = topBeam - levels * gap;
+      if (beam0Anchored + EPS < beam0Eq) {
+        gap = spanTop / levels;
+        gapsScaledToFit = true;
+      } else {
+        beam0Eq = beam0Anchored;
+      }
     }
     beamElevationsMm = [];
-    for (let k = 0; k < levels; k++) {
-      beamElevationsMm.push(beam0 + k * gap);
+    for (let k = 0; k <= levels; k++) {
+      beamElevationsMm.push(beam0Eq + k * gap);
     }
-    beamElevationsMm.push(topBeam);
   } else {
     let gap = span / levels;
     if (!Number.isFinite(gap) || gap < EPS) {
@@ -285,7 +295,6 @@ export function computeBeamElevations(
     }
   }
 
-  beamElevationsMm[0] = beam0;
   beamElevationsMm[levels] = topBeam;
 
   const diffs: number[] = [];

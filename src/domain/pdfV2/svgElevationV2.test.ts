@@ -44,11 +44,12 @@ describe('serializeElevationPagesV2', () => {
     expect(svg).toMatch(/Vão [\d.]+ mm\/baia · face de carga/);
     expect(svg).toMatch(/CAPACIDADE = 1\.200 kg por palete/);
     const pairLabels = svg.match(/PAR DE LONGARINAS/g) ?? [];
-    // Prancha premium: uma legenda por par de longarinas por nível (frontal centrada; lateral).
-    expect(pairLabels.length).toBe(a.levels * 2);
+    const beamAxes = a.levels + 1;
+    // Prancha premium: uma legenda por par de longarinas por eixo (frontal centrada; lateral).
+    expect(pairLabels.length).toBe(beamAxes * 2);
     const orangeBeams = svg.match(/fill="#fb923c"/g) ?? [];
-    // Frontal 1 baia + lateral: um feixe por nível em cada vista.
-    expect(orangeBeams.length).toBe(a.levels * 2);
+    // Frontal 1 baia + lateral: um feixe por eixo de longarina em cada vista (inclui último eixo ao topo).
+    expect(orangeBeams.length).toBe(beamAxes * 2);
   });
 
   it('travamento superior: traço discreto na frontal e na lateral quando regra BOM aplica', () => {
