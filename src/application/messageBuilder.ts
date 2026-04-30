@@ -33,11 +33,67 @@ export interface MessageContext {
   doneResendPdf?: boolean;
   /** Reenvio da prévia com módulos numerados (botão Baixar nesse passo). */
   tunnelPreviewResendPdf?: boolean;
+  /**
+   * Neste pedido o router devolveu `generatedPdf` da prévia de túnel manual —
+   * o integrador deve enviar o ficheiro (mensagem `type: document` correspondente).
+   */
+  tunnelPreviewAttachPdf?: boolean;
   /** Mensagem curta após gerar o Excel de orçamento no mesmo pedido. */
   budgetSuccessMessage?: string;
   /** Falha ao gerar orçamento (estado DONE; PDF pode estar ok). */
   budgetError?: string;
 }
+
+const appendTunnelPreviewModuleStepMessages = (
+  session: Session,
+  ctx: MessageContext,
+  into: OutgoingMessage[]
+): void => {
+  const phone = session.phone;
+  const fn =
+    typeof session.answers.tunnelPreviewPdfFilename === 'string'
+      ? session.answers.tunnelPreviewPdfFilename.trim()
+      : '';
+
+  const deliverDoc =
+    fn.length > 0 &&
+    (ctx.tunnelPreviewAttachPdf === true ||
+      ctx.tunnelPreviewResendPdf === true);
+
+  if (deliverDoc) {
+    into.push({
+      to: phone,
+      type: 'document',
+      document: { filename: fn },
+      text: '📄 Prévia PDF — módulos numerados (layout sem túneis aplicados).',
+    });
+  }
+
+  const baixarPrompt =
+    ctx.tunnelPreviewResendPdf === true
+      ? '📎 A pedir o reenvio da prévia. Se o PDF não chegar, toque em *Baixar PDF*.'
+      : deliverDoc
+        ? 'Recebeu o PDF na mensagem anterior? Se não o vir, toque em *Baixar PDF*.'
+        : 'Toque em *Baixar PDF* para receber a prévia com os números dos módulos.';
+
+  into.push({
+    to: phone,
+    type: 'text',
+    text: baixarPrompt,
+    buttons: [{ id: 'BAIXAR_PREVIA_PDF', label: 'Baixar PDF' }],
+  });
+
+  into.push({
+    to: phone,
+    type: 'text',
+    text:
+      '*Indique em que módulos quer o túnel*\n\n' +
+      '• Só os *módulos inteiros* têm número (1, 2, 3…).\n' +
+      '• «1/2» é meio-módulo — não pode ser túnel neste modo.\n' +
+      '• Envie os números separados por vírgula. Ex.: *2, 5, 8*\n\n' +
+      '*Sem nenhum túnel:* envie *nenhum*, *zero* ou *sem túnel*.',
+  });
+};
 
 export const buildMessages = (
   session: Session,
@@ -74,15 +130,11 @@ export const buildMessages = (
   }
 
   if (
-    ctx.tunnelPreviewResendPdf === true &&
-    session.state === 'WAIT_TUNNEL_MODULE_NUMBERS'
+    session.state === 'WAIT_TUNNEL_MODULE_NUMBERS' &&
+    !ctx.statusOnly
   ) {
-    messages.push({
-      to: session.phone,
-      type: 'text',
-      text:
-        '📎 A reenviar o PDF da prévia. O integrador WhatsApp deve voltar a anexar o mesmo ficheiro.',
-    });
+    appendTunnelPreviewModuleStepMessages(session, ctx, messages);
+    return messages;
   }
 
   if (session.state === 'DONE') {
@@ -614,21 +666,6 @@ const buildStateMessage = (session: Session): OutgoingMessage | null => {
       return {
         to: session.phone,
         text: GENERATING_TUNNEL_PREVIEW_WAIT_TEXT,
-      };
-
-    case 'WAIT_TUNNEL_MODULE_NUMBERS':
-      return {
-        to: session.phone,
-        text:
-          '📄 *Prévia com módulos numerados*\n\n' +
-            'O PDF de pré-visualização (mesmo padrão de desenho, *sem túneis aplicados*) foi enviado em anexo.\n\n' +
-            'Se *não vir o documento*, toque em *Baixar PDF* para o integrador reenviar o ficheiro.\n\n' +
-            '*Só os módulos inteiros* têm número (1, 2, 3…). *«1/2»* = meio-módulo (não pode ser túnel neste modo). *«T»* não aparece nesta prévia.\n\n' +
-            '*Responda só com os números dos inteiros* onde pretende túnel. Exemplos: *2, 5, 8* ou *Módulos 2 e 6*. Repetições contam uma vez.\n\n' +
-            '*Sem nenhum túnel:* pode enviar *nenhum*, *zero*, *0* ou *sem túnel* — seguimos para altura/carga sem módulos túnel (não precisa de cancelar).\n\n' +
-            'Números inválidos serão sinalizados — pode corrigir sem reiniciar o projeto.\n\n' +
-            'A seguir: *altura*, *carga* e *proteções* — igual ao modo assistente.',
-        buttons: [{ id: 'BAIXAR_PREVIA_PDF', label: 'Baixar PDF' }],
       };
 
     default:

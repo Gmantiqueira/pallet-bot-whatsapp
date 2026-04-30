@@ -182,25 +182,46 @@ describe('MessageBuilder', () => {
       });
       const messages = buildMessages(session, {});
 
-      expect(messages).toHaveLength(1);
-      expect(messages[0].text).toContain('Prévia com módulos numerados');
-      expect(messages[0].text).toMatch(/não vir o documento|Baixar PDF/i);
-      expect(messages[0].buttons).toEqual([
-        { id: 'BAIXAR_PREVIA_PDF', label: 'Baixar PDF' },
-      ]);
+      expect(messages).toHaveLength(2);
+      const withBtn = messages.find(m =>
+        m.buttons?.some(b => b.id === 'BAIXAR_PREVIA_PDF')
+      );
+      expect(withBtn?.text).toMatch(/Baixar PDF/i);
+      expect(messages[messages.length - 1].text).toMatch(
+        /Indique em que módulos/i
+      );
+      expect(messages.some(m => m.type === 'document')).toBe(false);
     });
 
-    it('should prepend resend notice when tunnelPreviewResendPdf', () => {
+    it('WAIT_TUNNEL: primeira mensagem document quando tunnelPreviewAttachPdf', () => {
       const session = createSession('WAIT_TUNNEL_MODULE_NUMBERS', {
         tunnelPreviewMaxIndex: 3,
+        tunnelPreviewPdfFilename: 'previa-layout.pdf',
+      });
+      const messages = buildMessages(session, {
+        tunnelPreviewAttachPdf: true,
+      });
+
+      expect(messages).toHaveLength(3);
+      expect(messages[0].type).toBe('document');
+      expect(messages[0].document?.filename).toBe('previa-layout.pdf');
+      expect(
+        messages[1].buttons?.some(b => b.id === 'BAIXAR_PREVIA_PDF')
+      ).toBe(true);
+      expect(messages[2].text).toMatch(/túnel/i);
+    });
+
+    it('should show document first when tunnelPreviewResendPdf with filename', () => {
+      const session = createSession('WAIT_TUNNEL_MODULE_NUMBERS', {
+        tunnelPreviewMaxIndex: 3,
+        tunnelPreviewPdfFilename: 'previa.pdf',
       });
       const messages = buildMessages(session, { tunnelPreviewResendPdf: true });
 
-      expect(messages.length).toBeGreaterThanOrEqual(2);
-      expect(messages[0].text).toContain('A reenviar o PDF da prévia');
-      const withBtn = messages.find(m => m.buttons?.length);
+      expect(messages[0].type).toBe('document');
+      expect(messages[1].text).toMatch(/reenvio da prévia|Baixar PDF/i);
       expect(
-        withBtn?.buttons?.some(b => b.id === 'BAIXAR_PREVIA_PDF')
+        messages[1].buttons?.some(b => b.id === 'BAIXAR_PREVIA_PDF')
       ).toBe(true);
     });
 

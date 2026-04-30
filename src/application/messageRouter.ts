@@ -601,6 +601,9 @@ export const routeIncoming = async (
       const merged = mergeTunnelPreviewOutcomeWithDeferred(outcome);
       const ctx: MessageContext = {
         lastError: outcome.deliveryError ?? merged.deferredApplyError,
+        tunnelPreviewAttachPdf:
+          merged.generatedPdf !== undefined &&
+          merged.session.state === 'WAIT_TUNNEL_MODULE_NUMBERS',
       };
       const messages = buildMessages(merged.session, ctx);
       const finalSession = { ...merged.session, updatedAt: Date.now() };
@@ -873,6 +876,9 @@ export const routeIncoming = async (
     lastError: deliveryError,
     doneResendPdf: hasResendPdfEffect,
     tunnelPreviewResendPdf: hasResendTunnelPreviewPdf,
+    tunnelPreviewAttachPdf:
+      generatedPdf !== undefined &&
+      updatedSession.state === 'WAIT_TUNNEL_MODULE_NUMBERS',
     budgetError,
     budgetSuccessMessage: generatedBudget
       ? `📊 Orçamento Excel: ${generatedBudget.filename} (preços editáveis; totais com fórmulas).`
