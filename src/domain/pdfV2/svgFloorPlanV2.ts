@@ -996,7 +996,7 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
   );
   parts.push('<defs>');
   parts.push(`<style>
-    /** Hierarquia: meta/títulos < cotas < estrutura (traços de módulo/galpão). Textos auxiliares mais leves. */
+    /* Hierarquia visual: textos auxiliares (leve) → cotas (médio) → estrutura (forte). */
     .fp-drawing-meta { font: 700 ${r(Math.max(14, b * 1.08))}px ${SVG_FONT_FAMILY_CSS}; fill: #475569; letter-spacing: 0.01em; opacity: 0.92; }
     .fp-plan-hint { font: 400 ${r(Math.max(12.5, b * 0.96))}px ${SVG_FONT_FAMILY_CSS}; fill: #94a3b8; opacity: 0.88; }
     .fp-row-legend { font: 600 ${r(Math.max(13, b * 1.02))}px ${SVG_FONT_FAMILY_CSS}; fill: #64748b; letter-spacing: 0.01em; opacity: 0.9; }
