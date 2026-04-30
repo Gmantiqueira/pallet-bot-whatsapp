@@ -237,13 +237,8 @@ export type FloorPlanModelV2 = {
     variant?: ModuleVariantV2;
     /** Meio-módulo (1 baia ao longo do vão) — desenho e legenda distintos na planta. */
     segmentType?: ModuleSegmentType;
-    /** Numeração global na planta (1…n), sequencial por frente de picking; dupla costas = faces contadas em série. */
+    /** Só módulos inteiros normais: sequência 1…n por frente de picking; meios e túneis sem número. */
     displayIndex?: number;
-    /**
-     * Meio-módulo nesta face: número do último módulo inteiro à frente no mesmo troço (rótulo «N 1/2»).
-     * Omitido quando não há inteiro anterior na mesma face.
-     */
-    halfAfterFullDisplayIndex?: number;
   }[];
   /**
    * Preenchimento extra nos módulos normais: cor da elevação (longarinas / faixas de nível), opacidade 5–10%.

@@ -6,7 +6,10 @@ import {
 } from '../../domain/warehouseHeightDerive';
 import { TUNNEL_MANUAL_PREVIEW_PROVISIONAL_SPECS_KEY } from '../../domain/tunnelPreviewAnswerDefaults';
 import { MIN_LEVEL_GAP_MM } from '../../domain/conversationHelpers';
-import { formatModuleSpanCountsCommercialPt } from '../../domain/pdfV2/formatModuleCountDisplay';
+import {
+  formatModuleSpanCountsCommercialPt,
+  documentModuleSpanCountsFromTotals,
+} from '../../domain/pdfV2/formatModuleCountDisplay';
 import { sanitizeText } from '../../utils/sanitizeText';
 import { formatMm, formatPeDireitoAltura } from './pdfService';
 import { countTopTravamentoSuperiorQuantity } from '../../domain/pdfV2/topTravamento';
@@ -176,7 +179,9 @@ export function technicalSummaryRowsFromLayoutGeometry(
   const provisionalPreview =
     project[TUNNEL_MANUAL_PREVIEW_PROVISIONAL_SPECS_KEY] === true;
 
-  const modulos = formatModuleSpanCountsCommercialPt(totals.moduleSpanCounts);
+  const modulos = formatModuleSpanCountsCommercialPt(
+    documentModuleSpanCountsFromTotals(totals)
+  );
   const niveisText = formatNiveisArmazenagemForDocumentPt(metadata);
   const niveisDetail =
     totals.levelCount !== metadata.structuralLevels

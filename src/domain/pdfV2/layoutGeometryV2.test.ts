@@ -12,7 +12,7 @@ import {
   validateOperationalAccess,
 } from './layoutGeometryV2';
 import type { ProjectAnswersV2 } from './answerMapping';
-import { buildFloorPlanModelV2 } from './floorPlanModelV2';
+import { buildFloorPlanModelV2, moduleSpanCountsFromFloorPlanStructureRects } from './floorPlanModelV2';
 
 const minimal = (): ProjectAnswersV2 => ({
   lengthMm: 12_000,
@@ -167,6 +167,12 @@ describe('buildLayoutGeometry + validateLayoutGeometry', () => {
     expect(new Set(idxs).size).toBe(idxs.length);
     expect(Math.min(...idxs)).toBe(1);
     expect(Math.max(...idxs)).toBe(idxs.length);
+    const planCounts =
+      moduleSpanCountsFromFloorPlanStructureRects(planD.structureRects);
+    expect(planCounts.fullModules).toBe(numbered.length);
+    expect(
+      planCounts.fullModules + planCounts.halfModules + planCounts.tunnels
+    ).toBe(planD.structureRects.length);
   });
 
   it('validateOperationalAccess: dupla encostada à parede transversal (lado baixo) → rejeita', () => {

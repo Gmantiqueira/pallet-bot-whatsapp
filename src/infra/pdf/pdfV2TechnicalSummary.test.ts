@@ -1,7 +1,14 @@
 import type { LayoutResult } from '../../domain/layoutEngine';
 import { buildLayoutSolutionV2 } from '../../domain/pdfV2/layoutSolutionV2';
-import { buildLayoutGeometry } from '../../domain/pdfV2/layoutGeometryV2';
+import {
+  buildLayoutGeometry,
+  type LayoutGeometry,
+} from '../../domain/pdfV2/layoutGeometryV2';
 import type { ProjectAnswersV2 } from '../../domain/pdfV2/answerMapping';
+import {
+  buildFloorPlanModelV2,
+  moduleSpanCountsFromFloorPlanStructureRects,
+} from '../../domain/pdfV2/floorPlanModelV2';
 import { selectStructure } from '../../domain/structureEngine';
 import { formatModuleSpanCountsCommercialPt } from '../../domain/pdfV2/formatModuleCountDisplay';
 import { technicalSummaryRows } from './pdfService';
@@ -35,6 +42,23 @@ function rowValue(
   return rows.find(r => r.label === label)?.value;
 }
 
+/** Replica o PDF: totais comerciais da planta renderizada. */
+function geometryAsPrintedPlan(
+  geo: LayoutGeometry,
+  project: Record<string, unknown>
+): LayoutGeometry {
+  const plan = buildFloorPlanModelV2(geo, project);
+  return {
+    ...geo,
+    totals: {
+      ...geo.totals,
+      planModuleSpanCounts: moduleSpanCountsFromFloorPlanStructureRects(
+        plan.structureRects
+      ),
+    },
+  };
+}
+
 describe('technicalSummaryRowsFromLayoutGeometry', () => {
   it('prefixa aviso de pré-visualização quando tunnelManualPreviewProvisionalSpecs', () => {
     const a = minimal();
@@ -47,7 +71,10 @@ describe('technicalSummaryRowsFromLayoutGeometry', () => {
       ...(a as unknown as Record<string, unknown>),
       [TUNNEL_MANUAL_PREVIEW_PROVISIONAL_SPECS_KEY]: true,
     };
-    const rows = technicalSummaryRowsFromLayoutGeometry(project, geo);
+    const rows = technicalSummaryRowsFromLayoutGeometry(
+      project,
+      geometryAsPrintedPlan(geo, project)
+    );
     expect(rows[0]?.label).toBe('Documento:');
     expect(rows[0]?.value).toContain('Pré-visualização');
   });
@@ -75,11 +102,12 @@ describe('technicalSummaryRowsFromLayoutGeometry', () => {
       ...(a as unknown as Record<string, unknown>),
       structure,
     };
-    const rows = technicalSummaryRowsFromLayoutGeometry(project, geo);
+    const geoDoc = geometryAsPrintedPlan(geo, project);
+    const rows = technicalSummaryRowsFromLayoutGeometry(project, geoDoc);
 
     expect(rowValue(rows, 'Coluna selecionada:')).toBe(structure.uprightType);
     expect(rowValue(rows, 'Módulos:')).toBe(
-      formatModuleSpanCountsCommercialPt(geo.totals.moduleSpanCounts)
+      formatModuleSpanCountsCommercialPt(geoDoc.totals.planModuleSpanCounts!)
     );
     expect(rowValue(rows, 'Posições totais:')).toBe(
       String(geo.totals.positionCount)
@@ -132,7 +160,10 @@ describe('technicalSummaryRowsFromLayoutGeometry', () => {
         hasGroundLevel: a.hasGroundLevel !== false,
       }),
     };
-    const rows = technicalSummaryRowsFromLayoutGeometry(project, geo);
+    const rows = technicalSummaryRowsFromLayoutGeometry(
+      project,
+      geometryAsPrintedPlan(geo, project)
+    );
     expect(rowValue(rows, 'Origem do projeto:')).toBe('Medidas digitadas');
     expect(rowValue(rows, 'Definição de altura:')).toBe('Pé-direito útil do galpão');
     expect(rowValue(rows, 'Pé-direito útil informado:')).toBe('10.000 mm');
@@ -158,7 +189,11 @@ describe('technicalSummaryRowsFromLayoutGeometry', () => {
         projectType: 'PLANTA_REAL',
         structure,
       },
-      geo
+      geometryAsPrintedPlan(geo, {
+        ...(a as unknown as Record<string, unknown>),
+        projectType: 'PLANTA_REAL',
+        structure,
+      })
     );
     const rowsManual = technicalSummaryRowsFromLayoutGeometry(
       {
@@ -166,7 +201,11 @@ describe('technicalSummaryRowsFromLayoutGeometry', () => {
         projectType: 'MEDIDAS_DIGITADAS',
         structure,
       },
-      geo
+      geometryAsPrintedPlan(geo, {
+        ...(a as unknown as Record<string, unknown>),
+        projectType: 'MEDIDAS_DIGITADAS',
+        structure,
+      })
     );
     expect(rowValue(rowsPlant, 'Origem do projeto:')).toBe('Planta real');
     expect(rowValue(rowsManual, 'Origem do projeto:')).toBe('Medidas digitadas');
@@ -196,7 +235,10 @@ describe('technicalSummaryRowsFromLayoutGeometry', () => {
         hasGroundLevel: a.firstLevelOnGround !== false,
       }),
     };
-    const rows = technicalSummaryRowsFromLayoutGeometry(project, geo);
+    const rows = technicalSummaryRowsFromLayoutGeometry(
+      project,
+      geometryAsPrintedPlan(geo, project)
+    );
     expect(rowValue(rows, 'Travamento superior:')).toBe('Sim');
   });
 
@@ -222,7 +264,10 @@ describe('technicalSummaryRowsFromLayoutGeometry', () => {
         hasGroundLevel: a.hasGroundLevel !== false,
       }),
     };
-    const rows = technicalSummaryRowsFromLayoutGeometry(project, geo);
+    const rows = technicalSummaryRowsFromLayoutGeometry(
+      project,
+      geometryAsPrintedPlan(geo, project)
+    );
     expect(rowValue(rows, 'Túnel:')).toBe('Não');
     expect(rowValue(rows, 'Guard rail em túnel:')).toBeUndefined();
     expect(geo.totals.tunnelCount).toBe(0);
@@ -255,11 +300,12 @@ describe('technicalSummaryRowsFromLayoutGeometry', () => {
         hasGroundLevel: a.hasGroundLevel !== false,
       }),
     };
-    const v2Rows = technicalSummaryRowsFromLayoutGeometry(project, geo);
+    const geoDoc = geometryAsPrintedPlan(geo, project);
+    const v2Rows = technicalSummaryRowsFromLayoutGeometry(project, geoDoc);
 
     expect(rowValue(legacyRows, 'Módulos')).toBe('999');
     expect(rowValue(v2Rows, 'Módulos:')).toBe(
-      formatModuleSpanCountsCommercialPt(geo.totals.moduleSpanCounts)
+      formatModuleSpanCountsCommercialPt(geoDoc.totals.planModuleSpanCounts!)
     );
     expect(geo.totals.physicalPickingModuleCount).not.toBe(999);
 

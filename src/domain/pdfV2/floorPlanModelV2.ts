@@ -6,6 +6,7 @@ import type {
   FloorPlanDimension,
   FloorPlanModelV2,
   LineStrategyCode,
+  ModuleSpanCounts,
   RackDepthModeV2,
 } from './types';
 import { buildFloorPlanAccessories } from './visualAccessoriesV2';
@@ -25,7 +26,33 @@ import { resolveUprightHeightMmForProject } from '../projectEngines';
  * - Para L ≈ W, se `innerH` < `innerW`, `scale = innerH/W` fica baixo e o bitmap fica “paisagem”; no PDF
  *   o encaixe limita pela largura e sobra área em branco. Por isso `VB_H` é alto o suficiente
  *   para `innerH >= innerW` quando possível, e VB_W/VB_H ≈ 0,72 aproxima a zona útil A4 retrato.
+ *
+ * Contagens comerciais da planta: {@link moduleSpanCountsFromFloorPlanStructureRects}.
  */
+/**
+ * Contagens comerciais / resumo técnico: iguais às células desenhadas na planta
+ * (`structureRects` após faces dupla costas, meios e túneis).
+ */
+export function moduleSpanCountsFromFloorPlanStructureRects(
+  structureRects: FloorPlanModelV2['structureRects']
+): ModuleSpanCounts {
+  let fullModules = 0;
+  let halfModules = 0;
+  let tunnels = 0;
+  for (const r of structureRects) {
+    if (r.variant === 'tunnel') {
+      tunnels += 1;
+      continue;
+    }
+    if (r.segmentType === 'half') {
+      halfModules += 1;
+      continue;
+    }
+    fullModules += 1;
+  }
+  return { fullModules, halfModules, tunnels };
+}
+
 const VB_W = 1420;
 const VB_H = 1980;
 const PAD = 16;
@@ -406,7 +433,6 @@ export function buildFloorPlanModelV2(
      * depois toda a frente B em dupla costas — nunca repetir 1…N nas duas faces.
      */
     for (let faceIdx = 0; faceIdx < maxFaces; faceIdx++) {
-      let lastFullDisplayOnFace: number | undefined = undefined;
       for (const { m, fps } of modulesWithFps) {
         if (faceIdx >= fps.length) {
           continue;
@@ -442,15 +468,11 @@ export function buildFloorPlanModelV2(
             kind,
             variant: 'normal',
             segmentType: 'half',
-            ...(lastFullDisplayOnFace !== undefined
-              ? { halfAfterFullDisplayIndex: lastFullDisplayOnFace }
-              : {}),
           });
           continue;
         }
 
         const displayIdx = nextDisplayIdx++;
-        lastFullDisplayOnFace = displayIdx;
         structureRects.push({
           id,
           x: toX(x0),
@@ -658,7 +680,7 @@ function planModuleSingleCaption(geometry: LayoutGeometry): string {
     geometry.totals;
   const faceMods = physicalPickingModuleCount ?? moduleCount;
   const legend =
-    'Planta: números inteiros por frente de picking (dupla costas: faces em sequência) · «N 1/2» = meio-módulo · «T» = túnel.';
+    'Planta: números inteiros nas faces completas (dupla costas: faces em sequência) · «1/2» = meio-módulo · «T» = túnel.';
   if (
     faceMods <= 0 ||
     !Number.isFinite(positionCount) ||

@@ -11,7 +11,10 @@ import {
 import { isDebugPdf, logLayoutSolutionDebug } from '../../domain/pdfV2/pdfDebugV2';
 import { validatePdfRenderCoherence } from '../../domain/pdfV2/pdfRenderCoherenceV2';
 import { validatePdfV2FinalConsistency } from '../../domain/pdfV2/pdfV2FinalConsistency';
-import { buildFloorPlanModelV2 } from '../../domain/pdfV2/floorPlanModelV2';
+import {
+  buildFloorPlanModelV2,
+  moduleSpanCountsFromFloorPlanStructureRects,
+} from '../../domain/pdfV2/floorPlanModelV2';
 import { serializeFloorPlanSvgV2 } from '../../domain/pdfV2/svgFloorPlanV2';
 import { buildElevationModelV2 } from '../../domain/pdfV2/elevationModelV2';
 import {
@@ -986,8 +989,18 @@ export async function generatePdfV2FromSession(
   }
   const debugPdf = isDebugPdf();
   const floorModel = buildFloorPlanModelV2(layoutGeometry, answers);
+  const planModuleSpanCounts = moduleSpanCountsFromFloorPlanStructureRects(
+    floorModel.structureRects
+  );
+  const layoutGeometryForDocument: LayoutGeometry = {
+    ...layoutGeometry,
+    totals: {
+      ...layoutGeometry.totals,
+      planModuleSpanCounts,
+    },
+  };
   const floorPlanSvg = serializeFloorPlanSvgV2(floorModel);
-  const elevationModel = buildElevationModelV2(answers, layoutGeometry);
+  const elevationModel = buildElevationModelV2(answers, layoutGeometryForDocument);
   const elevMeasureStd = measureElevationLandscapeDrawingMetrics();
   const elevMeasureTun =
     layoutGeometry.metadata.hasTunnel === true
@@ -1056,7 +1069,7 @@ export async function generatePdfV2FromSession(
         /** Alinha com a solução otimizada (ex.: MELHOR_LAYOUT pode preferir sem túnel). */
         hasTunnel: layoutGeometry.metadata.hasTunnel,
       },
-      layoutGeometry,
+      layoutGeometry: layoutGeometryForDocument,
       floorPlanSvg,
       elevationPages,
       view3dSvg,

@@ -5,7 +5,7 @@ import type {
   BillOfMaterials,
   BillOfMaterialsLineId,
 } from '../../domain/pdfV2/billOfMaterials';
-import type { LayoutSolutionV2 } from '../../domain/pdfV2/types';
+import type { LayoutSolutionV2, ModuleSpanCounts } from '../../domain/pdfV2/types';
 import { formatModuleSpanCountsCommercialPt } from '../../domain/pdfV2/formatModuleCountDisplay';
 import { sanitizeText } from '../../utils/sanitizeText';
 
@@ -78,6 +78,8 @@ function assertWorksheetFormulasExcelJsSafe(ws: ExcelJS.Worksheet): void {
 export async function fillBudgetWorkbookFromTemplate(args: {
   bom: BillOfMaterials;
   layoutSolution: LayoutSolutionV2;
+  /** Contagens da planta (G23); fallback `layoutSolution.totals.segmentCounts`. */
+  documentModuleSpanCounts?: ModuleSpanCounts;
   /** Campos opcionais de capa */
   projectLabel?: string;
   clientName?: string;
@@ -91,7 +93,10 @@ export async function fillBudgetWorkbookFromTemplate(args: {
     throw new Error(`Planilha "${SHEET}" não encontrada no modelo.`);
   }
 
-  const { bom, layoutSolution } = args;
+  const { bom, layoutSolution, documentModuleSpanCounts } = args;
+
+  const coverCounts =
+    documentModuleSpanCounts ?? layoutSolution.totals.segmentCounts;
 
   const u75 = lineById(bom, 'upright75');
   const u100 = lineById(bom, 'upright100');
@@ -157,9 +162,7 @@ export async function fillBudgetWorkbookFromTemplate(args: {
     formula: `(A${ROW.upright75}+A${ROW.upright100})*3`,
   };
 
-  const modulesAlong = formatModuleSpanCountsCommercialPt(
-    layoutSolution.totals.segmentCounts
-  );
+  const modulesAlong = formatModuleSpanCountsCommercialPt(coverCounts);
   const positions = layoutSolution.totals.positions;
 
   ws.getCell('G23').value = modulesAlong;

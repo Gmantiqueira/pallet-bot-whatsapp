@@ -8,6 +8,7 @@ import type {
 } from './pdfV2/types';
 import type { LayoutResult } from './layoutEngine';
 import type { StructureResult, UprightType } from './structureEngine';
+import { equivalentAlongBeamSpan } from './pdfV2/moduleSpanCounts';
 
 export type BudgetInput = {
   layout: LayoutResult;
@@ -112,7 +113,8 @@ const lineQty = (bom: BillOfMaterials, id: BillOfMaterialsLineId) =>
 export function budgetResultFromBillOfMaterials(
   bom: BillOfMaterials,
   sol: LayoutSolutionV2,
-  structure: StructureResult
+  structure: StructureResult,
+  opts?: { documentSegmentCounts?: ModuleSpanCounts }
 ): BudgetResult {
   const uprightNames: Record<UprightType, string> = {
     '8T': 'Montante 8T',
@@ -121,6 +123,9 @@ export function budgetResultFromBillOfMaterials(
   };
   const ton = uprightNames[structure.uprightType];
   const items: BudgetItem[] = [];
+
+  const segmentCounts: ModuleSpanCounts =
+    opts?.documentSegmentCounts ?? sol.totals.segmentCounts;
 
   const u75 = lineQty(bom, 'upright75');
   const u100 = lineQty(bom, 'upright100');
@@ -172,8 +177,8 @@ export function budgetResultFromBillOfMaterials(
   return {
     items,
     totals: {
-      segmentCounts: sol.totals.segmentCounts,
-      equivalentAlongBeamSpan: sol.totals.equivalentAlongBeamSpan,
+      segmentCounts,
+      equivalentAlongBeamSpan: equivalentAlongBeamSpan(segmentCounts),
       positions: sol.totals.positions,
     },
     meta: {

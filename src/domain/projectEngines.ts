@@ -30,6 +30,10 @@ import {
 } from './pdfV2/layoutGeometryV2';
 import { buildFloorPlanAccessories } from './pdfV2/visualAccessoriesV2';
 import { buildBillOfMaterials } from './pdfV2/billOfMaterials';
+import {
+  buildFloorPlanModelV2,
+  moduleSpanCountsFromFloorPlanStructureRects,
+} from './pdfV2/floorPlanModelV2';
 
 /** Profundidade de módulo padrão (mm) se não for informada. */
 export const DEFAULT_MODULE_DEPTH_MM = 2700;
@@ -74,9 +78,14 @@ function tryEnginesFromLayoutV2(
     const bom = buildBillOfMaterials(sol, geo, accessories, structure, uprightH, {
       longarinaTravaEnabled: answers['longarinaTrava'] === true,
     });
+    const floorModel = buildFloorPlanModelV2(geo, answers);
+    const documentSegmentCounts =
+      moduleSpanCountsFromFloorPlanStructureRects(floorModel.structureRects);
     return {
       structure,
-      budget: budgetResultFromBillOfMaterials(bom, sol, structure),
+      budget: budgetResultFromBillOfMaterials(bom, sol, structure, {
+        documentSegmentCounts,
+      }),
       modulePricing: computeModulePricingSnapshotFromBom(
         sol,
         bom,

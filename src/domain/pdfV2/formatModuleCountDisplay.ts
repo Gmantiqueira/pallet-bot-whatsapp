@@ -1,6 +1,16 @@
 import type { ModuleSpanCounts } from './types';
 
 /**
+ * Contagens para resumo/orçamento: preferir planta renderizada quando disponível.
+ */
+export function documentModuleSpanCountsFromTotals(totals: {
+  planModuleSpanCounts?: ModuleSpanCounts;
+  moduleSpanCounts: ModuleSpanCounts;
+}): ModuleSpanCounts {
+  return totals.planModuleSpanCounts ?? totals.moduleSpanCounts;
+}
+
+/**
  * Texto para documentos técnicos/comerciais (PT).
  * Preferir {@link formatModuleSpanCountsCommercialPt} quando existir {@link ModuleSpanCounts}.
  * Entrada “equiv.” em número só para casos sem segmentação explícita.

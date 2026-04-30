@@ -144,8 +144,13 @@ export type LayoutGeometryTotals = {
    * Módulos como frentes de picking: dupla costas ⇒ 2× por segmento; túnel ⇒ 1.
    */
   physicalPickingModuleCount: number;
-  /** Ao longo do vão: inteiros, meio-módulos e túneis em campos separados (texto comercial / planta). */
+  /** Contagens do solver (segmentos por fileira). Preservadas para coerência 3D / BOM. */
   moduleSpanCounts: ModuleSpanCounts;
+  /**
+   * Contagens iguais à planta renderizada ({@link buildFloorPlanModelV2} → `structureRects`).
+   * Quando definido, resumo técnico e texto comercial devem preferir este bloco.
+   */
+  planModuleSpanCounts?: ModuleSpanCounts;
   positionCount: number;
   levelCount: number;
   tunnelCount: number;

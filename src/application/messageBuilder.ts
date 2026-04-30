@@ -88,8 +88,8 @@ const appendTunnelPreviewModuleStepMessages = (
     type: 'text',
     text:
       '*Indique em que módulos quer o túnel*\n\n' +
-      '• Só os *módulos inteiros* têm número (1, 2, 3…).\n' +
-      '• «N 1/2» é meio-módulo (só inteiros contam para túnel manual).\n' +
+      '• Só as *faces completas* têm número inteiro (1, 2, 3…).\n' +
+      '• *1/2* é meio-módulo (só os números inteiros são elegíveis para túnel manual).\n' +
       '• Envie os números separados por vírgula. Ex.: *2, 5, 8*\n\n' +
       '*Sem nenhum túnel:* envie *nenhum*, *zero* ou *sem túnel*.',
   });

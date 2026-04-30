@@ -1,5 +1,8 @@
 import { computeBeamElevations } from './elevationLevelGeometryV2';
-import { formatModuleSpanCountsCommercialPt } from './formatModuleCountDisplay';
+import {
+  formatModuleSpanCountsCommercialPt,
+  documentModuleSpanCountsFromTotals,
+} from './formatModuleCountDisplay';
 import type { ElevationModelV2, ElevationPanelPayload } from './types';
 import { accessoryFieldsFromAnswers } from './visualAccessoriesV2';
 import { MODULE_PALLET_BAYS_PER_LEVEL } from './rackModuleSpec';
@@ -369,7 +372,7 @@ export function buildElevationModelV2(
 
   const summaryLines: string[] = [
     `${geometry.totals.levelCount} níveis · ${frontWithoutTunnel.capacityKgPerLevel} kg/palete · vão/baia ${Math.round(geometry.metadata.beamAlongModuleMm)} mm · módulo ao longo da fileira ~${Math.round(geometry.metadata.moduleLengthAlongBeamMm)} mm · prof. posição ${Math.round(geometry.metadata.moduleDepthMm)} mm · faixa ${Math.round(frontWithoutTunnel.bandDepthMm)} mm`,
-    `${formatModuleSpanCountsCommercialPt(geometry.totals.moduleSpanCounts)} · posições ${geometry.totals.positionCount} · ${geometry.metadata.rackDepthMode === 'double' ? 'dupla costas' : 'simples'} · planta: inteiros por frente; «N 1/2» meio-módulo; «T» túnel`,
+    `${formatModuleSpanCountsCommercialPt(documentModuleSpanCountsFromTotals(geometry.totals))} · posições ${geometry.totals.positionCount} · ${geometry.metadata.rackDepthMode === 'double' ? 'dupla costas' : 'simples'} · planta: inteiros nas faces completas; «1/2» meio-módulo; «T» túnel`,
   ];
   if (
     userWantsTunnel &&

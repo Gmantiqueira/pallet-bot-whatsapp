@@ -16,6 +16,10 @@ import { validatePdfRenderCoherence } from '../../domain/pdfV2/pdfRenderCoherenc
 import { validatePdfV2FinalConsistency } from '../../domain/pdfV2/pdfV2FinalConsistency';
 import { buildFloorPlanAccessories } from '../../domain/pdfV2/visualAccessoriesV2';
 import { buildBillOfMaterials } from '../../domain/pdfV2/billOfMaterials';
+import {
+  buildFloorPlanModelV2,
+  moduleSpanCountsFromFloorPlanStructureRects,
+} from '../../domain/pdfV2/floorPlanModelV2';
 import { selectStructure } from '../../domain/structureEngine';
 import {
   fillBudgetWorkbookFromTemplate,
@@ -72,6 +76,10 @@ export async function buildBudgetWorkbookFromProjectAnswers(
     longarinaTravaEnabled: ans['longarinaTrava'] === true,
   });
 
+  const floorModel = buildFloorPlanModelV2(geo, ans);
+  const documentModuleSpanCounts =
+    moduleSpanCountsFromFloorPlanStructureRects(floorModel.structureRects);
+
   const clientName =
     typeof ans.clientName === 'string'
       ? ans.clientName
@@ -94,6 +102,7 @@ export async function buildBudgetWorkbookFromProjectAnswers(
   return fillBudgetWorkbookFromTemplate({
     bom,
     layoutSolution: sol,
+    documentModuleSpanCounts,
     clientName,
     city,
     projectLabel,
