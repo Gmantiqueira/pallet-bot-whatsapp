@@ -38,6 +38,8 @@ describe('serializeElevationPagesV2', () => {
     const pages = serializeElevationPagesV2(model);
     expect(pages.landscapeTunnel).toBeNull();
     const svg = pages.landscapeStandard;
+    expect(svg).not.toMatch(/DEBUG/i);
+    expect(svg).not.toContain('el-spread-guides');
     expect(svg).toContain('id="fundo-travamento-lateral"');
     expect(svg).toContain('PISO');
     expect(svg).toContain('H total');
@@ -179,6 +181,34 @@ describe('serializeElevationPagesV2', () => {
     expect(transforms.length).toBe(2);
     expect(transforms[0]![3]).toBe(transforms[1]![3]);
     expect(transforms[0]![2]).toBe(transforms[1]![2]);
+    expect(svg).not.toContain('el-spread-guides');
+  });
+
+  it('renderOptions.debug: linhas-guia horizontais e painéis com camada el-debug', () => {
+    const a: ProjectAnswersV2 = {
+      lengthMm: 12_000,
+      widthMm: 10_000,
+      corridorMm: 3000,
+      moduleDepthMm: 1000,
+      moduleWidthMm: 1100,
+      levels: 5,
+      capacityKg: 1200,
+      lineStrategy: 'APENAS_SIMPLES',
+      hasTunnel: false,
+      halfModuleOptimization: false,
+      firstLevelOnGround: true,
+      heightMode: 'DIRECT',
+      heightMm: 5040,
+    };
+    const layout = buildLayoutSolutionV2(a);
+    const session = answersToSession(a);
+    const geo = buildLayoutGeometry(layout, session);
+    validateLayoutGeometry(geo);
+    const model = buildElevationModelV2(session, geo);
+    const svg = serializeElevationPagesV2(model, {
+      renderOptions: { debug: true },
+    }).landscapeStandard;
     expect(svg).toContain('id="el-spread-guides"');
+    expect(svg).toContain('el-debug-front');
   });
 });

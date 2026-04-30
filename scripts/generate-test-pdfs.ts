@@ -20,8 +20,8 @@
  *   LAYOUT_AUDIT_LOG=1 npx tsx scripts/generate-test-pdfs.ts
  *   npm run pdf:test:audit
  *
- * Debug no PDF (layoutSolution resumido; planta sem overlay se desligar):
- *   DEBUG_PDF=false npx tsx scripts/generate-test-pdfs.ts
+ * Debug SVG (elevação / vista 3D): `PDF_RENDER_DEBUG=true` — só desenvolvimento.
+ * Log de layout no stdout: `DEBUG_PDF=true` (não altera o PDF nem os SVG embutidos).
  *
  * Conjunto **fixo de 10 casos** (revisão manual), cobrindo o essencial:
  * - medidas (manual, planta) | estratégia de linhas: simples, duplas, personalizado, melhor

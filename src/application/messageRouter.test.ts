@@ -371,6 +371,7 @@ describe('MessageRouter', () => {
       );
       expect(view3dSvg).toMatch(/<svg[\s>]/i);
       expect(view3dSvg.length).toBeGreaterThan(80);
+      expect(view3dSvg).not.toMatch(/DEBUG/i);
     });
 
     it('should return to SUMMARY_CONFIRM with friendly message when delivery fails', async () => {

@@ -8,6 +8,10 @@ import {
   buildLayoutGeometry,
   validateLayoutGeometry,
 } from '../../domain/pdfV2/layoutGeometryV2';
+import {
+  pdfRenderDebugEnabled,
+  type PdfRenderOptions,
+} from '../../domain/pdfV2/pdfRenderOptions';
 import { isDebugPdf, logLayoutSolutionDebug } from '../../domain/pdfV2/pdfDebugV2';
 import { validatePdfRenderCoherence } from '../../domain/pdfV2/pdfRenderCoherenceV2';
 import { validatePdfV2FinalConsistency } from '../../domain/pdfV2/pdfV2FinalConsistency';
@@ -960,9 +964,15 @@ export async function renderPdfV2(
 /**
  * Monta modelos V2 a partir da sessão e gera o PDF.
  */
+export type GeneratePdfV2FromSessionOptions = {
+  storagePath: string;
+  /** Overlays de diagnóstico no SVG — só testes ou chamadas explícitas (`PDF_RENDER_DEBUG` via script). */
+  renderOptions?: PdfRenderOptions;
+};
+
 export async function generatePdfV2FromSession(
   session: Session,
-  options: { storagePath: string }
+  options: GeneratePdfV2FromSessionOptions
 ): Promise<GenerateProjectPdfResult> {
   const answers = session.answers;
   if (process.env.PDF_TUNNEL_DEBUG === '1') {
@@ -987,7 +997,11 @@ export async function generatePdfV2FromSession(
       `[pdf-v2 tunnel] final metadata.hasTunnel=${layoutGeometry.metadata.hasTunnel} tunnelCount=${layoutGeometry.totals.tunnelCount} v2answers.hasTunnel=${v2answers.hasTunnel}`
     );
   }
-  const debugPdf = isDebugPdf();
+  const debugVisual =
+    options.renderOptions?.debug === false
+      ? false
+      : pdfRenderDebugEnabled(options.renderOptions) ||
+        process.env.PDF_RENDER_DEBUG === 'true';
   const floorModel = buildFloorPlanModelV2(layoutGeometry, answers);
   const planModuleSpanCounts = moduleSpanCountsFromFloorPlanStructureRects(
     floorModel.structureRects
@@ -1039,7 +1053,7 @@ export async function generatePdfV2FromSession(
     });
   }
   const elevationPages = serializeElevationPagesV2(elevationModel, {
-    debug: debugPdf,
+    renderOptions: debugVisual ? { debug: true } : undefined,
     drawingAvailHPtStandard: elevMeasureStd.availHPt,
     drawingAvailHPtTunnel: elevMeasureTun?.availHPt,
     drawingUsableWPtStandard: elevMeasureStd.usableWPt,
@@ -1056,11 +1070,13 @@ export async function generatePdfV2FromSession(
     layoutSolution,
     geometry: layoutGeometry,
   });
-  const rack3dForView = debugPdf
-    ? build3DModelV2(layoutGeometry, { debug: true })
+  const rack3dForView = debugVisual
+    ? build3DModelV2(layoutGeometry, { renderOptions: { debug: true } })
     : rack3d;
   const projected3d = projectToIsometric(rack3dForView);
-  const view3dSvg = render3DViewV2(projected3d, { debug: debugPdf });
+  const view3dSvg = render3DViewV2(projected3d, {
+    renderOptions: debugVisual ? { debug: true } : undefined,
+  });
 
   return renderPdfV2(
     {
@@ -1081,3 +1097,5 @@ export async function generatePdfV2FromSession(
     options
   );
 }
+
+export type { PdfRenderOptions } from '../../domain/pdfV2/pdfRenderOptions';

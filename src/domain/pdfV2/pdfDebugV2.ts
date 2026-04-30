@@ -1,6 +1,9 @@
 import type { LayoutSolutionV2 } from './types';
 
-/** PDF de depuração visual + log (só com `DEBUG_PDF=true`). */
+/**
+ * Log de layout no stdout quando `DEBUG_PDF=true`.
+ * Não liga overlays nem SVG de diagnóstico — usar {@link pdfRenderDebugEnabled} para artefactos.
+ */
 export function isDebugPdf(): boolean {
   return process.env.DEBUG_PDF === 'true';
 }

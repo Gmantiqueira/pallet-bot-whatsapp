@@ -33,6 +33,10 @@ import {
   type LayoutGeometry,
 } from '../domain/pdfV2/layoutGeometryV2';
 import { isDebugPdf, logLayoutSolutionDebug } from '../domain/pdfV2/pdfDebugV2';
+import {
+  pdfRenderDebugEnabled,
+  type PdfRenderOptions,
+} from '../domain/pdfV2/pdfRenderOptions';
 import { validatePdfRenderCoherence } from '../domain/pdfV2/pdfRenderCoherenceV2';
 import { validatePdfV2FinalConsistency } from '../domain/pdfV2/pdfV2FinalConsistency';
 import {
@@ -379,12 +383,14 @@ async function executeProjectPdfGeneration(
       }
       const geo: LayoutGeometry = buildLayoutGeometry(sol, ans);
       validateLayoutGeometry(geo);
-      const dbg = isDebugPdf();
+      const svgRenderOptions: PdfRenderOptions | undefined =
+        process.env.PDF_RENDER_DEBUG === 'true' ? { debug: true } : undefined;
+      const svgDebug = pdfRenderDebugEnabled(svgRenderOptions);
       const floorSvg = serializeFloorPlanSvgV2(buildFloorPlanModelV2(geo, ans));
       const elevModel: ElevationModelV2 = buildElevationModelV2(ans, geo);
       const elevPages: ElevationPageSvgs = serializeElevationPagesV2(
         elevModel,
-        { debug: dbg }
+        { renderOptions: svgRenderOptions }
       );
       const rack3d = build3DModelV2(geo);
       validatePdfRenderCoherence(geo, {
@@ -397,9 +403,11 @@ async function executeProjectPdfGeneration(
         layoutSolution: sol,
         geometry: geo,
       });
-      const rack3dView = dbg ? build3DModelV2(geo, { debug: true }) : rack3d;
+      const rack3dView = svgDebug
+        ? build3DModelV2(geo, { renderOptions: { debug: true } })
+        : rack3d;
       const view3dSvg = render3DViewV2(projectToIsometric(rack3dView), {
-        debug: dbg,
+        renderOptions: svgRenderOptions,
       });
       fs.writeFileSync(
         path.join(storageDir, `planta-${phone}-${ts}.svg`),

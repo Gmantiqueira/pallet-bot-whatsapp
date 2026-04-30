@@ -6,11 +6,14 @@
 
 import type { Session } from '../domain/session';
 import type { GenerateProjectPdfResult } from '../infra/pdf/pdfService';
-import { generatePdfV2FromSession } from '../infra/pdf/pdfV2Service';
+import {
+  generatePdfV2FromSession,
+  type GeneratePdfV2FromSessionOptions,
+} from '../infra/pdf/pdfV2Service';
 
 export async function renderTunnelPreviewPdfFromSession(
   session: Session,
-  options: { storagePath: string }
+  options: GeneratePdfV2FromSessionOptions
 ): Promise<GenerateProjectPdfResult> {
   return generatePdfV2FromSession(session, options);
 }

@@ -4,6 +4,8 @@ import type {
   Rack3DModel,
   SvgGroup,
 } from './types';
+import type { PdfRenderOptions } from './pdfRenderOptions';
+import { pdfRenderDebugEnabled } from './pdfRenderOptions';
 import { SVG_FONT_FAMILY } from '../../config/pdfFonts';
 
 /**
@@ -81,7 +83,7 @@ const STROKE: Record<
   module_outline: { c: '#172554', w: 1.85, opacity: 0.94 },
 };
 
-/** Modo DEBUG_PDF: cores por tipo de módulo / contorno do galpão. */
+/** Modo `renderOptions.debug`: cores por tipo de módulo / contorno do galpão (só desenvolvimento). */
 const OUTLINE_DEBUG = { c: '#4338ca', w: 1.25, opacity: 0.9 };
 
 const STROKE_DEBUG: Record<
@@ -144,9 +146,9 @@ function strokeForLine(
  */
 export function render3DViewV2(
   projected: Projected2D,
-  options?: { debug?: boolean }
+  options?: { renderOptions?: PdfRenderOptions }
 ): SvgGroup {
-  const debug = options?.debug === true;
+  const debug = pdfRenderDebugEnabled(options?.renderOptions);
   /** Formato vertical (~0,72) alinhado à área útil A4 para o PDF preencher a folha. */
   const vbW = 1040;
   const vbH = 1440;

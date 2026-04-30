@@ -16,12 +16,16 @@ import {
   ELEVATION_LANDSCAPE_PAGE_SIZE,
   type GenerateProjectPdfV2Input,
   type ElevationLandscapeDrawingMeasure,
+  type GeneratePdfV2FromSessionOptions,
+  type PdfRenderOptions,
 } from '../infra/pdf/pdfV2Service';
 
 export type {
   GenerateProjectPdfResult,
   GenerateProjectPdfV2Input,
   ElevationLandscapeDrawingMeasure,
+  GeneratePdfV2FromSessionOptions,
+  PdfRenderOptions,
 };
 
 export {
@@ -40,7 +44,7 @@ export {
  */
 export function renderProjectPdfFromSession(
   session: Session,
-  options: { storagePath: string }
+  options: GeneratePdfV2FromSessionOptions
 ): Promise<GenerateProjectPdfResult> {
   return generatePdfV2FromSession(session, options);
 }

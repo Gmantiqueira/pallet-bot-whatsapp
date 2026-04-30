@@ -4,6 +4,8 @@ import {
   INTER_BAY_GAP_WITHIN_MODULE_MM,
   UPRIGHT_NORMAL_MM,
 } from './rackModuleSpec';
+import type { PdfRenderOptions } from './pdfRenderOptions';
+import { pdfRenderDebugEnabled } from './pdfRenderOptions';
 
 const EPS = 0.5;
 /** Espinha entre costas em dupla — alinhado a layoutSolutionV2 / layoutGeometryV2. */
@@ -507,7 +509,7 @@ function maxUprightHeightAndTiers(geometry: LayoutGeometry): {
  */
 export function build3DModelV2(
   geometry: LayoutGeometry,
-  options?: { debug?: boolean }
+  options?: { renderOptions?: PdfRenderOptions }
 ): Rack3DModel {
   const { uprightHeightMm: H, tiers: levels } =
     maxUprightHeightAndTiers(geometry);
@@ -515,8 +517,9 @@ export function build3DModelV2(
   const { warehouseLengthMm: L, warehouseWidthMm: W } = geometry;
 
   const z0 = 0;
+  const dbg3d = pdfRenderDebugEnabled(options?.renderOptions);
   const bTint =
-    options?.debug === true ? ('boundary' as const) : undefined;
+    dbg3d === true ? ('boundary' as const) : undefined;
   const whOpts = {
     ...(bTint !== undefined ? { debugTint: bTint } : {}),
     lineRole: 'warehouse_slab' as const,
@@ -564,7 +567,7 @@ export function build3DModelV2(
       }
 
       const modTint: Rack3DLine3D['debugTint'] | undefined =
-        options?.debug === true
+        dbg3d === true
           ? mod.type === 'tunnel'
             ? 'tunnel'
             : 'normal'

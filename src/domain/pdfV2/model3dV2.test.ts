@@ -111,6 +111,7 @@ describe('build3DModelV2 + projeção isométrica', () => {
     expect(svg).toContain('v2-3d-wireframe');
     expect(svg).toMatch(/stroke="#c2410c"/);
     expect(svg).toMatch(/stroke="#0f172a"/);
+    expect(svg).not.toMatch(/DEBUG/i);
   });
 
   it('2: túnel — módulo túnel no layout e vão inferior no 3D', () => {

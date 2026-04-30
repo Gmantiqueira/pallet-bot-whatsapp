@@ -43,6 +43,8 @@ import {
   svgGridMetrics,
   uniformMarginPt,
 } from './layoutGrid';
+import type { PdfRenderOptions } from './pdfRenderOptions';
+import { pdfRenderDebugEnabled } from './pdfRenderOptions';
 
 /**
  * Vista frontal na prancha: **uma** baia (2 montantes, 1 vão) para leitura mais clara.
@@ -2106,7 +2108,7 @@ export const ELEV_PDF_LS_PAGE_MARGIN_PT = uniformMarginPt(
 );
 /**
  * Fallback quando `serializeElevationPagesV2` corre sem `drawingAvailHPt*` (ex.: testes).
- * Valor calibrado vs {@link measureElevationLandscapeDrawingMetrics} (`DEBUG_PDF` / `PDF_ELEV_DEBUG`).
+ * Calibre vs {@link measureElevationLandscapeDrawingMetrics}; métricas no stdout com `PDF_ELEV_DEBUG`.
  */
 export const ELEV_PDF_LS_DRAWING_REGION_TOP_PT = 45;
 /** @deprecated Preferir `ELEV_PDF_LS_DRAWING_REGION_TOP_PT`. */
@@ -2327,7 +2329,8 @@ function wrapElevationLandscapeSpread(
  * Títulos de folha ficam no PDF; aqui só rótulos de coluna («Vista frontal / lateral»).
  */
 export type SerializeElevationPagesOptions = {
-  debug?: boolean;
+  /** Overlays e textos de diagnóstico — omitir no PDF para cliente. */
+  renderOptions?: PdfRenderOptions;
   /**
    * Alturas úteis em pt (medidas com PDFKit no gerador) — cada folha pode ter subtítulo distinto.
    * Omitindo, usa-se {@link ELEV_PDF_LS_AVAIL_H_PT}.
@@ -2419,7 +2422,8 @@ function finalizeOrthoSpreadPanels(
   left: ElevationPanelDeferredWrap,
   right: ElevationPanelDeferredWrap,
   panelCap: number,
-  layout: ReturnType<typeof elevationSpreadLayoutMetrics>
+  layout: ReturnType<typeof elevationSpreadLayoutMetrics>,
+  includeGuideLines: boolean
 ): {
   leftSvg: string;
   rightSvg: string;
@@ -2437,12 +2441,15 @@ function finalizeOrthoSpreadPanels(
     inset,
     s
   );
-  const guideLinesSvg = buildElevationSpreadGuideLinesSvg(
-    layout.width,
-    layout.m,
-    tLeft,
-    left.guideYsLocal
-  );
+  const guideLinesSvg =
+    includeGuideLines === true
+      ? buildElevationSpreadGuideLinesSvg(
+          layout.width,
+          layout.m,
+          tLeft,
+          left.guideYsLocal
+        )
+      : '';
   return {
     leftSvg: `<g transform="translate(${tLeft.tx.toFixed(3)},${tLeft.ty.toFixed(3)}) scale(${tLeft.s.toFixed(5)})">${left.inner}</g>`,
     rightSvg: `<g transform="translate(${tRight.tx.toFixed(3)},${tRight.ty.toFixed(3)}) scale(${tRight.s.toFixed(5)})">${right.inner}</g>`,
@@ -2454,7 +2461,7 @@ export function serializeElevationPagesV2(
   model: ElevationModelV2,
   options?: SerializeElevationPagesOptions
 ): ElevationPageSvgs {
-  const dbg = options?.debug === true;
+  const dbg = pdfRenderDebugEnabled(options?.renderOptions);
   const ls = ELEV_SPREAD_LS_PRIMARY;
   const lsMinor = ELEV_SPREAD_LS_MINOR;
   const lsLat = ELEV_SPREAD_LS_LAT_PRIMARY;
@@ -2527,7 +2534,7 @@ export function serializeElevationPagesV2(
     leftSvg: leftStd,
     rightSvg: rightStd,
     guideLinesSvg: guidesStd,
-  } = finalizeOrthoSpreadPanels(leftStdDef, rightStdDef, panelCap, L);
+  } = finalizeOrthoSpreadPanels(leftStdDef, rightStdDef, panelCap, L, dbg);
   const landscapeStandard = wrapElevationLandscapeSpread(
     L,
     leftStd,
@@ -2588,7 +2595,7 @@ export function serializeElevationPagesV2(
       leftSvg: leftTun,
       rightSvg: rightTun,
       guideLinesSvg: guidesTun,
-    } = finalizeOrthoSpreadPanels(leftTunDef, rightTunDef, panelCap, Ltun);
+    } = finalizeOrthoSpreadPanels(leftTunDef, rightTunDef, panelCap, Ltun, dbg);
     landscapeTunnel = wrapElevationLandscapeSpread(
       Ltun,
       leftTun,
