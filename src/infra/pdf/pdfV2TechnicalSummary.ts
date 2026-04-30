@@ -4,6 +4,7 @@ import {
   HEIGHT_DEFINITION_WAREHOUSE_CLEAR,
   HEIGHT_MODE_WAREHOUSE_HEIGHT,
 } from '../../domain/warehouseHeightDerive';
+import { TUNNEL_MANUAL_PREVIEW_PROVISIONAL_SPECS_KEY } from '../../domain/tunnelPreviewAnswerDefaults';
 import { MIN_LEVEL_GAP_MM } from '../../domain/conversationHelpers';
 import { formatModuleSpanCountsCommercialPt } from '../../domain/pdfV2/formatModuleCountDisplay';
 import { sanitizeText } from '../../utils/sanitizeText';
@@ -172,6 +173,9 @@ export function technicalSummaryRowsFromLayoutGeometry(
 ): TechnicalSummaryRow[] {
   const { totals, metadata, warehouseLengthMm, warehouseWidthMm } = geometry;
 
+  const provisionalPreview =
+    project[TUNNEL_MANUAL_PREVIEW_PROVISIONAL_SPECS_KEY] === true;
+
   const modulos = formatModuleSpanCountsCommercialPt(totals.moduleSpanCounts);
   const niveisText = formatNiveisArmazenagemForDocumentPt(metadata);
   const niveisDetail =
@@ -187,6 +191,16 @@ export function technicalSummaryRowsFromLayoutGeometry(
     ) > 0;
 
   const rows: TechnicalSummaryRow[] = [
+    ...(provisionalPreview
+      ? [
+          {
+            label: 'Documento:',
+            value:
+              'Pré-visualização — especificações indicativas (níveis, altura e/ou capacidade podem mudar no projeto final).',
+            emphasis: true,
+          } satisfies TechnicalSummaryRow,
+        ]
+      : []),
     {
       label: 'Comprimento:',
       value: formatMm(warehouseLengthMm),

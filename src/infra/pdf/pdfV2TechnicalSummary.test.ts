@@ -10,6 +10,7 @@ import {
   formatNiveisArmazenagemForDocumentPt,
   technicalSummaryRowsFromLayoutGeometry,
 } from './pdfV2TechnicalSummary';
+import { TUNNEL_MANUAL_PREVIEW_PROVISIONAL_SPECS_KEY } from '../../domain/tunnelPreviewAnswerDefaults';
 
 const minimal = (): ProjectAnswersV2 => ({
   lengthMm: 12_000,
@@ -35,6 +36,22 @@ function rowValue(
 }
 
 describe('technicalSummaryRowsFromLayoutGeometry', () => {
+  it('prefixa aviso de pré-visualização quando tunnelManualPreviewProvisionalSpecs', () => {
+    const a = minimal();
+    const sol = buildLayoutSolutionV2(a);
+    const geo = buildLayoutGeometry(
+      sol,
+      a as unknown as Record<string, unknown>
+    );
+    const project = {
+      ...(a as unknown as Record<string, unknown>),
+      [TUNNEL_MANUAL_PREVIEW_PROVISIONAL_SPECS_KEY]: true,
+    };
+    const rows = technicalSummaryRowsFromLayoutGeometry(project, geo);
+    expect(rows[0]?.label).toBe('Documento:');
+    expect(rows[0]?.value).toContain('Pré-visualização');
+  });
+
   it('reflete geometry.totals e dimensões do armazém (cenário com túnel)', () => {
     const a: ProjectAnswersV2 = {
       ...minimal(),

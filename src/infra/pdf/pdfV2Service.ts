@@ -54,6 +54,7 @@ import {
   pdfContentMetricsPt,
   pdfPageMarginsPt,
 } from '../../domain/pdfV2/layoutGrid';
+import { TUNNEL_MANUAL_PREVIEW_PROVISIONAL_SPECS_KEY } from '../../domain/tunnelPreviewAnswerDefaults';
 
 const COL_INK = '#0f172a';
 const COL_MUTED = '#64748b';
@@ -61,6 +62,8 @@ const COL_RULE = '#cbd5e1';
 const COL_ACCENT = '#334155';
 const COL_BOX = '#f1f5f9';
 const COL_VALUE_EMPH = '#0f172a';
+/** Aviso na capa — prévia PDF com níveis/altura/capacidade indicativos. */
+const COL_PREVIEW_PROVISIONAL = '#c2410c';
 /** DPI alinhado a {@link ./pdfService} (rasterização SVG). */
 const RASTER_DPI = 300;
 
@@ -733,6 +736,19 @@ export async function renderPdfV2(
     lineGap: 1.65,
     moveDown: 0.42,
   });
+
+  if (input.project[TUNNEL_MANUAL_PREVIEW_PROVISIONAL_SPECS_KEY] === true) {
+    drawCentered(
+      'Pré-visualização: níveis, altura e/ou capacidade ainda não confirmados — valores indicativos.',
+      {
+        size: 10.35,
+        font: PDFKIT_FONT_BOLD,
+        color: COL_PREVIEW_PROVISIONAL,
+        lineGap: 1.35,
+        moveDown: 0.38,
+      }
+    );
+  }
 
   const barY = doc.y + 2;
   doc

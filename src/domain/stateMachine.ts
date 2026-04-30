@@ -1413,7 +1413,7 @@ export const transition = (
           const { buildProjectAnswersV2 } = require('./pdfV2/answerMapping') as typeof import('./pdfV2/answerMapping');
           // eslint-disable-next-line @typescript-eslint/no-require-imports
           const { buildLayoutSolutionV2 } = require('./pdfV2/layoutSolutionV2') as typeof import('./pdfV2/layoutSolutionV2');
-          const a = mergeAnswersForTunnelPreview({
+          const { answers: a } = mergeAnswersForTunnelPreview({
             ...newSession.answers,
             tunnelManualModuleIndices: parsed,
             hasTunnel: true,

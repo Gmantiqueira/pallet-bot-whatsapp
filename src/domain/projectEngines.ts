@@ -237,6 +237,8 @@ export function finalizeSummaryAnswers(
   delete (stripped as { tunnelPreviewPdfPath?: unknown }).tunnelPreviewPdfPath;
   delete (stripped as { tunnelPreviewPdfFilename?: unknown })
     .tunnelPreviewPdfFilename;
+  delete (stripped as { tunnelManualPreviewProvisionalSpecs?: unknown })
+    .tunnelManualPreviewProvisionalSpecs;
   if (typeof stripped.heightMm === 'number') {
     stripped.heightMm = normalizeUprightHeightMmToColumnStep(stripped.heightMm);
   }

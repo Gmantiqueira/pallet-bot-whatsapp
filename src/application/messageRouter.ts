@@ -34,7 +34,10 @@ import {
 import { isDebugPdf, logLayoutSolutionDebug } from '../domain/pdfV2/pdfDebugV2';
 import { validatePdfRenderCoherence } from '../domain/pdfV2/pdfRenderCoherenceV2';
 import { validatePdfV2FinalConsistency } from '../domain/pdfV2/pdfV2FinalConsistency';
-import { mergeAnswersForTunnelPreview } from '../domain/tunnelPreviewAnswerDefaults';
+import {
+  mergeAnswersForTunnelPreview,
+  TUNNEL_MANUAL_PREVIEW_PROVISIONAL_SPECS_KEY,
+} from '../domain/tunnelPreviewAnswerDefaults';
 import { buildFloorPlanModelV2 } from '../domain/pdfV2/floorPlanModelV2';
 import { serializeFloorPlanSvgV2 } from '../domain/pdfV2/svgFloorPlanV2';
 import { loadEnv } from '../config/env';
@@ -353,13 +356,17 @@ async function executeTunnelPreviewGeneration(
   if (!fs.existsSync(storageDir)) {
     fs.mkdirSync(storageDir, { recursive: true });
   }
-  const mergedForPreview = mergeAnswersForTunnelPreview({
-    ...genSession.answers,
-  });
+  const { answers: mergedForPreview, usedPlaceholderSpecs } =
+    mergeAnswersForTunnelPreview({
+      ...genSession.answers,
+    });
   const finalized = finalizeSummaryAnswers({ ...mergedForPreview });
   const previewAns: Record<string, unknown> = {
     ...finalized,
     hasTunnel: false,
+    ...(usedPlaceholderSpecs
+      ? { [TUNNEL_MANUAL_PREVIEW_PROVISIONAL_SPECS_KEY]: true }
+      : {}),
   };
   delete (previewAns as { tunnelManualModuleIndices?: unknown })
     .tunnelManualModuleIndices;
