@@ -452,17 +452,21 @@ function appendColumnProtectorAlongModules(
 }
 
 /**
- * Legenda compacta: 1.º nível, guardas (simples/dupla), protetor de coluna — mesma semântica do resumo técnico.
+ * Legenda em dois cartões (notas vs símbolos), espacemento explícito e truncagem se exceder a faixa reservada.
  */
 function appendFloorPlanConfigurationLegend(
   model: FloorPlanModelV2,
   parts: string[],
-  opts: { innerPadPx: number; minSvgFs: number }
+  opts: { innerPadPx: number; minSvgFs: number; legendReservePx: number }
 ): void {
-  /** Legenda mais compacta (~12–18% da folha em VB): libertar área para implantação. */
   const LEGEND_TITLE_VIS_SCALE = 1.28;
   const LEGEND_BODY_VIS_SCALE = 1.22;
-  const { innerPadPx, minSvgFs } = opts;
+  const CARD_PAD = 8;
+  const TITLE_TO_BODY_GAP = 6;
+  const SECTION_GAP = 10;
+  const FOOTER_GAP = 10;
+
+  const { innerPadPx, minSvgFs, legendReservePx } = opts;
   const noteTitleFs = Math.max(
     Math.round(11.25 * LEGEND_TITLE_VIS_SCALE * 10) / 10,
     Math.round(minSvgFs * 1.08 * 10) / 10
@@ -487,12 +491,9 @@ function appendFloorPlanConfigurationLegend(
     Math.round(9.25 * LEGEND_BODY_VIS_SCALE * 10) / 10,
     Math.round(minSvgFs * 0.95 * 10) / 10
   );
-  const noteAfterTitleDy =
-    Math.round(16 * LEGEND_TITLE_VIS_SCALE * 10) / 10;
-  const noteLineDy =
-    Math.round(12 * LEGEND_BODY_VIS_SCALE * 10) / 10;
-  const noteBeforeSymbolsGap =
-    Math.round(8 * LEGEND_BODY_VIS_SCALE * 10) / 10;
+
+  const noteLineLead = noteBodyFs * 1.25;
+  const symLineLead = symBodyFs * 1.25;
 
   const { w, h } = model.viewBox;
   const a = model.planAccessories;
@@ -500,7 +501,8 @@ function appendFloorPlanConfigurationLegend(
   const edgeGap = Math.max(8, innerPadPx);
   const boxW = Math.min(560, w - 2 * innerPadPx - edgeGap);
   const cxTitle = innerPadPx + boxW / 2;
-  const textInset = Math.max(14, Math.round(innerPadPx * 1.2));
+  const textInset = Math.max(CARD_PAD + 6, Math.round(innerPadPx * 1.05));
+
   const noteLines: string[] = [];
   if (notes) {
     noteLines.push(notes.moduleIndexHint, notes.firstLevelHint, notes.implantHint);
@@ -512,60 +514,130 @@ function appendFloorPlanConfigurationLegend(
     if (notes.tunnelNote) noteLines.push(notes.tunnelNote);
   }
   const innerTextW = Math.max(120, boxW - 2 * textInset);
-  const approxCharPx = noteBodyFs * 0.5;
-  const maxChars = Math.max(38, Math.floor(innerTextW / approxCharPx));
-  const wrappedNotes: string[] = [];
+  const approxCharPx = noteBodyFs * 0.52;
+  const maxChars = Math.max(28, Math.floor(innerTextW / approxCharPx));
+
+  let wrappedNotes: string[] = [];
   for (const line of noteLines) {
     wrappedNotes.push(...wrapLegendLine(line, maxChars));
   }
-  const notesBlockH =
-    wrappedNotes.length > 0
-      ? 22 + noteAfterTitleDy + wrappedNotes.length * noteLineDy
-      : 0;
-  const wrappedProtNote =
+
+  let wrappedProtNote: string[] =
     a.columnProtector
       ? wrapLegendLine(
           'Protetor de coluna (base dos montantes — cantos + faixas nas pegadas)',
           Math.max(
-            28,
+            24,
             Math.floor((boxW - 40) / Math.max(6, symBodyFs * 0.48))
           )
         )
       : [];
-  const protectorExtra =
-    wrappedProtNote.length > 1
-      ? (wrappedProtNote.length - 1) * Math.round(symBodyFs * 1.15)
-      : 0;
-  /** Bloco de símbolos (mini esquemas + guardas + protetor de coluna) + rodapé. */
-  const symbolBlockH = 158 + protectorExtra;
-  const boxH = Math.min(440, 24 + notesBlockH + symbolBlockH);
-  const x0 = innerPadPx;
-  const bottomReserve = Math.max(innerPadPx, 10);
-  const y0 = Math.max(innerPadPx, h - bottomReserve - boxH);
-  parts.push(
-    `<rect x="${x0}" y="${y0}" width="${boxW}" height="${boxH}" rx="7" fill="#f8fafc" fill-opacity="0.96" stroke="#e2e8f0" stroke-width="0.78"/>`
-  );
-  let ly = y0 + 14;
-  const lx = x0 + textInset;
-  if (wrappedNotes.length > 0) {
-    parts.push(
-      `<text x="${cxTitle}" y="${ly}" text-anchor="middle" font-size="${noteTitleFs}px" fill="#1e293b" font-family="${SVG_FONT_FAMILY}" font-weight="700" letter-spacing="0.05em">NOTAS DO DESENHO</text>`
-    );
-    ly += noteAfterTitleDy;
-    for (const line of wrappedNotes) {
-      parts.push(
-        `<text x="${lx}" y="${ly}" font-size="${noteBodyFs}px" fill="#334155" font-family="${SVG_FONT_FAMILY}">${escapeXml(line)}</text>`
-      );
-      ly += noteLineDy;
+
+  const hasGuard = a.guardRailSimple || a.guardRailDouble;
+
+  const measureSymbolsInnerHeight = (protLines: number): number => {
+    let ly = CARD_PAD + symSectionTitleFs + symSectionTitleFs + TITLE_TO_BODY_GAP;
+    ly += symSubtitleBoldFs + 6 + 34;
+    if (hasGuard) {
+      ly += symSubtitleBoldFs + TITLE_TO_BODY_GAP + 22 + TITLE_TO_BODY_GAP;
     }
-    ly += noteBeforeSymbolsGap;
+    if (a.columnProtector && protLines > 0) {
+      ly += 4 + 12 + protLines * symLineLead + 10;
+    }
+    ly += CARD_PAD;
+    return ly;
+  };
+
+  let symInnerH = measureSymbolsInnerHeight(wrappedProtNote.length);
+  const notesTailPad = noteBodyFs * 0.28 + CARD_PAD;
+  /** Altura do cartão de notas: padding + título + gap para primeira linha + linhas × entrelinha + folga inferior. */
+  const notesOuter = (n: number): number =>
+    n <= 0
+      ? 0
+      : CARD_PAD +
+        noteTitleFs +
+        noteTitleFs +
+        TITLE_TO_BODY_GAP +
+        n * noteLineLead +
+        notesTailPad;
+
+  const footerBlock = symFootNoteFs * 1.15 + FOOTER_GAP + innerPadPx * 0.35;
+  let budgetStack = Math.min(
+    legendReservePx - 8,
+    h - innerPadPx - footerBlock - 8
+  );
+
+  while (true) {
+    symInnerH = measureSymbolsInnerHeight(wrappedProtNote.length);
+    const symNeed = symInnerH;
+    const noteNeed =
+      wrappedNotes.length > 0
+        ? notesOuter(wrappedNotes.length) + SECTION_GAP
+        : 0;
+    if (noteNeed + symNeed <= budgetStack) break;
+    if (wrappedProtNote.length > 1) {
+      wrappedProtNote = wrappedProtNote.slice(0, wrappedProtNote.length - 1);
+      continue;
+    }
+    if (wrappedNotes.length > 1) {
+      wrappedNotes = wrappedNotes.slice(0, wrappedNotes.length - 1);
+      continue;
+    }
+    if (wrappedNotes.length === 1) {
+      wrappedNotes = ['… Ver resumo técnico para notas completas.'];
+      break;
+    }
+    break;
+  }
+
+  symInnerH = measureSymbolsInnerHeight(wrappedProtNote.length);
+  const notesCardH = notesOuter(wrappedNotes.length);
+  const symbolsCardH = symInnerH;
+
+  const footerBaseline = h - innerPadPx - symFootNoteFs * 0.22;
+  const symbolsCardBottom = footerBaseline - FOOTER_GAP;
+  const symbolsCardTop = symbolsCardBottom - symbolsCardH;
+  const notesCardBottom = wrappedNotes.length > 0 ? symbolsCardTop - SECTION_GAP : symbolsCardTop;
+  const notesCardTop = wrappedNotes.length > 0 ? notesCardBottom - notesCardH : symbolsCardTop;
+
+  const x0 = innerPadPx;
+  const lx = x0 + textInset;
+
+  parts.push('<defs>');
+  if (notesCardH > 0) {
+    parts.push(
+      `<clipPath id="fp-leg-notes-clip"><rect x="${x0}" y="${notesCardTop}" width="${boxW}" height="${notesCardH}"/></clipPath>`
+    );
   }
   parts.push(
-    `<text x="${cxTitle}" y="${ly}" text-anchor="middle" font-size="${symSectionTitleFs}px" fill="#334155" font-family="${SVG_FONT_FAMILY}" font-weight="700" letter-spacing="0.05em">SÍMBOLOS (1.º nível · guardas · protetor de coluna)</text>`
+    `<clipPath id="fp-leg-sym-clip"><rect x="${x0}" y="${symbolsCardTop}" width="${boxW}" height="${symbolsCardH}"/></clipPath>`
   );
-  ly += Math.round(symSectionTitleFs * 0.78) + 5;
-  const onGround = a.firstLevelOnGround !== false;
-  /** Mini esquema: linha do piso + 1.º feixe. */
+  parts.push('</defs>');
+
+  if (wrappedNotes.length > 0) {
+    parts.push(
+      `<rect x="${x0}" y="${notesCardTop}" width="${boxW}" height="${notesCardH}" rx="7" fill="#f8fafc" fill-opacity="0.98" stroke="#e2e8f0" stroke-width="0.78"/>`
+    );
+    parts.push(`<g clip-path="url(#fp-leg-notes-clip)">`);
+    let ny = notesCardTop + CARD_PAD + noteTitleFs;
+    parts.push(
+      `<text x="${cxTitle}" y="${ny}" text-anchor="middle" font-size="${noteTitleFs}px" fill="#1e293b" font-family="${SVG_FONT_FAMILY}" font-weight="700" letter-spacing="0.05em">NOTAS DO DESENHO</text>`
+    );
+    ny += noteTitleFs + TITLE_TO_BODY_GAP;
+    for (const line of wrappedNotes) {
+      parts.push(
+        `<text x="${lx}" y="${ny}" font-size="${noteBodyFs}px" fill="#334155" font-family="${SVG_FONT_FAMILY}" dominant-baseline="alphabetic">${escapeXml(line)}</text>`
+      );
+      ny += noteLineLead;
+    }
+    parts.push('</g>');
+  }
+
+  parts.push(
+    `<rect x="${x0}" y="${symbolsCardTop}" width="${boxW}" height="${symbolsCardH}" rx="7" fill="#f8fafc" fill-opacity="0.98" stroke="#e2e8f0" stroke-width="0.78"/>`
+  );
+  parts.push(`<g clip-path="url(#fp-leg-sym-clip)">`);
+
   const miniGround = (
     gx: number,
     gy: number,
@@ -598,53 +670,61 @@ function appendFloorPlanConfigurationLegend(
     return bits.join('');
   };
 
+  const onGround = a.firstLevelOnGround !== false;
+  let ly = symbolsCardTop + CARD_PAD + symSectionTitleFs;
+  parts.push(
+    `<text x="${cxTitle}" y="${ly}" text-anchor="middle" font-size="${symSectionTitleFs}px" fill="#334155" font-family="${SVG_FONT_FAMILY}" font-weight="700" letter-spacing="0.05em">SÍMBOLOS (1.º nível · guardas · protetor de coluna)</text>`
+  );
+  ly += symSectionTitleFs + TITLE_TO_BODY_GAP;
   parts.push(
     `<text x="${lx}" y="${ly}" font-size="${symSubtitleBoldFs}px" fill="#64748b" font-family="${SVG_FONT_FAMILY}" font-weight="700">1.º eixo de feixe (destaque = opção do projeto)</text>`
   );
-  ly += 4;
+  ly += symSubtitleBoldFs + 6;
   parts.push(miniGround(lx, ly - 4, false, onGround));
   parts.push(
-    `<text x="${lx + 62}" y="${ly + 14}" font-size="${symBodyFs}px" fill="#0f766e" font-family="${SVG_FONT_FAMILY}">Ao piso · sem vão útil inferior</text>`
+    `<text x="${lx + 62}" y="${ly + 14}" font-size="${symBodyFs}px" fill="#0f766e" font-family="${SVG_FONT_FAMILY}" dominant-baseline="alphabetic">Ao piso · sem vão útil inferior</text>`
   );
   parts.push(miniGround(lx + 234, ly - 4, true, !onGround));
   parts.push(
-    `<text x="${lx + 296}" y="${ly + 14}" font-size="${symBodyFs}px" fill="#a16207" font-family="${SVG_FONT_FAMILY}">Elevado · folga sob o 1.º patamar</text>`
+    `<text x="${lx + 296}" y="${ly + 14}" font-size="${symBodyFs}px" fill="#a16207" font-family="${SVG_FONT_FAMILY}" dominant-baseline="alphabetic">Elevado · folga sob o 1.º patamar</text>`
   );
-  ly += 30;
+  ly += 34;
 
-  const hasGuard = a.guardRailSimple || a.guardRailDouble;
   if (hasGuard) {
     parts.push(
       `<text x="${lx}" y="${ly}" font-size="${symSubtitleBoldFs}px" fill="#64748b" font-family="${SVG_FONT_FAMILY}" font-weight="700">Guardas ao longo do vão (extremidades do desenho)</text>`
     );
-    ly += 12 + (symSubtitleBoldFs - 10.75) * 0.22;
+    ly += symSubtitleBoldFs + TITLE_TO_BODY_GAP;
     parts.push(
       `<line x1="${lx}" y1="${ly}" x2="${lx + 28}" y2="${ly}" stroke="#ca8a04" stroke-width="3.8" stroke-linecap="square"/>`,
-      `<text x="${lx + 36}" y="${ly + 4}" font-size="${symBodyFs}px" fill="#713f12" font-family="${SVG_FONT_FAMILY}">Simples (1 rail)</text>`,
+      `<text x="${lx + 36}" y="${ly + 4}" font-size="${symBodyFs}px" fill="#713f12" font-family="${SVG_FONT_FAMILY}" dominant-baseline="alphabetic">Simples (1 rail)</text>`,
       `<line x1="${lx + 152}" y1="${ly - 3}" x2="${lx + 180}" y2="${ly - 3}" stroke="#b91c1c" stroke-width="2.4" stroke-linecap="square"/>`,
       `<line x1="${lx + 152}" y1="${ly + 3}" x2="${lx + 180}" y2="${ly + 3}" stroke="#b91c1c" stroke-width="2.4" stroke-linecap="square"/>`,
-      `<text x="${lx + 188}" y="${ly + 4}" font-size="${symBodyFs}px" fill="#7f1d1d" font-family="${SVG_FONT_FAMILY}">Dupla (2 rails)</text>`
+      `<text x="${lx + 188}" y="${ly + 4}" font-size="${symBodyFs}px" fill="#7f1d1d" font-family="${SVG_FONT_FAMILY}" dominant-baseline="alphabetic">Dupla (2 rails)</text>`
     );
-    ly += 20 + (symBodyFs - 10.25) * 0.28;
+    ly += 22 + TITLE_TO_BODY_GAP;
   }
 
-  if (a.columnProtector) {
-    let py = ly;
+  if (a.columnProtector && wrappedProtNote.length > 0) {
+    ly += 4;
+    const py0 = ly;
     parts.push(
-      `<rect x="${lx}" y="${py - 8}" width="23" height="9.5" rx="1.5" fill="#ea580c" stroke="#9a3412" stroke-width="0.8"/>`
+      `<rect x="${lx}" y="${py0 - 8}" width="23" height="9.5" rx="1.5" fill="#ea580c" stroke="#9a3412" stroke-width="0.8"/>`
     );
+    let py = py0;
     for (const pl of wrappedProtNote) {
       parts.push(
-        `<text x="${lx + 31}" y="${py}" font-size="${symBodyFs}px" fill="#431407" font-family="${SVG_FONT_FAMILY}">${escapeXml(pl)}</text>`
+        `<text x="${lx + 31}" y="${py}" font-size="${symBodyFs}px" fill="#431407" font-family="${SVG_FONT_FAMILY}" dominant-baseline="alphabetic">${escapeXml(pl)}</text>`
       );
-      py += Math.round(symBodyFs * 1.15);
+      py += symLineLead;
     }
     ly = py + 6;
   }
 
-  const footY = y0 + boxH - Math.max(innerPadPx + 6, 20);
+  parts.push('</g>');
+
   parts.push(
-    `<text x="${cxTitle}" y="${footY}" text-anchor="middle" font-size="${symFootNoteFs}px" fill="#64748b" font-family="${SVG_FONT_FAMILY}">Convênio alinhado à vista frontal e ao resumo técnico.</text>`
+    `<text x="${cxTitle}" y="${footerBaseline}" text-anchor="middle" font-size="${symFootNoteFs}px" fill="#64748b" font-family="${SVG_FONT_FAMILY}" dominant-baseline="alphabetic">Convênio alinhado à vista frontal e ao resumo técnico.</text>`
   );
 }
 
@@ -1357,6 +1437,7 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
   appendFloorPlanConfigurationLegend(model, parts, {
     innerPadPx: innerPad,
     minSvgFs,
+    legendReservePx,
   });
 
   for (const lb of model.labels) {
