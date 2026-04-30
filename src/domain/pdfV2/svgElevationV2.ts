@@ -89,9 +89,16 @@ const ELEV_TYPO_DIM_UPRIGHT_MM = 1.18;
  * rótulos em duas linhas (pt-BR) sem sobreposição nem truncagem no encaixe da folha.
  */
 const ELEV_VERTICAL_DIM_STEP_LS = 15.25;
+/**
+ * Rótulos das cotas verticais intermédias ficam à direita da cota «H total»,
+ * na calha lateral — evita sobreposição com montantes/piso quando o segmento é baixo.
+ */
+const ELEV_VERTICAL_SEG_LABEL_PAST_TOTAL_DIM_PX = 10;
+/** Gap mínimo entre o extremo direito das marcas de cota e o início do texto (px). */
+const ELEV_VERTICAL_SEG_LABEL_MIN_GAP_FROM_TICKS_PX = 8;
 /** Calha à direita da última coluna — espaço para «H total», patamares e notas sem encostar à moldura. */
 const ELEV_VERTICAL_DIM_RIGHT_GUTTER_PX = Math.round(
-  238 * ELEV_INTERIOR_TYPE_SCALE
+  248 * ELEV_INTERIOR_TYPE_SCALE
 );
 /** Reserva horizontal antes de `rackMaxW` na frontal: toda a cadeia de cotas + rótulos à direita do vão. */
 const ELEV_FRONT_DIM_CHAIN_CAP_PX = Math.round(448 * ELEV_INTERIOR_TYPE_SCALE);
@@ -553,6 +560,11 @@ function drawVerticalDimChain(
   const parts: string[] = [];
 
   const xTotal = rackRight + 10 + (detailCount + 1) * step;
+  /** Coluna única de rótulos à direita da linha de «H total». */
+  const xSegLabelBase = Math.max(
+    xTotal + ELEV_VERTICAL_SEG_LABEL_PAST_TOTAL_DIM_PX,
+    tickR + ELEV_VERTICAL_SEG_LABEL_MIN_GAP_FROM_TICKS_PX
+  );
   parts.push(extensionToDim(rackRight, xTotal - 2, yFloor, DIM_MAJOR));
   parts.push(extensionToDim(rackRight, xTotal - 2, yTop, DIM_MAJOR));
   parts.push(
@@ -560,7 +572,7 @@ function drawVerticalDimChain(
   );
   parts.push(
     textLines(
-      xTotal + 5,
+      xSegLabelBase,
       (yTop + yFloor) / 2 - 12.2 * ls,
       ['H total', formatMmPtBr(Math.round(uprightH))],
       {
@@ -575,7 +587,7 @@ function drawVerticalDimChain(
     let yN = (yTop + yFloor) / 2 + 16 * ls;
     for (const line of appendRightLines) {
       parts.push(
-        `<text x="${xTotal + 5}" y="${yN}" font-size="${
+        `<text x="${xSegLabelBase}" y="${yN}" font-size="${
           8.75 * ls * ELEV_TYPO_VERTICAL_DIM_CHAIN
         }px" fill="${DIM_MINOR}" font-family="${SVG_FONT_FAMILY}" font-weight="600">${escapeXml(
           line
@@ -645,7 +657,7 @@ function drawVerticalDimChain(
     if (Math.abs(yT - yB) < 0.5) continue;
     parts.push(
       textLines(
-        xDim + 4.5,
+        xSegLabelBase,
         midY - (compact ? 9.1 : 10.1) * ls,
         compact
           ? [`${segLabel(k)} · ${formatMmPtBr(mmRounded)}`]
@@ -1253,17 +1265,22 @@ function drawFrontRack(
   const dimTopY = ry - 20;
   const floorTop = rackBottom;
   const floorPad = 6;
+  /** Faces externas úteis dos montantes (inclui sangria das sapatas), para linha/piso visível em toda a largura. */
+  let floorSpanLeft = uprightXs[0]!;
+  let floorSpanRight = uprightXs[nMod]! + uprightWidthsPx[nMod]!;
+  for (let fi = 0; fi <= nMod; fi++) {
+    const ux = uprightXs[fi]!;
+    const uw = uprightWidthsPx[fi]!;
+    const prot = data.columnProtector === true;
+    const padXP = prot ? 0.95 : 0.35;
+    floorSpanLeft = Math.min(floorSpanLeft, ux - padXP);
+    floorSpanRight = Math.max(floorSpanRight, ux + uw + padXP);
+  }
 
   const parts: string[] = [];
 
   parts.push(
-    `<rect x="${rx - floorPad}" y="${floorTop}" width="${totalW + 2 * floorPad}" height="11" fill="${COL_FLOOR_FILL}" stroke="${COL_FLOOR}" stroke-width="1.35"/>`
-  );
-  parts.push(
-    `<line x1="${rx - floorPad}" y1="${floorTop}" x2="${rx + totalW + floorPad}" y2="${floorTop}" stroke="${COL_FLOOR}" stroke-width="2.2"/>`
-  );
-  parts.push(
-    `<text x="${rx + totalW / 2}" y="${floorTop + 8.5 * ls}" text-anchor="middle" font-size="${9.25 * ls}px" fill="${COL_FLOOR}" font-family="${SVG_FONT_FAMILY}" font-weight="700">PISO</text>`
+    `<rect x="${floorSpanLeft - floorPad}" y="${floorTop}" width="${floorSpanRight - floorSpanLeft + 2 * floorPad}" height="11" fill="${COL_FLOOR_FILL}" stroke="${COL_FLOOR}" stroke-width="1.35"/>`
   );
 
   const clearanceMm =
@@ -1303,6 +1320,13 @@ function drawFrontRack(
       );
     }
   }
+
+  parts.push(
+    `<line x1="${floorSpanLeft}" y1="${floorTop}" x2="${floorSpanRight}" y2="${floorTop}" stroke="${COL_FLOOR}" stroke-width="2.2"/>`
+  );
+  parts.push(
+    `<text x="${(floorSpanLeft + floorSpanRight) / 2}" y="${floorTop + 8.5 * ls}" text-anchor="middle" font-size="${9.25 * ls}px" fill="${COL_FLOOR}" font-family="${SVG_FONT_FAMILY}" font-weight="700">PISO</text>`
+  );
 
   if (showTunnelOpening && yPassTop < floorTop - 2.5) {
     const yMid = (yPassTop + floorTop) / 2;
@@ -1584,14 +1608,18 @@ function drawFrontRack(
   if (subtitle) minY = Math.min(minY, oy + 4);
   if (showTunnelOpening) minY = Math.min(minY, yPassTop - 10);
   const maxY = Math.max(rackBottom + 76 * ls, floorTop + 16, oy + ph * 0.98);
-  const minX = Math.min(rx - floorPad - 4, faceSpanLeft - 30, ox + 4);
+  const minX = Math.min(
+    floorSpanLeft - floorPad - 4,
+    faceSpanLeft - 30,
+    ox + 4
+  );
   const maxX = Math.max(dimRight, ox + pw - 6, rackRight + floorPad + 8);
   const bboxBase = { minX, minY, maxX, maxY };
   /** Folga extra ao bbox para «H total», níveis longos e cotas — encaixe usa bbox completo. */
   const bbox = prem
     ? {
         minX: bboxBase.minX - 8 * ls,
-        minY: bboxBase.minY - 16 * ls,
+        minY: bboxBase.minY - 5 * ls,
         maxX: bboxBase.maxX + 36 * ls,
         maxY: bboxBase.maxY + 14 * ls,
       }
@@ -1599,8 +1627,12 @@ function drawFrontRack(
   const structuralMinY =
     data.topTravamentoSuperior === true ? Math.min(ry, ry - 2.85) : ry;
   const structuralBbox: SvgBBox = {
-    minX: Math.min(rx - floorPad, faceSpanLeft),
-    maxX: Math.max(rackRight + floorPad, faceSpanRight),
+    minX: Math.min(floorSpanLeft - floorPad, faceSpanLeft),
+    maxX: Math.max(
+      rackRight + floorPad,
+      faceSpanRight,
+      floorSpanRight + floorPad
+    ),
     minY: structuralMinY,
     maxY: floorTop + 11,
   };
@@ -1993,7 +2025,7 @@ function drawLateral(
     prem && opts?.orthoSpread
       ? {
           minX: bboxLatBase.minX - 8 * ls,
-          minY: bboxLatBase.minY - 16 * ls,
+          minY: bboxLatBase.minY - 5 * ls,
           maxX: bboxLatBase.maxX + 38 * ls,
           maxY: bboxLatBase.maxY + 14 * ls,
         }
@@ -2065,6 +2097,11 @@ const ELEV_SPREAD_COL_GAP_PX = 0;
  * Manter 0–2; só aumentar se cotas superiores tocarem no texto.
  */
 const ELEV_SPREAD_CONTENT_PAD_TOP_PX = 1;
+/**
+ * Folga alvo (px SVG) entre o topo útil do painel ortográfico e o topo do bbox com cotas —
+ * evita centenas de px em branco sob «Vista frontal / lateral» (calha ~16–32 px).
+ */
+const ELEV_SPREAD_TOP_SLACK_TARGET_PX = 24;
 /**
  * Ganho final do par ortográfico (~5–8%) + cotas/textos proporcionais.
  * `lsPad = ls / ORTHO_REFINE` nos fitPad premium evita absorver o ganho em folga do fitBox.
@@ -2511,8 +2548,9 @@ function orthoSpreadPairVerticalNudgePx(
   const nMin = Math.max(-L.slackTop, -R.slackTop) + eps;
   const nMax = Math.min(L.slackBot, R.slackBot) - eps;
   if (nMax >= nMin) {
-    /** Encostar cotas+desenho à zona inferior útil (coerente com insets de rodapé). */
-    return Math.max(nMin, Math.min(nMax, nMax - 0.25));
+    const slackTopRef = Math.min(L.slackTop, R.slackTop);
+    const nudgeIdeal = ELEV_SPREAD_TOP_SLACK_TARGET_PX - slackTopRef;
+    return Math.max(nMin, Math.min(nMax, nudgeIdeal));
   }
   /**
    * Sem intervalo válido (cotas muito altas vs painel): empurra o par para dentro da área útil
