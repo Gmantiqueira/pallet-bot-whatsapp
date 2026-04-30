@@ -32,10 +32,11 @@ export function planModuleFaceLabel(
 }
 
 const COL_BG = '#ffffff';
-const COL_FRAME = '#e2e8f0';
+const COL_FRAME = '#eef2f7';
 /** Perímetro do galpão: discreto mas legível. */
 const COL_WH_FILL = '#f8fafc';
-const COL_WH_STROKE = '#94a3b8';
+/** Perímetro do compartimento — hierarquia alta (estrutura de implantação). */
+const COL_WH_STROKE = '#475569';
 /** Faixa de fileira: fundo contínuo atrás dos módulos (leitura de “linha”). */
 const COL_ROW_SINGLE = '#eef2f7';
 const COL_ROW_DOUBLE = '#e2edf8';
@@ -44,7 +45,7 @@ const COL_ROW_DOUBLE_FACE_A = '#dde8f6';
 const COL_ROW_DOUBLE_FACE_B = '#e8eef8';
 /** Linha ao longo da espinha (costas) entre frentes. */
 const COL_SPINE_LINE = '#475569';
-const SPINE_LINE_SW = 1.72;
+const SPINE_LINE_SW = 1.88;
 const SPINE_DASH = '4 3.5';
 /** Canal entre costas em dupla: leve contraste + limites explícitos. */
 const COL_SPINE_GAP_FILL = '#f1f5f9';
@@ -55,31 +56,32 @@ const COL_MOD_FILL = '#f1f5f9';
 /** Meio-módulo (1 baia): base mais fria + hachura; contorno índigo tracejado. */
 const COL_MOD_HALF_FILL = '#e0e7ff';
 const COL_MOD_HALF_STROKE = '#4f46e5';
-/** Contorno do módulo: hierarquia acima da subdivisão interna (baias) e da grelha. */
-const COL_MOD_STROKE = '#64748b';
-/** Dupla costas: contorno ligeiramente mais escuro — leitura de armação própria por face. */
-const COL_MOD_STROKE_DOUBLE = '#475569';
-const COL_MOD_STROKE_W = 1.74;
-const COL_MOD_STROKE_W_DOUBLE = 2.18;
+/** Contorno do módulo — peso visual forte vs cotas e notas. */
+const COL_MOD_STROKE = '#334155';
+/** Dupla costas: ainda mais marcado que simples. */
+const COL_MOD_STROKE_DOUBLE = '#1e293b';
+const COL_MOD_STROKE_W = 2.05;
+const COL_MOD_STROKE_W_DOUBLE = 2.42;
 const COL_MOD_TUNNEL_FILL = '#fffbeb';
-const COL_MOD_TUNNEL_STROKE = '#b45309';
+const COL_MOD_TUNNEL_STROKE = '#d97706';
 /**
- * Nível 1 — corredor operacional: máximo contraste na planta.
+ * Nível 1 — corredor operacional: tom suave (área de trabalho, não competir com estrutura).
  */
-const COL_CORRIDOR_OP_FILL = '#93c5fd';
-const COL_CORRIDOR_OP_STROKE = '#1d4ed8';
-const COL_CORRIDOR_OP_STROKE_W = 2.6;
+const COL_CORRIDOR_OP_FILL = '#dbeafe';
+const COL_CORRIDOR_OP_STROKE = '#3b82f6';
+const COL_CORRIDOR_OP_STROKE_W = 1.95;
 /** Passagem transversal (ainda legível, um degrau abaixo do corredor principal). */
-const COL_CROSS_FILL = '#bae6fd';
-const COL_CROSS_STROKE = '#0369a1';
-/** Túnel / passagem — contraste reforçado face ao corredor. */
-const COL_TUNNEL_FILL = '#fef3c7';
-const COL_TUNNEL_STROKE = '#b45309';
+const COL_CROSS_FILL = '#e0f2fe';
+const COL_CROSS_STROKE = '#0ea5e9';
+/** Túnel / passagem — tom âmbar suave vs corredor azul. */
+const COL_TUNNEL_FILL = '#fffbeb';
+const COL_TUNNEL_STROKE = '#d97706';
 /**
  * Nível 3 — área residual: leitura clara vs. corredor ativo.
  */
 const COL_RESIDUAL_FILL = '#f4f4f5';
 const COL_RESIDUAL_STROKE = '#a1a1aa';
+/** Cotas principais — escuro; cotas secundárias usam tons mais claros em `dimStrokeColor`. */
 const COL_DIM = '#111827';
 /** Texto sobre áreas “cheias”; WCAG ~4.5:1 vs branco não se aplica — halo + fundo garantem leitura. */
 const COL_CIRC_RES_TEXT = '#1c1917';
@@ -128,17 +130,17 @@ function svgLabelBackdropRect(
   return `<rect x="${cx - rw / 2}" y="${cy - rh / 2}" width="${rw}" height="${rh}" rx="${rx}" fill="#ffffff" fill-opacity="0.9"/>`;
 }
 /** Contorno da **faixa da linha** (unidade contínua), desenhado por cima dos módulos. */
-const COL_ROW_ENVELOPE_STROKE = '#334155';
-const ROW_ENVELOPE_SW = 2.92;
+const COL_ROW_ENVELOPE_STROKE = '#1e293b';
+const ROW_ENVELOPE_SW = 3.12;
 /** Aresta voltada à espinha (dupla): não usar o mesmo peso — evita “caixa” única. */
 const COL_ROW_ENVELOPE_SPINE_EDGE = '#94a3b8';
-const ROW_ENVELOPE_SPINE_EDGE_SW = 1.05;
+const ROW_ENVELOPE_SPINE_EDGE_SW = 0.95;
 
 /** ~+12,5% face ao bloco base 228×58 (faixa pedida 10–15%). */
 const OPERATION_DIRECTION_INDICATOR_SCALE = 1.125;
-const COL_OP_DIRECTION_LABEL = '#0f172a';
-const COL_OP_DIRECTION_BOX_STROKE = '#64748b';
-const COL_OP_DIRECTION_SHAFT = '#0f172a';
+const COL_OP_DIRECTION_LABEL = '#334155';
+const COL_OP_DIRECTION_BOX_STROKE = '#94a3b8';
+const COL_OP_DIRECTION_SHAFT = '#1e293b';
 
 function operationDirectionIndicatorMetrics(minFontPx?: number) {
   const k = OPERATION_DIRECTION_INDICATOR_SCALE;
@@ -240,7 +242,7 @@ function appendOperationalCorridorVisualExtras(
   }
   const inset = Math.min(32, longSide * 0.055);
   const col = COL_CORRIDOR_OP_STROKE;
-  const op = 0.2;
+  const op = 0.14;
   if (c.w >= c.h) {
     const y = c.y + c.h / 2;
     const x1 = c.x + inset;
@@ -375,7 +377,7 @@ function moduleDisplayFontOpacity(
   const raw = Math.max(minSvgFs, Math.min(fromCount, fromBox));
   const fontPx = Math.round(raw * PLAN_MODULE_INDEX_FONT_SCALE * 10) / 10;
   let opacity =
-    totalModules > 45 ? 0.74 : totalModules > 28 ? 0.8 : totalModules > 16 ? 0.85 : 0.9;
+    totalModules > 45 ? 0.8 : totalModules > 28 ? 0.86 : totalModules > 16 ? 0.9 : 0.93;
   if (raw < 13) opacity *= 0.96;
   const nudgeY = -Math.min(5, s.h * 0.055);
   const nudgeX = s.w >= s.h ? Math.min(4, s.w * 0.018) : 0;
@@ -541,7 +543,7 @@ function appendFloorPlanConfigurationLegend(
   const bottomReserve = Math.max(innerPadPx, 10);
   const y0 = Math.max(innerPadPx, h - bottomReserve - boxH);
   parts.push(
-    `<rect x="${x0}" y="${y0}" width="${boxW}" height="${boxH}" rx="7" fill="#f8fafc" fill-opacity="0.97" stroke="#cbd5e1" stroke-width="0.95"/>`
+    `<rect x="${x0}" y="${y0}" width="${boxW}" height="${boxH}" rx="7" fill="#f8fafc" fill-opacity="0.96" stroke="#e2e8f0" stroke-width="0.78"/>`
   );
   let ly = y0 + 14;
   const lx = x0 + textInset;
@@ -711,7 +713,7 @@ function appendFloorPlanAccessoryGraphics(
           );
         } else {
           parts.push(
-            `<line x1="${x0 - xRun}" y1="${my}" x2="${x0 + xRun}" y2="${my}" stroke="${col}" stroke-width="${railStroke}" stroke-linecap="square" opacity="0.92"/>`
+            `<line x1="${x0 - xRun}" y1="${my}" x2="${x0 + xRun}" y2="${my}" stroke="${col}" stroke-width="${railStroke}" stroke-linecap="square" opacity="0.76"/>`
           );
         }
       }
@@ -810,7 +812,7 @@ function appendRowBandEnvelope(
   const isSpine = (edge: NonNullable<typeof e>) => edge === e;
   const strokeFor = (edge: NonNullable<typeof e>) =>
     isSpine(edge)
-      ? { c: COL_ROW_ENVELOPE_SPINE_EDGE, sw: ROW_ENVELOPE_SPINE_EDGE_SW, op: 0.9 }
+      ? { c: COL_ROW_ENVELOPE_SPINE_EDGE, sw: ROW_ENVELOPE_SPINE_EDGE_SW, op: 0.68 }
       : { c: COL_ROW_ENVELOPE_STROKE, sw: ROW_ENVELOPE_SW, op: 1 };
   const line = (
     x1: number,
@@ -879,11 +881,11 @@ function dimClassFor(d: FloorPlanDimension): string {
 function dimStrokeMain(d: FloorPlanDimension): number {
   switch (dimTierOf(d)) {
     case 'primary':
-      return 1.28;
+      return 1.38;
     case 'detail':
-      return 0.74;
+      return 0.62;
     default:
-      return 1.05;
+      return 1.02;
   }
 }
 
@@ -894,7 +896,40 @@ function dimStrokeColor(d: FloorPlanDimension): string {
     case 'detail':
       return '#94a3b8';
     default:
-      return '#475569';
+      return '#64748b';
+  }
+}
+
+function dimMainLineOpacity(d: FloorPlanDimension): number {
+  switch (dimTierOf(d)) {
+    case 'primary':
+      return 1;
+    case 'detail':
+      return 0.66;
+    default:
+      return 0.82;
+  }
+}
+
+function dimExtensionOpacity(d: FloorPlanDimension): number {
+  switch (dimTierOf(d)) {
+    case 'primary':
+      return 0.88;
+    case 'detail':
+      return 0.46;
+    default:
+      return 0.58;
+  }
+}
+
+function dimExtensionStrokeWidth(d: FloorPlanDimension): number {
+  switch (dimTierOf(d)) {
+    case 'primary':
+      return 0.9;
+    case 'detail':
+      return 0.48;
+    default:
+      return 0.68;
   }
 }
 
@@ -916,7 +951,7 @@ function appendInterModuleColumnContinuity(
     if (!groups.has(k)) groups.set(k, []);
     groups.get(k)!.push(r);
   }
-  const COL = '#64748b';
+  const COL = '#94a3b8';
   for (const list of groups.values()) {
     list.sort((a, b) => (alongX ? a.x - b.x : a.y - b.y));
     for (let i = 0; i < list.length - 1; i++) {
@@ -929,14 +964,14 @@ function appendInterModuleColumnContinuity(
         const y0 = Math.min(a.y, b.y);
         const y1 = Math.max(a.y + a.h, b.y + b.h);
         parts.push(
-          `<line x1="${x}" y1="${y0}" x2="${x}" y2="${y1}" stroke="${COL}" stroke-width="1.32" stroke-linecap="square" opacity="0.76"/>`
+          `<line x1="${x}" y1="${y0}" x2="${x}" y2="${y1}" stroke="${COL}" stroke-width="1.02" stroke-linecap="square" opacity="0.52"/>`
         );
       } else {
         const y = a.y + a.h;
         const x0 = Math.min(a.x, b.x);
         const x1 = Math.max(a.x + a.w, b.x + b.w);
         parts.push(
-          `<line x1="${x0}" y1="${y}" x2="${x1}" y2="${y}" stroke="${COL}" stroke-width="1.32" stroke-linecap="square" opacity="0.76"/>`
+          `<line x1="${x0}" y1="${y}" x2="${x1}" y2="${y}" stroke="${COL}" stroke-width="1.02" stroke-linecap="square" opacity="0.52"/>`
         );
       }
     }
@@ -961,23 +996,23 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
   );
   parts.push('<defs>');
   parts.push(`<style>
-    /** Tipografia escalada com floor ≥ ~2,5 mm no PDF; halo nas cotas e rótulos sobre fundos complexos. */
-    .fp-drawing-meta { font: 700 ${r(Math.max(14, b * 1.08))}px ${SVG_FONT_FAMILY_CSS}; fill: #1e293b; letter-spacing: 0.01em; }
-    .fp-plan-hint { font: 400 ${r(Math.max(12.5, b * 0.96))}px ${SVG_FONT_FAMILY_CSS}; fill: #475569; }
-    .fp-row-legend { font: 700 ${r(Math.max(13, b * 1.02))}px ${SVG_FONT_FAMILY_CSS}; fill: #334155; letter-spacing: 0.01em; }
-    .fp-first-level { font: 400 ${r(Math.max(12, b * 0.94))}px ${SVG_FONT_FAMILY_CSS}; fill: #0f766e; }
-    .fp-anno-heading { font: 700 ${r(Math.max(11, b * 0.93))}px ${SVG_FONT_FAMILY_CSS}; fill: #475569; letter-spacing: 0.06em; text-transform: uppercase; }
-    .fp-circ-op { font: 700 ${r(Math.max(16.1, b * 1.06))}px ${SVG_FONT_FAMILY_CSS}; fill: #0f172a; }
-    .fp-circ { font: 700 ${r(Math.max(16.1, b * 1.06))}px ${SVG_FONT_FAMILY_CSS}; }
-    .fp-circ-res { font: 700 ${r(Math.max(14.375, b))}px ${SVG_FONT_FAMILY_CSS}; fill: ${COL_CIRC_RES_TEXT}; }
-    .fp-dim { font: 700 ${r(Math.max(20.7, b * 1.22))}px ${SVG_FONT_FAMILY_CSS}; fill: ${COL_DIM}; paint-order: stroke fill; stroke: #ffffff; stroke-width: ${dimStroke}px; stroke-opacity: 0.93; }
+    /** Hierarquia: meta/títulos < cotas < estrutura (traços de módulo/galpão). Textos auxiliares mais leves. */
+    .fp-drawing-meta { font: 700 ${r(Math.max(14, b * 1.08))}px ${SVG_FONT_FAMILY_CSS}; fill: #475569; letter-spacing: 0.01em; opacity: 0.92; }
+    .fp-plan-hint { font: 400 ${r(Math.max(12.5, b * 0.96))}px ${SVG_FONT_FAMILY_CSS}; fill: #94a3b8; opacity: 0.88; }
+    .fp-row-legend { font: 600 ${r(Math.max(13, b * 1.02))}px ${SVG_FONT_FAMILY_CSS}; fill: #64748b; letter-spacing: 0.01em; opacity: 0.9; }
+    .fp-first-level { font: 400 ${r(Math.max(12, b * 0.94))}px ${SVG_FONT_FAMILY_CSS}; fill: #0d9488; opacity: 0.85; }
+    .fp-anno-heading { font: 600 ${r(Math.max(11, b * 0.93))}px ${SVG_FONT_FAMILY_CSS}; fill: #94a3b8; letter-spacing: 0.06em; text-transform: uppercase; opacity: 0.82; }
+    .fp-circ-op { font: 700 ${r(Math.max(16.1, b * 1.06))}px ${SVG_FONT_FAMILY_CSS}; fill: #1d4ed8; opacity: 0.94; }
+    .fp-circ { font: 700 ${r(Math.max(16.1, b * 1.06))}px ${SVG_FONT_FAMILY_CSS}; opacity: 0.88; }
+    .fp-circ-res { font: 700 ${r(Math.max(14.375, b))}px ${SVG_FONT_FAMILY_CSS}; fill: ${COL_CIRC_RES_TEXT}; opacity: 0.78; }
+    .fp-dim { font: 700 ${r(Math.max(20.7, b * 1.22))}px ${SVG_FONT_FAMILY_CSS}; fill: ${COL_DIM}; paint-order: stroke fill; stroke: #ffffff; stroke-width: ${dimStroke}px; stroke-opacity: 0.9; opacity: 0.92; }
     .fp-dim-primary { font: 700 ${r(Math.max(24.15, b * 1.32))}px ${SVG_FONT_FAMILY_CSS}; fill: #0f172a; letter-spacing: 0.02em; paint-order: stroke fill; stroke: #ffffff; stroke-width: ${r(dimStroke * 1.08)}px; stroke-opacity: 0.94; }
-    .fp-dim-secondary { font: 700 ${r(Math.max(18.975, b * 1.18))}px ${SVG_FONT_FAMILY_CSS}; fill: #1e293b; paint-order: stroke fill; stroke: #ffffff; stroke-width: ${dimStroke}px; stroke-opacity: 0.92; }
-    .fp-dim-detail { font: 600 ${r(Math.max(15.525, b * 1.06))}px ${SVG_FONT_FAMILY_CSS}; fill: #334155; paint-order: stroke fill; stroke: #ffffff; stroke-width: ${r(dimStroke * 0.92)}px; stroke-opacity: 0.9; }
-    .fp-implantacao-hint { font: 400 ${r(Math.max(11.5, b * 0.92))}px ${SVG_FONT_FAMILY_CSS}; fill: #475569; font-style: italic; }
-    .fp-strategy-hint { font: 600 ${r(Math.max(11, b * 0.9))}px ${SVG_FONT_FAMILY_CSS}; fill: #475569; letter-spacing: 0.01em; }
-    .fp-mod-num { font-family: ${SVG_FONT_FAMILY_CSS}; font-weight: 600; font-size: ${r(b)}px; fill: #0f172a; paint-order: stroke fill; stroke: #ffffff; stroke-width: ${r(dimStroke * 0.85)}px; stroke-opacity: 0.92; }
-    .fp-mod-half { font-family: ${SVG_FONT_FAMILY_CSS}; font-weight: 600; font-size: ${r(b)}px; fill: #3730a3; letter-spacing: 0.02em; paint-order: stroke fill; stroke: #ffffff; stroke-width: ${r(dimStroke * 0.85)}px; stroke-opacity: 0.92; }
+    .fp-dim-secondary { font: 700 ${r(Math.max(18.975, b * 1.18))}px ${SVG_FONT_FAMILY_CSS}; fill: #64748b; paint-order: stroke fill; stroke: #ffffff; stroke-width: ${dimStroke}px; stroke-opacity: 0.82; opacity: 0.9; }
+    .fp-dim-detail { font: 600 ${r(Math.max(15.525, b * 1.06))}px ${SVG_FONT_FAMILY_CSS}; fill: #94a3b8; paint-order: stroke fill; stroke: #ffffff; stroke-width: ${r(dimStroke * 0.88)}px; stroke-opacity: 0.72; opacity: 0.82; }
+    .fp-implantacao-hint { font: 400 ${r(Math.max(11.5, b * 0.92))}px ${SVG_FONT_FAMILY_CSS}; fill: #94a3b8; font-style: italic; opacity: 0.8; }
+    .fp-strategy-hint { font: 500 ${r(Math.max(11, b * 0.9))}px ${SVG_FONT_FAMILY_CSS}; fill: #94a3b8; letter-spacing: 0.01em; opacity: 0.82; }
+    .fp-mod-num { font-family: ${SVG_FONT_FAMILY_CSS}; font-weight: 700; font-size: ${r(b)}px; fill: #0f172a; paint-order: stroke fill; stroke: #ffffff; stroke-width: ${r(dimStroke * 0.85)}px; stroke-opacity: 0.93; }
+    .fp-mod-half { font-family: ${SVG_FONT_FAMILY_CSS}; font-weight: 700; font-size: ${r(b)}px; fill: #4338ca; letter-spacing: 0.02em; paint-order: stroke fill; stroke: #ffffff; stroke-width: ${r(dimStroke * 0.85)}px; stroke-opacity: 0.9; }
   </style>`);
   /** 1.º eixo elevado: leitura imediata na planta (sombreia o módulo). */
   parts.push(
@@ -1002,19 +1037,19 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
   );
   parts.push(
     `<pattern id="fp-corridor-op-texture" patternUnits="userSpaceOnUse" width="22" height="22" patternTransform="rotate(36)">` +
-      `<path d="M0,22 l22,-22 M-4,4 l8,-8 M12,26 l8,-8" stroke="#1e3a8a" stroke-width="0.5" opacity="0.09"/>` +
+      `<path d="M0,22 l22,-22 M-4,4 l8,-8 M12,26 l8,-8" stroke="#1e3a8a" stroke-width="0.5" opacity="0.055"/>` +
       `</pattern>`
   );
   parts.push(
     `<pattern id="fp-cross-passage-texture" patternUnits="userSpaceOnUse" width="18" height="18" patternTransform="rotate(-28)">` +
-      `<path d="M0,18 l18,-18 M-3,6 l9,-9" stroke="#0369a1" stroke-width="0.45" opacity="0.078"/>` +
+      `<path d="M0,18 l18,-18 M-3,6 l9,-9" stroke="#0369a1" stroke-width="0.45" opacity="0.048"/>` +
       `</pattern>`
   );
   parts.push('</defs>');
   parts.push(`<rect width="${w}" height="${h}" fill="${COL_BG}"/>`);
   const fpPad = innerPad;
   parts.push(
-    `<rect x="${fpPad}" y="${fpPad}" width="${w - 2 * fpPad}" height="${h - 2 * fpPad}" fill="none" stroke="${COL_FRAME}" stroke-width="0.65"/>`
+    `<rect x="${fpPad}" y="${fpPad}" width="${w - 2 * fpPad}" height="${h - 2 * fpPad}" fill="none" stroke="${COL_FRAME}" stroke-width="0.52"/>`
   );
 
   const structureDraw = model.structureRects;
@@ -1036,11 +1071,11 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
 
   const o = model.warehouseOutline;
   parts.push(
-    `<rect x="${o.x}" y="${o.y}" width="${o.w}" height="${o.h}" fill="${COL_WH_FILL}" stroke="${COL_WH_STROKE}" stroke-width="2"/>`
+    `<rect x="${o.x}" y="${o.y}" width="${o.w}" height="${o.h}" fill="${COL_WH_FILL}" stroke="${COL_WH_STROKE}" stroke-width="2.38"/>`
   );
-  /** Limite físico do compartimento — lê-se como implantação, não grelha abstracta. */
+  /** Limite físico do compartimento — leitura auxiliar; não compete com o perímetro cheio. */
   parts.push(
-    `<rect x="${o.x - 5}" y="${o.y - 5}" width="${o.w + 10}" height="${o.h + 10}" fill="none" stroke="#64748b" stroke-width="0.85" stroke-dasharray="7 5" opacity="0.72"/>`
+    `<rect x="${o.x - 5}" y="${o.y - 5}" width="${o.w + 10}" height="${o.h + 10}" fill="none" stroke="#94a3b8" stroke-width="0.72" stroke-dasharray="7 5" opacity="0.52"/>`
   );
   for (const r of model.rowBandRects) {
     let fill: string;
@@ -1055,7 +1090,7 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
       fill = COL_ROW_SINGLE;
     }
     parts.push(
-      `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="${fill}" stroke="none" opacity="0.94"/>`
+      `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="${fill}" stroke="none" opacity="0.78"/>`
     );
   }
 
@@ -1065,24 +1100,24 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
     );
     if (g.w >= g.h) {
       parts.push(
-        `<line x1="${g.x}" y1="${g.y}" x2="${g.x + g.w}" y2="${g.y}" stroke="${COL_SPINE_GAP_DIVIDER}" stroke-width="${SPINE_GAP_DIVIDER_SW}" stroke-linecap="square" opacity="0.92"/>`
+        `<line x1="${g.x}" y1="${g.y}" x2="${g.x + g.w}" y2="${g.y}" stroke="${COL_SPINE_GAP_DIVIDER}" stroke-width="${SPINE_GAP_DIVIDER_SW}" stroke-linecap="square" opacity="0.68"/>`
       );
       parts.push(
-        `<line x1="${g.x}" y1="${g.y + g.h}" x2="${g.x + g.w}" y2="${g.y + g.h}" stroke="${COL_SPINE_GAP_DIVIDER}" stroke-width="${SPINE_GAP_DIVIDER_SW}" stroke-linecap="square" opacity="0.92"/>`
+        `<line x1="${g.x}" y1="${g.y + g.h}" x2="${g.x + g.w}" y2="${g.y + g.h}" stroke="${COL_SPINE_GAP_DIVIDER}" stroke-width="${SPINE_GAP_DIVIDER_SW}" stroke-linecap="square" opacity="0.68"/>`
       );
     } else {
       parts.push(
-        `<line x1="${g.x}" y1="${g.y}" x2="${g.x}" y2="${g.y + g.h}" stroke="${COL_SPINE_GAP_DIVIDER}" stroke-width="${SPINE_GAP_DIVIDER_SW}" stroke-linecap="square" opacity="0.92"/>`
+        `<line x1="${g.x}" y1="${g.y}" x2="${g.x}" y2="${g.y + g.h}" stroke="${COL_SPINE_GAP_DIVIDER}" stroke-width="${SPINE_GAP_DIVIDER_SW}" stroke-linecap="square" opacity="0.68"/>`
       );
       parts.push(
-        `<line x1="${g.x + g.w}" y1="${g.y}" x2="${g.x + g.w}" y2="${g.y + g.h}" stroke="${COL_SPINE_GAP_DIVIDER}" stroke-width="${SPINE_GAP_DIVIDER_SW}" stroke-linecap="square" opacity="0.92"/>`
+        `<line x1="${g.x + g.w}" y1="${g.y}" x2="${g.x + g.w}" y2="${g.y + g.h}" stroke="${COL_SPINE_GAP_DIVIDER}" stroke-width="${SPINE_GAP_DIVIDER_SW}" stroke-linecap="square" opacity="0.68"/>`
       );
     }
   }
 
   for (const ln of model.rowSpineLines) {
     parts.push(
-      `<line x1="${ln.x1}" y1="${ln.y1}" x2="${ln.x2}" y2="${ln.y2}" stroke="${COL_SPINE_LINE}" stroke-width="${SPINE_LINE_SW}" stroke-dasharray="${SPINE_DASH}" stroke-linecap="round" opacity="0.92"/>`
+      `<line x1="${ln.x1}" y1="${ln.y1}" x2="${ln.x2}" y2="${ln.y2}" stroke="${COL_SPINE_LINE}" stroke-width="${SPINE_LINE_SW}" stroke-dasharray="${SPINE_DASH}" stroke-linecap="round" opacity="0.98"/>`
     );
   }
 
@@ -1092,27 +1127,28 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
     let stroke: string;
     let sw: number;
     let dash = '';
-    let op = 0.94;
+    let op = 0.9;
     if (sem === 'tunnel') {
       fill = COL_TUNNEL_FILL;
       stroke = COL_TUNNEL_STROKE;
-      sw = 2.15;
+      sw = 1.72;
+      op = 0.9;
     } else if (sem === 'residual') {
       fill = COL_RESIDUAL_FILL;
       stroke = COL_RESIDUAL_STROKE;
-      sw = 1.15;
+      sw = 1.02;
       dash = '7 6';
-      op = 0.88;
+      op = 0.78;
     } else if (sem === 'cross_passage') {
       fill = COL_CROSS_FILL;
       stroke = COL_CROSS_STROKE;
-      sw = 1.85;
-      op = 0.96;
+      sw = 1.42;
+      op = 0.88;
     } else {
       fill = COL_CORRIDOR_OP_FILL;
       stroke = COL_CORRIDOR_OP_STROKE;
       sw = COL_CORRIDOR_OP_STROKE_W;
-      op = 1;
+      op = 0.92;
     }
     const dashAttr = dash ? ` stroke-dasharray="${dash}"` : '';
     parts.push(
@@ -1216,10 +1252,10 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
 
   appendInterModuleColumnContinuity(model, structureDraw, parts);
 
-  const COL_TOP_TRAV = '#64748b';
+  const COL_TOP_TRAV = '#94a3b8';
   for (const ln of model.topTravamentoLines) {
     parts.push(
-      `<line x1="${ln.x1}" y1="${ln.y1}" x2="${ln.x2}" y2="${ln.y2}" stroke="${COL_TOP_TRAV}" stroke-width="1.38" stroke-linecap="square" opacity="0.82"/>`
+      `<line x1="${ln.x1}" y1="${ln.y1}" x2="${ln.x2}" y2="${ln.y2}" stroke="${COL_TOP_TRAV}" stroke-width="1.22" stroke-linecap="square" opacity="0.55"/>`
     );
   }
 
@@ -1250,7 +1286,6 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
 
   parts.push(orientationArrowSvg(o, model.beamSpanAlong, minSvgFs));
 
-  const dimExtStroke = 0.82;
   const tick = 6.5;
 
   const dimRank = (d: FloorPlanDimension): number =>
@@ -1262,31 +1297,32 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
   for (const d of dimensionsSorted) {
     const mainW = dimStrokeMain(d);
     const colDim = dimStrokeColor(d);
-    const extOp =
-      dimTierOf(d) === 'primary' ? 0.9 : dimTierOf(d) === 'detail' ? 0.62 : 0.78;
+    const extOp = dimExtensionOpacity(d);
+    const extW = dimExtensionStrokeWidth(d);
+    const mainOp = dimMainLineOpacity(d);
     if (d.extensions?.length && d.textMode === 'corridor-outside') {
       for (const e of d.extensions) {
         parts.push(
-          `<line x1="${e.x1}" y1="${e.y1}" x2="${e.x2}" y2="${e.y2}" stroke="${colDim}" stroke-width="${dimExtStroke}" opacity="${extOp}"/>`
+          `<line x1="${e.x1}" y1="${e.y1}" x2="${e.x2}" y2="${e.y2}" stroke="${colDim}" stroke-width="${extW}" opacity="${extOp}"/>`
         );
       }
     }
     parts.push(
-      `<line x1="${d.x1}" y1="${d.y1}" x2="${d.x2}" y2="${d.y2}" stroke="${colDim}" stroke-width="${mainW}"/>`
+      `<line x1="${d.x1}" y1="${d.y1}" x2="${d.x2}" y2="${d.y2}" stroke="${colDim}" stroke-width="${mainW}" opacity="${mainOp}"/>`
     );
     if (d.textMode === 'corridor-outside') {
       const horiz = Math.abs(d.y2 - d.y1) < 0.5;
       if (horiz) {
         const y = d.y1;
         parts.push(
-          `<line x1="${d.x1}" y1="${y - tick}" x2="${d.x1}" y2="${y + tick}" stroke="${colDim}" stroke-width="${mainW}"/>`,
-          `<line x1="${d.x2}" y1="${y - tick}" x2="${d.x2}" y2="${y + tick}" stroke="${colDim}" stroke-width="${mainW}"/>`
+          `<line x1="${d.x1}" y1="${y - tick}" x2="${d.x1}" y2="${y + tick}" stroke="${colDim}" stroke-width="${mainW}" opacity="${mainOp}"/>`,
+          `<line x1="${d.x2}" y1="${y - tick}" x2="${d.x2}" y2="${y + tick}" stroke="${colDim}" stroke-width="${mainW}" opacity="${mainOp}"/>`
         );
       } else {
         const x = d.x1;
         parts.push(
-          `<line x1="${x - tick}" y1="${d.y1}" x2="${x + tick}" y2="${d.y1}" stroke="${colDim}" stroke-width="${mainW}"/>`,
-          `<line x1="${x - tick}" y1="${d.y2}" x2="${x + tick}" y2="${d.y2}" stroke="${colDim}" stroke-width="${mainW}"/>`
+          `<line x1="${x - tick}" y1="${d.y1}" x2="${x + tick}" y2="${d.y1}" stroke="${colDim}" stroke-width="${mainW}" opacity="${mainOp}"/>`,
+          `<line x1="${x - tick}" y1="${d.y2}" x2="${x + tick}" y2="${d.y2}" stroke="${colDim}" stroke-width="${mainW}" opacity="${mainOp}"/>`
         );
       }
     }
