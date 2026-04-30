@@ -11,8 +11,6 @@ import {
   SVG_FONT_FAMILY,
   SVG_FONT_FAMILY_CSS,
 } from '../../config/pdfFonts';
-import { floorPlanMinSvgFontPx } from './pdfTechnicalDrawingDefaults';
-import { floorPlanLegendReservePx, svgGridMetrics } from './layoutGrid';
 
 /** Ligação visual com a elevação (traços de baia = `ELEV_PALLET_TIER_STROKE`). */
 
@@ -32,11 +30,10 @@ export function planModuleFaceLabel(
 }
 
 const COL_BG = '#ffffff';
-const COL_FRAME = '#eef2f7';
+const COL_FRAME = '#e2e8f0';
 /** Perímetro do galpão: discreto mas legível. */
 const COL_WH_FILL = '#f8fafc';
-/** Perímetro do compartimento — hierarquia alta (estrutura de implantação). */
-const COL_WH_STROKE = '#475569';
+const COL_WH_STROKE = '#94a3b8';
 /** Faixa de fileira: fundo contínuo atrás dos módulos (leitura de “linha”). */
 const COL_ROW_SINGLE = '#eef2f7';
 const COL_ROW_DOUBLE = '#e2edf8';
@@ -45,7 +42,7 @@ const COL_ROW_DOUBLE_FACE_A = '#dde8f6';
 const COL_ROW_DOUBLE_FACE_B = '#e8eef8';
 /** Linha ao longo da espinha (costas) entre frentes. */
 const COL_SPINE_LINE = '#475569';
-const SPINE_LINE_SW = 1.88;
+const SPINE_LINE_SW = 1.72;
 const SPINE_DASH = '4 3.5';
 /** Canal entre costas em dupla: leve contraste + limites explícitos. */
 const COL_SPINE_GAP_FILL = '#f1f5f9';
@@ -56,102 +53,54 @@ const COL_MOD_FILL = '#f1f5f9';
 /** Meio-módulo (1 baia): base mais fria + hachura; contorno índigo tracejado. */
 const COL_MOD_HALF_FILL = '#e0e7ff';
 const COL_MOD_HALF_STROKE = '#4f46e5';
-/** Contorno do módulo — peso visual forte vs cotas e notas. */
-const COL_MOD_STROKE = '#334155';
-/** Dupla costas: ainda mais marcado que simples. */
-const COL_MOD_STROKE_DOUBLE = '#1e293b';
-const COL_MOD_STROKE_W = 2.05;
-const COL_MOD_STROKE_W_DOUBLE = 2.42;
+/** Contorno do módulo: hierarquia acima da subdivisão interna (baias) e da grelha. */
+const COL_MOD_STROKE = '#64748b';
+/** Dupla costas: contorno ligeiramente mais escuro — leitura de armação própria por face. */
+const COL_MOD_STROKE_DOUBLE = '#475569';
+const COL_MOD_STROKE_W = 1.74;
+const COL_MOD_STROKE_W_DOUBLE = 2.18;
 const COL_MOD_TUNNEL_FILL = '#fffbeb';
-const COL_MOD_TUNNEL_STROKE = '#d97706';
+const COL_MOD_TUNNEL_STROKE = '#b45309';
 /**
- * Nível 1 — corredor operacional: tom suave (área de trabalho, não competir com estrutura).
+ * Nível 1 — corredor operacional: máximo contraste na planta.
  */
-const COL_CORRIDOR_OP_FILL = '#dbeafe';
-const COL_CORRIDOR_OP_STROKE = '#3b82f6';
-const COL_CORRIDOR_OP_STROKE_W = 1.95;
+const COL_CORRIDOR_OP_FILL = '#93c5fd';
+const COL_CORRIDOR_OP_STROKE = '#1d4ed8';
+const COL_CORRIDOR_OP_STROKE_W = 2.6;
 /** Passagem transversal (ainda legível, um degrau abaixo do corredor principal). */
-const COL_CROSS_FILL = '#e0f2fe';
-const COL_CROSS_STROKE = '#0ea5e9';
-/** Túnel / passagem — tom âmbar suave vs corredor azul. */
-const COL_TUNNEL_FILL = '#fffbeb';
-const COL_TUNNEL_STROKE = '#d97706';
+const COL_CROSS_FILL = '#bae6fd';
+const COL_CROSS_STROKE = '#0369a1';
+/** Túnel / passagem — contraste reforçado face ao corredor. */
+const COL_TUNNEL_FILL = '#fef3c7';
+const COL_TUNNEL_STROKE = '#b45309';
 /**
  * Nível 3 — área residual: leitura clara vs. corredor ativo.
  */
 const COL_RESIDUAL_FILL = '#f4f4f5';
 const COL_RESIDUAL_STROKE = '#a1a1aa';
-/** Cotas principais — escuro; cotas secundárias usam tons mais claros em `dimStrokeColor`. */
 const COL_DIM = '#111827';
-/** Texto sobre áreas “cheias”; WCAG ~4.5:1 vs branco não se aplica — halo + fundo garantem leitura. */
-const COL_CIRC_RES_TEXT = '#1c1917';
-/** Quebra linhas longas na legenda para evitar palavras cortadas pelo clip horizontal. */
-function wrapLegendLine(line: string, maxChars: number): string[] {
-  const t = line.trim();
-  if (t.length <= maxChars) return [t];
-  const words = t.split(/\s+/);
-  const out: string[] = [];
-  let cur = '';
-  for (const w of words) {
-    if (!w) continue;
-    const next = cur ? `${cur} ${w}` : w;
-    if (next.length <= maxChars) {
-      cur = next;
-      continue;
-    }
-    if (cur) out.push(cur);
-    if (w.length <= maxChars) {
-      cur = w;
-    } else {
-      for (let i = 0; i < w.length; i += maxChars) {
-        out.push(w.slice(i, i + maxChars));
-      }
-      cur = '';
-    }
-  }
-  if (cur) out.push(cur);
-  return out;
-}
-
-/** Fundo branco semi-transparente atrás de rótulos sobre cor/hachura (contraste percebido). */
-function svgLabelBackdropRect(
-  cx: number,
-  cy: number,
-  textLen: number,
-  fontSize: number
-): string {
-  const tw = Math.max(fontSize * 2.8, textLen * fontSize * 0.56);
-  const th = fontSize * 1.45;
-  const padX = fontSize * 0.42;
-  const padY = fontSize * 0.32;
-  const rw = tw + 2 * padX;
-  const rh = th + 2 * padY;
-  const rx = Math.min(10, fontSize * 0.38);
-  return `<rect x="${cx - rw / 2}" y="${cy - rh / 2}" width="${rw}" height="${rh}" rx="${rx}" fill="#ffffff" fill-opacity="0.9"/>`;
-}
+/** Reserva inferior do viewBox para legenda + cotas (encaixe global do desenho). */
+const FLOOR_PLAN_LEGEND_RESERVE_PX = 568;
 /** Contorno da **faixa da linha** (unidade contínua), desenhado por cima dos módulos. */
-const COL_ROW_ENVELOPE_STROKE = '#1e293b';
-const ROW_ENVELOPE_SW = 3.12;
+const COL_ROW_ENVELOPE_STROKE = '#334155';
+const ROW_ENVELOPE_SW = 2.92;
 /** Aresta voltada à espinha (dupla): não usar o mesmo peso — evita “caixa” única. */
 const COL_ROW_ENVELOPE_SPINE_EDGE = '#94a3b8';
-const ROW_ENVELOPE_SPINE_EDGE_SW = 0.95;
+const ROW_ENVELOPE_SPINE_EDGE_SW = 1.05;
 
 /** ~+12,5% face ao bloco base 228×58 (faixa pedida 10–15%). */
 const OPERATION_DIRECTION_INDICATOR_SCALE = 1.125;
-const COL_OP_DIRECTION_LABEL = '#334155';
-const COL_OP_DIRECTION_BOX_STROKE = '#94a3b8';
-const COL_OP_DIRECTION_SHAFT = '#1e293b';
-
-/** Gap mínimo (unidades SVG da planta) entre o cartão de sentido e a bbox do desenho. */
-const OPERATION_DIRECTION_LAYOUT_GAP_PX = 22;
+const COL_OP_DIRECTION_LABEL = '#0f172a';
+const COL_OP_DIRECTION_BOX_STROKE = '#64748b';
+const COL_OP_DIRECTION_SHAFT = '#0f172a';
 
 function operationDirectionIndicatorMetrics() {
   const k = OPERATION_DIRECTION_INDICATOR_SCALE;
   const r = (n: number) => Math.round(n * k);
-  const baseFs = Math.round(11.5 * k * 1.15 * 10) / 10;
   return {
     gw: r(228),
     gh: r(58),
+    pad: r(12),
     rx: Math.max(4, r(5)),
     textInset: r(10),
     textY: r(22),
@@ -161,8 +110,7 @@ function operationDirectionIndicatorMetrics() {
     headTipInset: r(14),
     headBackInset: r(28),
     headHalfSpan: r(10),
-    /** Fixo — não escala com `minSvgFs`; o cartão não deve influenciar o fit do desenho. */
-    fontSize: baseFs,
+    fontSize: Math.round(11.5 * k * 1.15 * 10) / 10,
     boxStrokeW: Math.round(0.9 * k * 100) / 100,
     shaftW: Math.round(2.6 * k * 100) / 100,
     vertBottomInset: r(10),
@@ -171,176 +119,6 @@ function operationDirectionIndicatorMetrics() {
     vertBaseY: r(18),
     vertHalfW: r(8),
   } as const;
-}
-
-type FloorPlanCollisionRect = {
-  minX: number;
-  minY: number;
-  maxX: number;
-  maxY: number;
-};
-
-function appendFloorPlanDimensionCollisionRects(
-  dims: FloorPlanModelV2['dimensionLines'],
-  out: FloorPlanCollisionRect[]
-): void {
-  for (const d of dims) {
-    out.push({
-      minX: Math.min(d.x1, d.x2) - 8,
-      minY: Math.min(d.y1, d.y2) - 8,
-      maxX: Math.max(d.x1, d.x2) + 8,
-      maxY: Math.max(d.y1, d.y2) + 8,
-    });
-    if (d.textAnchor) {
-      out.push({
-        minX: d.textAnchor.x - 60,
-        minY: d.textAnchor.y - 28,
-        maxX: d.textAnchor.x + 60,
-        maxY: d.textAnchor.y + 28,
-      });
-    } else {
-      const midX = (d.x1 + d.x2) / 2;
-      const midY = (d.y1 + d.y2) / 2;
-      const isVert = Math.abs(d.x2 - d.x1) < 1;
-      if (isVert) {
-        const ox = d.offset ?? -14;
-        out.push({
-          minX: d.x1 + ox - 48,
-          minY: midY - 130,
-          maxX: d.x1 + ox + 32,
-          maxY: midY + 130,
-        });
-      } else {
-        out.push({
-          minX: midX - 220,
-          minY: d.y1 - 38,
-          maxX: midX + 220,
-          maxY: d.y1 + 14,
-        });
-      }
-    }
-  }
-}
-
-function collectFloorPlanCollisionRects(
-  model: FloorPlanModelV2,
-  structureDraw: StructureRect[],
-  circulationDraw: CirculationRect[]
-): FloorPlanCollisionRect[] {
-  const out: FloorPlanCollisionRect[] = [];
-  for (const s of structureDraw) {
-    out.push({ minX: s.x, minY: s.y, maxX: s.x + s.w, maxY: s.y + s.h });
-  }
-  for (const c of circulationDraw) {
-    out.push({ minX: c.x, minY: c.y, maxX: c.x + c.w, maxY: c.y + c.h });
-  }
-  appendFloorPlanDimensionCollisionRects(model.dimensionLines, out);
-  for (const r of model.rowBandRects) {
-    out.push({ minX: r.x, minY: r.y, maxX: r.x + r.w, maxY: r.y + r.h });
-  }
-  return out;
-}
-
-function operationIndicatorHitsObstacles(
-  gx: number,
-  gy: number,
-  gw: number,
-  gh: number,
-  obstacles: FloorPlanCollisionRect[]
-): boolean {
-  const pad = 0.75;
-  const ax0 = gx - pad;
-  const ay0 = gy - pad;
-  const ax1 = gx + gw + pad;
-  const ay1 = gy + gh + pad;
-  for (const r of obstacles) {
-    if (!(ax1 <= r.minX || ax0 >= r.maxX || ay1 <= r.minY || ay0 >= r.maxY)) {
-      return true;
-    }
-  }
-  return false;
-}
-
-/**
- * Coloca o cartão numa faixa livre acima da bbox do desenho (preferencial) ou à direita.
- * A geometria da seta fica dentro do cartão; colisões cobrem módulos, corredores, cotas e bandas de fileira.
- */
-function computeOperationDirectionIndicatorPosition(
-  model: FloorPlanModelV2,
-  drawingBounds: { minX: number; minY: number; maxX: number; maxY: number },
-  structureDraw: StructureRect[],
-  circulationDraw: CirculationRect[],
-  m: ReturnType<typeof operationDirectionIndicatorMetrics>
-): { gx: number; gy: number } {
-  const GAP = OPERATION_DIRECTION_LAYOUT_GAP_PX;
-  const { gw, gh } = m;
-  const o = model.warehouseOutline;
-  const db = drawingBounds;
-  const obstacles = collectFloorPlanCollisionRects(
-    model,
-    structureDraw,
-    circulationDraw
-  );
-
-  const cxPreferred = o.x + o.w / 2 - gw / 2;
-  const slideStep = 26;
-  const yAbove = db.minY - GAP - gh;
-
-  const aboveGxCandidates = (): number[] => {
-    const xs: number[] = [cxPreferred];
-    for (let i = 1; i <= 28; i++) {
-      xs.push(cxPreferred + slideStep * i);
-      xs.push(cxPreferred - slideStep * i);
-    }
-    const minAllow = Math.min(db.minX, cxPreferred) - 140;
-    const maxAllow = Math.max(db.maxX - gw, cxPreferred) + 140;
-    const ranked = [...new Set(xs.map(x => Math.round(x * 10) / 10))].filter(
-      x => x >= minAllow && x <= maxAllow
-    );
-    ranked.sort(
-      (a, b) => Math.abs(a - cxPreferred) - Math.abs(b - cxPreferred)
-    );
-    return ranked;
-  };
-
-  const clearAbove = (gx: number, gy: number): boolean =>
-    gy + gh <= db.minY - GAP + 1e-6 &&
-    !operationIndicatorHitsObstacles(gx, gy, gw, gh, obstacles);
-
-  if (Number.isFinite(yAbove)) {
-    for (const gx of aboveGxCandidates()) {
-      if (clearAbove(gx, yAbove)) {
-        return { gx, gy: yAbove };
-      }
-    }
-  }
-
-  const xRight = db.maxX + GAP;
-  const yPreferred = o.y + o.h / 2 - gh / 2;
-  const yCand: number[] = [yPreferred];
-  for (let i = 1; i <= 36; i++) {
-    yCand.push(yPreferred + slideStep * i);
-    yCand.push(yPreferred - slideStep * i);
-  }
-  const ymin = db.minY - gh - 40;
-  const ymax = db.maxY + 40;
-  for (const gy of yCand) {
-    if (gy < ymin || gy > ymax) continue;
-    const gx = xRight;
-    if (
-      gx >= db.maxX + GAP - 1e-6 &&
-      !operationIndicatorHitsObstacles(gx, gy, gw, gh, obstacles)
-    ) {
-      return { gx, gy };
-    }
-  }
-
-  let gx = cxPreferred;
-  let gy = Math.min(o.y - gh - GAP, db.minY - GAP - gh);
-  for (let n = 0; n < 18 && operationIndicatorHitsObstacles(gx, gy, gw, gh, obstacles); n++) {
-    gx += (n % 2 === 0 ? 1 : -1) * slideStep * (Math.floor(n / 2) + 1);
-  }
-  return { gx, gy };
 }
 
 const SEM_ORDER: Record<FloorPlanCirculationSemantic, number> = {
@@ -358,8 +136,7 @@ function circulationSemantic(
 
 function corridorDisplayLabel(
   sem: FloorPlanCirculationSemantic,
-  minSidePx: number,
-  minSvgFs: number
+  minSidePx: number
 ): { text: string; fontSize: number } {
   const compact = minSidePx < 150;
   let text: string;
@@ -378,11 +155,12 @@ function corridorDisplayLabel(
       text = compact ? 'Corredor' : 'Corredor';
       break;
   }
-  const capPx = Math.min(minSidePx * 0.38, (compact ? 17 : 18) * 1.15);
-  const fromGeometry = Math.min((compact ? 13 : 14) * 1.15, minSidePx * 0.095 * 1.15);
-  const fontSize =
-    Math.round(Math.min(Math.max(minSvgFs, fromGeometry), capPx) * 10) / 10;
-  return { text, fontSize };
+  const fontSize = Math.max(
+    10 * 1.15,
+    Math.min((compact ? 12 : 13) * 1.15, minSidePx * 0.088 * 1.15)
+  );
+  const rounded = Math.round(fontSize * 10) / 10;
+  return { text, fontSize: rounded };
 }
 
 function sortCirculation(
@@ -415,7 +193,7 @@ function appendOperationalCorridorVisualExtras(
   }
   const inset = Math.min(32, longSide * 0.055);
   const col = COL_CORRIDOR_OP_STROKE;
-  const op = 0.14;
+  const op = 0.2;
   if (c.w >= c.h) {
     const y = c.y + c.h / 2;
     const x1 = c.x + inset;
@@ -431,6 +209,16 @@ function appendOperationalCorridorVisualExtras(
       `<line x1="${x}" y1="${y1}" x2="${x}" y2="${y2}" stroke="${col}" stroke-width="0.6" stroke-dasharray="4 11" stroke-linecap="round" opacity="${op}" pointer-events="none"/>`
     );
   }
+}
+
+function orientationArrowBounds(
+  o: FloorPlanModelV2['warehouseOutline'],
+  _beamAlong: 'x' | 'y'
+): { minX: number; minY: number; maxX: number; maxY: number } {
+  const { gw, gh, pad } = operationDirectionIndicatorMetrics();
+  const gx = o.x + o.w - gw - pad;
+  const gy = o.y + o.h - gh - pad;
+  return { minX: gx, minY: gy, maxX: gx + gw, maxY: gy + gh };
 }
 
 function computeFloorPlanDrawingBounds(
@@ -478,6 +266,9 @@ function computeFloorPlanDrawingBounds(
       }
     }
   }
+  const ab = orientationArrowBounds(o, model.beamSpanAlong);
+  bump(ab.minX, ab.minY, ab.maxX, ab.maxY);
+  bump(o.x - 16, o.y - 16, o.x + o.w + 16, o.y + o.h + 16);
   return { minX, minY, maxX, maxY };
 }
 
@@ -486,14 +277,13 @@ function fitTransformForDrawingBounds(
   viewW: number,
   viewH: number,
   fpPad: number,
-  legendReservePx: number,
-  innerGutterPx: number
+  legendReservePx: number
 ): string {
-  const gutter = Math.max(innerGutterPx, 14, Math.round(Math.min(viewW, viewH) * 0.017));
-  const safeL = fpPad + gutter;
-  const safeT = fpPad + gutter;
-  const safeR = viewW - fpPad - gutter;
-  const safeB = viewH - fpPad - gutter - legendReservePx;
+  const SAFE = 16;
+  const safeL = fpPad + SAFE;
+  const safeT = fpPad + SAFE;
+  const safeR = viewW - fpPad - SAFE;
+  const safeB = viewH - fpPad - SAFE - legendReservePx;
   const bw = Math.max(1, b.maxX - b.minX);
   const bh = Math.max(1, b.maxY - b.minY);
   const sx = (safeR - safeL) / bw;
@@ -518,8 +308,7 @@ const PLAN_MODULE_INDEX_FONT_SCALE = 1.18;
 /** Tamanho/opacidade do índice do módulo: muitos módulos ou caixa pequena → mais discreto. */
 function moduleDisplayFontOpacity(
   s: FloorPlanModelV2['structureRects'][0],
-  totalModules: number,
-  minSvgFs: number
+  totalModules: number
 ): { fontPx: number; opacity: number; nudgeX: number; nudgeY: number } {
   const minSide = Math.min(s.w, s.h);
   const fromCount =
@@ -533,10 +322,10 @@ function moduleDisplayFontOpacity(
             ? 19
             : 21;
   const fromBox = minSide * 0.22;
-  const raw = Math.max(minSvgFs, Math.min(fromCount, fromBox));
+  const raw = Math.max(12, Math.min(fromCount, fromBox));
   const fontPx = Math.round(raw * PLAN_MODULE_INDEX_FONT_SCALE * 10) / 10;
   let opacity =
-    totalModules > 45 ? 0.8 : totalModules > 28 ? 0.86 : totalModules > 16 ? 0.9 : 0.93;
+    totalModules > 45 ? 0.74 : totalModules > 28 ? 0.8 : totalModules > 16 ? 0.85 : 0.9;
   if (raw < 13) opacity *= 0.96;
   const nudgeY = -Math.min(5, s.h * 0.055);
   const nudgeX = s.w >= s.h ? Math.min(4, s.w * 0.018) : 0;
@@ -546,10 +335,9 @@ function moduleDisplayFontOpacity(
 /** Índice do módulo túnel na planta: legível dentro da pegada, coerente com o tom âmbar do túnel. */
 function tunnelModuleDisplayFontPx(
   s: FloorPlanModelV2['structureRects'][0],
-  moduleCount: number,
-  minSvgFs: number
+  _moduleCount: number
 ): number {
-  const { fontPx } = moduleDisplayFontOpacity(s, moduleCount, minSvgFs);
+  const { fontPx } = moduleDisplayFontOpacity(s, _moduleCount);
   const minSide = Math.min(s.w, s.h);
   const fromBox = minSide * 0.2;
   const merged = Math.max(fontPx, fromBox * PLAN_MODULE_INDEX_FONT_SCALE);
@@ -611,57 +399,39 @@ function appendColumnProtectorAlongModules(
 }
 
 /**
- * Legenda em dois cartões (notas vs símbolos), espacemento explícito e truncagem se exceder a faixa reservada.
+ * Legenda compacta: 1.º nível, guardas (simples/dupla), protetor de coluna — mesma semântica do resumo técnico.
  */
 function appendFloorPlanConfigurationLegend(
   model: FloorPlanModelV2,
-  parts: string[],
-  opts: { innerPadPx: number; minSvgFs: number; legendReservePx: number }
+  parts: string[]
 ): void {
-  const LEGEND_TITLE_VIS_SCALE = 1.28;
-  const LEGEND_BODY_VIS_SCALE = 1.22;
-  const CARD_PAD = 10;
-  const TITLE_TO_BODY_GAP = 9;
-  const SECTION_GAP = 18;
-  const FOOTER_GAP = 12;
-
-  const { innerPadPx, minSvgFs, legendReservePx } = opts;
-  const noteTitleFs = Math.max(
-    Math.round(11.25 * LEGEND_TITLE_VIS_SCALE * 10) / 10,
-    Math.round(minSvgFs * 1.08 * 10) / 10
-  );
-  const noteBodyFs = Math.max(
-    Math.round(9.25 * LEGEND_BODY_VIS_SCALE * 10) / 10,
-    Math.round(minSvgFs * 10) / 10
-  );
-  const symSectionTitleFs = Math.max(
-    Math.round(11.25 * LEGEND_TITLE_VIS_SCALE * 10) / 10,
-    Math.round(minSvgFs * 1.06 * 10) / 10
-  );
-  const symSubtitleBoldFs = Math.max(
-    Math.round(10.75 * LEGEND_BODY_VIS_SCALE * 10) / 10,
-    Math.round(minSvgFs * 1.02 * 10) / 10
-  );
-  const symBodyFs = Math.max(
-    Math.round(10.25 * LEGEND_BODY_VIS_SCALE * 10) / 10,
-    Math.round(minSvgFs * 0.98 * 10) / 10
-  );
-  const symFootNoteFs = Math.max(
-    Math.round(9.25 * LEGEND_BODY_VIS_SCALE * 10) / 10,
-    Math.round(minSvgFs * 0.95 * 10) / 10
-  );
-
-  const noteLineLead = noteBodyFs * 1.44;
-  const symLineLead = symBodyFs * 1.44;
+  /** Títulos de secção +40%; texto corpo da legenda +35% — leitura móvel/impressão. */
+  const LEGEND_TITLE_VIS_SCALE = 1.4;
+  const LEGEND_BODY_VIS_SCALE = 1.35;
+  const noteTitleFs =
+    Math.round(11.25 * LEGEND_TITLE_VIS_SCALE * 10) / 10;
+  const noteBodyFs =
+    Math.round(9.25 * LEGEND_BODY_VIS_SCALE * 10) / 10;
+  const symSectionTitleFs =
+    Math.round(11.25 * LEGEND_TITLE_VIS_SCALE * 10) / 10;
+  const symSubtitleBoldFs =
+    Math.round(10.75 * LEGEND_BODY_VIS_SCALE * 10) / 10;
+  const symBodyFs =
+    Math.round(10.25 * LEGEND_BODY_VIS_SCALE * 10) / 10;
+  const symFootNoteFs =
+    Math.round(9.25 * LEGEND_BODY_VIS_SCALE * 10) / 10;
+  const noteAfterTitleDy =
+    Math.round(16 * LEGEND_TITLE_VIS_SCALE * 10) / 10;
+  const noteLineDy =
+    Math.round(12 * LEGEND_BODY_VIS_SCALE * 10) / 10;
+  const noteBeforeSymbolsGap =
+    Math.round(8 * LEGEND_BODY_VIS_SCALE * 10) / 10;
 
   const { w, h } = model.viewBox;
   const a = model.planAccessories;
   const notes = model.planLegendNotes;
-  const edgeGap = Math.max(8, innerPadPx);
-  const boxW = Math.min(560, w - 2 * innerPadPx - edgeGap);
-  const cxTitle = innerPadPx + boxW / 2;
-  const textInset = Math.max(CARD_PAD + 6, Math.round(innerPadPx * 1.05));
-
+  const pad = 14;
+  const boxW = Math.min(520, w - 2 * pad - 8);
   const noteLines: string[] = [];
   if (notes) {
     noteLines.push(notes.moduleIndexHint, notes.firstLevelHint, notes.implantHint);
@@ -672,129 +442,39 @@ function appendFloorPlanConfigurationLegend(
     if (notes.bayClearSpanNote) noteLines.push(notes.bayClearSpanNote);
     if (notes.tunnelNote) noteLines.push(notes.tunnelNote);
   }
-  const innerTextW = Math.max(120, boxW - 2 * textInset);
-  const approxCharPx = noteBodyFs * 0.52;
-  const maxChars = Math.max(28, Math.floor(innerTextW / approxCharPx));
-
-  let wrappedNotes: string[] = [];
-  for (const line of noteLines) {
-    wrappedNotes.push(...wrapLegendLine(line, maxChars));
-  }
-
-  let wrappedProtNote: string[] =
-    a.columnProtector
-      ? wrapLegendLine(
-          'Protetor de coluna (base dos montantes — cantos + faixas nas pegadas)',
-          Math.max(
-            24,
-            Math.floor((boxW - 40) / Math.max(6, symBodyFs * 0.48))
-          )
-        )
-      : [];
-
-  const hasGuard = a.guardRailSimple || a.guardRailDouble;
-
-  const measureSymbolsInnerHeight = (protLines: number): number => {
-    let ly = CARD_PAD + symSectionTitleFs + symSectionTitleFs + TITLE_TO_BODY_GAP;
-    ly += symSubtitleBoldFs + 6 + 34;
-    if (hasGuard) {
-      ly += symSubtitleBoldFs + TITLE_TO_BODY_GAP + 22 + TITLE_TO_BODY_GAP;
-    }
-    if (a.columnProtector && protLines > 0) {
-      ly += 4 + 12 + protLines * symLineLead + 10;
-    }
-    ly += CARD_PAD;
-    return ly + 12;
-  };
-
-  let symInnerH = measureSymbolsInnerHeight(wrappedProtNote.length);
-  const notesTailPad = noteBodyFs * 0.55 + CARD_PAD + 8;
-  /** Uma linha de título + folga até ao corpo (baseline SVG). */
-  const notesTitleBlockH =
-    noteTitleFs + Math.round(noteTitleFs * 1.08) + TITLE_TO_BODY_GAP;
-  /** Altura do cartão de notas: padding + bloco de título + linhas × entrelinha + folga inferior. */
-  const notesOuter = (n: number): number =>
-    n <= 0
-      ? 0
-      : CARD_PAD + notesTitleBlockH + n * noteLineLead + notesTailPad;
-
-  const footerBlock = symFootNoteFs * 1.15 + FOOTER_GAP + innerPadPx * 0.35;
-  let budgetStack = Math.min(
-    legendReservePx - 8,
-    h - innerPadPx - footerBlock - 8
-  );
-
-  while (true) {
-    symInnerH = measureSymbolsInnerHeight(wrappedProtNote.length);
-    const symNeed = symInnerH;
-    const noteNeed =
-      wrappedNotes.length > 0
-        ? notesOuter(wrappedNotes.length) + SECTION_GAP
-        : 0;
-    if (noteNeed + symNeed <= budgetStack) break;
-    if (wrappedProtNote.length > 1) {
-      wrappedProtNote = wrappedProtNote.slice(0, wrappedProtNote.length - 1);
-      continue;
-    }
-    if (wrappedNotes.length > 1) {
-      wrappedNotes = wrappedNotes.slice(0, wrappedNotes.length - 1);
-      continue;
-    }
-    if (wrappedNotes.length === 1) {
-      wrappedNotes = ['… Ver resumo técnico para notas completas.'];
-      break;
-    }
-    break;
-  }
-
-  symInnerH = measureSymbolsInnerHeight(wrappedProtNote.length);
-  const notesCardH = notesOuter(wrappedNotes.length);
-  const symbolsCardH = symInnerH;
-
-  const footerBaseline = h - innerPadPx - symFootNoteFs * 0.22;
-  const symbolsCardBottom = footerBaseline - FOOTER_GAP;
-  const symbolsCardTop = symbolsCardBottom - symbolsCardH;
-  const notesCardBottom = wrappedNotes.length > 0 ? symbolsCardTop - SECTION_GAP : symbolsCardTop;
-  const notesCardTop = wrappedNotes.length > 0 ? notesCardBottom - notesCardH : symbolsCardTop;
-
-  const x0 = innerPadPx;
-  const lx = x0 + textInset;
-
-  parts.push('<defs>');
-  if (notesCardH > 0) {
-    parts.push(
-      `<clipPath id="fp-leg-notes-clip"><rect x="${x0}" y="${notesCardTop}" width="${boxW}" height="${notesCardH}"/></clipPath>`
-    );
-  }
+  const notesBlockH =
+    noteLines.length > 0
+      ? 26 + noteAfterTitleDy + noteLines.length * noteLineDy
+      : 0;
+  /** Bloco de símbolos (mini esquemas + guardas + protetor de coluna) + rodapé. */
+  const symbolBlockH = 202;
+  const boxH = Math.min(500, 28 + notesBlockH + symbolBlockH);
+  const x0 = pad;
+  const y0 = h - pad - boxH;
   parts.push(
-    `<clipPath id="fp-leg-sym-clip"><rect x="${x0}" y="${symbolsCardTop}" width="${boxW}" height="${symbolsCardH}"/></clipPath>`
+    `<rect x="${x0}" y="${y0}" width="${boxW}" height="${boxH}" rx="7" fill="#f8fafc" fill-opacity="0.97" stroke="#cbd5e1" stroke-width="0.95"/>`
   );
-  parts.push('</defs>');
-
-  if (wrappedNotes.length > 0) {
+  let ly = y0 + 17;
+  const lx = x0 + 12;
+  if (noteLines.length > 0) {
     parts.push(
-      `<rect x="${x0}" y="${notesCardTop}" width="${boxW}" height="${notesCardH}" rx="7" fill="#f8fafc" fill-opacity="0.98" stroke="#e2e8f0" stroke-width="0.78"/>`
+      `<text x="${lx}" y="${ly}" font-size="${noteTitleFs}px" fill="#334155" font-family="${SVG_FONT_FAMILY}" font-weight="700" letter-spacing="0.05em">NOTAS DO DESENHO</text>`
     );
-    parts.push(`<g clip-path="url(#fp-leg-notes-clip)">`);
-    let ny = notesCardTop + CARD_PAD + noteTitleFs;
-    parts.push(
-      `<text x="${cxTitle}" y="${ny}" text-anchor="middle" font-size="${noteTitleFs}px" fill="#1e293b" font-family="${SVG_FONT_FAMILY}" font-weight="700" letter-spacing="0.05em">NOTAS DO DESENHO</text>`
-    );
-    ny += Math.round(noteTitleFs * 1.08) + TITLE_TO_BODY_GAP;
-    for (const line of wrappedNotes) {
+    ly += noteAfterTitleDy;
+    for (const line of noteLines) {
       parts.push(
-        `<text x="${lx}" y="${ny}" font-size="${noteBodyFs}px" fill="#334155" font-family="${SVG_FONT_FAMILY}" dominant-baseline="alphabetic">${escapeXml(line)}</text>`
+        `<text x="${lx}" y="${ly}" font-size="${noteBodyFs}px" fill="#475569" font-family="${SVG_FONT_FAMILY}">${escapeXml(line)}</text>`
       );
-      ny += noteLineLead;
+      ly += noteLineDy;
     }
-    parts.push('</g>');
+    ly += noteBeforeSymbolsGap;
   }
-
   parts.push(
-    `<rect x="${x0}" y="${symbolsCardTop}" width="${boxW}" height="${symbolsCardH}" rx="7" fill="#f8fafc" fill-opacity="0.98" stroke="#e2e8f0" stroke-width="0.78"/>`
+    `<text x="${lx}" y="${ly}" font-size="${symSectionTitleFs}px" fill="#475569" font-family="${SVG_FONT_FAMILY}" font-weight="700" letter-spacing="0.05em">SÍMBOLOS (1.º nível · guardas · protetor de coluna)</text>`
   );
-  parts.push(`<g clip-path="url(#fp-leg-sym-clip)">`);
-
+  ly += Math.round(symSectionTitleFs * 0.85) + 8;
+  const onGround = a.firstLevelOnGround !== false;
+  /** Mini esquema: linha do piso + 1.º feixe. */
   const miniGround = (
     gx: number,
     gy: number,
@@ -827,69 +507,53 @@ function appendFloorPlanConfigurationLegend(
     return bits.join('');
   };
 
-  const onGround = a.firstLevelOnGround !== false;
-  let ly = symbolsCardTop + CARD_PAD + symSectionTitleFs;
-  parts.push(
-    `<text x="${cxTitle}" y="${ly}" text-anchor="middle" font-size="${symSectionTitleFs}px" fill="#334155" font-family="${SVG_FONT_FAMILY}" font-weight="700" letter-spacing="0.05em">SÍMBOLOS (1.º nível · guardas · protetor de coluna)</text>`
-  );
-  ly += symSectionTitleFs + TITLE_TO_BODY_GAP;
   parts.push(
     `<text x="${lx}" y="${ly}" font-size="${symSubtitleBoldFs}px" fill="#64748b" font-family="${SVG_FONT_FAMILY}" font-weight="700">1.º eixo de feixe (destaque = opção do projeto)</text>`
   );
-  ly += symSubtitleBoldFs + 6;
+  ly += 5;
   parts.push(miniGround(lx, ly - 4, false, onGround));
   parts.push(
-    `<text x="${lx + 62}" y="${ly + 14}" font-size="${symBodyFs}px" fill="#0f766e" font-family="${SVG_FONT_FAMILY}" dominant-baseline="alphabetic">Ao piso · sem vão útil inferior</text>`
+    `<text x="${lx + 62}" y="${ly + 15}" font-size="${symBodyFs}px" fill="#0f766e" font-family="${SVG_FONT_FAMILY}">Ao piso · sem vão útil inferior</text>`
   );
   parts.push(miniGround(lx + 234, ly - 4, true, !onGround));
   parts.push(
-    `<text x="${lx + 296}" y="${ly + 14}" font-size="${symBodyFs}px" fill="#a16207" font-family="${SVG_FONT_FAMILY}" dominant-baseline="alphabetic">Elevado · folga sob o 1.º patamar</text>`
+    `<text x="${lx + 296}" y="${ly + 15}" font-size="${symBodyFs}px" fill="#a16207" font-family="${SVG_FONT_FAMILY}">Elevado · folga sob o 1.º patamar</text>`
   );
-  ly += 34;
+  ly += 36;
 
+  const hasGuard = a.guardRailSimple || a.guardRailDouble;
   if (hasGuard) {
     parts.push(
       `<text x="${lx}" y="${ly}" font-size="${symSubtitleBoldFs}px" fill="#64748b" font-family="${SVG_FONT_FAMILY}" font-weight="700">Guardas ao longo do vão (extremidades do desenho)</text>`
     );
-    ly += symSubtitleBoldFs + TITLE_TO_BODY_GAP;
+    ly += 15 + (symSubtitleBoldFs - 10.75) * 0.25;
     parts.push(
       `<line x1="${lx}" y1="${ly}" x2="${lx + 28}" y2="${ly}" stroke="#ca8a04" stroke-width="3.8" stroke-linecap="square"/>`,
-      `<text x="${lx + 36}" y="${ly + 4}" font-size="${symBodyFs}px" fill="#713f12" font-family="${SVG_FONT_FAMILY}" dominant-baseline="alphabetic">Simples (1 rail)</text>`,
+      `<text x="${lx + 36}" y="${ly + 4}" font-size="${symBodyFs}px" fill="#713f12" font-family="${SVG_FONT_FAMILY}">Simples (1 rail)</text>`,
       `<line x1="${lx + 152}" y1="${ly - 3}" x2="${lx + 180}" y2="${ly - 3}" stroke="#b91c1c" stroke-width="2.4" stroke-linecap="square"/>`,
       `<line x1="${lx + 152}" y1="${ly + 3}" x2="${lx + 180}" y2="${ly + 3}" stroke="#b91c1c" stroke-width="2.4" stroke-linecap="square"/>`,
-      `<text x="${lx + 188}" y="${ly + 4}" font-size="${symBodyFs}px" fill="#7f1d1d" font-family="${SVG_FONT_FAMILY}" dominant-baseline="alphabetic">Dupla (2 rails)</text>`
+      `<text x="${lx + 188}" y="${ly + 4}" font-size="${symBodyFs}px" fill="#7f1d1d" font-family="${SVG_FONT_FAMILY}">Dupla (2 rails)</text>`
     );
-    ly += 22 + TITLE_TO_BODY_GAP;
+    ly += 24 + (symBodyFs - 10.25) * 0.35;
   }
 
-  if (a.columnProtector && wrappedProtNote.length > 0) {
-    ly += 4;
-    const py0 = ly;
+  if (a.columnProtector) {
     parts.push(
-      `<rect x="${lx}" y="${py0 - 8}" width="23" height="9.5" rx="1.5" fill="#ea580c" stroke="#9a3412" stroke-width="0.8"/>`
+      `<rect x="${lx}" y="${ly - 8}" width="23" height="9.5" rx="1.5" fill="#ea580c" stroke="#9a3412" stroke-width="0.8"/>`,
+      `<text x="${lx + 31}" y="${ly}" font-size="${symBodyFs}px" fill="#431407" font-family="${SVG_FONT_FAMILY}">Protetor de coluna (base dos montantes — cantos + faixas nas pegadas)</text>`
     );
-    let py = py0;
-    for (const pl of wrappedProtNote) {
-      parts.push(
-        `<text x="${lx + 31}" y="${py}" font-size="${symBodyFs}px" fill="#431407" font-family="${SVG_FONT_FAMILY}" dominant-baseline="alphabetic">${escapeXml(pl)}</text>`
-      );
-      py += symLineLead;
-    }
-    ly = py + 6;
+    ly += 19;
   }
-
-  parts.push('</g>');
 
   parts.push(
-    `<text x="${cxTitle}" y="${footerBaseline}" text-anchor="middle" font-size="${symFootNoteFs}px" fill="#64748b" font-family="${SVG_FONT_FAMILY}" dominant-baseline="alphabetic">Convênio alinhado à vista frontal e ao resumo técnico.</text>`
+    `<text x="${lx}" y="${y0 + boxH - 12}" font-size="${symFootNoteFs}px" fill="#94a3b8" font-family="${SVG_FONT_FAMILY}">Convênio alinhado à vista frontal e ao resumo técnico.</text>`
   );
 }
 
 /** Protetores de coluna nos cantos + guardas nas extremidades ao longo do vão (símbolo). */
 function appendFloorPlanAccessoryGraphics(
   model: FloorPlanModelV2,
-  parts: string[],
-  minTagPx: number
+  parts: string[]
 ): void {
   const a = model.planAccessories;
   const o = model.warehouseOutline;
@@ -950,7 +614,7 @@ function appendFloorPlanAccessoryGraphics(
           );
         } else {
           parts.push(
-            `<line x1="${x0 - xRun}" y1="${my}" x2="${x0 + xRun}" y2="${my}" stroke="${col}" stroke-width="${railStroke}" stroke-linecap="square" opacity="0.76"/>`
+            `<line x1="${x0 - xRun}" y1="${my}" x2="${x0 + xRun}" y2="${my}" stroke="${col}" stroke-width="${railStroke}" stroke-linecap="square" opacity="0.92"/>`
           );
         }
       }
@@ -958,9 +622,8 @@ function appendFloorPlanAccessoryGraphics(
       if (tag) {
         const isLeftEdge = x0 < o.x + o.w / 2;
         const tx = isLeftEdge ? x0 - 16 : x0 + 16;
-        const tagFs = Math.round(Math.max(14.375, minTagPx) * 10) / 10;
         parts.push(
-          `<text x="${tx}" y="${midY + 5}" text-anchor="${isLeftEdge ? 'end' : 'start'}" font-size="${tagFs}px" fill="${col}" stroke="#ffffff" stroke-width="${Math.max(0.55, tagFs * 0.035)}" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="700">${escapeXml(tag)}</text>`
+          `<text x="${tx}" y="${midY + 5}" text-anchor="${isLeftEdge ? 'end' : 'start'}" font-size="14.375px" fill="${col}" stroke="#ffffff" stroke-width="0.45" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="700">${escapeXml(tag)}</text>`
         );
       }
     } else if (kind === 'double') {
@@ -982,9 +645,8 @@ function appendFloorPlanAccessoryGraphics(
       }
       const ty = y0 + (y0 < o.y + o.h / 2 ? -14 : 16);
       if (tag) {
-        const tagFs = Math.round(Math.max(14.375, minTagPx) * 10) / 10;
         parts.push(
-          `<text x="${(x0 + x1) / 2}" y="${ty}" text-anchor="middle" font-size="${tagFs}px" fill="${col}" stroke="#ffffff" stroke-width="${Math.max(0.55, tagFs * 0.035)}" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="700">${escapeXml(tag)}</text>`
+          `<text x="${(x0 + x1) / 2}" y="${ty}" text-anchor="middle" font-size="14.375px" fill="${col}" stroke="#ffffff" stroke-width="0.45" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="700">${escapeXml(tag)}</text>`
         );
       }
     } else {
@@ -1004,9 +666,8 @@ function appendFloorPlanAccessoryGraphics(
       }
       const ty = y0 + (y0 < o.y + o.h / 2 ? -14 : 16);
       if (tag) {
-        const tagFs = Math.round(Math.max(14.375, minTagPx) * 10) / 10;
         parts.push(
-          `<text x="${(x0 + x1) / 2}" y="${ty}" text-anchor="middle" font-size="${tagFs}px" fill="${col}" stroke="#ffffff" stroke-width="${Math.max(0.55, tagFs * 0.035)}" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="700">${escapeXml(tag)}</text>`
+          `<text x="${(x0 + x1) / 2}" y="${ty}" text-anchor="middle" font-size="14.375px" fill="${col}" stroke="#ffffff" stroke-width="0.45" paint-order="stroke fill" font-family="${SVG_FONT_FAMILY}" font-weight="700">${escapeXml(tag)}</text>`
         );
       }
     }
@@ -1049,7 +710,7 @@ function appendRowBandEnvelope(
   const isSpine = (edge: NonNullable<typeof e>) => edge === e;
   const strokeFor = (edge: NonNullable<typeof e>) =>
     isSpine(edge)
-      ? { c: COL_ROW_ENVELOPE_SPINE_EDGE, sw: ROW_ENVELOPE_SPINE_EDGE_SW, op: 0.68 }
+      ? { c: COL_ROW_ENVELOPE_SPINE_EDGE, sw: ROW_ENVELOPE_SPINE_EDGE_SW, op: 0.9 }
       : { c: COL_ROW_ENVELOPE_STROKE, sw: ROW_ENVELOPE_SW, op: 1 };
   const line = (
     x1: number,
@@ -1070,27 +731,22 @@ function appendRowBandEnvelope(
 }
 
 function orientationArrowSvg(
-  beamAlong: 'x' | 'y',
-  m: ReturnType<typeof operationDirectionIndicatorMetrics>,
-  gx: number,
-  gy: number
+  o: FloorPlanModelV2['warehouseOutline'],
+  beamAlong: 'x' | 'y'
 ): string {
-  const { gw, gh } = m;
+  const m = operationDirectionIndicatorMetrics();
+  const { gw, gh, pad } = m;
+  const gx = o.x + o.w - gw - pad;
+  const gy = o.y + o.h - gh - pad;
   const ax = gx + gw / 2;
   const yArr = gy + m.arrowRowY;
-  const fs = m.fontSize;
-  const ty = gy + m.textY - fs * 0.55;
   const shaft =
     beamAlong === 'x'
       ? `<line x1="${gx + m.shaftStartInset}" y1="${yArr}" x2="${gx + gw - m.shaftEndInset}" y2="${yArr}" stroke="${COL_OP_DIRECTION_SHAFT}" stroke-width="${m.shaftW}"/><polygon points="${gx + gw - m.headTipInset},${yArr} ${gx + gw - m.headBackInset},${yArr - m.headHalfSpan} ${gx + gw - m.headBackInset},${yArr + m.headHalfSpan}" fill="${COL_OP_DIRECTION_SHAFT}"/>`
       : `<line x1="${ax}" y1="${gy + gh - m.vertBottomInset}" x2="${ax}" y2="${gy + m.vertTopInset}" stroke="${COL_OP_DIRECTION_SHAFT}" stroke-width="${m.shaftW}"/><polygon points="${ax},${gy + m.vertTipY} ${ax - m.vertHalfW},${gy + m.vertBaseY} ${ax + m.vertHalfW},${gy + m.vertBaseY}" fill="${COL_OP_DIRECTION_SHAFT}"/>`;
-  const tx = gx + m.textInset;
   return `<g>
     <rect x="${gx}" y="${gy}" width="${gw}" height="${gh}" rx="${m.rx}" fill="#f8fafc" fill-opacity="0.98" stroke="${COL_OP_DIRECTION_BOX_STROKE}" stroke-width="${m.boxStrokeW}"/>
-    <text x="${tx}" y="${ty}" font-size="${fs}px" fill="${COL_OP_DIRECTION_LABEL}" font-family="${SVG_FONT_FAMILY}" font-weight="700">
-      <tspan x="${tx}" dy="0">Sentido de operação</tspan>
-      <tspan x="${tx}" dy="1.14em">(empilhadeira)</tspan>
-    </text>
+    <text x="${gx + m.textInset}" y="${gy + m.textY}" font-size="${m.fontSize}px" fill="${COL_OP_DIRECTION_LABEL}" font-family="${SVG_FONT_FAMILY}" font-weight="700">Sentido de operação (empilhadeira)</text>
     ${shaft}
   </g>`;
 }
@@ -1116,11 +772,11 @@ function dimClassFor(d: FloorPlanDimension): string {
 function dimStrokeMain(d: FloorPlanDimension): number {
   switch (dimTierOf(d)) {
     case 'primary':
-      return 1.38;
+      return 1.28;
     case 'detail':
-      return 0.62;
+      return 0.74;
     default:
-      return 1.02;
+      return 1.05;
   }
 }
 
@@ -1131,40 +787,7 @@ function dimStrokeColor(d: FloorPlanDimension): string {
     case 'detail':
       return '#94a3b8';
     default:
-      return '#64748b';
-  }
-}
-
-function dimMainLineOpacity(d: FloorPlanDimension): number {
-  switch (dimTierOf(d)) {
-    case 'primary':
-      return 1;
-    case 'detail':
-      return 0.66;
-    default:
-      return 0.82;
-  }
-}
-
-function dimExtensionOpacity(d: FloorPlanDimension): number {
-  switch (dimTierOf(d)) {
-    case 'primary':
-      return 0.88;
-    case 'detail':
-      return 0.46;
-    default:
-      return 0.58;
-  }
-}
-
-function dimExtensionStrokeWidth(d: FloorPlanDimension): number {
-  switch (dimTierOf(d)) {
-    case 'primary':
-      return 0.9;
-    case 'detail':
-      return 0.48;
-    default:
-      return 0.68;
+      return '#475569';
   }
 }
 
@@ -1186,7 +809,7 @@ function appendInterModuleColumnContinuity(
     if (!groups.has(k)) groups.set(k, []);
     groups.get(k)!.push(r);
   }
-  const COL = '#94a3b8';
+  const COL = '#64748b';
   for (const list of groups.values()) {
     list.sort((a, b) => (alongX ? a.x - b.x : a.y - b.y));
     for (let i = 0; i < list.length - 1; i++) {
@@ -1199,14 +822,14 @@ function appendInterModuleColumnContinuity(
         const y0 = Math.min(a.y, b.y);
         const y1 = Math.max(a.y + a.h, b.y + b.h);
         parts.push(
-          `<line x1="${x}" y1="${y0}" x2="${x}" y2="${y1}" stroke="${COL}" stroke-width="1.02" stroke-linecap="square" opacity="0.52"/>`
+          `<line x1="${x}" y1="${y0}" x2="${x}" y2="${y1}" stroke="${COL}" stroke-width="1.32" stroke-linecap="square" opacity="0.76"/>`
         );
       } else {
         const y = a.y + a.h;
         const x0 = Math.min(a.x, b.x);
         const x1 = Math.max(a.x + a.w, b.x + b.w);
         parts.push(
-          `<line x1="${x0}" y1="${y}" x2="${x1}" y2="${y}" stroke="${COL}" stroke-width="1.02" stroke-linecap="square" opacity="0.52"/>`
+          `<line x1="${x0}" y1="${y}" x2="${x1}" y2="${y}" stroke="${COL}" stroke-width="1.32" stroke-linecap="square" opacity="0.76"/>`
         );
       }
     }
@@ -1218,36 +841,30 @@ function appendInterModuleColumnContinuity(
  */
 export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
   const { w, h } = model.viewBox;
-  const planGrid = svgGridMetrics(w, h);
-  const innerPad = planGrid.outerMarginPx;
-  const legendReservePx = floorPlanLegendReservePx(w, h);
-  const minSvgFs = floorPlanMinSvgFontPx(h, legendReservePx);
-  const r = (n: number) => Math.round(n * 10) / 10;
-  const b = minSvgFs;
-  const dimStroke = Math.max(0.48, r(b * 0.032));
   const parts: string[] = [];
   parts.push(
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">`
   );
   parts.push('<defs>');
   parts.push(`<style>
-    /* Hierarquia visual: textos auxiliares (leve) → cotas (médio) → estrutura (forte). */
-    .fp-drawing-meta { font: 700 ${r(Math.max(14, b * 1.08))}px ${SVG_FONT_FAMILY_CSS}; fill: #475569; letter-spacing: 0.01em; opacity: 0.92; }
-    .fp-plan-hint { font: 400 ${r(Math.max(12.5, b * 0.96))}px ${SVG_FONT_FAMILY_CSS}; fill: #94a3b8; opacity: 0.88; }
-    .fp-row-legend { font: 600 ${r(Math.max(13, b * 1.02))}px ${SVG_FONT_FAMILY_CSS}; fill: #64748b; letter-spacing: 0.01em; opacity: 0.9; }
-    .fp-first-level { font: 400 ${r(Math.max(12, b * 0.94))}px ${SVG_FONT_FAMILY_CSS}; fill: #0d9488; opacity: 0.85; }
-    .fp-anno-heading { font: 600 ${r(Math.max(11, b * 0.93))}px ${SVG_FONT_FAMILY_CSS}; fill: #94a3b8; letter-spacing: 0.06em; text-transform: uppercase; opacity: 0.82; }
-    .fp-circ-op { font: 700 ${r(Math.max(16.1, b * 1.06))}px ${SVG_FONT_FAMILY_CSS}; fill: #1d4ed8; opacity: 0.94; }
-    .fp-circ { font: 700 ${r(Math.max(16.1, b * 1.06))}px ${SVG_FONT_FAMILY_CSS}; opacity: 0.88; }
-    .fp-circ-res { font: 700 ${r(Math.max(14.375, b))}px ${SVG_FONT_FAMILY_CSS}; fill: ${COL_CIRC_RES_TEXT}; opacity: 0.78; }
-    .fp-dim { font: 700 ${r(Math.max(20.7, b * 1.22))}px ${SVG_FONT_FAMILY_CSS}; fill: ${COL_DIM}; paint-order: stroke fill; stroke: #ffffff; stroke-width: ${dimStroke}px; stroke-opacity: 0.9; opacity: 0.92; }
-    .fp-dim-primary { font: 700 ${r(Math.max(24.15, b * 1.32))}px ${SVG_FONT_FAMILY_CSS}; fill: #0f172a; letter-spacing: 0.02em; paint-order: stroke fill; stroke: #ffffff; stroke-width: ${r(dimStroke * 1.08)}px; stroke-opacity: 0.94; }
-    .fp-dim-secondary { font: 700 ${r(Math.max(18.975, b * 1.18))}px ${SVG_FONT_FAMILY_CSS}; fill: #64748b; paint-order: stroke fill; stroke: #ffffff; stroke-width: ${dimStroke}px; stroke-opacity: 0.82; opacity: 0.9; }
-    .fp-dim-detail { font: 600 ${r(Math.max(15.525, b * 1.06))}px ${SVG_FONT_FAMILY_CSS}; fill: #94a3b8; paint-order: stroke fill; stroke: #ffffff; stroke-width: ${r(dimStroke * 0.88)}px; stroke-opacity: 0.72; opacity: 0.82; }
-    .fp-implantacao-hint { font: 400 ${r(Math.max(11.5, b * 0.92))}px ${SVG_FONT_FAMILY_CSS}; fill: #94a3b8; font-style: italic; opacity: 0.8; }
-    .fp-strategy-hint { font: 500 ${r(Math.max(11, b * 0.9))}px ${SVG_FONT_FAMILY_CSS}; fill: #94a3b8; letter-spacing: 0.01em; opacity: 0.82; }
-    .fp-mod-num { font-family: ${SVG_FONT_FAMILY_CSS}; font-weight: 700; font-size: ${r(b)}px; fill: #0f172a; paint-order: stroke fill; stroke: #ffffff; stroke-width: ${r(dimStroke * 0.85)}px; stroke-opacity: 0.93; }
-    .fp-mod-half { font-family: ${SVG_FONT_FAMILY_CSS}; font-weight: 700; font-size: ${r(b)}px; fill: #4338ca; letter-spacing: 0.02em; paint-order: stroke fill; stroke: #ffffff; stroke-width: ${r(dimStroke * 0.85)}px; stroke-opacity: 0.9; }
+    /** Bloco superior: metadado → desenho → cotas → legenda (hierarquia). */
+    .fp-drawing-meta { font: 700 14px ${SVG_FONT_FAMILY_CSS}; fill: #334155; letter-spacing: 0.01em; }
+    .fp-plan-hint { font: 400 12.5px ${SVG_FONT_FAMILY_CSS}; fill: #64748b; }
+    .fp-row-legend { font: 700 13px ${SVG_FONT_FAMILY_CSS}; fill: #334155; letter-spacing: 0.01em; }
+    .fp-first-level { font: 400 12px ${SVG_FONT_FAMILY_CSS}; fill: #0f766e; }
+    .fp-anno-heading { font: 700 11px ${SVG_FONT_FAMILY_CSS}; fill: #64748b; letter-spacing: 0.06em; text-transform: uppercase; }
+    .fp-circ-op { font: 700 16.1px ${SVG_FONT_FAMILY_CSS}; fill: #0f172a; }
+    .fp-circ { font: 700 16.1px ${SVG_FONT_FAMILY_CSS}; }
+    .fp-circ-res { font: 700 14.375px ${SVG_FONT_FAMILY_CSS}; fill: #44403c; }
+    /** Cotas do desenho — +15% face ao passo anterior (legibilidade A4 / ecrã). */
+    .fp-dim { font: 700 20.7px ${SVG_FONT_FAMILY_CSS}; fill: ${COL_DIM}; }
+    .fp-dim-primary { font: 700 24.15px ${SVG_FONT_FAMILY_CSS}; fill: #0f172a; letter-spacing: 0.02em; }
+    .fp-dim-secondary { font: 700 18.975px ${SVG_FONT_FAMILY_CSS}; fill: #1e293b; }
+    .fp-dim-detail { font: 600 15.525px ${SVG_FONT_FAMILY_CSS}; fill: #475569; }
+    .fp-implantacao-hint { font: 400 11.5px ${SVG_FONT_FAMILY_CSS}; fill: #64748b; font-style: italic; }
+    .fp-strategy-hint { font: 600 11px ${SVG_FONT_FAMILY_CSS}; fill: #475569; letter-spacing: 0.01em; }
+    .fp-mod-num { font-family: ${SVG_FONT_FAMILY_CSS}; font-weight: 600; fill: #1e293b; }
+    .fp-mod-half { font-family: ${SVG_FONT_FAMILY_CSS}; font-weight: 600; fill: #4338ca; letter-spacing: 0.02em; }
   </style>`);
   /** 1.º eixo elevado: leitura imediata na planta (sombreia o módulo). */
   parts.push(
@@ -1272,19 +889,19 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
   );
   parts.push(
     `<pattern id="fp-corridor-op-texture" patternUnits="userSpaceOnUse" width="22" height="22" patternTransform="rotate(36)">` +
-      `<path d="M0,22 l22,-22 M-4,4 l8,-8 M12,26 l8,-8" stroke="#1e3a8a" stroke-width="0.5" opacity="0.055"/>` +
+      `<path d="M0,22 l22,-22 M-4,4 l8,-8 M12,26 l8,-8" stroke="#1e3a8a" stroke-width="0.5" opacity="0.09"/>` +
       `</pattern>`
   );
   parts.push(
     `<pattern id="fp-cross-passage-texture" patternUnits="userSpaceOnUse" width="18" height="18" patternTransform="rotate(-28)">` +
-      `<path d="M0,18 l18,-18 M-3,6 l9,-9" stroke="#0369a1" stroke-width="0.45" opacity="0.048"/>` +
+      `<path d="M0,18 l18,-18 M-3,6 l9,-9" stroke="#0369a1" stroke-width="0.45" opacity="0.078"/>` +
       `</pattern>`
   );
   parts.push('</defs>');
   parts.push(`<rect width="${w}" height="${h}" fill="${COL_BG}"/>`);
-  const fpPad = innerPad;
+  const fpPad = 14;
   parts.push(
-    `<rect x="${fpPad}" y="${fpPad}" width="${w - 2 * fpPad}" height="${h - 2 * fpPad}" fill="none" stroke="${COL_FRAME}" stroke-width="0.52"/>`
+    `<rect x="${fpPad}" y="${fpPad}" width="${w - 2 * fpPad}" height="${h - 2 * fpPad}" fill="none" stroke="${COL_FRAME}" stroke-width="0.65"/>`
   );
 
   const structureDraw = model.structureRects;
@@ -1294,31 +911,22 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
     structureDraw,
     circulationDraw
   );
-  const opDirectionMetrics = operationDirectionIndicatorMetrics();
-  const opDirectionPos = computeOperationDirectionIndicatorPosition(
-    model,
-    drawingBounds,
-    structureDraw,
-    circulationDraw,
-    opDirectionMetrics
-  );
   const fitTf = fitTransformForDrawingBounds(
     drawingBounds,
     w,
     h,
     fpPad,
-    legendReservePx,
-    innerPad
+    FLOOR_PLAN_LEGEND_RESERVE_PX
   );
   parts.push(`<g transform="${fitTf}">`);
 
   const o = model.warehouseOutline;
   parts.push(
-    `<rect x="${o.x}" y="${o.y}" width="${o.w}" height="${o.h}" fill="${COL_WH_FILL}" stroke="${COL_WH_STROKE}" stroke-width="2.38"/>`
+    `<rect x="${o.x}" y="${o.y}" width="${o.w}" height="${o.h}" fill="${COL_WH_FILL}" stroke="${COL_WH_STROKE}" stroke-width="2"/>`
   );
-  /** Limite físico do compartimento — leitura auxiliar; não compete com o perímetro cheio. */
+  /** Limite físico do compartimento — lê-se como implantação, não grelha abstracta. */
   parts.push(
-    `<rect x="${o.x - 5}" y="${o.y - 5}" width="${o.w + 10}" height="${o.h + 10}" fill="none" stroke="#94a3b8" stroke-width="0.72" stroke-dasharray="7 5" opacity="0.52"/>`
+    `<rect x="${o.x - 5}" y="${o.y - 5}" width="${o.w + 10}" height="${o.h + 10}" fill="none" stroke="#64748b" stroke-width="0.85" stroke-dasharray="7 5" opacity="0.72"/>`
   );
   for (const r of model.rowBandRects) {
     let fill: string;
@@ -1333,7 +941,7 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
       fill = COL_ROW_SINGLE;
     }
     parts.push(
-      `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="${fill}" stroke="none" opacity="0.78"/>`
+      `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="${fill}" stroke="none" opacity="0.94"/>`
     );
   }
 
@@ -1343,24 +951,24 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
     );
     if (g.w >= g.h) {
       parts.push(
-        `<line x1="${g.x}" y1="${g.y}" x2="${g.x + g.w}" y2="${g.y}" stroke="${COL_SPINE_GAP_DIVIDER}" stroke-width="${SPINE_GAP_DIVIDER_SW}" stroke-linecap="square" opacity="0.68"/>`
+        `<line x1="${g.x}" y1="${g.y}" x2="${g.x + g.w}" y2="${g.y}" stroke="${COL_SPINE_GAP_DIVIDER}" stroke-width="${SPINE_GAP_DIVIDER_SW}" stroke-linecap="square" opacity="0.92"/>`
       );
       parts.push(
-        `<line x1="${g.x}" y1="${g.y + g.h}" x2="${g.x + g.w}" y2="${g.y + g.h}" stroke="${COL_SPINE_GAP_DIVIDER}" stroke-width="${SPINE_GAP_DIVIDER_SW}" stroke-linecap="square" opacity="0.68"/>`
+        `<line x1="${g.x}" y1="${g.y + g.h}" x2="${g.x + g.w}" y2="${g.y + g.h}" stroke="${COL_SPINE_GAP_DIVIDER}" stroke-width="${SPINE_GAP_DIVIDER_SW}" stroke-linecap="square" opacity="0.92"/>`
       );
     } else {
       parts.push(
-        `<line x1="${g.x}" y1="${g.y}" x2="${g.x}" y2="${g.y + g.h}" stroke="${COL_SPINE_GAP_DIVIDER}" stroke-width="${SPINE_GAP_DIVIDER_SW}" stroke-linecap="square" opacity="0.68"/>`
+        `<line x1="${g.x}" y1="${g.y}" x2="${g.x}" y2="${g.y + g.h}" stroke="${COL_SPINE_GAP_DIVIDER}" stroke-width="${SPINE_GAP_DIVIDER_SW}" stroke-linecap="square" opacity="0.92"/>`
       );
       parts.push(
-        `<line x1="${g.x + g.w}" y1="${g.y}" x2="${g.x + g.w}" y2="${g.y + g.h}" stroke="${COL_SPINE_GAP_DIVIDER}" stroke-width="${SPINE_GAP_DIVIDER_SW}" stroke-linecap="square" opacity="0.68"/>`
+        `<line x1="${g.x + g.w}" y1="${g.y}" x2="${g.x + g.w}" y2="${g.y + g.h}" stroke="${COL_SPINE_GAP_DIVIDER}" stroke-width="${SPINE_GAP_DIVIDER_SW}" stroke-linecap="square" opacity="0.92"/>`
       );
     }
   }
 
   for (const ln of model.rowSpineLines) {
     parts.push(
-      `<line x1="${ln.x1}" y1="${ln.y1}" x2="${ln.x2}" y2="${ln.y2}" stroke="${COL_SPINE_LINE}" stroke-width="${SPINE_LINE_SW}" stroke-dasharray="${SPINE_DASH}" stroke-linecap="round" opacity="0.98"/>`
+      `<line x1="${ln.x1}" y1="${ln.y1}" x2="${ln.x2}" y2="${ln.y2}" stroke="${COL_SPINE_LINE}" stroke-width="${SPINE_LINE_SW}" stroke-dasharray="${SPINE_DASH}" stroke-linecap="round" opacity="0.92"/>`
     );
   }
 
@@ -1370,28 +978,27 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
     let stroke: string;
     let sw: number;
     let dash = '';
-    let op = 0.9;
+    let op = 0.94;
     if (sem === 'tunnel') {
       fill = COL_TUNNEL_FILL;
       stroke = COL_TUNNEL_STROKE;
-      sw = 1.72;
-      op = 0.9;
+      sw = 2.15;
     } else if (sem === 'residual') {
       fill = COL_RESIDUAL_FILL;
       stroke = COL_RESIDUAL_STROKE;
-      sw = 1.02;
+      sw = 1.15;
       dash = '7 6';
-      op = 0.78;
+      op = 0.88;
     } else if (sem === 'cross_passage') {
       fill = COL_CROSS_FILL;
       stroke = COL_CROSS_STROKE;
-      sw = 1.42;
-      op = 0.88;
+      sw = 1.85;
+      op = 0.96;
     } else {
       fill = COL_CORRIDOR_OP_FILL;
       stroke = COL_CORRIDOR_OP_STROKE;
       sw = COL_CORRIDOR_OP_STROKE_W;
-      op = 0.92;
+      op = 1;
     }
     const dashAttr = dash ? ` stroke-dasharray="${dash}"` : '';
     parts.push(
@@ -1409,20 +1016,14 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
       );
     }
     const minSide = Math.min(c.w, c.h);
-    const { text: circText, fontSize } = corridorDisplayLabel(
-      sem,
-      minSide,
-      minSvgFs
-    );
+    const { text: circText, fontSize } = corridorDisplayLabel(sem, minSide);
     const tcx = c.x + c.w / 2;
     const tcy = c.y + c.h / 2;
     if (sem === 'operational') {
-      parts.push(svgLabelBackdropRect(tcx, tcy, circText.length, fontSize));
       parts.push(
         `<text x="${tcx}" y="${tcy}" text-anchor="middle" dominant-baseline="middle" class="fp-circ-op" font-size="${fontSize}px">${escapeXml(circText)}</text>`
       );
     } else if (sem === 'residual') {
-      parts.push(svgLabelBackdropRect(tcx, tcy, circText.length, fontSize));
       parts.push(
         `<text x="${tcx}" y="${tcy}" text-anchor="middle" dominant-baseline="middle" class="fp-circ-res" font-size="${fontSize}px">${escapeXml(circText)}</text>`
       );
@@ -1462,11 +1063,9 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
       if (s.displayIndex !== undefined) {
         const cx = s.x + s.w / 2;
         const cy = s.y + s.h / 2;
-        const fsTunnel = tunnelModuleDisplayFontPx(s, moduleCount, minSvgFs);
-        const idxStr = String(s.displayIndex);
+        const fsTunnel = tunnelModuleDisplayFontPx(s, moduleCount);
         parts.push(
-          svgLabelBackdropRect(cx, cy, idxStr.length, fsTunnel),
-          `<text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="middle" font-size="${fsTunnel}px" fill="#431407" font-family="${SVG_FONT_FAMILY}" font-weight="700" paint-order="stroke fill" stroke="#ffffff" stroke-width="${Math.max(0.55, fsTunnel * 0.036)}" stroke-opacity="0.95">${escapeXml(idxStr)}</text>`
+          `<text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="middle" font-size="${fsTunnel}px" fill="#78350f" font-family="${SVG_FONT_FAMILY}" font-weight="600" opacity="0.9">${s.displayIndex}</text>`
         );
       }
     } else {
@@ -1495,10 +1094,10 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
 
   appendInterModuleColumnContinuity(model, structureDraw, parts);
 
-  const COL_TOP_TRAV = '#94a3b8';
+  const COL_TOP_TRAV = '#64748b';
   for (const ln of model.topTravamentoLines) {
     parts.push(
-      `<line x1="${ln.x1}" y1="${ln.y1}" x2="${ln.x2}" y2="${ln.y2}" stroke="${COL_TOP_TRAV}" stroke-width="1.22" stroke-linecap="square" opacity="0.55"/>`
+      `<line x1="${ln.x1}" y1="${ln.y1}" x2="${ln.x2}" y2="${ln.y2}" stroke="${COL_TOP_TRAV}" stroke-width="1.38" stroke-linecap="square" opacity="0.82"/>`
     );
   }
 
@@ -1507,8 +1106,7 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
     if (s.variant === 'tunnel') continue;
     const { fontPx, opacity, nudgeX, nudgeY } = moduleDisplayFontOpacity(
       s,
-      moduleCount,
-      minSvgFs
+      moduleCount
     );
     const tcx = s.x + s.w / 2 + nudgeX;
     const tcy = s.y + s.h / 2 + nudgeY;
@@ -1517,9 +1115,9 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
     let fs = fontPx;
     if (s.segmentType === 'half') {
       if (label.length > 10) {
-        fs = Math.max(minSvgFs * 0.88, fontPx * 0.66);
+        fs = Math.max(10, fontPx * 0.66);
       } else {
-        fs = Math.max(minSvgFs * 0.92, fontPx * 0.9);
+        fs = Math.max(11, fontPx * 0.9);
       }
     }
     parts.push(
@@ -1527,52 +1125,39 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
     );
   }
 
-  parts.push(
-    orientationArrowSvg(
-      model.beamSpanAlong,
-      opDirectionMetrics,
-      opDirectionPos.gx,
-      opDirectionPos.gy
-    )
-  );
+  parts.push(orientationArrowSvg(o, model.beamSpanAlong));
 
+  const dimExtStroke = 0.82;
   const tick = 6.5;
 
-  const dimRank = (d: FloorPlanDimension): number =>
-    dimTierOf(d) === 'primary' ? 2 : dimTierOf(d) === 'secondary' ? 1 : 0;
-  const dimensionsSorted = [...model.dimensionLines].sort(
-    (a, b) => dimRank(a) - dimRank(b)
-  );
-
-  for (const d of dimensionsSorted) {
+  for (const d of model.dimensionLines) {
     const mainW = dimStrokeMain(d);
     const colDim = dimStrokeColor(d);
-    const extOp = dimExtensionOpacity(d);
-    const extW = dimExtensionStrokeWidth(d);
-    const mainOp = dimMainLineOpacity(d);
+    const extOp =
+      dimTierOf(d) === 'primary' ? 0.9 : dimTierOf(d) === 'detail' ? 0.62 : 0.78;
     if (d.extensions?.length && d.textMode === 'corridor-outside') {
       for (const e of d.extensions) {
         parts.push(
-          `<line x1="${e.x1}" y1="${e.y1}" x2="${e.x2}" y2="${e.y2}" stroke="${colDim}" stroke-width="${extW}" opacity="${extOp}"/>`
+          `<line x1="${e.x1}" y1="${e.y1}" x2="${e.x2}" y2="${e.y2}" stroke="${colDim}" stroke-width="${dimExtStroke}" opacity="${extOp}"/>`
         );
       }
     }
     parts.push(
-      `<line x1="${d.x1}" y1="${d.y1}" x2="${d.x2}" y2="${d.y2}" stroke="${colDim}" stroke-width="${mainW}" opacity="${mainOp}"/>`
+      `<line x1="${d.x1}" y1="${d.y1}" x2="${d.x2}" y2="${d.y2}" stroke="${colDim}" stroke-width="${mainW}"/>`
     );
     if (d.textMode === 'corridor-outside') {
       const horiz = Math.abs(d.y2 - d.y1) < 0.5;
       if (horiz) {
         const y = d.y1;
         parts.push(
-          `<line x1="${d.x1}" y1="${y - tick}" x2="${d.x1}" y2="${y + tick}" stroke="${colDim}" stroke-width="${mainW}" opacity="${mainOp}"/>`,
-          `<line x1="${d.x2}" y1="${y - tick}" x2="${d.x2}" y2="${y + tick}" stroke="${colDim}" stroke-width="${mainW}" opacity="${mainOp}"/>`
+          `<line x1="${d.x1}" y1="${y - tick}" x2="${d.x1}" y2="${y + tick}" stroke="${colDim}" stroke-width="${mainW}"/>`,
+          `<line x1="${d.x2}" y1="${y - tick}" x2="${d.x2}" y2="${y + tick}" stroke="${colDim}" stroke-width="${mainW}"/>`
         );
       } else {
         const x = d.x1;
         parts.push(
-          `<line x1="${x - tick}" y1="${d.y1}" x2="${x + tick}" y2="${d.y1}" stroke="${colDim}" stroke-width="${mainW}" opacity="${mainOp}"/>`,
-          `<line x1="${x - tick}" y1="${d.y2}" x2="${x + tick}" y2="${d.y2}" stroke="${colDim}" stroke-width="${mainW}" opacity="${mainOp}"/>`
+          `<line x1="${x - tick}" y1="${d.y1}" x2="${x + tick}" y2="${d.y1}" stroke="${colDim}" stroke-width="${mainW}"/>`,
+          `<line x1="${x - tick}" y1="${d.y2}" x2="${x + tick}" y2="${d.y2}" stroke="${colDim}" stroke-width="${mainW}"/>`
         );
       }
     }
@@ -1596,20 +1181,15 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
         `<text transform="translate(${d.x1 + ox},${midY}) rotate(-90)" text-anchor="middle" class="${dCls}">${escapeXml(d.text)}</text>`
       );
     } else {
-      const lift = dimTierOf(d) === 'primary' ? 17 : 11;
       parts.push(
-        `<text x="${midX}" y="${d.y1 - lift}" text-anchor="middle" class="${dCls}">${escapeXml(d.text)}</text>`
+        `<text x="${midX}" y="${d.y1 - 10}" text-anchor="middle" class="${dCls}">${escapeXml(d.text)}</text>`
       );
     }
   }
 
-  appendFloorPlanAccessoryGraphics(model, parts, minSvgFs);
+  appendFloorPlanAccessoryGraphics(model, parts);
   parts.push('</g>');
-  appendFloorPlanConfigurationLegend(model, parts, {
-    innerPadPx: innerPad,
-    minSvgFs,
-    legendReservePx,
-  });
+  appendFloorPlanConfigurationLegend(model, parts);
 
   for (const lb of model.labels) {
     const cls = lb.className ?? 'fp-drawing-meta';

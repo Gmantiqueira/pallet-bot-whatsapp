@@ -12,7 +12,6 @@ import { buildFloorPlanAccessories } from './visualAccessoriesV2';
 import { ELEV_BEAM_FILL } from './elevationVisualTokens';
 import { topTravamentoPlanLinesMm } from './topTravamento';
 import { resolveUprightHeightMmForProject } from '../projectEngines';
-import { snapSvgExtentPx, svgGridMetrics } from './layoutGrid';
 
 /**
  * Canvas SVG da planta.
@@ -29,24 +28,14 @@ import { snapSvgExtentPx, svgGridMetrics } from './layoutGrid';
  */
 const VB_W = 1420;
 const VB_H = 1980;
-const _planGrid = svgGridMetrics(VB_W, VB_H);
-const PAD = snapSvgExtentPx(_planGrid.rowH, 16, _planGrid.rowH);
+const PAD = 16;
 /** Espaço superior sem título duplicado (o PDF traz o cabeçalho da folha). */
-const HEADER = snapSvgExtentPx(_planGrid.rowH, 22, _planGrid.rowH);
-const DIM_OUT = snapSvgExtentPx(_planGrid.rowH, 16, _planGrid.rowH);
+const HEADER = 22;
+const DIM_OUT = 16;
 /** Reserva à esquerda para cota de largura sem clip. */
-const PLAN_LEFT_DIM_MARGIN_PX = snapSvgExtentPx(
-  _planGrid.colW,
-  54,
-  _planGrid.colW
-);
-/** Reserva inferior para cotas + legenda no modelo (coordenadas mm→SVG). */
-const PLAN_BOTTOM_STACK_RESERVE_PX = snapSvgExtentPx(
-  _planGrid.rowH,
-  235,
-  _planGrid.rowH * 2
-);
-const PLAN_INNER_TOP_GAP_PX = snapSvgExtentPx(_planGrid.rowH, 18, _planGrid.rowH);
+const PLAN_LEFT_DIM_MARGIN_PX = 54;
+/** Reserva inferior para cotas + legenda sem sobreposição ao desenho. */
+const PLAN_BOTTOM_STACK_RESERVE_PX = 278;
 /** Espinha entre costas (mm) — igual a layoutGeometryV2 / model3dV2.splitModuleFootprintsFor3d. */
 
 function escapeXml(text: string): string {
@@ -264,7 +253,7 @@ export function buildFloorPlanModelV2(
 ): FloorPlanModelV2 {
   const { warehouseLengthMm: L, warehouseWidthMm: W } = geometry;
   const innerW = VB_W - 2 * PAD;
-  const innerH = VB_H - PAD - HEADER - DIM_OUT - PLAN_INNER_TOP_GAP_PX;
+  const innerH = VB_H - PAD - HEADER - DIM_OUT - 18;
   const drawableW = Math.max(120, innerW - PLAN_LEFT_DIM_MARGIN_PX);
   const drawableH = Math.max(120, innerH - PLAN_BOTTOM_STACK_RESERVE_PX);
   const scale = Math.min(drawableW / L, drawableH / W);
@@ -456,39 +445,28 @@ export function buildFloorPlanModelV2(
   }
 
   const dimensionLines: FloorPlanDimension[] = [];
-  /**
-   * Perímetro exterior “visual” da planta — alinhado ao tracejado SVG (`warehouseOutline ± 5`).
-   * Cotas paralelas ficam **fora** deste envelope para não cortar módulos nem cruzar linhas de fluxo.
-   */
-  const envPad = 5;
-  const envBottom = by + boxH + envPad;
-  const envLeft = bx - envPad;
-  const envRight = bx + boxW + envPad;
-
-  /**
-   * Faixas de cota (lanes) — evita colisão entre “Comprimento total”, corredor operacional e largura total.
-   * Inferior: laneBottomSecondary (corredor horizontal, se existir) mais perto do desenho;
-   * laneBottomMain = comprimento total (fora).
-   * Esquerda: laneLeftSecondary (corredor vertical); laneLeftMain = largura total (fora).
-   */
-  const DIM_TICK_PX = 6.5;
-  const DIM_HORIZONTAL_STACK_GAP_PX = 12;
-  const DIM_TEXT_ABOVE_LINE_PX = 14;
-  /** Da linha de cota secundária inferior à linha de cota principal (comprimento total). */
-  const DIM_LANE_BOTTOM_MAIN_OFFSET_PX =
-    DIM_TICK_PX + DIM_HORIZONTAL_STACK_GAP_PX + DIM_TEXT_ABOVE_LINE_PX + 48;
-  /** Espaço horizontal entre linha de cota do corredor (vertical) e linha da largura total. */
-  const DIM_LANE_LEFT_MAIN_OFFSET_PX = Math.max(
-    38,
-    18 + DIM_HORIZONTAL_STACK_GAP_PX + 18
-  );
-
-  const dimStripeGap = 18;
-  const flushThresh = Math.min(36, Math.max(12, Math.min(boxW, boxH) * 0.038));
-
-  let corridorHorizY: number | undefined;
-  /** Cotável à esquerda do envelope quando há cota vertical secundária (desloca a largura total mais para fora). */
-  let corridorVertInnerLeftX: number | undefined;
+  /** Folga explícita abaixo do perímetro tracejado antes da cota horizontal (evita leitura colada ao limite). */
+  const dimY = by + boxH + 34;
+  dimensionLines.push({
+    id: 'dim-length',
+    x1: bx,
+    y1: dimY,
+    x2: bx + boxW,
+    y2: dimY,
+    text: `Comprimento total: ${formatMm(L)}`,
+    dimTier: 'primary',
+  });
+  const dimX = bx - 44;
+  dimensionLines.push({
+    id: 'dim-width',
+    x1: dimX,
+    y1: by,
+    x2: dimX,
+    y2: by + boxH,
+    text: `Largura total: ${formatMm(W)}`,
+    offset: -28,
+    dimTier: 'primary',
+  });
 
   const corridorZone = pickCorridorZoneForPlanDimension(geometry.circulationZones);
   if (corridorZone) {
@@ -511,29 +489,13 @@ export function buildFloorPlanModelV2(
     const cRight = Math.max(cx1, cx2);
     const cTop = Math.min(cy1, cy2);
     const cBot = Math.max(cy1, cy2);
-
-    const tolL = Math.max(120, L * 0.035);
-    const tolW = Math.max(120, W * 0.035);
-    const redundantHoriz =
-      cw < ch &&
-      (cRight - cLeft) >= boxW * 0.9 &&
-      Math.abs(spanXm - L) <= tolL;
-    const redundantVert =
-      cw >= ch &&
-      (cBot - cTop) >= boxH * 0.9 &&
-      Math.abs(spanYm - W) <= tolW;
-
-    /** Corredor encostado ao limite inferior — prolongamentos só na margem, sem atravessar picking. */
-    const bottomFlushCorridor = cBot >= by + boxH - flushThresh;
-    const leftFlushCorridor = cLeft <= bx + flushThresh;
-    const rightFlushCorridor = cRight >= bx + boxW - flushThresh;
-
-    if (cw < ch && !redundantHoriz && bottomFlushCorridor) {
-      const laneBottomSecondaryY = Math.max(envBottom + dimStripeGap, cBot + DIM_HORIZONTAL_STACK_GAP_PX);
-      corridorHorizY = laneBottomSecondaryY;
-      const yDim = laneBottomSecondaryY;
-      /** Texto acima da linha de cota — nunca partilha baseline com “Comprimento total”. */
-      const corridorTextY = yDim - DIM_TEXT_ABOVE_LINE_PX;
+    const margin = 18;
+    /** Cota fora da faixa do corredor — evita sobreposição com o rótulo semântico no interior. */
+    if (cw < ch) {
+      const canPlaceAbove = cTop > margin + 20;
+      const yDim = canPlaceAbove ? cTop - margin : cBot + margin;
+      const edgeY = canPlaceAbove ? cTop : cBot;
+      const textY = canPlaceAbove ? yDim - 12 : yDim + 18;
       dimensionLines.push({
         id: 'dim-corridor',
         x1: cLeft,
@@ -543,92 +505,36 @@ export function buildFloorPlanModelV2(
         text: corText,
         textMode: 'corridor-outside',
         extensions: [
-          { x1: cLeft, y1: cBot, x2: cLeft, y2: yDim },
-          { x1: cRight, y1: cBot, x2: cRight, y2: yDim },
+          { x1: cLeft, y1: edgeY, x2: cLeft, y2: yDim },
+          { x1: cRight, y1: edgeY, x2: cRight, y2: yDim },
         ],
-        textAnchor: { x: (cLeft + cRight) / 2, y: corridorTextY },
+        textAnchor: { x: (cLeft + cRight) / 2, y: textY },
         textRotateDeg: 0,
         dimTier: 'secondary',
       });
-    } else if (cw >= ch && !redundantVert) {
-      if (leftFlushCorridor) {
-        const laneLeftSecondaryX = Math.min(envLeft - dimStripeGap, cLeft - DIM_HORIZONTAL_STACK_GAP_PX);
-        corridorVertInnerLeftX = laneLeftSecondaryX;
-        const xDim = laneLeftSecondaryX;
-        /** Rótulo à esquerda da linha — folga explícita da faixa da largura total. */
-        const textX = xDim - DIM_TEXT_ABOVE_LINE_PX - 10;
-        dimensionLines.push({
-          id: 'dim-corridor',
-          x1: xDim,
-          y1: cTop,
-          x2: xDim,
-          y2: cBot,
-          text: corText,
-          textMode: 'corridor-outside',
-          extensions: [
-            { x1: cLeft, y1: cTop, x2: xDim, y2: cTop },
-            { x1: cLeft, y1: cBot, x2: xDim, y2: cBot },
-          ],
-          textAnchor: { x: textX, y: (cTop + cBot) / 2 },
-          textRotateDeg: -90,
-          dimTier: 'secondary',
-        });
-      } else if (rightFlushCorridor) {
-        const laneRightSecondaryX = Math.max(envRight + dimStripeGap, cRight + DIM_HORIZONTAL_STACK_GAP_PX);
-        const xDim = laneRightSecondaryX;
-        const textX = xDim + DIM_TEXT_ABOVE_LINE_PX + 10;
-        dimensionLines.push({
-          id: 'dim-corridor',
-          x1: xDim,
-          y1: cTop,
-          x2: xDim,
-          y2: cBot,
-          text: corText,
-          textMode: 'corridor-outside',
-          extensions: [
-            { x1: cRight, y1: cTop, x2: xDim, y2: cTop },
-            { x1: cRight, y1: cBot, x2: xDim, y2: cBot },
-          ],
-          textAnchor: { x: textX, y: (cTop + cBot) / 2 },
-          textRotateDeg: -90,
-          dimTier: 'secondary',
-        });
-      }
+    } else {
+      const canPlaceLeft = cLeft > margin + 24;
+      const xDim = canPlaceLeft ? cLeft - margin : cRight + margin;
+      const edgeX = canPlaceLeft ? cLeft : cRight;
+      const textX = canPlaceLeft ? xDim - 14 : xDim + 14;
+      dimensionLines.push({
+        id: 'dim-corridor',
+        x1: xDim,
+        y1: cTop,
+        x2: xDim,
+        y2: cBot,
+        text: corText,
+        textMode: 'corridor-outside',
+        extensions: [
+          { x1: edgeX, y1: cTop, x2: xDim, y2: cTop },
+          { x1: edgeX, y1: cBot, x2: xDim, y2: cBot },
+        ],
+        textAnchor: { x: textX, y: (cTop + cBot) / 2 },
+        textRotateDeg: -90,
+        dimTier: 'secondary',
+      });
     }
   }
-
-  const laneBottomMainY =
-    corridorHorizY !== undefined
-      ? corridorHorizY + DIM_LANE_BOTTOM_MAIN_OFFSET_PX
-      : envBottom + dimStripeGap;
-  const dimLengthY = laneBottomMainY;
-
-  dimensionLines.push({
-    id: 'dim-length',
-    x1: bx,
-    y1: dimLengthY,
-    x2: bx + boxW,
-    y2: dimLengthY,
-    text: `Comprimento total: ${formatMm(L)}`,
-    dimTier: 'primary',
-  });
-
-  const laneLeftMainX =
-    corridorVertInnerLeftX !== undefined
-      ? corridorVertInnerLeftX - DIM_LANE_LEFT_MAIN_OFFSET_PX
-      : envLeft - dimStripeGap;
-  const dimWidthX = laneLeftMainX;
-
-  dimensionLines.push({
-    id: 'dim-width',
-    x1: dimWidthX,
-    y1: by,
-    x2: dimWidthX,
-    y2: by + boxH,
-    text: `Largura total: ${formatMm(W)}`,
-    offset: -28,
-    dimTier: 'primary',
-  });
 
   const meta = geometry.metadata;
   const bayClearSpanNote =

@@ -161,98 +161,16 @@ function applyElevationLandscapeDrawingSheetHeader(
   doc.y = ruleY + 1;
 }
 
-/** Título/subtítulo da folha da planta (medidos em {@link measureFloorPlanPortraitDrawingMetrics}). */
-export const FLOOR_PLAN_PDF_SHEET_TITLE =
-  'Planta de implantação — porta-paletes';
-export const FLOOR_PLAN_PDF_SHEET_SUBTITLE =
-  'Desenho de conjunto · cotas em milímetros · leitura operacional e estrutural (legenda na folha)';
-
 /** Folha A4 retrato da vista 3D — alinhado a `beginDrawingSheetHeader` compacto + tipos desta página. */
 export const VIEW3D_PDF_SHEET_TITLE = 'Visualização 3D do layout';
 export const VIEW3D_PDF_SHEET_SUBTITLE =
   'Wireframe isométrico · montantes, longarinas e contorno do piso';
-
-/**
- * Cabeçalho retrato compacto só para a planta — menos folga entre subtítulo e traço,
- * para maximizar altura útil do desenho em A4.
- */
-function layoutPortraitFloorPlanDrawingSheetHeader(
-  doc: InstanceType<typeof PDFDocument>,
-  left: number,
-  usableW: number,
-  opts: {
-    title: string;
-    subtitle?: string;
-    titleSize?: number;
-    subtitleSize?: number;
-  }
-): void {
-  const titleT = sanitizeText(opts.title);
-  const subT =
-    opts.subtitle !== undefined ? sanitizeText(opts.subtitle) : '';
-  const tSize = opts.titleSize ?? 10.85;
-  const subSize = opts.subtitleSize ?? 8.15;
-  let y = doc.page.margins.top + 0.42;
-  doc.font(PDFKIT_FONT_BOLD).fontSize(tSize).fillColor(COL_INK);
-  const hTitle = doc.heightOfString(titleT, { width: usableW });
-  doc.text(titleT, left, y, { width: usableW, align: 'left' });
-  y += hTitle + (opts.subtitle !== undefined ? 0.92 : 1.55);
-  if (opts.subtitle !== undefined) {
-    doc.font(PDFKIT_FONT_REGULAR).fontSize(subSize).fillColor(COL_MUTED);
-    const hSub = doc.heightOfString(subT, { width: usableW });
-    doc.text(subT, left, y, { width: usableW, align: 'left' });
-    y += hSub + 0.76;
-  }
-  const ruleY = y;
-  doc
-    .strokeColor(COL_RULE)
-    .lineWidth(0.65)
-    .moveTo(left, ruleY)
-    .lineTo(left + usableW, ruleY)
-    .stroke();
-  doc.y = ruleY + 0.72;
-}
 
 export type FloorPlanPortraitDrawingMeasure = {
   usableWPt: number;
   /** Altura disponível para o bitmap desde `doc.y + 0.5` até à margem inferior menos padding do embed. */
   availHPt: number;
 };
-
-/**
- * Mede com PDFKit a mesma geometria que a folha da planta — raster deve usar esta caixa, não um orçamento fixo.
- */
-export function measureFloorPlanPortraitDrawingMetrics(opts?: {
-  title?: string;
-  subtitle?: string;
-  titleSize?: number;
-  subtitleSize?: number;
-}): FloorPlanPortraitDrawingMeasure {
-  const pageMargins = pdfPageMarginsPt(
-    ISO_A4_PORTRAIT_W_PT,
-    ISO_A4_PORTRAIT_H_PT
-  );
-  const doc = new PDFDocument({
-    size: 'A4',
-    margins: pageMargins,
-  });
-  registerPdfKitFonts(doc);
-  const left = doc.page.margins.left;
-  const usableW =
-    doc.page.width - doc.page.margins.left - doc.page.margins.right;
-  layoutPortraitFloorPlanDrawingSheetHeader(doc, left, usableW, {
-    title: opts?.title ?? FLOOR_PLAN_PDF_SHEET_TITLE,
-    subtitle: opts?.subtitle ?? FLOOR_PLAN_PDF_SHEET_SUBTITLE,
-    titleSize: opts?.titleSize ?? 11,
-    subtitleSize: opts?.subtitleSize ?? 8.35,
-  });
-  const yImg = doc.y + 0.5;
-  const pageBottom = doc.page.height - doc.page.margins.bottom;
-  /** Igual a `embedFullWidthDrawing(floorRaster, { bottomPadPt: 2 })`. */
-  const floorEmbedBottomPadPt = 2;
-  const availHPt = pageBottom - yImg - floorEmbedBottomPadPt;
-  return { usableWPt: usableW, availHPt };
-}
 
 /**
  * Mede a folha da vista 3D (mesmo fluxo que {@link beginDrawingSheetHeader} compacto:
@@ -318,20 +236,26 @@ function view3dRasterPixelSize(): { pxW: number; pxH: number } {
   };
 }
 
-/** Oversample moderado: Sharp encaixa “inside”; mais px na vertical nitida faixa de cotas + legenda. */
-const FLOOR_PLAN_RASTER_OVERSAMPLE = 1.2;
+/**
+ * Orçamento vertical do cabeçalho retrato (planta) para proporção do raster —
+ * mesmo modelo que antes da folha/cabeçalho dedicados à planta (evita bitmap “apertado”).
+ */
+const LEGACY_FLOOR_PLAN_HEADER_BUDGET_PT = 38;
+const LEGACY_FLOOR_PLAN_BOTTOM_PAD_PT = 2;
+const LEGACY_FLOOR_PLAN_PAGE_MARGIN_PT = 24;
 
 function floorPlanRasterPixelSize(): { pxW: number; pxH: number } {
-  const { usableWPt, availHPt } = measureFloorPlanPortraitDrawingMetrics();
+  const pageW = ISO_A4_PORTRAIT_W_PT;
+  const pageH = ISO_A4_PORTRAIT_H_PT;
+  const usableW = pageW - 2 * LEGACY_FLOOR_PLAN_PAGE_MARGIN_PT;
+  const pageBottom = pageH - LEGACY_FLOOR_PLAN_PAGE_MARGIN_PT;
+  const imgTop =
+    LEGACY_FLOOR_PLAN_PAGE_MARGIN_PT + LEGACY_FLOOR_PLAN_HEADER_BUDGET_PT;
+  const imgBoxH =
+    pageBottom - imgTop - LEGACY_FLOOR_PLAN_BOTTOM_PAD_PT;
   return {
-    pxW: Math.max(
-      1,
-      Math.round(ptToPx(usableWPt * FLOOR_PLAN_RASTER_OVERSAMPLE))
-    ),
-    pxH: Math.max(
-      1,
-      Math.round(ptToPx(availHPt * FLOOR_PLAN_RASTER_OVERSAMPLE))
-    ),
+    pxW: ptToPx(usableW),
+    pxH: ptToPx(Math.max(120, imgBoxH * 1.22)),
   };
 }
 
@@ -754,11 +678,6 @@ export async function renderPdfV2(
       compactDrawingGap?: boolean;
       /** Cabeçalho mais baixo + tipos menores — maximiza `availH` da prancha no PDF. */
       elevationSheet?: boolean;
-      /**
-       * Folha da planta A4: traço logo após o subtítulo e `doc.y` baixo —
-       * alinhado a {@link measureFloorPlanPortraitDrawingMetrics}.
-       */
-      floorPlanSheet?: boolean;
     }
   ): void => {
     if (options?.elevationSheet === true) {
@@ -766,15 +685,6 @@ export async function renderPdfV2(
       applyElevationLandscapeDrawingSheetHeader(doc, el, uw, {
         title,
         subtitle: options.subtitle,
-      });
-      return;
-    }
-    if (options?.floorPlanSheet === true) {
-      layoutPortraitFloorPlanDrawingSheetHeader(doc, left, usableW, {
-        title,
-        subtitle: options.subtitle,
-        titleSize: options.titleSize,
-        subtitleSize: options.subtitleSize,
       });
       return;
     }
@@ -964,11 +874,9 @@ export async function renderPdfV2(
   doc.y = Math.max(yBullet, bodyTop + 52) + 18;
 
   doc.addPage();
-  beginDrawingSheetHeader(FLOOR_PLAN_PDF_SHEET_TITLE, {
-    subtitle: FLOOR_PLAN_PDF_SHEET_SUBTITLE,
-    floorPlanSheet: true,
-    titleSize: 11,
-    subtitleSize: 8.35,
+  beginDrawingSheetHeader('Planta de implantação — porta-paletes', {
+    subtitle:
+      'Desenho de conjunto · cotas em milímetros · leitura operacional e estrutural (legenda na folha)',
   });
   embedFullWidthDrawing(floorRaster, { bottomPadPt: 2 });
 
