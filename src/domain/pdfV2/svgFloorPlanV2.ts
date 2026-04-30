@@ -142,14 +142,16 @@ const COL_OP_DIRECTION_LABEL = '#334155';
 const COL_OP_DIRECTION_BOX_STROKE = '#94a3b8';
 const COL_OP_DIRECTION_SHAFT = '#1e293b';
 
-function operationDirectionIndicatorMetrics(minFontPx?: number) {
+/** Gap mínimo (unidades SVG da planta) entre o cartão de sentido e a bbox do desenho. */
+const OPERATION_DIRECTION_LAYOUT_GAP_PX = 12;
+
+function operationDirectionIndicatorMetrics() {
   const k = OPERATION_DIRECTION_INDICATOR_SCALE;
   const r = (n: number) => Math.round(n * k);
   const baseFs = Math.round(11.5 * k * 1.15 * 10) / 10;
   return {
     gw: r(228),
     gh: r(58),
-    pad: r(12),
     rx: Math.max(4, r(5)),
     textInset: r(10),
     textY: r(22),
@@ -159,7 +161,8 @@ function operationDirectionIndicatorMetrics(minFontPx?: number) {
     headTipInset: r(14),
     headBackInset: r(28),
     headHalfSpan: r(10),
-    fontSize: Math.max(baseFs, minFontPx ?? 0),
+    /** Fixo — não escala com `minSvgFs`; o cartão não deve influenciar o fit do desenho. */
+    fontSize: baseFs,
     boxStrokeW: Math.round(0.9 * k * 100) / 100,
     shaftW: Math.round(2.6 * k * 100) / 100,
     vertBottomInset: r(10),
@@ -168,6 +171,176 @@ function operationDirectionIndicatorMetrics(minFontPx?: number) {
     vertBaseY: r(18),
     vertHalfW: r(8),
   } as const;
+}
+
+type FloorPlanCollisionRect = {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+};
+
+function appendFloorPlanDimensionCollisionRects(
+  dims: FloorPlanModelV2['dimensionLines'],
+  out: FloorPlanCollisionRect[]
+): void {
+  for (const d of dims) {
+    out.push({
+      minX: Math.min(d.x1, d.x2) - 8,
+      minY: Math.min(d.y1, d.y2) - 8,
+      maxX: Math.max(d.x1, d.x2) + 8,
+      maxY: Math.max(d.y1, d.y2) + 8,
+    });
+    if (d.textAnchor) {
+      out.push({
+        minX: d.textAnchor.x - 60,
+        minY: d.textAnchor.y - 28,
+        maxX: d.textAnchor.x + 60,
+        maxY: d.textAnchor.y + 28,
+      });
+    } else {
+      const midX = (d.x1 + d.x2) / 2;
+      const midY = (d.y1 + d.y2) / 2;
+      const isVert = Math.abs(d.x2 - d.x1) < 1;
+      if (isVert) {
+        const ox = d.offset ?? -14;
+        out.push({
+          minX: d.x1 + ox - 48,
+          minY: midY - 130,
+          maxX: d.x1 + ox + 32,
+          maxY: midY + 130,
+        });
+      } else {
+        out.push({
+          minX: midX - 220,
+          minY: d.y1 - 38,
+          maxX: midX + 220,
+          maxY: d.y1 + 14,
+        });
+      }
+    }
+  }
+}
+
+function collectFloorPlanCollisionRects(
+  model: FloorPlanModelV2,
+  structureDraw: StructureRect[],
+  circulationDraw: CirculationRect[]
+): FloorPlanCollisionRect[] {
+  const out: FloorPlanCollisionRect[] = [];
+  for (const s of structureDraw) {
+    out.push({ minX: s.x, minY: s.y, maxX: s.x + s.w, maxY: s.y + s.h });
+  }
+  for (const c of circulationDraw) {
+    out.push({ minX: c.x, minY: c.y, maxX: c.x + c.w, maxY: c.y + c.h });
+  }
+  appendFloorPlanDimensionCollisionRects(model.dimensionLines, out);
+  for (const r of model.rowBandRects) {
+    out.push({ minX: r.x, minY: r.y, maxX: r.x + r.w, maxY: r.y + r.h });
+  }
+  return out;
+}
+
+function operationIndicatorHitsObstacles(
+  gx: number,
+  gy: number,
+  gw: number,
+  gh: number,
+  obstacles: FloorPlanCollisionRect[]
+): boolean {
+  const pad = 0.75;
+  const ax0 = gx - pad;
+  const ay0 = gy - pad;
+  const ax1 = gx + gw + pad;
+  const ay1 = gy + gh + pad;
+  for (const r of obstacles) {
+    if (!(ax1 <= r.minX || ax0 >= r.maxX || ay1 <= r.minY || ay0 >= r.maxY)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Coloca o cartão numa faixa livre acima da bbox do desenho (preferencial) ou à direita.
+ * A geometria da seta fica dentro do cartão; colisões cobrem módulos, corredores, cotas e bandas de fileira.
+ */
+function computeOperationDirectionIndicatorPosition(
+  model: FloorPlanModelV2,
+  drawingBounds: { minX: number; minY: number; maxX: number; maxY: number },
+  structureDraw: StructureRect[],
+  circulationDraw: CirculationRect[],
+  m: ReturnType<typeof operationDirectionIndicatorMetrics>
+): { gx: number; gy: number } {
+  const GAP = OPERATION_DIRECTION_LAYOUT_GAP_PX;
+  const { gw, gh } = m;
+  const o = model.warehouseOutline;
+  const db = drawingBounds;
+  const obstacles = collectFloorPlanCollisionRects(
+    model,
+    structureDraw,
+    circulationDraw
+  );
+
+  const cxPreferred = o.x + o.w / 2 - gw / 2;
+  const slideStep = 26;
+  const yAbove = db.minY - GAP - gh;
+
+  const aboveGxCandidates = (): number[] => {
+    const xs: number[] = [cxPreferred];
+    for (let i = 1; i <= 28; i++) {
+      xs.push(cxPreferred + slideStep * i);
+      xs.push(cxPreferred - slideStep * i);
+    }
+    const minAllow = Math.min(db.minX, cxPreferred) - 140;
+    const maxAllow = Math.max(db.maxX - gw, cxPreferred) + 140;
+    const ranked = [...new Set(xs.map(x => Math.round(x * 10) / 10))].filter(
+      x => x >= minAllow && x <= maxAllow
+    );
+    ranked.sort(
+      (a, b) => Math.abs(a - cxPreferred) - Math.abs(b - cxPreferred)
+    );
+    return ranked;
+  };
+
+  const clearAbove = (gx: number, gy: number): boolean =>
+    gy + gh <= db.minY - GAP + 1e-6 &&
+    !operationIndicatorHitsObstacles(gx, gy, gw, gh, obstacles);
+
+  if (Number.isFinite(yAbove)) {
+    for (const gx of aboveGxCandidates()) {
+      if (clearAbove(gx, yAbove)) {
+        return { gx, gy: yAbove };
+      }
+    }
+  }
+
+  const xRight = db.maxX + GAP;
+  const yPreferred = o.y + o.h / 2 - gh / 2;
+  const yCand: number[] = [yPreferred];
+  for (let i = 1; i <= 36; i++) {
+    yCand.push(yPreferred + slideStep * i);
+    yCand.push(yPreferred - slideStep * i);
+  }
+  const ymin = db.minY - gh - 40;
+  const ymax = db.maxY + 40;
+  for (const gy of yCand) {
+    if (gy < ymin || gy > ymax) continue;
+    const gx = xRight;
+    if (
+      gx >= db.maxX + GAP - 1e-6 &&
+      !operationIndicatorHitsObstacles(gx, gy, gw, gh, obstacles)
+    ) {
+      return { gx, gy };
+    }
+  }
+
+  let gx = cxPreferred;
+  let gy = Math.min(o.y - gh - GAP, db.minY - GAP - gh);
+  for (let n = 0; n < 18 && operationIndicatorHitsObstacles(gx, gy, gw, gh, obstacles); n++) {
+    gx += (n % 2 === 0 ? 1 : -1) * slideStep * (Math.floor(n / 2) + 1);
+  }
+  return { gx, gy };
 }
 
 const SEM_ORDER: Record<FloorPlanCirculationSemantic, number> = {
@@ -260,17 +433,6 @@ function appendOperationalCorridorVisualExtras(
   }
 }
 
-function orientationArrowBounds(
-  o: FloorPlanModelV2['warehouseOutline'],
-  _beamAlong: 'x' | 'y'
-): { minX: number; minY: number; maxX: number; maxY: number } {
-  const { gw, gh, pad } = operationDirectionIndicatorMetrics();
-  /** Acima do envelope — não sobrepõe módulos nem cruza cotas inferiores (faixa paralela). */
-  const gx = o.x + (o.w - gw) / 2;
-  const gy = o.y - gh - pad - 8;
-  return { minX: gx, minY: gy, maxX: gx + gw, maxY: gy + gh };
-}
-
 function computeFloorPlanDrawingBounds(
   model: FloorPlanModelV2,
   structureDraw: StructureRect[],
@@ -316,9 +478,6 @@ function computeFloorPlanDrawingBounds(
       }
     }
   }
-  const ab = orientationArrowBounds(o, model.beamSpanAlong);
-  bump(ab.minX, ab.minY, ab.maxX, ab.maxY);
-  bump(o.x - 16, o.y - 16, o.x + o.w + 16, o.y + o.h + 16);
   return { minX, minY, maxX, maxY };
 }
 
@@ -913,14 +1072,12 @@ function appendRowBandEnvelope(
 }
 
 function orientationArrowSvg(
-  o: FloorPlanModelV2['warehouseOutline'],
   beamAlong: 'x' | 'y',
-  minLabelPx: number
+  m: ReturnType<typeof operationDirectionIndicatorMetrics>,
+  gx: number,
+  gy: number
 ): string {
-  const m = operationDirectionIndicatorMetrics(minLabelPx * 0.96);
-  const { gw, gh, pad } = m;
-  const gx = o.x + (o.w - gw) / 2;
-  const gy = o.y - gh - pad - 8;
+  const { gw, gh } = m;
   const ax = gx + gw / 2;
   const yArr = gy + m.arrowRowY;
   const fs = m.fontSize;
@@ -1138,6 +1295,14 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
     model,
     structureDraw,
     circulationDraw
+  );
+  const opDirectionMetrics = operationDirectionIndicatorMetrics();
+  const opDirectionPos = computeOperationDirectionIndicatorPosition(
+    model,
+    drawingBounds,
+    structureDraw,
+    circulationDraw,
+    opDirectionMetrics
   );
   const fitTf = fitTransformForDrawingBounds(
     drawingBounds,
@@ -1364,7 +1529,14 @@ export function serializeFloorPlanSvgV2(model: FloorPlanModelV2): string {
     );
   }
 
-  parts.push(orientationArrowSvg(o, model.beamSpanAlong, minSvgFs));
+  parts.push(
+    orientationArrowSvg(
+      model.beamSpanAlong,
+      opDirectionMetrics,
+      opDirectionPos.gx,
+      opDirectionPos.gy
+    )
+  );
 
   const tick = 6.5;
 
