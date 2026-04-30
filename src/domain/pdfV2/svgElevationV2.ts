@@ -945,9 +945,7 @@ function drawFrontStorageTiers(
   storageTiers: number,
   beamTh: number,
   yClipTop: number,
-  yClipBottom: number,
-  /** `true` = uma só baia com linha de separação ao centro; `false` = uma posição por baia (2 baias no módulo). */
-  splitTwoPalletPositions: boolean
+  yClipBottom: number
 ): string {
   const parts: string[] = [];
   const insetX = Math.max(2.8, (bay.right - bay.left) * 0.04);
@@ -966,16 +964,6 @@ function drawFrontStorageTiers(
     parts.push(
       `<rect x="${xl}" y="${t}" width="${xr - xl}" height="${b - t}" rx="1.2" fill="${FV_PALLET_TIER_FILL}" stroke="${FV_PALLET_TIER_STROKE}" stroke-width="0.35" opacity="${FV_PALLET_TIER_OPACITY}"/>`
     );
-    const mx = (xl + xr) / 2;
-    if (splitTwoPalletPositions) {
-      parts.push(
-        `<line x1="${mx}" y1="${t + 1.2}" x2="${mx}" y2="${b - 1.2}" stroke="#475569" stroke-width="1.15" stroke-linecap="square" opacity="0.92"/>`
-      );
-    } else {
-      parts.push(
-        `<line x1="${mx}" y1="${t + 1.5}" x2="${mx}" y2="${b - 1.5}" stroke="${FV_PALLET_TIER_STROKE}" stroke-width="0.28" opacity="0.22"/>`
-      );
-    }
   }
   return parts.join('');
 }
@@ -986,8 +974,7 @@ function drawGroundPalletBand(
   yFirstBeamPx: number,
   yFloorInnerPx: number,
   yClipTop: number,
-  yClipBottom: number,
-  splitTwoPalletPositions: boolean
+  yClipBottom: number
 ): string {
   const yTop = Math.min(yFirstBeamPx, yFloorInnerPx);
   const yBot = Math.max(yFirstBeamPx, yFloorInnerPx);
@@ -997,16 +984,7 @@ function drawGroundPalletBand(
   const insetX = Math.max(2.8, (bay.right - bay.left) * 0.04);
   const xl = bay.left + insetX;
   const xr = bay.right - insetX;
-  const parts: string[] = [
-    `<rect x="${xl}" y="${t}" width="${xr - xl}" height="${b - t}" rx="1.4" fill="${FV_GROUND_PALLET_FILL}" stroke="${FV_GROUND_PALLET_STROKE}" stroke-width="0.55" opacity="${FV_GROUND_PALLET_OPACITY}"/>`,
-  ];
-  const mx = (xl + xr) / 2;
-  if (splitTwoPalletPositions) {
-    parts.push(
-      `<line x1="${mx}" y1="${t + 1.2}" x2="${mx}" y2="${b - 1.2}" stroke="#047857" stroke-width="1.05" stroke-linecap="square" opacity="0.88"/>`
-    );
-  }
-  return parts.join('');
+  return `<rect x="${xl}" y="${t}" width="${xr - xl}" height="${b - t}" rx="1.4" fill="${FV_GROUND_PALLET_FILL}" stroke="${FV_GROUND_PALLET_STROKE}" stroke-width="0.55" opacity="${FV_GROUND_PALLET_OPACITY}"/>`;
 }
 
 /**
@@ -1185,8 +1163,6 @@ function drawFrontRack(
   const prem = options?.spreadPremium === true;
   const lsPad = prem ? ls / ELEV_SPREAD_ORTHO_REFINE : ls;
   const nMod = FV_FRONT_BAY_COUNT;
-  /** Uma baia no desenho: duas posições de palete no mesmo vão (linha central). */
-  const splitPalateLanesInClearSpan = nMod === 1;
   const levelsEst = Math.max(1, Math.min(32, Math.floor(data.levels)));
   const tunnelExtraSeg =
     data.tunnel === true && typeof data.tunnelClearanceMm === 'number' ? 1 : 0;
@@ -1397,8 +1373,7 @@ function drawFrontRack(
           yBeam0,
           rackBottom,
           ry + 1,
-          rackBottom - 1,
-          splitPalateLanesInClearSpan
+          rackBottom - 1
         )
       );
     }
@@ -1412,8 +1387,7 @@ function drawFrontRack(
         storageTiers,
         beamTh,
         ry + 1,
-        rackBottom - 1,
-        splitPalateLanesInClearSpan
+        rackBottom - 1
       )
     );
   }
