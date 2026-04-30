@@ -79,8 +79,6 @@ const ELEV_TYPO_VERTICAL_DIM_CHAIN = 1.18;
 const ELEV_TYPO_CAP_AND_FACE_DIM = 1.18;
 /** Rótulos «Vista frontal / lateral» (prancha paisagem e cabeçalhos dos painéis). */
 const ELEV_TYPO_VISTA_HEADING = 1.2;
-/** Rodapé narrativo sob as duas colunas. */
-const ELEV_TYPO_SPREAD_FOOT_SCALE = 1.35;
 /** Cotas de largura nominal dos montantes (mm). */
 const ELEV_TYPO_DIM_UPRIGHT_MM = 1.18;
 
@@ -2178,27 +2176,8 @@ function computeElevationSpreadWidthPx(
   const safeAvail = Math.max(12, drawingAvailHPt);
   return Math.round(ELEV_SPREAD_H * (usableWPt / safeAvail));
 }
-/** Faixa de notas compacta — menos altura em faixa = mais `innerH` para escala. */
-const ELEV_SPREAD_FOOTER_BAND_PX = 13;
-/** Margem interna do texto de rodapé à moldura. */
-const ELEV_SPREAD_FOOTER_SIDE_PAD_PX = 10;
-/** Evita que notas de rodapé invadam o eixo da junta entre vistas. */
-const ELEV_SPREAD_FOOTER_CENTER_CLEAR_PX = 11;
-/** Folgas verticais dentro da faixa de rodapé. */
-const ELEV_SPREAD_FOOTER_TEXT_PAD_BOTTOM = 3;
-const ELEV_SPREAD_FOOTER_TEXT_PAD_TOP = 2;
-/** Tipografia do rodapé: legível sob as duas colunas (+35%). */
-const ELEV_SPREAD_FOOTER_FS_BASE =
-  Math.round(
-    7.85 *
-      ELEV_INTERIOR_TYPE_SCALE *
-      ELEV_SPREAD_ORTHO_REFINE *
-      ELEV_TYPO_SPREAD_FOOT_SCALE *
-      10
-  ) / 10;
-/** Se o bloco não caber na altura útil, reduzir tipografia do rodapé. */
-const ELEV_SPREAD_FOOTER_FS_SHRINK = 0.91;
-const ELEV_SPREAD_FOOTER_FS_MIN = 9;
+/** Rodapé narrativo SVG removido — texto rasterizado ficava ilegível e repetia o cabeçalho PDF/cotas. */
+const ELEV_SPREAD_FOOTER_BAND_PX = 0;
 /**
  * Tecto de escala do par ortográfico (independente de `ELEV_SPREAD_ORTHO_REFINE` na tipografia,
  * para não inflacionar o bbox só por aumentar `ls`). Escala com o canvas para não ficar preso a 1.22.
@@ -2312,94 +2291,6 @@ function elevationSpreadLayoutMetrics(spreadWidthPx: number): {
   };
 }
 
-/**
- * Quebra texto do rodapé por largura máxima em px (estimativa por caractere).
- * Palavras longas são partidas para não ultrapassar a coluna.
- */
-function wrapFooterTextToLines(
-  text: string,
-  maxWidthPx: number,
-  fs: number
-): string[] {
-  const avgCharPx = fs * 0.5;
-  const maxChars = Math.max(8, Math.floor(maxWidthPx / avgCharPx));
-  const words = text.trim().split(/\s+/).filter(Boolean);
-  if (words.length === 0) {
-    return [''];
-  }
-  const lines: string[] = [];
-  let cur = '';
-  for (const w of words) {
-    let remaining = w;
-    while (remaining.length > 0) {
-      const chunk =
-        remaining.length <= maxChars ? remaining : remaining.slice(0, maxChars);
-      remaining = remaining.slice(chunk.length);
-      if (cur.length === 0) {
-        cur = chunk;
-      } else if (`${cur} ${chunk}`.length <= maxChars) {
-        cur = `${cur} ${chunk}`;
-      } else {
-        lines.push(cur);
-        cur = chunk;
-      }
-    }
-  }
-  if (cur.length > 0) {
-    lines.push(cur);
-  }
-  return lines;
-}
-
-/**
- * Uma coluna de rodapé: largura limitada, quebras automáticas, âncora esquerda ou direita.
- * O bloco ancora-se à base da faixa (margem inferior segura) e cresce para cima.
- */
-function elevationSpreadFooterColumnSvg(opts: {
-  yBandTop: number;
-  bandH: number;
-  maxWidthPx: number;
-  fsBase: number;
-  fill: string;
-  body: string;
-  anchor: 'start' | 'end';
-  /** Borda da coluna: esquerda se anchor start, direita se anchor end. */
-  xEdge: number;
-}): string {
-  const { yBandTop, bandH, maxWidthPx, fsBase, fill, body, anchor, xEdge } =
-    opts;
-  const yContentBottom = yBandTop + bandH - ELEV_SPREAD_FOOTER_TEXT_PAD_BOTTOM;
-  const yAnchorTop = yBandTop + ELEV_SPREAD_FOOTER_TEXT_PAD_TOP;
-  const availableH = Math.max(24, yContentBottom - yAnchorTop);
-
-  let fs = fsBase;
-  let lines = wrapFooterTextToLines(body, maxWidthPx, fs);
-  let lh = fs * (fs <= 10.5 ? 1.34 : 1.22);
-  let blockH = (lines.length > 0 ? (lines.length - 1) * lh : 0) + fs * 0.92;
-
-  while (fs > ELEV_SPREAD_FOOTER_FS_MIN && blockH > availableH - fs * 0.2) {
-    fs = Math.max(ELEV_SPREAD_FOOTER_FS_MIN, fs * ELEV_SPREAD_FOOTER_FS_SHRINK);
-    lines = wrapFooterTextToLines(body, maxWidthPx, fs);
-    lh = fs * (fs <= 10.5 ? 1.34 : 1.22);
-    blockH = (lines.length > 0 ? (lines.length - 1) * lh : 0) + fs * 0.92;
-  }
-
-  let yFirst = yContentBottom - blockH + fs * 0.28;
-  if (yFirst < yAnchorTop) {
-    yFirst = yAnchorTop;
-  }
-
-  const weight = svgFontWeightForSvgAttr('500');
-  const inner = lines
-    .map((line, i) =>
-      i === 0
-        ? `<tspan x="${xEdge}">${escapeXml(line)}</tspan>`
-        : `<tspan x="${xEdge}" dy="${lh}">${escapeXml(line)}</tspan>`
-    )
-    .join('');
-  return `<text x="${xEdge}" y="${yFirst}" text-anchor="${anchor}" font-size="${fs}px" fill="${fill}" font-family="${SVG_FONT_FAMILY}" font-weight="${weight}">${inner}</text>`;
-}
-
 export type ElevationPageSvgs = {
   /** Paisagem: vista frontal (esq.) + vista lateral (dir.), módulo padrão. */
   landscapeStandard: string;
@@ -2414,14 +2305,11 @@ function wrapElevationLandscapeSpread(
   L: ReturnType<typeof elevationSpreadLayoutMetrics>,
   leftInner: string,
   rightInner: string,
-  footerLeft: string,
-  footerRight: string,
   guideLinesSvg?: string
 ): string {
   const {
     m,
     gap,
-    footerBand,
     width,
     height,
     colInnerW,
@@ -2432,15 +2320,6 @@ function wrapElevationLandscapeSpread(
   const cxLeft = m + colInnerW / 2;
   const cxRight = m + colInnerW + gap + colInnerW / 2;
   const sepX = m + colInnerW + gap / 2;
-  const side = ELEV_SPREAD_FOOTER_SIDE_PAD_PX;
-  const dead = ELEV_SPREAD_FOOTER_CENTER_CLEAR_PX;
-  const leftColLeft = m + side;
-  const leftColMaxW = Math.max(64, sepX - dead - leftColLeft);
-  const rightColRight = m + colInnerW + gap + colInnerW - side;
-  const rightColLeft = sepX + dead;
-  const rightColMaxW = Math.max(64, rightColRight - rightColLeft);
-  const footFill = '#475569';
-  const fsFoot = ELEV_SPREAD_FOOTER_FS_BASE;
   const parts: string[] = [];
   parts.push(
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">`
@@ -2465,37 +2344,13 @@ function wrapElevationLandscapeSpread(
   if (guideLinesSvg) {
     parts.push(guideLinesSvg);
   }
-  parts.push(
-    `<g id="el-spread-footer" pointer-events="none">`,
-    elevationSpreadFooterColumnSvg({
-      yBandTop: yFooterBandTop,
-      bandH: footerBand,
-      maxWidthPx: leftColMaxW,
-      fsBase: fsFoot,
-      fill: footFill,
-      body: footerLeft,
-      anchor: 'start',
-      xEdge: leftColLeft,
-    }),
-    elevationSpreadFooterColumnSvg({
-      yBandTop: yFooterBandTop,
-      bandH: footerBand,
-      maxWidthPx: rightColMaxW,
-      fsBase: fsFoot,
-      fill: footFill,
-      body: footerRight,
-      anchor: 'end',
-      xEdge: rightColRight,
-    }),
-    `</g>`
-  );
   parts.push('</svg>');
   return parts.join('');
 }
 
 /**
  * Pranchas paisagem: frontal + lateral lado a lado (padrão; segunda prancha se houver túnel).
- * Títulos de folha ficam no PDF; aqui rótulos de coluna discretos e rodapés.
+ * Títulos de folha ficam no PDF; aqui só rótulos de coluna («Vista frontal / lateral»).
  */
 export type SerializeElevationPagesOptions = {
   debug?: boolean;
@@ -2703,8 +2558,6 @@ export function serializeElevationPagesV2(
     L,
     leftStd,
     rightStd,
-    'Cotas em mm · armazenagem (referência comum ao desenho com túnel, se existir).',
-    'Perfil de uma costa; dupla costas apenas em planta, quando aplicável.',
     guidesStd
   );
 
@@ -2766,8 +2619,6 @@ export function serializeElevationPagesV2(
       Ltun,
       leftTun,
       rightTun,
-      'Cotas em mm · túnel: passagem entre longarinas no nível inferior.',
-      'Lateral · vão inferior do túnel; níveis alinhados à vista frontal.',
       guidesTun
     );
   }
